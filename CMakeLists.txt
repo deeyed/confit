@@ -32,6 +32,7 @@ else()
 endif()
 
 add_library(confit_host STATIC
+  src/host/host_directory.c
   src/host/host_file.c
   src/host/host_io.c
   src/host/host_path.c

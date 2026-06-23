@@ -144,127 +144,132 @@ int main(void) {
     confit_project_free(project);
     return 27;
   }
+  if (!expect_status(confit_profile_set_target(profile, "host-sim"))) {
+    confit_project_free(project);
+    return 28;
+  }
   if (!expect_status(
           confit_profile_add_value(profile, "delos.debug.ddc", &value,
                                    "config/profiles/sim-dsh.toml"))) {
     confit_project_free(project);
-    return 28;
+    return 29;
   }
   if (profile->value_count != 1U ||
       strcmp(profile->values[0].option_id, "delos.debug.ddc") != 0 ||
-      profile->values[0].value.as.bool_value != 1) {
+      profile->values[0].value.as.bool_value != 1 ||
+      strcmp(profile->target, "host-sim") != 0) {
     confit_project_free(project);
-    return 29;
+    return 30;
   }
 
   if (!expect_status(confit_project_add_target(project, &target))) {
     confit_project_free(project);
-    return 30;
+    return 31;
   }
   if (!expect_status(confit_target_set_identity(
           target, "host-sim", "host", "host-sim", "portability-probe"))) {
     confit_project_free(project);
-    return 31;
+    return 32;
   }
   if (!expect_status(confit_value_set_enum(&value, "host-sim"))) {
     confit_project_free(project);
-    return 32;
+    return 33;
   }
   if (!expect_status(
           confit_target_add_value(target, "delos.target.board", &value,
                                   "config/targets/host-sim.toml"))) {
     confit_project_free(project);
-    return 33;
+    return 34;
   }
   if (target->value_count != 1U ||
       target->values[0].value.kind != CONFIT_VALUE_ENUM ||
       strcmp(target->values[0].value.as.string_value, "host-sim") != 0) {
     confit_project_free(project);
-    return 34;
+    return 35;
   }
 
   if (!expect_status(confit_value_set_path(&value,
                                            "build/generated/config"))) {
     confit_project_free(project);
-    return 35;
+    return 36;
   }
   if (!expect_status(confit_value_copy(&copy, &value))) {
     confit_project_free(project);
-    return 36;
+    return 37;
   }
   if (copy.kind != CONFIT_VALUE_PATH ||
       strcmp(copy.as.string_value, "build/generated/config") != 0 ||
       copy.as.string_value == value.as.string_value) {
     confit_project_free(project);
-    return 37;
+    return 38;
   }
   confit_value_clear(&copy);
 
   if (!expect_status(confit_project_add_option(project, &option))) {
     confit_project_free(project);
-    return 38;
+    return 39;
   }
   if (!expect_status(confit_option_set_identity(
           option, "delos.target.board", CONFIT_OPTION_TYPE_ENUM))) {
     confit_project_free(project);
-    return 39;
+    return 40;
   }
   if (!expect_status(confit_option_add_enum_value(option, "host-sim")) ||
       !expect_status(confit_option_add_enum_value(option,
                                                   "qemu-mps2-an500"))) {
     confit_project_free(project);
-    return 40;
+    return 41;
   }
   if (!expect_status(confit_value_set_enum(&value, "host-sim")) ||
       !expect_status(confit_option_set_default(option, &value)) ||
       !expect_status(confit_option_validate_default(option))) {
     confit_project_free(project);
-    return 41;
+    return 42;
   }
   if (!expect_status(confit_value_set_enum(&value, "unknown-board")) ||
       !expect_status(confit_option_set_default(option, &value)) ||
       confit_option_validate_default(option) != CONFIT_ERR_SCHEMA) {
     confit_project_free(project);
-    return 42;
+    return 43;
   }
 
   if (!expect_status(confit_project_add_option(project, &option))) {
     confit_project_free(project);
-    return 43;
+    return 44;
   }
   if (!expect_status(confit_option_set_identity(
           option, "delos.scheduler.task_slots", CONFIT_OPTION_TYPE_UINT))) {
     confit_project_free(project);
-    return 44;
+    return 45;
   }
   confit_value_set_uint(&min_value, UINT64_C(1));
   confit_value_set_uint(&max_value, UINT64_C(128));
   if (!expect_status(confit_option_set_range(option, &min_value,
                                              &max_value))) {
     confit_project_free(project);
-    return 45;
+    return 46;
   }
   confit_value_set_uint(&value, UINT64_C(16));
   if (!expect_status(confit_option_set_default(option, &value)) ||
       !expect_status(confit_option_validate_default(option))) {
     confit_project_free(project);
-    return 46;
+    return 47;
   }
   confit_value_set_uint(&value, UINT64_C(256));
   if (!expect_status(confit_option_set_default(option, &value)) ||
       confit_option_validate_default(option) != CONFIT_ERR_SCHEMA) {
     confit_project_free(project);
-    return 47;
+    return 48;
   }
 
   if (!expect_status(confit_project_add_option(project, &option))) {
     confit_project_free(project);
-    return 48;
+    return 49;
   }
   if (!expect_status(confit_option_set_identity(
           option, "delos.sim.default_gain", CONFIT_OPTION_TYPE_FLOAT))) {
     confit_project_free(project);
-    return 49;
+    return 50;
   }
   confit_value_set_float(&min_value, 0.0);
   confit_value_set_float(&max_value, 1.0);
@@ -276,7 +281,7 @@ int main(void) {
       option->default_value.as.float_value < 0.499 ||
       option->default_value.as.float_value > 0.501) {
     confit_project_free(project);
-    return 50;
+    return 51;
   }
   nonfinite = 1.0e308;
   nonfinite *= 10.0;
@@ -284,7 +289,7 @@ int main(void) {
   if (!expect_status(confit_option_set_default(option, &value)) ||
       confit_option_validate_default(option) != CONFIT_ERR_SCHEMA) {
     confit_project_free(project);
-    return 51;
+    return 52;
   }
 
   confit_value_clear(&min_value);

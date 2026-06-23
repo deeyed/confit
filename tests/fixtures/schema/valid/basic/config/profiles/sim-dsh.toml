@@ -1,0 +1,11 @@
+[profile]
+name = "sim-dsh"
+schema_version = 1
+base = "debug"
+target = "host-sim"
+
+[values]
+"delos.scheduler.task_slots" = 32
+"delos.target.board" = "host-sim"
+"delos.sim.default_gain" = 0.25
+"delos.paths.config_root" = "build/generated/config/delos/sim-dsh"

@@ -1,0 +1,12 @@
+[target]
+name = "host-sim"
+schema_version = 1
+arch = "host"
+board = "host-sim"
+
+[target.claim]
+level = "portability-probe"
+
+[values]
+"delos.target.board" = "host-sim"
+"delos.output.name" = "delos-host-sim"

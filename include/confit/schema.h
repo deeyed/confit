@@ -14,8 +14,8 @@ extern "C" {
  *
  * `project_root`는 `config/project.toml`을 포함하는 project root이거나
  * `project.toml`을 직접 포함하는 config root일 수 있다. Loader는
- * `project.toml`의 imports 순서대로 option file을 읽고 deterministic하게
- * model에 추가한다.
+ * `project.toml`의 imports 순서대로 option file을 읽은 뒤 profiles directory와
+ * targets directory의 TOML file을 deterministic order로 읽어 model에 추가한다.
  *
  * @param project_root project root 또는 config root.
  * @param out_project 성공 시 caller-owned project를 받는다.

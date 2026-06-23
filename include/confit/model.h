@@ -153,13 +153,16 @@ typedef struct ConfitOption {
 /**
  * @brief profile override 묶음이다.
  *
- * `name`, `base`, `values`의 문자열과 value payload는 profile이 소유한다.
+ * `name`, `base`, `target`, `values`의 문자열과 value payload는 profile이
+ * 소유한다.
  */
 typedef struct ConfitProfile {
   /** profile name. */
   char *name;
   /** base profile name. 없으면 `NULL`. */
   char *base;
+  /** 선택 target name. 없으면 `NULL`. */
+  char *target;
   /** override value 목록. */
   ConfitNamedValue *values;
   /** override value 개수. */
@@ -521,6 +524,16 @@ ConfitStatus confit_choice_add_option(ConfitChoice *choice,
  */
 ConfitStatus confit_profile_set_identity(ConfitProfile *profile,
                                          const char *name, const char *base);
+
+/**
+ * @brief profile이 선택하는 target name을 설정한다.
+ *
+ * @param profile 갱신할 profile.
+ * @param target 복사할 target name. 없으면 `NULL`.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_profile_set_target(ConfitProfile *profile,
+                                       const char *target);
 
 /**
  * @brief profile override value를 추가한다.

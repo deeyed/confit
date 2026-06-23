@@ -405,6 +405,7 @@ static void confit_profile_init(ConfitProfile *profile) {
 
   profile->name = 0;
   profile->base = 0;
+  profile->target = 0;
   profile->values = 0;
   profile->value_count = 0;
 }
@@ -416,6 +417,7 @@ static void confit_profile_clear(ConfitProfile *profile) {
 
   free(profile->name);
   free(profile->base);
+  free(profile->target);
   confit_named_value_array_clear(profile->values, profile->value_count);
   confit_profile_init(profile);
 }
@@ -893,6 +895,15 @@ ConfitStatus confit_profile_set_identity(ConfitProfile *profile,
   }
 
   return confit_model_replace_string(&profile->base, base);
+}
+
+ConfitStatus confit_profile_set_target(ConfitProfile *profile,
+                                       const char *target) {
+  if (profile == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  return confit_model_replace_string(&profile->target, target);
 }
 
 ConfitStatus confit_profile_add_value(ConfitProfile *profile,

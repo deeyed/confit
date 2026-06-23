@@ -1,0 +1,6 @@
+[profile]
+name = "bad"
+schema_version = 1
+
+[values]
+"delos.unknown.option" = true

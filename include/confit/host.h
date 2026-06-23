@@ -56,6 +56,31 @@ ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
                                         ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief directory 바로 아래의 `.toml` file path 목록을 deterministic order로 읽는다.
+ *
+ * Directory가 없으면 빈 목록을 성공으로 반환한다. 반환된 문자열 배열과 각
+ * 문자열은 caller 소유이며 `confit_host_string_list_free`로 해제해야 한다.
+ * Subdirectory traversal은 하지 않는다.
+ *
+ * @param directory 조회할 host directory path.
+ * @param out_paths 성공 시 할당된 path 문자열 배열을 받는다.
+ * @param out_count 성공 시 path 개수를 받는다.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받을 optional diagnostic.
+ * @return 성공하면 CONFIT_OK, 실패하면 오류 status.
+ */
+ConfitStatus confit_host_list_toml_files(const char *directory,
+                                         char ***out_paths, size_t *out_count,
+                                         ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief host adapter가 caller에게 넘긴 string list를 해제한다.
+ *
+ * @param items 해제할 문자열 배열. `NULL`은 허용한다.
+ * @param count 배열 원소 개수.
+ */
+void confit_host_string_list_free(char **items, size_t count);
+
+/**
  * @brief host adapter가 caller에게 넘긴 heap allocation을 해제한다.
  *
  * @param allocation 해제할 pointer. `NULL`은 허용한다.

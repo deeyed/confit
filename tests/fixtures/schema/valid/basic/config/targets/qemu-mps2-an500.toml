@@ -1,0 +1,12 @@
+[target]
+name = "qemu-mps2-an500"
+schema_version = 1
+arch = "armv7m"
+board = "qemu-mps2-an500"
+
+[target.claim]
+level = "portability-probe"
+
+[values]
+"delos.target.board" = "qemu-mps2-an500"
+"delos.scheduler.task_slots" = 64

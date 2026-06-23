@@ -15,6 +15,8 @@ int main(void) {
   char joined_path[64];
   char *text;
   size_t text_size;
+  char **paths;
+  size_t path_count;
 
   confit_diagnostic_init(&diagnostic);
 
@@ -75,6 +77,43 @@ int main(void) {
                                  &diagnostic) !=
       CONFIT_ERR_INVALID_ARGUMENT) {
     return 12;
+  }
+
+  if (confit_host_path_join(fixture_path, sizeof(fixture_path),
+                            CONFIT_TEST_SOURCE_DIR,
+                            "tests/fixtures/host/list", &diagnostic) !=
+      CONFIT_OK) {
+    return 13;
+  }
+  paths = 0;
+  path_count = 0U;
+  if (confit_host_list_toml_files(fixture_path, &paths, &path_count,
+                                  &diagnostic) != CONFIT_OK) {
+    return 14;
+  }
+  if (path_count != 2U) {
+    confit_host_string_list_free(paths, path_count);
+    return 15;
+  }
+  if (strstr(paths[0], "a.toml") == 0 || strstr(paths[1], "b.toml") == 0) {
+    confit_host_string_list_free(paths, path_count);
+    return 16;
+  }
+  confit_host_string_list_free(paths, path_count);
+
+  if (confit_host_path_join(fixture_path, sizeof(fixture_path),
+                            CONFIT_TEST_SOURCE_DIR,
+                            "tests/fixtures/host/missing", &diagnostic) !=
+      CONFIT_OK) {
+    return 17;
+  }
+  paths = 0;
+  path_count = 99U;
+  if (confit_host_list_toml_files(fixture_path, &paths, &path_count,
+                                  &diagnostic) != CONFIT_OK ||
+      paths != 0 || path_count != 0U) {
+    confit_host_string_list_free(paths, path_count);
+    return 18;
   }
 
   return 0;
