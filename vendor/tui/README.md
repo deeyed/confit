@@ -8,6 +8,7 @@ The shim owns only terminal rendering and keyboard tokenization:
 
 - list-view rendering
 - status-bar rendering
-- simple key decoding for `q`, `j`, `k`, arrow up/down, and enter
+- simple key decoding for movement, edit, filter, save, and quit commands
+- line prompts for text entry
 
 Confit schema semantics stay outside this vendor directory.

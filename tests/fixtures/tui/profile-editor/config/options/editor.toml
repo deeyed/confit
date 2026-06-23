@@ -1,0 +1,50 @@
+[option."delos.edit.bool"]
+type = "bool"
+default = false
+prompt = "Edit Bool"
+category = "edit"
+tags = ["edit", "bool"]
+help = "Boolean editor fixture."
+
+[option."delos.edit.mode"]
+type = "enum"
+default = "sim"
+choices = ["sim", "hw"]
+prompt = "Edit Mode"
+category = "edit"
+tags = ["edit", "enum"]
+help = "Enum editor fixture."
+
+[option."delos.edit.count"]
+type = "int"
+default = 1
+range = [0, 10]
+prompt = "Edit Count"
+category = "edit"
+tags = ["edit", "int"]
+help = "Integer editor fixture."
+
+[option."delos.edit.gain"]
+type = "float"
+default = 0.5
+range = [0.0, 1.0]
+prompt = "Edit Gain"
+category = "edit"
+tags = ["edit", "float"]
+help = "Float editor fixture."
+
+[option."delos.edit.name"]
+type = "string"
+default = "demo"
+prompt = "Edit Name"
+category = "edit"
+tags = ["edit", "string"]
+help = "String editor fixture."
+
+[option."delos.edit.path"]
+type = "path"
+default = "build/demo"
+prompt = "Edit Path"
+category = "edit"
+tags = ["edit", "path"]
+help = "Path editor fixture."

@@ -1,0 +1,11 @@
+[profile]
+name = "edit"
+schema_version = 1
+
+[values]
+"delos.edit.bool" = true
+"delos.edit.mode" = "hw"
+"delos.edit.count" = 7
+"delos.edit.gain" = 0.75
+"delos.edit.name" = "TUI name"
+"delos.edit.path" = "build/new"

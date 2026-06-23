@@ -533,3 +533,12 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round17-tui
 )
+
+add_test(
+  NAME confit.cli.tui_profile_editor
+  COMMAND /bin/sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round18_tui_profile_editor.sh
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round18-tui
+)

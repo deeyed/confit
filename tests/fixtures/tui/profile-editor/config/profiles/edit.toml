@@ -1,0 +1,11 @@
+[profile]
+name = "edit"
+schema_version = 1
+
+[values]
+"delos.edit.bool" = false
+"delos.edit.mode" = "sim"
+"delos.edit.count" = 2
+"delos.edit.gain" = 0.25
+"delos.edit.name" = "old"
+"delos.edit.path" = "old/path"

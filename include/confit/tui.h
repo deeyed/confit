@@ -21,10 +21,11 @@ typedef struct ConfitTuiOptions {
 } ConfitTuiOptions;
 
 /**
- * @brief TUI frontend skeleton을 실행한다.
+ * @brief TUI profile editor를 실행한다.
  *
- * Round 17 skeleton은 project schema를 로드하고 resolved option list와 status
- * bar를 보여준다. 저장이나 schema/profile mutation은 이후 라운드에서 붙인다.
+ * TUI는 project schema를 로드하고 resolved option list, search/filter,
+ * type-aware editing, profile TOML 저장을 제공한다. 저장 전에는 resolver를
+ * 통해 full validation을 다시 수행한다.
  *
  * @param options TUI startup options.
  * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.

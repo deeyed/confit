@@ -13,6 +13,12 @@ typedef enum CftuiKey {
   CFTUI_KEY_UP = 2,
   CFTUI_KEY_DOWN = 3,
   CFTUI_KEY_ENTER = 4,
+  CFTUI_KEY_EDIT = 5,
+  CFTUI_KEY_SAVE = 6,
+  CFTUI_KEY_SEARCH = 7,
+  CFTUI_KEY_CATEGORY = 8,
+  CFTUI_KEY_TAG = 9,
+  CFTUI_KEY_CLEAR_FILTER = 10,
 } CftuiKey;
 
 typedef struct CftuiListItem {
@@ -32,6 +38,7 @@ typedef struct CftuiScreen {
 
 int cftui_render(const CftuiScreen *screen);
 CftuiKey cftui_read_key(void);
+int cftui_read_line(const char *prompt, char *out, size_t out_size);
 
 #ifdef __cplusplus
 }

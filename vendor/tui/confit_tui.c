@@ -1,6 +1,7 @@
 #include "confit_tui.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static const char *cftui_text_or_empty(const char *text) {
   return text != 0 ? text : "";
@@ -72,6 +73,24 @@ CftuiKey cftui_read_key(void) {
   if (ch == '\n' || ch == '\r') {
     return CFTUI_KEY_ENTER;
   }
+  if (ch == 'e' || ch == 'E') {
+    return CFTUI_KEY_EDIT;
+  }
+  if (ch == 's' || ch == 'S') {
+    return CFTUI_KEY_SAVE;
+  }
+  if (ch == '/') {
+    return CFTUI_KEY_SEARCH;
+  }
+  if (ch == 'c' || ch == 'C') {
+    return CFTUI_KEY_CATEGORY;
+  }
+  if (ch == 't' || ch == 'T') {
+    return CFTUI_KEY_TAG;
+  }
+  if (ch == 'x' || ch == 'X') {
+    return CFTUI_KEY_CLEAR_FILTER;
+  }
   if (ch == 27) {
     const int bracket = getchar();
     const int arrow = bracket == '[' ? getchar() : EOF;
@@ -84,4 +103,29 @@ CftuiKey cftui_read_key(void) {
     }
   }
   return CFTUI_KEY_NONE;
+}
+
+int cftui_read_line(const char *prompt, char *out, size_t out_size) {
+  size_t size;
+
+  if (out == 0 || out_size == 0U) {
+    return -1;
+  }
+  out[0] = '\0';
+
+  if (prompt != 0 && prompt[0] != '\0') {
+    if (fputs(prompt, stdout) == EOF || fflush(stdout) != 0) {
+      return -1;
+    }
+  }
+  if (fgets(out, (int)out_size, stdin) == 0) {
+    return -1;
+  }
+
+  size = strlen(out);
+  while (size > 0U && (out[size - 1U] == '\n' || out[size - 1U] == '\r')) {
+    out[size - 1U] = '\0';
+    size -= 1U;
+  }
+  return 0;
 }

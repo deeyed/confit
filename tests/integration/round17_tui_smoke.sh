@@ -18,4 +18,5 @@ grep -F "project=delos profile=sim-dsh target=host-sim" \
   "$WORK_DIR/tui.txt" >/dev/null
 grep -F "delos.debug.ddc" "$WORK_DIR/tui.txt" >/dev/null
 grep -F "[status] option" "$WORK_DIR/tui.txt" >/dev/null
-grep -F "keys: j/down k/up q quit" "$WORK_DIR/tui.txt" >/dev/null
+grep -F "/ search c category t tag x clear e edit s save q quit" \
+  "$WORK_DIR/tui.txt" >/dev/null
