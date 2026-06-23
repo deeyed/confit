@@ -198,11 +198,20 @@ target_link_libraries(confit PRIVATE
   confit_tui
 )
 
+target_compile_definitions(confit PRIVATE
+  CONFIT_BUILD_C_COMPILER_ID="${CMAKE_C_COMPILER_ID}"
+  CONFIT_BUILD_C_COMPILER_VERSION="${CMAKE_C_COMPILER_VERSION}"
+  CONFIT_BUILD_HAS_CURSES=1
+  CONFIT_BUILD_SYSTEM_NAME="${CMAKE_SYSTEM_NAME}"
+)
+
 if(MSVC)
   target_compile_options(confit PRIVATE /W4 /WX)
 else()
   target_compile_options(confit PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
+
+install(TARGETS confit RUNTIME DESTINATION bin)
 
 enable_testing()
 
@@ -477,6 +486,15 @@ add_test(
 
 set_tests_properties(confit.cli.help
   PROPERTIES PASS_REGULAR_EXPRESSION "Usage:"
+)
+
+add_test(
+  NAME confit.cli.doctor
+  COMMAND confit doctor
+)
+
+set_tests_properties(confit.cli.doctor
+  PROPERTIES PASS_REGULAR_EXPRESSION "doctor ok"
 )
 
 add_test(

@@ -39,6 +39,7 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 ## Document Map
 
 - [architecture.md](docs/architecture.md): Confit의 전체 구조와 책임 경계.
+- [cli-contract.md](docs/cli-contract.md): CLI command, option, exit code, local install 계약.
 - [toml-schema.md](docs/toml-schema.md): TOML source format과 option/profile/target/compat schema.
 - [syntax-stability.md](docs/syntax-stability.md): 문법 안정성, versioning, deprecation 원칙.
 - [resolution-dag.md](docs/resolution-dag.md): option graph, dependency resolution, conflict explanation.
@@ -78,3 +79,23 @@ build/generated/config/<project>/<profile>/
 
 `config/` 아래에는 사람이 관리하는 source config만 둔다. Generated 파일을 `config/`에 쓰는 것은
 기본 정책이 아니다.
+
+## Local Install
+
+Confit의 필수 설치 산출물은 단일 실행 파일이다.
+
+```sh
+tools/confit/scripts/install-local.sh --prefix ~/.local
+~/.local/bin/confit doctor
+```
+
+수동 설치도 같은 규칙을 따른다.
+
+```sh
+cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/confit-build --target confit
+cmake --install /tmp/confit-build --prefix "$HOME/.local"
+```
+
+설치 명령은 project `config/` tree를 만들거나 수정하지 않는다. Project skeleton 생성과 profile/schema
+수정은 명시적인 Confit command가 담당한다.

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "confit/compat.h"
@@ -47,6 +48,10 @@ typedef struct ConfitCliGraphArgs {
   const char *format;
 } ConfitCliGraphArgs;
 
+typedef struct ConfitCliDoctorArgs {
+  const char *project_root;
+} ConfitCliDoctorArgs;
+
 typedef struct ConfitCliGlobalArgs {
   const char *color;
   int quiet;
@@ -64,6 +69,7 @@ typedef struct ConfitCliCommandSpec {
   ConfitCliCommandHandler handler;
 } ConfitCliCommandSpec;
 
+static int confit_cli_run_doctor(int argc, char **argv);
 static int confit_cli_run_check(int argc, char **argv);
 static int confit_cli_run_gen(int argc, char **argv);
 static int confit_cli_run_explain(int argc, char **argv);
@@ -81,7 +87,7 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "Check host installation, platform support, project layout, and "
      "generators.",
      "confit doctor [--project <path>]",
-     "--project <path>", 0},
+     "--project <path>", confit_cli_run_doctor},
     {"init", "Create a Confit project skeleton from a named template.",
      "confit init --project <path> --template minimal|delos|parus [--force] "
      "[--dry-run]",
@@ -151,6 +157,8 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
 
 static const size_t confit_cli_command_count =
     sizeof(confit_cli_commands) / sizeof(confit_cli_commands[0]);
+
+static const char *confit_cli_executable_path = "confit";
 
 static ConfitStatus confit_cli_write_error(const char *message) {
   ConfitStatus status;
@@ -442,6 +450,173 @@ static int confit_cli_run_unsupported_command(
     return confit_status_exit_code(status);
   }
   return confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
+}
+
+#ifndef CONFIT_BUILD_SYSTEM_NAME
+#define CONFIT_BUILD_SYSTEM_NAME "unknown"
+#endif
+
+#ifndef CONFIT_BUILD_C_COMPILER_ID
+#define CONFIT_BUILD_C_COMPILER_ID "unknown"
+#endif
+
+#ifndef CONFIT_BUILD_C_COMPILER_VERSION
+#define CONFIT_BUILD_C_COMPILER_VERSION "unknown"
+#endif
+
+#ifndef CONFIT_BUILD_HAS_CURSES
+#define CONFIT_BUILD_HAS_CURSES 1
+#endif
+
+static ConfitStatus confit_cli_write_doctor_kv(const char *key,
+                                               const char *value) {
+  ConfitStatus status;
+
+  status = confit_host_stdout_write("  ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(key);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(value);
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_write_doctor_size(const char *key,
+                                                 size_t value) {
+  char buffer[64];
+
+  (void)snprintf(buffer, sizeof(buffer), "%lu", (unsigned long)value);
+  return confit_cli_write_doctor_kv(key, buffer);
+}
+
+static const char *confit_cli_doctor_platform_note(void) {
+#if defined(_WIN32)
+  return "windows clang-only CLI lane; TUI unsupported";
+#elif defined(__APPLE__)
+  return "macOS CLI and curses TUI lane";
+#elif defined(__linux__)
+  return "Linux CLI and curses TUI lane";
+#else
+  return "portable CLI lane; platform is not release-gated yet";
+#endif
+}
+
+static ConfitStatus confit_cli_parse_doctor_args(int argc, char **argv,
+                                                 ConfitCliDoctorArgs *args) {
+  int index;
+
+  args->project_root = 0;
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      args->project_root = argv[index];
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown doctor option");
+    }
+    return confit_cli_write_error("doctor does not accept positional arguments");
+  }
+  return CONFIT_OK;
+}
+
+static int confit_cli_run_doctor(int argc, char **argv) {
+  ConfitCliDoctorArgs args;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitStatus status;
+
+  status = confit_cli_parse_doctor_args(argc, argv, &args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  status = confit_host_stdout_write_line("Confit doctor");
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("version", confit_version_string());
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("executable",
+                                        confit_cli_executable_path);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("platform",
+                                        CONFIT_BUILD_SYSTEM_NAME);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("platform note",
+                                        confit_cli_doctor_platform_note());
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("compiler",
+                                        CONFIT_BUILD_C_COMPILER_ID " "
+                                        CONFIT_BUILD_C_COMPILER_VERSION);
+  }
+  if (status == CONFIT_OK) {
+#if CONFIT_BUILD_HAS_CURSES
+    status = confit_cli_write_doctor_kv("curses", "available; TUI enabled");
+#else
+    status = confit_cli_write_doctor_kv("curses",
+                                        "not available; TUI unsupported");
+#endif
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "install rule", "single executable artifact: <prefix>/bin/confit");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "generators", "header, reports, explain text, graph, inputs");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "deferred generators", "cmake and qstar are not installed yet");
+  }
+
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  if (args.project_root == 0) {
+    status = confit_cli_write_doctor_kv("project", "not checked");
+    if (status == CONFIT_OK) {
+      status = confit_host_stdout_write_line("doctor ok");
+    }
+    return confit_status_exit_code(status);
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  status = confit_schema_load_project(args.project_root, &project, &diagnostic);
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+
+  status = confit_cli_write_doctor_kv("project", args.project_root);
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_size("options", project->option_count);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_size("profiles", project->profile_count);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_size("targets", project->target_count);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("doctor ok");
+  }
+
+  confit_project_free(project);
+  return confit_status_exit_code(status);
 }
 
 static void confit_cli_project_args_init(ConfitCliProjectArgs *args) {
@@ -1435,6 +1610,10 @@ int main(int argc, char **argv) {
   ConfitStatus status;
   int normalized_argc;
   char **normalized_argv;
+
+  if (argc > 0 && argv[0] != 0) {
+    confit_cli_executable_path = argv[0];
+  }
 
   status = confit_cli_parse_global_args(argc, argv, &global_args);
   if (status != CONFIT_OK) {

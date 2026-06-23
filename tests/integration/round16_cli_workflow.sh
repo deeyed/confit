@@ -13,6 +13,10 @@ GEN_DIR="$WORK_DIR/generated"
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
+"$CONFIT_BIN" doctor --project "$PROJECT_DIR" >"$WORK_DIR/doctor.txt"
+grep -F "doctor ok" "$WORK_DIR/doctor.txt" >/dev/null
+grep -F "options:" "$WORK_DIR/doctor.txt" >/dev/null
+
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/check.txt"
 grep -Fx "check ok" "$WORK_DIR/check.txt" >/dev/null

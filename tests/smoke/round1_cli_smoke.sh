@@ -60,15 +60,17 @@ done
 "$BUILD_DIR/confit" --verbose help completion | \
   grep -F "confit completion --shell" >/dev/null
 
-set +e
-"$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out" 2>"$BUILD_DIR/doctor.err"
-STATUS=$?
-set -e
-if [ "$STATUS" -ne 8 ]; then
-  echo "doctor exit code was $STATUS, expected 8" >&2
-  exit 1
-fi
-grep -F "unsupported command: doctor" "$BUILD_DIR/doctor.err" >/dev/null
+"$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out"
+grep -F "Confit doctor" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "curses:" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "doctor ok" "$BUILD_DIR/doctor.out" >/dev/null
+
+"$BUILD_DIR/confit" doctor \
+  --project "$ROOT_DIR/tests/fixtures/schema/valid/basic" \
+  >"$BUILD_DIR/doctor-project.out"
+grep -F "project:" "$BUILD_DIR/doctor-project.out" >/dev/null
+grep -F "options:" "$BUILD_DIR/doctor-project.out" >/dev/null
+grep -F "doctor ok" "$BUILD_DIR/doctor-project.out" >/dev/null
 
 set +e
 "$BUILD_DIR/confit" unknown >"$BUILD_DIR/unknown.out" 2>"$BUILD_DIR/unknown.err"

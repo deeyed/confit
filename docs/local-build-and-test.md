@@ -79,6 +79,39 @@ ctest --test-dir /tmp/confit-build --output-on-failure
 /tmp/confit-build/confit help
 ```
 
+## Local Install
+
+Confit의 필수 설치 산출물은 단일 실행 파일이다.
+
+```text
+<prefix>/bin/confit
+```
+
+local checkout에서 설치하려면 다음 명령을 사용한다.
+
+```sh
+tools/confit/scripts/install-local.sh --prefix ~/.local
+```
+
+이 스크립트는 network를 사용하지 않는다. source tree 밖 임시 build directory에서 `confit` target을
+빌드하고, CMake install rule로 `<prefix>/bin/confit`을 설치한다. 설치 과정은 어떤 project `config/`
+tree도 생성하거나 수정하지 않는다.
+
+같은 동작을 수동으로 수행하면 다음과 같다.
+
+```sh
+cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/confit-build --target confit
+cmake --install /tmp/confit-build --prefix "$HOME/.local"
+```
+
+설치 후 기본 확인:
+
+```sh
+~/.local/bin/confit --version
+~/.local/bin/confit doctor
+```
+
 ## Fixture Convention
 
 Fixture는 사람이 관리하는 input project나 negative input을 담는다.
