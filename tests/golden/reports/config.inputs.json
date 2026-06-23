@@ -1,0 +1,14 @@
+{
+  "schema": "confit-inputs-v1",
+  "project": "delos",
+  "profile": "sim-dsh",
+  "files": [
+    {"path": "config/options/debug.toml", "sha256": "8736b1e8de009bf1f83f2708ee4dc7505f851bf1458ef659aa49414e9542e99b"},
+    {"path": "config/options/runtime.toml", "sha256": "36d9fc94969ef669fbeed84a103191c7a9f238fa49c89f2b1d796da754eb3a0d"},
+    {"path": "config/options/types.toml", "sha256": "ccb82865dcd88df2aeb7fad84b39db111a5889312555fe280ccbb7a1dfaa61b1"},
+    {"path": "config/profiles/debug.toml", "sha256": "d82b7c08158f8456b60d44be4a85eae59c7008cc196a803d95e798f3399054d1"},
+    {"path": "config/profiles/sim-dsh.toml", "sha256": "928fbd76f266e144f224930acda86a8b255297feec6c015fa246c7fd6111633f"},
+    {"path": "config/project.toml", "sha256": "568a5d26cbdc652cfd6d2416ceb8cff1f7ed54f183eaceecd67c82a1fad90227"},
+    {"path": "config/targets/host-sim.toml", "sha256": "729472c78a5c3f1e29b8fe1f283a0b5cf3999487da96bbb2d3f3296bd4061c55"}
+  ]
+}

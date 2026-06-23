@@ -1,0 +1,21 @@
+{
+  "schema": "confit-graph-v1",
+  "project": "delos",
+  "nodes": [
+    {"id": "delos.debug.ddc", "type": "bool"},
+    {"id": "delos.internal.debug_gate", "type": "bool"},
+    {"id": "delos.scheduler.task_slots", "type": "uint"},
+    {"id": "delos.target.board", "type": "enum"},
+    {"id": "delos.memory.flash_base", "type": "hex"},
+    {"id": "delos.sim.default_gain", "type": "float"},
+    {"id": "delos.output.name", "type": "string"},
+    {"id": "delos.paths.config_root", "type": "path"}
+  ],
+  "edges": [
+    {"from": "delos.debug.ddc", "to": "delos.internal.debug_gate", "kind": "recommends"},
+    {"from": "delos.debug.ddc", "to": "delos.internal.debug_gate", "kind": "forces"},
+    {"from": "delos.scheduler.task_slots", "to": "delos.internal.debug_gate", "kind": "conflicts"},
+    {"from": "delos.target.board", "to": "delos.debug.ddc", "kind": "requires"},
+    {"from": "delos.target.board", "to": "delos.scheduler.task_slots", "kind": "visible_if"}
+  ]
+}

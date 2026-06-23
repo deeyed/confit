@@ -1,0 +1,30 @@
+profile: sim-dsh
+target: host-sim
+
+enabled:
+  delos.debug.ddc
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.memory.flash_base
+    because resolved number is non-zero
+    set by default
+  delos.output.name
+    because resolved text is non-empty
+    set by targets/host-sim.toml
+  delos.paths.config_root
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.scheduler.task_slots
+    because resolved number is non-zero
+    set by profiles/sim-dsh.toml
+  delos.sim.default_gain
+    because resolved number is non-zero
+    set by profiles/sim-dsh.toml
+  delos.target.board
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+
+disabled:
+  delos.internal.debug_gate
+    because resolved bool is false
+    set by default

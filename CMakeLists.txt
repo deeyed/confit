@@ -143,6 +143,7 @@ endif()
 
 add_library(confit_generator STATIC
   src/generator/config_header.c
+  src/generator/reports.c
 )
 
 target_link_libraries(confit_generator PUBLIC confit_resolver)
@@ -376,6 +377,32 @@ endif()
 add_test(
   NAME confit.unit.generator
   COMMAND confit_test_generator
+)
+
+add_executable(confit_test_reports
+  tests/unit/test_reports.c
+)
+
+target_link_libraries(confit_test_reports PRIVATE
+  confit_generator
+  confit_graph
+  confit_schema
+)
+target_compile_definitions(confit_test_reports PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_reports PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_reports PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.reports
+  COMMAND confit_test_reports
 )
 
 add_test(

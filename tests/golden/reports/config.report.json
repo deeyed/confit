@@ -1,0 +1,19 @@
+{
+  "schema": "confit-report-v1",
+  "project": "delos",
+  "profile": "sim-dsh",
+  "target": "host-sim",
+  "status": "ok",
+  "source_hash": "0x9C11AEAD955DCA37",
+  "options": [
+    {"id": "delos.debug.ddc", "type": "bool", "value": true, "source": "profiles/debug.toml"},
+    {"id": "delos.internal.debug_gate", "type": "bool", "value": false, "source": "default"},
+    {"id": "delos.memory.flash_base", "type": "hex", "value": 134217728, "source": "default"},
+    {"id": "delos.output.name", "type": "string", "value": "delos-host-sim", "source": "targets/host-sim.toml"},
+    {"id": "delos.paths.config_root", "type": "path", "value": "build/generated/config/delos/sim-dsh", "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.scheduler.task_slots", "type": "uint", "value": 32, "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.sim.default_gain", "type": "float", "value": 0.25, "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.target.board", "type": "enum", "value": "host-sim", "source": "profiles/sim-dsh.toml"}
+  ],
+  "compat": []
+}
