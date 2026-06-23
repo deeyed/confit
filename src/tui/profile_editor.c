@@ -1711,7 +1711,8 @@ static ConfitStatus confit_tui_search_jump(ConfitTuiState *state, int direction,
   if (match_count == 0U) {
     state->search_count = 0U;
     state->search_position = 0U;
-    (void)snprintf(state->status, sizeof(state->status), "search 0/0: %s",
+    (void)snprintf(state->status, sizeof(state->status),
+                   "search 0/0: %s | fields id,prompt,help,category,tags",
                    state->search);
     state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;
@@ -1740,6 +1741,15 @@ static ConfitStatus confit_tui_search_jump(ConfitTuiState *state, int direction,
                  (unsigned long)state->search_count,
                  confit_tui_text_or_dash(state->rows[best_match].option->id));
   state->status[sizeof(state->status) - 1U] = '\0';
+  {
+    const size_t used = strlen(state->status);
+
+    if (used + 1U < sizeof(state->status)) {
+      (void)snprintf(state->status + used, sizeof(state->status) - used,
+                     " | fields id,prompt,help,category,tags");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
+  }
   return CONFIT_OK;
 }
 
@@ -2023,7 +2033,8 @@ static ConfitStatus confit_tui_save_profile(ConfitTuiState *state,
     status = confit_tui_reload_saved_project(state, &reload_diagnostic);
     if (status == CONFIT_OK) {
       (void)snprintf(state->status, sizeof(state->status),
-                     "saved and reloaded %s", profile_path);
+                     "saved and reloaded; full validation ok: %s",
+                     profile_path);
       state->status[sizeof(state->status) - 1U] = '\0';
     } else {
       confit_tui_set_status_from_diagnostic(state, "saved but reload failed",
@@ -2112,6 +2123,102 @@ static ConfitStatus confit_tui_detail_append_line(ConfitTuiTextBuilder *builder,
     status = confit_tui_text_append(builder, "\n");
   }
   return status;
+}
+
+static ConfitStatus confit_tui_detail_append_wrapped_word(
+    ConfitTuiTextBuilder *builder, const char *word, size_t word_size,
+    size_t wrap_width, size_t *line_size) {
+  ConfitStatus status;
+
+  if (wrap_width == 0U) {
+    wrap_width = 78U;
+  }
+  while (word_size > 0U) {
+    size_t room;
+    size_t take;
+    size_t index;
+
+    if (*line_size > 0U && *line_size + 1U + word_size > wrap_width) {
+      status = confit_tui_text_append(builder, "\n");
+      if (status != CONFIT_OK) {
+        return status;
+      }
+      *line_size = 0U;
+    }
+    if (*line_size > 0U) {
+      status = confit_tui_text_append(builder, " ");
+      if (status != CONFIT_OK) {
+        return status;
+      }
+      *line_size += 1U;
+    }
+
+    room = wrap_width > *line_size ? wrap_width - *line_size : 1U;
+    take = word_size < room ? word_size : room;
+    for (index = 0U; index < take; ++index) {
+      status = confit_tui_text_append_char(builder, word[index]);
+      if (status != CONFIT_OK) {
+        return status;
+      }
+    }
+    *line_size += take;
+    word += take;
+    word_size -= take;
+    if (word_size > 0U) {
+      status = confit_tui_text_append(builder, "\n");
+      if (status != CONFIT_OK) {
+        return status;
+      }
+      *line_size = 0U;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_detail_append_wrapped(
+    ConfitTuiTextBuilder *builder, const char *text, size_t wrap_width) {
+  const char *cursor;
+  size_t line_size;
+  ConfitStatus status;
+
+  if (text == 0 || text[0] == '\0') {
+    return confit_tui_text_append(builder, "-");
+  }
+
+  cursor = text;
+  line_size = 0U;
+  while (*cursor != '\0') {
+    const char *word;
+    size_t word_size;
+
+    if (*cursor == '\n') {
+      status = confit_tui_text_append(builder, "\n");
+      if (status != CONFIT_OK) {
+        return status;
+      }
+      line_size = 0U;
+      cursor += 1;
+      continue;
+    }
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r') {
+      cursor += 1;
+    }
+    if (*cursor == '\0') {
+      break;
+    }
+    word = cursor;
+    while (*cursor != '\0' && *cursor != '\n' && *cursor != ' ' &&
+           *cursor != '\t' && *cursor != '\r') {
+      cursor += 1;
+    }
+    word_size = (size_t)(cursor - word);
+    status = confit_tui_detail_append_wrapped_word(
+        builder, word, word_size, wrap_width, &line_size);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_tui_detail_append_tags(ConfitTuiTextBuilder *builder,
@@ -2347,9 +2454,10 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
     status = confit_tui_text_append(&builder, "\nHelp\n");
   }
   if (status == CONFIT_OK) {
-    status = confit_tui_text_append(
+    status = confit_tui_detail_append_wrapped(
         &builder,
-        option->help != 0 && option->help[0] != '\0' ? option->help : "-");
+        option->help != 0 && option->help[0] != '\0' ? option->help : "-",
+        78U);
   }
   if (status == CONFIT_OK) {
     status = confit_tui_text_append(&builder, "\n");
@@ -2566,7 +2674,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   (void)snprintf(
       header, sizeof(header),
       "project=%s profile=%s target=%s search=%s result=%lu/%lu "
-      "filter.category=%s filter.tag=%s menus=%lu dirty=%s",
+      "filter.category=%s filter.tag=%s menus=%lu dirty=%s\n"
+      "search fields=id,prompt,help,category,tags display=dim-blocked",
       confit_tui_text_or_dash(state->project->name),
       confit_tui_text_or_dash(state->options->profile_name),
       confit_tui_text_or_dash(target_name),

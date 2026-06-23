@@ -58,6 +58,8 @@ printf '/board\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
 
 grep -aF "search 1/1: delos.target.board" "$WORK_DIR/tui-search-single.txt" \
   >/dev/null
+grep -aF "search fields=id,prompt,help,category,tags" \
+  "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "result=1/1" "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
 
@@ -182,3 +184,4 @@ printf 'q' | env TERM=xterm LINES=8 COLUMNS=35 \
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-small.txt" \
   >/dev/null
 grep -aF "row 1/" "$WORK_DIR/tui-small.txt" >/dev/null
+grep -aF "compact terminal fallback" "$WORK_DIR/tui-small.txt" >/dev/null

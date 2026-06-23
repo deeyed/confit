@@ -23,6 +23,8 @@ printf '\nndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated he
 grep -aF "Schema Edit Warning" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "SCHEMA EDIT MODE is a guarded workflow." \
   "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Generated outputs are not written here" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "schema 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "SCHEMA EDIT MODE - guarded" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Editor - menuconfig guarded schema" \
@@ -33,6 +35,7 @@ grep -aF "Menu" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "arrows/jk PgUp/PgDn Home/End n new y type d/e default p prompt h help" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "reloaded graph" "$WORK_DIR/tui-schema.txt" >/dev/null
 
 printf '\nn\033?q' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \

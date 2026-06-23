@@ -225,8 +225,13 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
     attroff(A_BOLD);
   }
   if (LINES > 1) {
-    confit_tui_curses_add_clipped(1, 0, confit_tui_curses_text(screen->status),
-                                  width);
+    char compact_status[384];
+
+    (void)snprintf(compact_status, sizeof(compact_status),
+                   "compact terminal fallback; %s",
+                   confit_tui_curses_text(screen->status));
+    compact_status[sizeof(compact_status) - 1U] = '\0';
+    confit_tui_curses_add_clipped(1, 0, compact_status, width);
   }
 
   list_height = LINES > 4 ? LINES - 4 : 0;
@@ -952,6 +957,7 @@ static void confit_tui_curses_render_choice_dialog(
   int row;
   int list_top;
   int list_height;
+  int header_last;
   size_t first;
   size_t index;
 
@@ -982,10 +988,21 @@ static void confit_tui_curses_render_choice_dialog(
   }
 
   row = top + 2;
-  confit_tui_curses_render_lines(header, &row, top + 3, left + 2, width - 4, 0,
-                                 A_NORMAL);
-  list_top = top + 4;
-  list_height = height - 7;
+  header_last = top + height - 5 - (int)item_count;
+  if (header_last < top + 3) {
+    header_last = top + 3;
+  }
+  if (header_last > top + height - 5) {
+    header_last = top + height - 5;
+  }
+  confit_tui_curses_render_lines(header, &row, header_last, left + 2,
+                                 width - 4, 0, A_NORMAL);
+  list_top = row + 1;
+  list_height = top + height - 3 - list_top;
+  if (list_height < 1) {
+    list_top = top + 4;
+    list_height = height - 7;
+  }
   first = 0U;
   if (list_height > 0 && selected_index >= (size_t)list_height) {
     first = selected_index - (size_t)list_height + 1U;

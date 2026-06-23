@@ -57,7 +57,7 @@ default = "demo"
 prompt = "Edit Name"
 category = "edit"
 tags = ["edit", "string"]
-help = "String editor fixture."
+help = "String editor fixture. This long help sentence is intentionally written for the production TUI help panel so wrapping can be checked without losing context while editing profile values."
 
 [option."delos.edit.path"]
 type = "path"

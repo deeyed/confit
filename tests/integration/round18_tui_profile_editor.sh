@@ -15,6 +15,7 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 
 TERM=xterm
 export TERM
+PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
 
 {
   printf '%s\n' '/bool'
@@ -42,6 +43,9 @@ export TERM
   printf '%s' 'e'
   printf '\n'
   printf '%s\n' 'TUI name'
+  printf '%s' '?'
+  printf '%s' "$PAGE_DOWN_KEY"
+  printf '%s' 'q'
   printf '%s\n' 'x/path'
   printf '%s' 'e'
   printf '%s\n' '/tmp/bad'
@@ -69,10 +73,13 @@ grep -aF "invalid hex: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid float: expected finite value" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
 grep -aF "invalid string: value required" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "production TUI help panel" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "without losing" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid path: expected relative path" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
 grep -aF "Overwrite Profile" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "saved and reloaded" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "full validation ok" "$WORK_DIR/tui-edit.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile edit \

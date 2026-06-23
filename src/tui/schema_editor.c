@@ -1237,14 +1237,21 @@ static ConfitStatus confit_tui_schema_save(ConfitTuiSchemaState *state,
   if (status == CONFIT_OK) {
     status = confit_graph_validate(check_graph, diagnostic);
   }
-  confit_graph_free(check_graph);
-  confit_project_free(check_project);
   if (status == CONFIT_OK) {
+    confit_graph_free(state->graph);
+    confit_project_free(state->project);
+    state->project = check_project;
+    state->graph = check_graph;
+    check_project = 0;
+    check_graph = 0;
     state->dirty = 0;
     (void)snprintf(state->status, sizeof(state->status),
-                   "schema saved and validated %s", schema_path);
+                   "schema saved and validated; reloaded graph %s",
+                   schema_path);
     state->status[sizeof(state->status) - 1U] = '\0';
   }
+  confit_graph_free(check_graph);
+  confit_project_free(check_project);
   return status;
 }
 
@@ -1495,7 +1502,9 @@ static int confit_tui_schema_confirm_entry(const ConfitTuiSchemaState *state) {
       "SCHEMA EDIT MODE is a guarded workflow.\n"
       "Project: %s\n"
       "Schema changes alter configuration semantics for every profile.\n"
-      "Use this mode only for deliberate schema work, then review the TOML.",
+      "Use this mode only for deliberate schema work, then review the TOML.\n"
+      "Generated outputs are not written here; only source TOML changes after "
+      "validation.",
       confit_tui_text_or_dash(
           state != 0 && state->project != 0 ? state->project->name : 0));
   header[sizeof(header) - 1U] = '\0';
