@@ -5,6 +5,9 @@ prompt = "Edit Bool"
 category = "edit"
 tags = ["edit", "bool"]
 help = "Boolean editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.mode"]
 type = "enum"
@@ -14,6 +17,9 @@ prompt = "Edit Mode"
 category = "edit"
 tags = ["edit", "enum"]
 help = "Enum editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.count"]
 type = "int"
@@ -23,6 +29,9 @@ prompt = "Edit Count"
 category = "edit"
 tags = ["edit", "int"]
 help = "Integer editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.threads"]
 type = "uint"
@@ -32,6 +41,9 @@ prompt = "Edit Threads"
 category = "edit"
 tags = ["edit", "uint"]
 help = "Unsigned integer editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.mask"]
 type = "hex"
@@ -41,6 +53,9 @@ prompt = "Edit Mask"
 category = "edit"
 tags = ["edit", "hex"]
 help = "Hex editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.gain"]
 type = "float"
@@ -50,6 +65,9 @@ prompt = "Edit Gain"
 category = "edit"
 tags = ["edit", "float"]
 help = "Float editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.name"]
 type = "string"
@@ -58,6 +76,9 @@ prompt = "Edit Name"
 category = "edit"
 tags = ["edit", "string"]
 help = "String editor fixture. This long help sentence is intentionally written for the production TUI help panel so wrapping can be checked without losing context while editing profile values."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"
 
 [option."delos.edit.path"]
 type = "path"
@@ -66,3 +87,6 @@ prompt = "Edit Path"
 category = "edit"
 tags = ["edit", "path"]
 help = "Path editor fixture."
+owner = "confit-tests"
+since = "0.1.0"
+stability = "stable"

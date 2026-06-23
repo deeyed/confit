@@ -132,6 +132,6 @@ Confit은 수천 개 option을 가정한다.
 - TUI는 깊은 tree traversal이 아니라 검색, tag, dependency explanation을 기본 탐색 수단으로 둔다.
 - Explanation은 큰 graph에서도 특정 option 중심으로 빠르게 조회 가능해야 한다.
 
-Round 20 local gate는 2,500개 option synthetic project를 생성해 `check`, `list`, `graph`, `gen`을
-실행한다. 이 수치는 최소 release-candidate smoke 기준이며, 이후 CI에서는 더 큰 profile과 platform
+Local scale gate는 5,000개 option synthetic project를 생성해 `check`, `list`, `graph`, `gen`을 실행한다.
+이 수치는 최소 release-candidate smoke 기준이며, 이후 CI에서는 더 큰 profile과 platform
 matrix를 추가한다.

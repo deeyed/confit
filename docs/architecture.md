@@ -67,9 +67,10 @@ Confit의 목표가 아니다.
 
 ## Build System Boundary
 
-Confit은 CMake나 QStar를 대체하지 않는다. Confit은 build graph를 만들지 않는다. 초기 Confit은
-C code가 소비할 `config.h`와 검증 report를 먼저 만든다. CMake/QStar fragment 생성은 Confit core,
-TUI, Parus/Delos 적용이 안정화된 뒤 붙이는 장기 확장이다.
+Confit은 CMake나 QStar를 대체하지 않는다. Confit은 build graph를 만들지 않는다. Confit은 C code가
+소비할 `config.h`, 검증 report, 그리고 build system이 명시적으로 include할 수 있는 보조
+`config.cmake`/`config.qst` artifact를 만든다. 실제 CMake/QStar graph wiring은 Confit이 암묵적으로
+수정하지 않고, 별도 적용 round에서 review한다.
 
 ```text
 Confit:
@@ -78,8 +79,8 @@ Confit:
 C source:
   "generated config.h를 include해서 compile-time #define을 본다."
 
-CMake/QStar future integration:
-  "같은 resolved config에서 생성된 fragment를 읽고 source와 flag를 선택한다."
+CMake/QStar integration:
+  "같은 resolved config에서 생성된 fragment를 명시적으로 include해 source와 flag를 선택한다."
 ```
 
 QStar의 `qstar.config`와 future Confit `config.qst`는 역할이 다르다. Confit은 profile 결과를

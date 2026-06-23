@@ -56,6 +56,32 @@ Native Windows machine or CI execution has not yet been completed in this repo.
 The lane is implemented and testable, but not fully validated on a Windows host.
 ```
 
+## Round 18 Final Status
+
+As of the final Confit 18-round candidate, Windows is not claimed as a fully
+validated platform. The codebase has a deliberate Windows CLI-only path, rejects
+MSVC/clang-cl style compiler lanes, and keeps TUI disabled through the
+unsupported frontend.
+
+What is ready for a Windows host validation round:
+
+```text
+configure with CMake + Ninja + GNU-style clang
+build confit.exe
+run C integration runner
+run doctor/check/resolve/gen/explain/list/graph/diff/compat/profile/completion
+verify tui exits with unsupported command/platform
+```
+
+What remains open:
+
+```text
+native Windows CI or machine run
+Windows local install smoke
+Windows path edge cases outside the current C runner
+any PDCurses or real Windows TUI design
+```
+
 ## Compiler Policy
 
 The preferred Windows route is LLVM/MinGW-style Clang, not MSVC.

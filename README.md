@@ -51,6 +51,7 @@ integration artifact로만 다룬다.
 - [coding-and-doc-rules.md](docs/coding-and-doc-rules.md): 구현팀이 따라야 할 C/Doxygen/문서 규칙.
 - [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
 - [release-candidate.md](docs/release-candidate.md): v0 RC 검증 gate, 예제 command, portability review.
+- [final-release-note.md](docs/final-release-note.md): 18라운드 종료 시점 실전 투입 후보 판정과 남은 위험.
 
 ## Recommended Repository Placement
 
@@ -77,6 +78,8 @@ build/generated/config/<project>/<profile>/
   config.explain.txt
   config.graph.json
   config.inputs.json
+  config.cmake
+  config.qst
 ```
 
 `config/` 아래에는 사람이 관리하는 source config만 둔다. Generated 파일을 `config/`에 쓰는 것은
