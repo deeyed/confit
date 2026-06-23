@@ -34,7 +34,11 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/parser/toml_scan.c" \
   "$ROOT_DIR/src/resolver/resolver.c" \
   "$ROOT_DIR/src/schema/schema.c" \
+  "$ROOT_DIR/src/tui/curses_frontend.c" \
+  "$ROOT_DIR/src/tui/profile_editor.c" \
+  "$ROOT_DIR/src/tui/schema_editor.c" \
   "$ROOT_DIR/src/tui/tui.c" \
+  "$ROOT_DIR/src/tui/tui_common.c" \
   "$ROOT_DIR/src/host/host_directory.c" \
   "$ROOT_DIR/src/host/host_file.c" \
   "$ROOT_DIR/src/host/host_io.c" \

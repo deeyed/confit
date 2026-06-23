@@ -157,7 +157,11 @@ else()
 endif()
 
 add_library(confit_tui STATIC
+  src/tui/curses_frontend.c
+  src/tui/profile_editor.c
+  src/tui/schema_editor.c
   src/tui/tui.c
+  src/tui/tui_common.c
 )
 
 target_link_libraries(confit_tui
