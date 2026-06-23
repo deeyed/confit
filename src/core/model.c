@@ -72,6 +72,10 @@ static void confit_model_string_array_clear(char **items, size_t item_count) {
   free(items);
 }
 
+static int confit_model_float_is_finite(double value) {
+  return value == value && value <= 1.0e308 && value >= -1.0e308;
+}
+
 const char *confit_option_type_name(ConfitOptionType type) {
   switch (type) {
   case CONFIT_OPTION_TYPE_INVALID:
@@ -111,6 +115,10 @@ const char *confit_value_kind_name(ConfitValueKind kind) {
     return "string";
   case CONFIT_VALUE_ENUM:
     return "enum";
+  case CONFIT_VALUE_FLOAT:
+    return "float";
+  case CONFIT_VALUE_PATH:
+    return "path";
   default:
     return "unknown";
   }
@@ -131,7 +139,7 @@ void confit_value_clear(ConfitValue *value) {
   }
 
   if (value->kind == CONFIT_VALUE_STRING ||
-      value->kind == CONFIT_VALUE_ENUM) {
+      value->kind == CONFIT_VALUE_ENUM || value->kind == CONFIT_VALUE_PATH) {
     free(value->as.string_value);
   }
   confit_value_init(value);
@@ -198,6 +206,21 @@ ConfitStatus confit_value_set_enum(ConfitValue *value,
   return confit_value_set_owned_string(value, CONFIT_VALUE_ENUM, enum_value);
 }
 
+void confit_value_set_float(ConfitValue *value, double float_value) {
+  if (value == 0) {
+    return;
+  }
+
+  confit_value_clear(value);
+  value->kind = CONFIT_VALUE_FLOAT;
+  value->as.float_value = float_value;
+}
+
+ConfitStatus confit_value_set_path(ConfitValue *value,
+                                   const char *path_value) {
+  return confit_value_set_owned_string(value, CONFIT_VALUE_PATH, path_value);
+}
+
 ConfitStatus confit_value_copy(ConfitValue *out, const ConfitValue *input) {
   if (out == 0 || input == 0) {
     return CONFIT_ERR_INVALID_ARGUMENT;
@@ -220,6 +243,11 @@ ConfitStatus confit_value_copy(ConfitValue *out, const ConfitValue *input) {
     return confit_value_set_string(out, input->as.string_value);
   case CONFIT_VALUE_ENUM:
     return confit_value_set_enum(out, input->as.string_value);
+  case CONFIT_VALUE_FLOAT:
+    confit_value_set_float(out, input->as.float_value);
+    return CONFIT_OK;
+  case CONFIT_VALUE_PATH:
+    return confit_value_set_path(out, input->as.string_value);
   default:
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
@@ -319,6 +347,11 @@ static void confit_option_init(ConfitOption *option) {
   option->id = 0;
   option->type = CONFIT_OPTION_TYPE_INVALID;
   confit_value_init(&option->default_value);
+  option->has_range = 0;
+  confit_value_init(&option->range_min);
+  confit_value_init(&option->range_max);
+  option->enum_values = 0;
+  option->enum_value_count = 0;
   option->prompt = 0;
   option->category = 0;
   option->help = 0;
@@ -333,6 +366,9 @@ static void confit_option_clear(ConfitOption *option) {
 
   free(option->id);
   confit_value_clear(&option->default_value);
+  confit_option_clear_range(option);
+  confit_model_string_array_clear(option->enum_values,
+                                  option->enum_value_count);
   free(option->prompt);
   free(option->category);
   free(option->help);
@@ -642,6 +678,179 @@ ConfitStatus confit_option_set_default(ConfitOption *option,
   }
 
   return confit_value_copy(&option->default_value, value);
+}
+
+ConfitStatus confit_option_set_range(ConfitOption *option,
+                                     const ConfitValue *min_value,
+                                     const ConfitValue *max_value) {
+  ConfitStatus status;
+
+  if (option == 0 || min_value == 0 || max_value == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_value_copy(&option->range_min, min_value);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_value_copy(&option->range_max, max_value);
+  if (status != CONFIT_OK) {
+    confit_value_clear(&option->range_min);
+    return status;
+  }
+  option->has_range = 1;
+  return CONFIT_OK;
+}
+
+void confit_option_clear_range(ConfitOption *option) {
+  if (option == 0) {
+    return;
+  }
+
+  confit_value_clear(&option->range_min);
+  confit_value_clear(&option->range_max);
+  option->has_range = 0;
+}
+
+ConfitStatus confit_option_add_enum_value(ConfitOption *option,
+                                          const char *enum_value) {
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  return confit_model_append_string(&option->enum_values,
+                                    &option->enum_value_count, enum_value);
+}
+
+static int confit_option_enum_contains(const ConfitOption *option,
+                                       const char *enum_value) {
+  size_t index;
+
+  if (option == 0 || enum_value == 0) {
+    return 0;
+  }
+
+  for (index = 0U; index < option->enum_value_count; ++index) {
+    if (strcmp(option->enum_values[index], enum_value) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static ConfitStatus confit_option_validate_range(const ConfitOption *option) {
+  const ConfitValue *value;
+
+  if (option == 0 || !option->has_range ||
+      option->default_value.kind == CONFIT_VALUE_EMPTY) {
+    return CONFIT_OK;
+  }
+
+  value = &option->default_value;
+  if (option->type == CONFIT_OPTION_TYPE_INT) {
+    if (option->range_min.kind != CONFIT_VALUE_INT ||
+        option->range_max.kind != CONFIT_VALUE_INT ||
+        value->kind != CONFIT_VALUE_INT ||
+        option->range_min.as.int_value > option->range_max.as.int_value ||
+        value->as.int_value < option->range_min.as.int_value ||
+        value->as.int_value > option->range_max.as.int_value) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    return CONFIT_OK;
+  }
+
+  if (option->type == CONFIT_OPTION_TYPE_UINT ||
+      option->type == CONFIT_OPTION_TYPE_HEX) {
+    if (option->range_min.kind != CONFIT_VALUE_UINT ||
+        option->range_max.kind != CONFIT_VALUE_UINT ||
+        value->kind != CONFIT_VALUE_UINT ||
+        option->range_min.as.uint_value > option->range_max.as.uint_value ||
+        value->as.uint_value < option->range_min.as.uint_value ||
+        value->as.uint_value > option->range_max.as.uint_value) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    return CONFIT_OK;
+  }
+
+  if (option->type == CONFIT_OPTION_TYPE_FLOAT) {
+    if (option->range_min.kind != CONFIT_VALUE_FLOAT ||
+        option->range_max.kind != CONFIT_VALUE_FLOAT ||
+        value->kind != CONFIT_VALUE_FLOAT ||
+        !confit_model_float_is_finite(option->range_min.as.float_value) ||
+        !confit_model_float_is_finite(option->range_max.as.float_value) ||
+        !confit_model_float_is_finite(value->as.float_value) ||
+        option->range_min.as.float_value > option->range_max.as.float_value ||
+        value->as.float_value < option->range_min.as.float_value ||
+        value->as.float_value > option->range_max.as.float_value) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    return CONFIT_OK;
+  }
+
+  return CONFIT_ERR_SCHEMA;
+}
+
+ConfitStatus confit_option_validate_default(const ConfitOption *option) {
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  switch (option->type) {
+  case CONFIT_OPTION_TYPE_BOOL:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_BOOL) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_INT:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_INT) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_UINT:
+  case CONFIT_OPTION_TYPE_HEX:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_UINT) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_STRING:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_STRING) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_ENUM:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_ENUM) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (option->default_value.kind == CONFIT_VALUE_ENUM &&
+        option->enum_value_count > 0U &&
+        !confit_option_enum_contains(option,
+                                     option->default_value.as.string_value)) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_FLOAT:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        (option->default_value.kind != CONFIT_VALUE_FLOAT ||
+         !confit_model_float_is_finite(option->default_value.as.float_value))) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_PATH:
+    if (option->default_value.kind != CONFIT_VALUE_EMPTY &&
+        option->default_value.kind != CONFIT_VALUE_PATH) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    break;
+  default:
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  return confit_option_validate_range(option);
 }
 
 ConfitStatus confit_choice_set_identity(ConfitChoice *choice, const char *id,

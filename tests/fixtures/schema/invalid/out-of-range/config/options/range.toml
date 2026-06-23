@@ -1,0 +1,4 @@
+[option."delos.scheduler.task_slots"]
+type = "uint"
+default = 256
+range = [1, 128]

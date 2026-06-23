@@ -288,6 +288,39 @@ static int confit_schema_parse_uint(const char *text, size_t begin, size_t end,
   return 1;
 }
 
+static int confit_schema_parse_hex_uint(const char *text, size_t begin,
+                                        size_t end, uint64_t *out_value) {
+  uint64_t value;
+  size_t index;
+
+  begin = confit_schema_trim_left(text + begin, end - begin) + begin;
+  end = confit_schema_trim_right(text, begin, end);
+  if (end < begin + 3U || text[begin] != '0' ||
+      (text[begin + 1U] != 'x' && text[begin + 1U] != 'X')) {
+    return confit_schema_parse_uint(text, begin, end, out_value);
+  }
+
+  value = 0U;
+  for (index = begin + 2U; index < end; ++index) {
+    const char ch = text[index];
+    unsigned digit;
+
+    if (ch >= '0' && ch <= '9') {
+      digit = (unsigned)(ch - '0');
+    } else if (ch >= 'a' && ch <= 'f') {
+      digit = (unsigned)(ch - 'a') + 10U;
+    } else if (ch >= 'A' && ch <= 'F') {
+      digit = (unsigned)(ch - 'A') + 10U;
+    } else {
+      return 0;
+    }
+    value = value * 16U + (uint64_t)digit;
+  }
+
+  *out_value = value;
+  return 1;
+}
+
 static int confit_schema_parse_int(const char *text, size_t begin, size_t end,
                                    int64_t *out_value) {
   int negative;
@@ -307,6 +340,91 @@ static int confit_schema_parse_int(const char *text, size_t begin, size_t end,
 
   *out_value = negative ? -(int64_t)magnitude : (int64_t)magnitude;
   return 1;
+}
+
+static int confit_schema_parse_float(const char *text, size_t begin,
+                                     size_t end, double *out_value) {
+  int negative;
+  int saw_digit;
+  double value;
+  double place;
+  int exponent_negative;
+  int exponent;
+  size_t index;
+
+  begin = confit_schema_trim_left(text + begin, end - begin) + begin;
+  end = confit_schema_trim_right(text, begin, end);
+  if (begin >= end) {
+    return 0;
+  }
+
+  index = begin;
+  negative = 0;
+  if (text[index] == '-' || text[index] == '+') {
+    negative = text[index] == '-';
+    index += 1U;
+  }
+
+  value = 0.0;
+  saw_digit = 0;
+  while (index < end && isdigit((unsigned char)text[index])) {
+    if (value > 1.0e307) {
+      return 0;
+    }
+    value = value * 10.0 + (double)(text[index] - '0');
+    saw_digit = 1;
+    index += 1U;
+  }
+
+  if (index < end && text[index] == '.') {
+    index += 1U;
+    place = 0.1;
+    while (index < end && isdigit((unsigned char)text[index])) {
+      value += (double)(text[index] - '0') * place;
+      place *= 0.1;
+      saw_digit = 1;
+      index += 1U;
+    }
+  }
+
+  if (!saw_digit) {
+    return 0;
+  }
+
+  if (index < end && (text[index] == 'e' || text[index] == 'E')) {
+    index += 1U;
+    exponent_negative = 0;
+    exponent = 0;
+    if (index < end && (text[index] == '-' || text[index] == '+')) {
+      exponent_negative = text[index] == '-';
+      index += 1U;
+    }
+    if (index >= end || !isdigit((unsigned char)text[index])) {
+      return 0;
+    }
+    while (index < end && isdigit((unsigned char)text[index])) {
+      exponent = exponent * 10 + (int)(text[index] - '0');
+      if (exponent > 308) {
+        return 0;
+      }
+      index += 1U;
+    }
+    while (exponent > 0) {
+      value = exponent_negative ? value / 10.0 : value * 10.0;
+      if (value > 1.0e308 || value < -1.0e308) {
+        return 0;
+      }
+      exponent -= 1;
+    }
+  }
+
+  if (index != end) {
+    return 0;
+  }
+
+  *out_value = negative ? -value : value;
+  return *out_value == *out_value && *out_value <= 1.0e308 &&
+         *out_value >= -1.0e308;
 }
 
 static int confit_schema_parse_string_array(const char *text, size_t begin,
@@ -403,6 +521,112 @@ static void confit_schema_string_array_free(char **items, size_t count) {
     free(items[index]);
   }
   free(items);
+}
+
+static int confit_schema_find_range_comma(const char *text, size_t begin,
+                                          size_t end, size_t *out_comma) {
+  size_t index;
+
+  for (index = begin; index < end; ++index) {
+    if (text[index] == ',') {
+      *out_comma = index;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static ConfitStatus confit_schema_parse_range_value(
+    ConfitOptionType type, const char *text, size_t begin, size_t end,
+    ConfitValue *out_value, const char *path, size_t line,
+    ConfitDiagnostic *diagnostic) {
+  int64_t int_value;
+  uint64_t uint_value;
+  double float_value;
+
+  confit_value_init(out_value);
+  switch (type) {
+  case CONFIT_OPTION_TYPE_INT:
+    if (!confit_schema_parse_int(text, begin, end, &int_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              begin + 1U, "invalid int range value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_int(out_value, int_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_UINT:
+    if (!confit_schema_parse_uint(text, begin, end, &uint_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              begin + 1U, "invalid uint range value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_uint(out_value, uint_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_HEX:
+    if (!confit_schema_parse_hex_uint(text, begin, end, &uint_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              begin + 1U, "invalid hex range value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_uint(out_value, uint_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_FLOAT:
+    if (!confit_schema_parse_float(text, begin, end, &float_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              begin + 1U, "invalid float range value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_float(out_value, float_value);
+    return CONFIT_OK;
+  default:
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            begin + 1U,
+                            "range is only valid for numeric options");
+    return CONFIT_ERR_SCHEMA;
+  }
+}
+
+static ConfitStatus confit_schema_parse_range(
+    ConfitOption *option, const char *line_text, size_t value_begin,
+    size_t value_end, const char *path, size_t line,
+    ConfitDiagnostic *diagnostic) {
+  ConfitValue min_value;
+  ConfitValue max_value;
+  ConfitStatus status;
+  size_t comma;
+
+  value_begin =
+      confit_schema_trim_left(line_text + value_begin, value_end - value_begin) +
+      value_begin;
+  value_end = confit_schema_trim_right(line_text, value_begin, value_end);
+  if (value_begin >= value_end || line_text[value_begin] != '[' ||
+      line_text[value_end - 1U] != ']') {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U, "expected range array");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (!confit_schema_find_range_comma(line_text, value_begin + 1U,
+                                      value_end - 1U, &comma)) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U, "range must have two values");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_schema_parse_range_value(option->type, line_text,
+                                           value_begin + 1U, comma, &min_value,
+                                           path, line, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_schema_parse_range_value(option->type, line_text, comma + 1U,
+                                           value_end - 1U, &max_value, path,
+                                           line, diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_option_set_range(option, &min_value, &max_value);
+  }
+  confit_value_clear(&min_value);
+  confit_value_clear(&max_value);
+  return status;
 }
 
 static int confit_schema_parse_table(const char *text, size_t begin, size_t end,
@@ -833,6 +1057,7 @@ static ConfitStatus confit_schema_parse_option_default(
   char *string_value;
   int64_t int_value;
   uint64_t uint_value;
+  double float_value;
 
   confit_value_init(&value);
   switch (option->type) {
@@ -864,7 +1089,6 @@ static ConfitStatus confit_schema_parse_option_default(
     confit_value_set_int(&value, int_value);
     break;
   case CONFIT_OPTION_TYPE_UINT:
-  case CONFIT_OPTION_TYPE_HEX:
     if (!confit_schema_parse_uint(line_text, value_begin, value_end,
                                   &uint_value)) {
       confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
@@ -874,14 +1098,35 @@ static ConfitStatus confit_schema_parse_option_default(
     }
     confit_value_set_uint(&value, uint_value);
     break;
+  case CONFIT_OPTION_TYPE_HEX:
+    if (!confit_schema_parse_hex_uint(line_text, value_begin, value_end,
+                                      &uint_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "hex default must be an unsigned integer");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_uint(&value, uint_value);
+    break;
   case CONFIT_OPTION_TYPE_STRING:
-  case CONFIT_OPTION_TYPE_PATH:
     string_value = confit_schema_parse_quoted_string(
         line_text, value_begin, value_end, path, line, diagnostic);
     if (string_value == 0) {
       return CONFIT_ERR_SCHEMA;
     }
     status = confit_value_set_string(&value, string_value);
+    free(string_value);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    break;
+  case CONFIT_OPTION_TYPE_PATH:
+    string_value = confit_schema_parse_quoted_string(
+        line_text, value_begin, value_end, path, line, diagnostic);
+    if (string_value == 0) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    status = confit_value_set_path(&value, string_value);
     free(string_value);
     if (status != CONFIT_OK) {
       return status;
@@ -898,6 +1143,16 @@ static ConfitStatus confit_schema_parse_option_default(
     if (status != CONFIT_OK) {
       return status;
     }
+    break;
+  case CONFIT_OPTION_TYPE_FLOAT:
+    if (!confit_schema_parse_float(line_text, value_begin, value_end,
+                                   &float_value)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "float default must be finite");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_float(&value, float_value);
     break;
   default:
     confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
@@ -931,7 +1186,6 @@ static ConfitStatus confit_schema_parse_option_value(
   if (strncmp(key, "x_", 2U) == 0 || strcmp(key, "requires") == 0 ||
       strcmp(key, "conflicts") == 0 || strcmp(key, "recommends") == 0 ||
       strcmp(key, "forces") == 0 || strcmp(key, "visible_if") == 0 ||
-      strcmp(key, "range") == 0 || strcmp(key, "choices") == 0 ||
       strcmp(key, "deprecated") == 0 || strcmp(key, "replaced_by") == 0) {
     return CONFIT_OK;
   }
@@ -958,6 +1212,36 @@ static ConfitStatus confit_schema_parse_option_value(
   if (strcmp(key, "default") == 0) {
     return confit_schema_parse_option_default(option, line_text, value_begin,
                                              value_end, path, line, diagnostic);
+  }
+
+  if (strcmp(key, "range") == 0) {
+    return confit_schema_parse_range(option, line_text, value_begin, value_end,
+                                    path, line, diagnostic);
+  }
+
+  if (strcmp(key, "choices") == 0) {
+    if (option->type != CONFIT_OPTION_TYPE_ENUM) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "choices are only valid for enum options");
+      return CONFIT_ERR_SCHEMA;
+    }
+    array_items = 0;
+    array_count = 0U;
+    if (!confit_schema_parse_string_array(line_text, value_begin, value_end,
+                                          &array_items, &array_count, path,
+                                          line, diagnostic)) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; index < array_count; ++index) {
+      status = confit_option_add_enum_value(option, array_items[index]);
+      if (status != CONFIT_OK) {
+        confit_schema_string_array_free(array_items, array_count);
+        return status;
+      }
+    }
+    confit_schema_string_array_free(array_items, array_count);
+    return CONFIT_OK;
   }
 
   if (strcmp(key, "prompt") == 0 || strcmp(key, "category") == 0 ||
@@ -1016,6 +1300,22 @@ static ConfitStatus confit_schema_finish_option(
   if (!state->saw_type) {
     confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path,
                             state->type_line, 1U, "missing option type");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  if (confit_option_validate_default(state->option) != CONFIT_OK) {
+    const char *message;
+
+    message = "invalid option default";
+    if (state->option->type == CONFIT_OPTION_TYPE_ENUM &&
+        state->option->default_value.kind == CONFIT_VALUE_ENUM &&
+        state->option->enum_value_count > 0U) {
+      message = "enum default is not a candidate";
+    } else if (state->option->has_range) {
+      message = "default outside range";
+    }
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path,
+                            state->type_line, 1U, message);
     return CONFIT_ERR_SCHEMA;
   }
 

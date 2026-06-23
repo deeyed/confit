@@ -1,6 +1,7 @@
 [option."delos.scheduler.task_slots"]
 type = "uint"
 default = 16
+range = [1, 128]
 prompt = "Task Slots"
 category = "scheduler"
 tags = ["scheduler"]
@@ -9,6 +10,7 @@ help = "Number of static task slots."
 [option."delos.target.board"]
 type = "enum"
 default = "host-sim"
+choices = ["host-sim", "qemu-mps2-an500"]
 prompt = "Target Board"
 category = "target"
 tags = ["target"]

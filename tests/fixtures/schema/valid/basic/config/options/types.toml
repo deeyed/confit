@@ -1,0 +1,33 @@
+[option."delos.memory.flash_base"]
+type = "hex"
+default = 0x08000000
+range = [0x08000000, 0x080FFFFF]
+prompt = "Flash Base"
+category = "memory"
+tags = ["memory"]
+help = "Flash base address."
+
+[option."delos.sim.default_gain"]
+type = "float"
+default = 0.125
+range = [0.0, 1.0]
+prompt = "Default Gain"
+category = "sim"
+tags = ["sim"]
+help = "Simulation tuning gain."
+
+[option."delos.output.name"]
+type = "string"
+default = "delos-sim"
+prompt = "Output Name"
+category = "build"
+tags = ["build"]
+help = "Generated output name."
+
+[option."delos.paths.config_root"]
+type = "path"
+default = "build/generated/config"
+prompt = "Config Root"
+category = "build"
+tags = ["build"]
+help = "Build-relative generated config root."

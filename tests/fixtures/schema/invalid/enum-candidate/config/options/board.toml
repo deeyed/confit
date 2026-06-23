@@ -1,0 +1,4 @@
+[option."delos.target.board"]
+type = "enum"
+default = "unknown-board"
+choices = ["host-sim", "qemu-mps2-an500"]

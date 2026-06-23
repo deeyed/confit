@@ -1,0 +1,4 @@
+[option."delos.output.name"]
+type = "string"
+default = "delos"
+range = [1, 2]

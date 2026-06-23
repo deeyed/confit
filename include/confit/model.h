@@ -13,9 +13,9 @@ extern "C" {
 /**
  * @brief Confit option schema type이다.
  *
- * Round 5는 bool, int, uint, string, enum skeleton을 실제 value helper와 함께
- * 제공한다. Hex, float, path는 schema surface에 예약되어 있으며, full
- * validation은 이후 type-system 라운드에서 완성한다.
+ * bool, int, uint, hex, string, enum, float, path를 schema surface와
+ * default value payload로 표현한다. Hex는 unsigned integer payload를
+ * 사용하되 display convention이 hex인 option type으로 구분한다.
  */
 typedef enum ConfitOptionType {
   /** 아직 type이 정해지지 않았다. */
@@ -54,6 +54,10 @@ typedef enum ConfitValueKind {
   CONFIT_VALUE_STRING = 4,
   /** enum string payload를 가진다. */
   CONFIT_VALUE_ENUM = 5,
+  /** finite floating-point payload를 가진다. */
+  CONFIT_VALUE_FLOAT = 6,
+  /** path string payload를 가진다. */
+  CONFIT_VALUE_PATH = 7,
 } ConfitValueKind;
 
 /**
@@ -73,6 +77,8 @@ typedef struct ConfitValue {
     int64_t int_value;
     /** unsigned integer payload. */
     uint64_t uint_value;
+    /** finite floating-point payload. */
+    double float_value;
     /** string 또는 enum payload. */
     char *string_value;
   } as;
@@ -122,6 +128,16 @@ typedef struct ConfitOption {
   ConfitOptionType type;
   /** default value. */
   ConfitValue default_value;
+  /** range metadata가 있으면 1. */
+  int has_range;
+  /** range minimum value. */
+  ConfitValue range_min;
+  /** range maximum value. */
+  ConfitValue range_max;
+  /** enum candidate 목록. */
+  char **enum_values;
+  /** enum candidate 개수. */
+  size_t enum_value_count;
   /** TUI/display prompt. 없으면 `NULL`. */
   char *prompt;
   /** category label. 없으면 `NULL`. */
@@ -277,6 +293,24 @@ ConfitStatus confit_value_set_enum(ConfitValue *value,
                                    const char *enum_value);
 
 /**
+ * @brief value에 finite floating-point payload를 설정한다.
+ *
+ * @param value 갱신할 value.
+ * @param float_value 저장할 floating-point 값.
+ */
+void confit_value_set_float(ConfitValue *value, double float_value);
+
+/**
+ * @brief value에 path string payload를 복사해 설정한다.
+ *
+ * @param value 갱신할 value.
+ * @param path_value 복사할 path 문자열.
+ * @return 성공하면 CONFIT_OK, allocation 실패면 CONFIT_ERR_INTERNAL.
+ */
+ConfitStatus confit_value_set_path(ConfitValue *value,
+                                   const char *path_value);
+
+/**
  * @brief value payload를 deep-copy한다.
  *
  * @param out 복사 결과를 받을 value.
@@ -415,6 +449,46 @@ ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag);
  */
 ConfitStatus confit_option_set_default(ConfitOption *option,
                                        const ConfitValue *value);
+
+/**
+ * @brief option range metadata를 deep-copy한다.
+ *
+ * Range validation은 option type과 value kind가 맞아야 한다. int는 int range,
+ * uint/hex는 uint range, float는 float range를 사용한다.
+ *
+ * @param option 갱신할 option.
+ * @param min_value 복사할 minimum value.
+ * @param max_value 복사할 maximum value.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_set_range(ConfitOption *option,
+                                     const ConfitValue *min_value,
+                                     const ConfitValue *max_value);
+
+/**
+ * @brief option range metadata를 제거한다.
+ *
+ * @param option 갱신할 option.
+ */
+void confit_option_clear_range(ConfitOption *option);
+
+/**
+ * @brief enum option candidate를 추가한다.
+ *
+ * @param option 갱신할 option.
+ * @param enum_value 복사할 enum candidate.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_add_enum_value(ConfitOption *option,
+                                          const char *enum_value);
+
+/**
+ * @brief option default value가 type/range/enum candidate 제약을 만족하는지 확인한다.
+ *
+ * @param option 검사할 option.
+ * @return 유효하면 CONFIT_OK, 아니면 CONFIT_ERR_SCHEMA.
+ */
+ConfitStatus confit_option_validate_default(const ConfitOption *option);
 
 /**
  * @brief choice identity를 설정한다.

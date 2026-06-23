@@ -5,4 +5,5 @@ schema_version = 1
 imports = [
   "options/debug.toml",
   "options/runtime.toml",
+  "options/types.toml",
 ]
