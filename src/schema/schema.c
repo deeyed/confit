@@ -77,6 +77,72 @@ static char *confit_schema_copy_string(const char *text) {
   return text != 0 ? confit_schema_copy_bytes(text, strlen(text)) : 0;
 }
 
+void confit_schema_audit_init(ConfitSchemaAudit *audit) {
+  if (audit == 0) {
+    return;
+  }
+
+  audit->warnings = 0;
+  audit->warning_count = 0U;
+}
+
+void confit_schema_audit_clear(ConfitSchemaAudit *audit) {
+  size_t index;
+
+  if (audit == 0) {
+    return;
+  }
+
+  for (index = 0U; index < audit->warning_count; ++index) {
+    free(audit->warnings[index].path);
+    free(audit->warnings[index].option_id);
+    free(audit->warnings[index].message);
+  }
+  free(audit->warnings);
+  confit_schema_audit_init(audit);
+}
+
+static ConfitStatus confit_schema_audit_add_warning(
+    ConfitSchemaAudit *audit, const char *path, size_t line, size_t column,
+    const char *option_id, const char *message) {
+  ConfitSchemaWarning *new_warnings;
+  ConfitSchemaWarning *warning;
+
+  if (audit == 0) {
+    return CONFIT_OK;
+  }
+
+  new_warnings =
+      (ConfitSchemaWarning *)realloc(
+          audit->warnings,
+          (audit->warning_count + 1U) * sizeof(audit->warnings[0]));
+  if (new_warnings == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  audit->warnings = new_warnings;
+  warning = &audit->warnings[audit->warning_count];
+  warning->path = confit_schema_copy_string(path);
+  warning->line = line;
+  warning->column = column;
+  warning->option_id = confit_schema_copy_string(option_id);
+  warning->message = confit_schema_copy_string(message);
+  if ((path != 0 && warning->path == 0) ||
+      (option_id != 0 && warning->option_id == 0) ||
+      (message != 0 && warning->message == 0)) {
+    free(warning->path);
+    free(warning->option_id);
+    free(warning->message);
+    warning->path = 0;
+    warning->option_id = 0;
+    warning->message = 0;
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  audit->warning_count += 1U;
+  return CONFIT_OK;
+}
+
 static void confit_schema_set_error(ConfitDiagnostic *diagnostic,
                                     ConfitStatus status, const char *path,
                                     size_t line, size_t column,
@@ -452,6 +518,21 @@ static int confit_schema_parse_float(const char *text, size_t begin,
   *out_value = negative ? -value : value;
   return *out_value == *out_value && *out_value <= 1.0e308 &&
          *out_value >= -1.0e308;
+}
+
+static int confit_schema_parse_bool_token(const char *text, size_t begin,
+                                          size_t end, int *out_value) {
+  begin = confit_schema_trim_left(text + begin, end - begin) + begin;
+  end = confit_schema_trim_right(text, begin, end);
+  if (confit_schema_string_equal(text, begin, end, "true")) {
+    *out_value = 1;
+    return 1;
+  }
+  if (confit_schema_string_equal(text, begin, end, "false")) {
+    *out_value = 0;
+    return 1;
+  }
+  return 0;
 }
 
 static int confit_schema_parse_string_array(const char *text, size_t begin,
@@ -962,10 +1043,13 @@ static int confit_schema_is_known_project_field(const char *key) {
 
 static int confit_schema_is_known_option_field(const char *key) {
   static const char *const known_fields[] = {
-      "type",       "default",    "prompt",    "category", "tags",
-      "help",       "requires",   "conflicts", "recommends",
-      "forces",     "visible_if", "range",     "choices",  "deprecated",
-      "replaced_by"};
+      "type",               "default",   "prompt",
+      "category",           "tags",      "help",
+      "requires",           "conflicts", "recommends",
+      "forces",             "visible_if", "range",
+      "choices",            "owner",     "since",
+      "stability",          "deprecated", "replaced_by",
+      "deprecated_aliases"};
   size_t index;
 
   if (strncmp(key, "x_", 2U) == 0) {
@@ -1440,8 +1524,7 @@ static ConfitStatus confit_schema_parse_option_value(
     return CONFIT_ERR_SCHEMA;
   }
 
-  if (strncmp(key, "x_", 2U) == 0 || strcmp(key, "deprecated") == 0 ||
-      strcmp(key, "replaced_by") == 0) {
+  if (strncmp(key, "x_", 2U) == 0) {
     return CONFIT_OK;
   }
 
@@ -1543,6 +1626,57 @@ static ConfitStatus confit_schema_parse_option_value(
     return status;
   }
 
+  if (strcmp(key, "owner") == 0 || strcmp(key, "since") == 0 ||
+      strcmp(key, "stability") == 0) {
+    const char *owner = option->owner;
+    const char *since = option->since;
+    const char *stability = option->stability;
+
+    string_value = confit_schema_parse_quoted_string(
+        line_text, value_begin, value_end, path, line, diagnostic);
+    if (string_value == 0) {
+      return CONFIT_ERR_SCHEMA;
+    }
+
+    if (strcmp(key, "owner") == 0) {
+      owner = string_value;
+    } else if (strcmp(key, "since") == 0) {
+      since = string_value;
+    } else {
+      stability = string_value;
+    }
+    status =
+        confit_option_set_stability_metadata(option, owner, since, stability);
+    free(string_value);
+    return status;
+  }
+
+  if (strcmp(key, "deprecated") == 0) {
+    int deprecated;
+
+    if (!confit_schema_parse_bool_token(line_text, value_begin, value_end,
+                                        &deprecated)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "deprecated must be true or false");
+      return CONFIT_ERR_SCHEMA;
+    }
+    return confit_option_set_deprecation(option, deprecated,
+                                         option->replaced_by);
+  }
+
+  if (strcmp(key, "replaced_by") == 0) {
+    string_value = confit_schema_parse_quoted_string(
+        line_text, value_begin, value_end, path, line, diagnostic);
+    if (string_value == 0) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    status =
+        confit_option_set_deprecation(option, option->deprecated, string_value);
+    free(string_value);
+    return status;
+  }
+
   if (strcmp(key, "tags") == 0) {
     array_items = 0;
     array_count = 0U;
@@ -1553,6 +1687,25 @@ static ConfitStatus confit_schema_parse_option_value(
     }
     for (index = 0U; index < array_count; ++index) {
       status = confit_option_add_tag(option, array_items[index]);
+      if (status != CONFIT_OK) {
+        confit_schema_string_array_free(array_items, array_count);
+        return status;
+      }
+    }
+    confit_schema_string_array_free(array_items, array_count);
+    return CONFIT_OK;
+  }
+
+  if (strcmp(key, "deprecated_aliases") == 0) {
+    array_items = 0;
+    array_count = 0U;
+    if (!confit_schema_parse_string_array(line_text, value_begin, value_end,
+                                          &array_items, &array_count, path,
+                                          line, diagnostic)) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; index < array_count; ++index) {
+      status = confit_option_add_deprecated_alias(option, array_items[index]);
       if (status != CONFIT_OK) {
         confit_schema_string_array_free(array_items, array_count);
         return status;
@@ -1876,15 +2029,87 @@ static ConfitStatus confit_schema_parse_profile_field(
   return status;
 }
 
+static ConfitOption *confit_schema_find_option_by_deprecated_alias(
+    ConfitProject *project, const char *alias, int *out_ambiguous) {
+  ConfitOption *match;
+  size_t option_index;
+
+  match = 0;
+  *out_ambiguous = 0;
+  for (option_index = 0U; option_index < project->option_count;
+       ++option_index) {
+    ConfitOption *option = &project->options[option_index];
+    size_t alias_index;
+
+    for (alias_index = 0U; alias_index < option->deprecated_alias_count;
+         ++alias_index) {
+      if (strcmp(option->deprecated_aliases[alias_index], alias) != 0) {
+        continue;
+      }
+      if (match != 0) {
+        *out_ambiguous = 1;
+        return match;
+      }
+      match = option;
+    }
+  }
+  return match;
+}
+
+static ConfitStatus confit_schema_resolve_value_option(
+    ConfitProject *project, const char *option_id, ConfitOption **out_option,
+    const char **out_canonical_id, const char *path, size_t line,
+    ConfitSchemaAudit *audit, ConfitDiagnostic *diagnostic) {
+  ConfitOption *option;
+  int ambiguous;
+  ConfitStatus status;
+
+  option = confit_project_find_option(project, option_id);
+  if (option != 0) {
+    *out_option = option;
+    *out_canonical_id = option_id;
+    return CONFIT_OK;
+  }
+
+  ambiguous = 0;
+  option = confit_schema_find_option_by_deprecated_alias(project, option_id,
+                                                        &ambiguous);
+  if (ambiguous) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
+                            "ambiguous deprecated alias");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (option == 0) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
+                            "unknown value option");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_schema_audit_add_warning(
+      audit, path, line, 1U, option_id,
+      "deprecated alias canonicalized to current option id");
+  if (status != CONFIT_OK) {
+    confit_schema_set_error(diagnostic, status, path, line, 1U,
+                            "failed to record deprecated alias warning");
+    return status;
+  }
+
+  *out_option = option;
+  *out_canonical_id = option->id;
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_schema_parse_profile_value(
     ConfitProject *project, ConfitProfile *profile, const char *key_text,
     size_t key_begin, size_t key_end, const char *line_text,
     size_t value_begin, size_t value_end, const char *source_label,
-    const char *path, size_t line, ConfitDiagnostic *diagnostic) {
+    const char *path, size_t line, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
   ConfitOption *option;
   ConfitValue value;
   ConfitStatus status;
   char *option_id;
+  const char *canonical_id;
 
   option_id = confit_schema_parse_value_key(key_text, key_begin, key_end, path,
                                             line, diagnostic);
@@ -1892,19 +2117,19 @@ static ConfitStatus confit_schema_parse_profile_value(
     return CONFIT_ERR_SCHEMA;
   }
 
-  option = confit_project_find_option(project, option_id);
-  if (option == 0) {
+  status = confit_schema_resolve_value_option(project, option_id, &option,
+                                              &canonical_id, path, line, audit,
+                                              diagnostic);
+  if (status != CONFIT_OK) {
     free(option_id);
-    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
-                            "unknown value option");
-    return CONFIT_ERR_SCHEMA;
+    return status;
   }
 
   status = confit_schema_parse_value_for_option(
       option, line_text, value_begin, value_end, path, line,
       "invalid profile value", &value, diagnostic);
   if (status == CONFIT_OK) {
-    status = confit_profile_add_value(profile, option_id, &value,
+    status = confit_profile_add_value(profile, canonical_id, &value,
                                       source_label);
     confit_value_clear(&value);
   }
@@ -1939,7 +2164,8 @@ static ConfitStatus confit_schema_finish_profile(
 }
 
 static ConfitStatus confit_schema_parse_profile_file(
-    ConfitProject *project, const char *path, ConfitDiagnostic *diagnostic) {
+    ConfitProject *project, const char *path, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
   ConfitParserDocument *document;
   const char *text;
   size_t text_size;
@@ -2053,7 +2279,7 @@ static ConfitStatus confit_schema_parse_profile_file(
                  : confit_schema_parse_profile_value(
                        project, state.profile, line.begin, begin, equals_index,
                        line.begin, equals_index + 1U, end, source_label, path,
-                       line.line, diagnostic);
+                       line.line, audit, diagnostic);
     free(key);
     if (status != CONFIT_OK) {
       confit_schema_profile_state_clear(&state);
@@ -2135,11 +2361,13 @@ static ConfitStatus confit_schema_parse_target_value(
     ConfitProject *project, ConfitTarget *target, const char *key_text,
     size_t key_begin, size_t key_end, const char *line_text,
     size_t value_begin, size_t value_end, const char *source_label,
-    const char *path, size_t line, ConfitDiagnostic *diagnostic) {
+    const char *path, size_t line, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
   ConfitOption *option;
   ConfitValue value;
   ConfitStatus status;
   char *option_id;
+  const char *canonical_id;
 
   option_id = confit_schema_parse_value_key(key_text, key_begin, key_end, path,
                                             line, diagnostic);
@@ -2147,19 +2375,20 @@ static ConfitStatus confit_schema_parse_target_value(
     return CONFIT_ERR_SCHEMA;
   }
 
-  option = confit_project_find_option(project, option_id);
-  if (option == 0) {
+  status = confit_schema_resolve_value_option(project, option_id, &option,
+                                              &canonical_id, path, line, audit,
+                                              diagnostic);
+  if (status != CONFIT_OK) {
     free(option_id);
-    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
-                            "unknown value option");
-    return CONFIT_ERR_SCHEMA;
+    return status;
   }
 
   status = confit_schema_parse_value_for_option(
       option, line_text, value_begin, value_end, path, line,
       "invalid target value", &value, diagnostic);
   if (status == CONFIT_OK) {
-    status = confit_target_add_value(target, option_id, &value, source_label);
+    status = confit_target_add_value(target, canonical_id, &value,
+                                     source_label);
     confit_value_clear(&value);
   }
   free(option_id);
@@ -2186,7 +2415,8 @@ static ConfitStatus confit_schema_finish_target(
 }
 
 static ConfitStatus confit_schema_parse_target_file(
-    ConfitProject *project, const char *path, ConfitDiagnostic *diagnostic) {
+    ConfitProject *project, const char *path, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
   ConfitParserDocument *document;
   const char *text;
   size_t text_size;
@@ -2300,7 +2530,7 @@ static ConfitStatus confit_schema_parse_target_file(
                  ? confit_schema_parse_target_value(
                        project, state.target, line.begin, begin, equals_index,
                        line.begin, equals_index + 1U, end, source_label, path,
-                       line.line, diagnostic)
+                       line.line, audit, diagnostic)
                  : confit_schema_parse_target_field(
                        &state, table_kind, key, line.begin, equals_index + 1U,
                        end, path, line.line, diagnostic);
@@ -2434,7 +2664,7 @@ static ConfitStatus confit_schema_parse_project_file(
 
 static ConfitStatus confit_schema_load_profile_directory(
     ConfitProject *project, const char *config_root,
-    ConfitDiagnostic *diagnostic) {
+    ConfitSchemaAudit *audit, ConfitDiagnostic *diagnostic) {
   char profile_dir[1024];
   char **paths;
   size_t path_count;
@@ -2456,7 +2686,7 @@ static ConfitStatus confit_schema_load_profile_directory(
   }
 
   for (index = 0U; index < path_count; ++index) {
-    status = confit_schema_parse_profile_file(project, paths[index],
+    status = confit_schema_parse_profile_file(project, paths[index], audit,
                                               diagnostic);
     if (status != CONFIT_OK) {
       confit_host_string_list_free(paths, path_count);
@@ -2470,7 +2700,7 @@ static ConfitStatus confit_schema_load_profile_directory(
 
 static ConfitStatus confit_schema_load_target_directory(
     ConfitProject *project, const char *config_root,
-    ConfitDiagnostic *diagnostic) {
+    ConfitSchemaAudit *audit, ConfitDiagnostic *diagnostic) {
   char target_dir[1024];
   char **paths;
   size_t path_count;
@@ -2492,7 +2722,7 @@ static ConfitStatus confit_schema_load_target_directory(
   }
 
   for (index = 0U; index < path_count; ++index) {
-    status = confit_schema_parse_target_file(project, paths[index],
+    status = confit_schema_parse_target_file(project, paths[index], audit,
                                              diagnostic);
     if (status != CONFIT_OK) {
       confit_host_string_list_free(paths, path_count);
@@ -2502,6 +2732,165 @@ static ConfitStatus confit_schema_load_target_directory(
 
   confit_host_string_list_free(paths, path_count);
   return CONFIT_OK;
+}
+
+static int confit_schema_option_id_has_project_namespace(
+    const ConfitProject *project, const char *id) {
+  size_t name_size;
+
+  if (project == 0 || project->name == 0 || id == 0) {
+    return 0;
+  }
+  name_size = strlen(project->name);
+  return strncmp(id, project->name, name_size) == 0 && id[name_size] == '.';
+}
+
+static int confit_schema_is_valid_stability(const char *stability) {
+  return strcmp(stability, "experimental") == 0 ||
+         strcmp(stability, "stable") == 0 ||
+         strcmp(stability, "deprecated") == 0 ||
+         strcmp(stability, "internal") == 0;
+}
+
+static ConfitStatus confit_schema_warn_missing_metadata(
+    const ConfitOption *option, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+
+  if (option->owner == 0) {
+    status = confit_schema_audit_add_warning(audit, option->id, 0, 0,
+                                             option->id,
+                                             "owner metadata missing");
+    if (status != CONFIT_OK) {
+      confit_schema_set_error(diagnostic, status, option->id, 0, 0,
+                              "failed to record schema warning");
+      return status;
+    }
+  }
+  if (option->since == 0) {
+    status = confit_schema_audit_add_warning(audit, option->id, 0, 0,
+                                             option->id,
+                                             "since metadata missing");
+    if (status != CONFIT_OK) {
+      confit_schema_set_error(diagnostic, status, option->id, 0, 0,
+                              "failed to record schema warning");
+      return status;
+    }
+  }
+  if (option->stability == 0) {
+    status = confit_schema_audit_add_warning(audit, option->id, 0, 0,
+                                             option->id,
+                                             "stability metadata missing");
+    if (status != CONFIT_OK) {
+      confit_schema_set_error(diagnostic, status, option->id, 0, 0,
+                              "failed to record schema warning");
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_schema_validate_deprecated_aliases(
+    ConfitProject *project, ConfitDiagnostic *diagnostic) {
+  size_t option_index;
+
+  for (option_index = 0U; option_index < project->option_count;
+       ++option_index) {
+    ConfitOption *option = &project->options[option_index];
+    size_t alias_index;
+
+    for (alias_index = 0U; alias_index < option->deprecated_alias_count;
+         ++alias_index) {
+      const char *alias = option->deprecated_aliases[alias_index];
+      size_t other_option_index;
+      size_t other_alias_index;
+
+      if (!confit_schema_validate_option_id(alias)) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0,
+                                0, "invalid deprecated alias id");
+        return CONFIT_ERR_SCHEMA;
+      }
+      if (strcmp(alias, option->id) == 0) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0,
+                                0, "deprecated alias matches option id");
+        return CONFIT_ERR_SCHEMA;
+      }
+      if (confit_project_find_option(project, alias) != 0) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0,
+                                0, "deprecated alias conflicts with option id");
+        return CONFIT_ERR_SCHEMA;
+      }
+      for (other_option_index = 0U;
+           other_option_index < project->option_count; ++other_option_index) {
+        ConfitOption *other = &project->options[other_option_index];
+        size_t alias_limit =
+            other_option_index == option_index ? alias_index
+                                               : other->deprecated_alias_count;
+
+        for (other_alias_index = 0U; other_alias_index < alias_limit;
+             ++other_alias_index) {
+          if (strcmp(alias, other->deprecated_aliases[other_alias_index]) ==
+              0) {
+            confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id,
+                                    0, 0, "duplicate deprecated alias");
+            return CONFIT_ERR_SCHEMA;
+          }
+        }
+      }
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_schema_validate_option_stability(
+    ConfitProject *project, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+  ConfitStatus status;
+
+  for (index = 0U; index < project->option_count; ++index) {
+    ConfitOption *option = &project->options[index];
+
+    if (!confit_schema_option_id_has_project_namespace(project, option->id)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                              "option id must use project namespace");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (option->stability != 0 &&
+        !confit_schema_is_valid_stability(option->stability)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                              "invalid stability metadata");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (option->deprecated && option->stability != 0 &&
+        strcmp(option->stability, "deprecated") != 0) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                              "deprecated option must use deprecated stability");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (option->replaced_by != 0) {
+      ConfitOption *replacement;
+
+      replacement = confit_project_find_option(project, option->replaced_by);
+      if (replacement == 0) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0,
+                                0, "replacement option is unknown");
+        return CONFIT_ERR_SCHEMA;
+      }
+      if (replacement == option) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0,
+                                0, "replacement option cannot be self");
+        return CONFIT_ERR_SCHEMA;
+      }
+    }
+
+    status = confit_schema_warn_missing_metadata(option, audit, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+
+  return confit_schema_validate_deprecated_aliases(project, diagnostic);
 }
 
 static ConfitStatus confit_schema_validate_profile_links(
@@ -2535,9 +2924,9 @@ static ConfitStatus confit_schema_validate_profile_links(
   return CONFIT_OK;
 }
 
-ConfitStatus confit_schema_load_project(const char *project_root,
-                                        ConfitProject **out_project,
-                                        ConfitDiagnostic *diagnostic) {
+ConfitStatus confit_schema_load_project_with_audit(
+    const char *project_root, ConfitProject **out_project,
+    ConfitSchemaAudit *audit, ConfitDiagnostic *diagnostic) {
   ConfitProject *project;
   ConfitSchemaImports imports;
   char config_root[1024];
@@ -2599,7 +2988,14 @@ ConfitStatus confit_schema_load_project(const char *project_root,
     }
   }
 
-  status = confit_schema_load_profile_directory(project, config_root,
+  status = confit_schema_validate_option_stability(project, audit, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_schema_imports_clear(&imports);
+    confit_project_free(project);
+    return status;
+  }
+
+  status = confit_schema_load_profile_directory(project, config_root, audit,
                                                 diagnostic);
   if (status != CONFIT_OK) {
     confit_schema_imports_clear(&imports);
@@ -2607,7 +3003,7 @@ ConfitStatus confit_schema_load_project(const char *project_root,
     return status;
   }
 
-  status = confit_schema_load_target_directory(project, config_root,
+  status = confit_schema_load_target_directory(project, config_root, audit,
                                                diagnostic);
   if (status != CONFIT_OK) {
     confit_schema_imports_clear(&imports);
@@ -2625,4 +3021,11 @@ ConfitStatus confit_schema_load_project(const char *project_root,
   confit_schema_imports_clear(&imports);
   *out_project = project;
   return CONFIT_OK;
+}
+
+ConfitStatus confit_schema_load_project(const char *project_root,
+                                        ConfitProject **out_project,
+                                        ConfitDiagnostic *diagnostic) {
+  return confit_schema_load_project_with_audit(project_root, out_project, 0,
+                                              diagnostic);
 }

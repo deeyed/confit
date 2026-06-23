@@ -218,6 +218,24 @@ static void test_check(ConfitCliWorkflowContext *context) {
   test_check_project_profile(context, context->project_dir, "sim-dsh");
 }
 
+static void test_check_strict(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  const char *argv[] = {0, "check", "--project", 0, "--profile",
+                        "sim-dsh", "--strict", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  argv[0] = context->confit_bin;
+  argv[3] = context->project_dir;
+  test_run(context, argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(3, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "owner metadata missing");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "schema warnings are fatal under --strict");
+  confit_test_process_result_clear(&result);
+}
+
 static void test_init_templates(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   char dry_run_project_toml[4096];
@@ -422,6 +440,7 @@ int main(int argc, char **argv) {
   test_init_templates(&context);
   test_doctor(&context);
   test_check(&context);
+  test_check_strict(&context);
   test_list(&context);
   test_graph_json(&context);
   test_graph_dot(&context);

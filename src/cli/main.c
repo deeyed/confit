@@ -19,6 +19,11 @@ typedef struct ConfitCliProjectArgs {
   const char *target_name;
 } ConfitCliProjectArgs;
 
+typedef struct ConfitCliCheckArgs {
+  ConfitCliProjectArgs project;
+  int strict;
+} ConfitCliCheckArgs;
+
 typedef struct ConfitCliGenArgs {
   ConfitCliProjectArgs project;
   const char *out_dir;
@@ -117,7 +122,7 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "Parse project TOML, validate schema and graph, and resolve a profile.",
      "confit check --project <path> --profile <name> [--target <name>] "
      "[--strict]",
-     "--project <path>\n  --profile <name>\n  --target <name>",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  --strict",
      confit_cli_run_check},
     {"resolve", "Emit the resolved configuration without writing artifacts.",
      "confit resolve --project <path> --profile <name> [--target <name>] "
@@ -1126,55 +1131,6 @@ static void confit_cli_project_args_init(ConfitCliProjectArgs *args) {
   args->target_name = 0;
 }
 
-static ConfitStatus confit_cli_parse_project_args(
-    int argc, char **argv, int start_index, ConfitCliProjectArgs *args,
-    int require_profile, const char *unknown_message,
-    const char *extra_message) {
-  int index;
-
-  confit_cli_project_args_init(args);
-  for (index = start_index; index < argc; ++index) {
-    const char *arg = argv[index];
-
-    if (strcmp(arg, "--project") == 0) {
-      if (index + 1 >= argc) {
-        return confit_cli_write_error("missing value for --project");
-      }
-      index += 1;
-      args->project_root = argv[index];
-      continue;
-    }
-    if (strcmp(arg, "--profile") == 0) {
-      if (index + 1 >= argc) {
-        return confit_cli_write_error("missing value for --profile");
-      }
-      index += 1;
-      args->profile_name = argv[index];
-      continue;
-    }
-    if (strcmp(arg, "--target") == 0) {
-      if (index + 1 >= argc) {
-        return confit_cli_write_error("missing value for --target");
-      }
-      index += 1;
-      args->target_name = argv[index];
-      continue;
-    }
-    if (arg[0] == '-') {
-      return confit_cli_write_error(unknown_message);
-    }
-    return confit_cli_write_error(extra_message);
-  }
-
-  if (args->project_root == 0) {
-    return confit_cli_write_error("command requires --project");
-  }
-  if (require_profile && args->profile_name == 0) {
-    return confit_cli_write_error("command requires --profile");
-  }
-  return CONFIT_OK;
-}
-
 static ConfitStatus confit_cli_join3(char *out, size_t out_size,
                                      const char *first, const char *second,
                                      const char *third,
@@ -1194,7 +1150,8 @@ static ConfitStatus confit_cli_join3(char *out, size_t out_size,
 static ConfitStatus confit_cli_load_checked_project(
     const char *project_root, const char *profile_name, const char *target_name,
     int resolve_profile, ConfitProject **out_project, ConfitGraph **out_graph,
-    ConfitResolvedConfig **out_config, ConfitDiagnostic *diagnostic) {
+    ConfitResolvedConfig **out_config, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
   ConfitProject *project;
   ConfitGraph *graph;
   ConfitResolvedConfig *config;
@@ -1213,7 +1170,12 @@ static ConfitStatus confit_cli_load_checked_project(
   graph = 0;
   config = 0;
 
-  status = confit_schema_load_project(project_root, &project, diagnostic);
+  if (audit != 0) {
+    status = confit_schema_load_project_with_audit(project_root, &project,
+                                                   audit, diagnostic);
+  } else {
+    status = confit_schema_load_project(project_root, &project, diagnostic);
+  }
   if (status != CONFIT_OK) {
     goto fail;
   }
@@ -1265,31 +1227,154 @@ static const char *confit_cli_effective_target_name(
   return 0;
 }
 
+static ConfitStatus confit_cli_print_schema_warnings(
+    const ConfitSchemaAudit *audit) {
+  ConfitStatus status;
+  size_t index;
+
+  if (audit == 0) {
+    return CONFIT_OK;
+  }
+
+  status = CONFIT_OK;
+  for (index = 0U; status == CONFIT_OK && index < audit->warning_count;
+       ++index) {
+    const ConfitSchemaWarning *warning = &audit->warnings[index];
+
+    status = confit_host_stderr_write("confit: warning");
+    if (status == CONFIT_OK && warning->path != 0) {
+      status = confit_host_stderr_write(": ");
+    }
+    if (status == CONFIT_OK && warning->path != 0) {
+      status = confit_host_stderr_write(warning->path);
+    }
+    if (status == CONFIT_OK && warning->line != 0U) {
+      char buffer[64];
+
+      (void)snprintf(buffer, sizeof(buffer), ":%lu",
+                     (unsigned long)warning->line);
+      status = confit_host_stderr_write(buffer);
+    }
+    if (status == CONFIT_OK && warning->column != 0U) {
+      char buffer[64];
+
+      (void)snprintf(buffer, sizeof(buffer), ":%lu",
+                     (unsigned long)warning->column);
+      status = confit_host_stderr_write(buffer);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_host_stderr_write(": ");
+    }
+    if (status == CONFIT_OK && warning->message != 0) {
+      status = confit_host_stderr_write(warning->message);
+    }
+    if (status == CONFIT_OK && warning->option_id != 0 &&
+        (warning->path == 0 || strcmp(warning->path, warning->option_id) != 0)) {
+      status = confit_host_stderr_write(" [");
+      if (status == CONFIT_OK) {
+        status = confit_host_stderr_write(warning->option_id);
+      }
+      if (status == CONFIT_OK) {
+        status = confit_host_stderr_write("]");
+      }
+    }
+    if (status == CONFIT_OK) {
+      status = confit_host_stderr_write("\n");
+    }
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_parse_check_args(int argc, char **argv,
+                                                ConfitCliCheckArgs *args) {
+  int index;
+
+  confit_cli_project_args_init(&args->project);
+  args->strict = 0;
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      args->project.project_root = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--profile") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --profile");
+      }
+      index += 1;
+      args->project.profile_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--target") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --target");
+      }
+      index += 1;
+      args->project.target_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--strict") == 0) {
+      args->strict = 1;
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown check option");
+    }
+    return confit_cli_write_error("check does not accept positional arguments");
+  }
+
+  if (args->project.project_root == 0) {
+    return confit_cli_write_error("check requires --project");
+  }
+  if (args->project.profile_name == 0) {
+    return confit_cli_write_error("check requires --profile");
+  }
+  return CONFIT_OK;
+}
+
 static int confit_cli_run_check(int argc, char **argv) {
-  ConfitCliProjectArgs args;
+  ConfitCliCheckArgs args;
+  ConfitSchemaAudit audit;
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
   ConfitGraph *graph;
   ConfitResolvedConfig *config;
   ConfitStatus status;
+  ConfitStatus warning_status;
 
-  status = confit_cli_parse_project_args(
-      argc, argv, 2, &args, 1, "unknown check option",
-      "check does not accept positional arguments");
+  status = confit_cli_parse_check_args(argc, argv, &args);
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
   }
 
   confit_diagnostic_init(&diagnostic);
+  confit_schema_audit_init(&audit);
   project = 0;
   graph = 0;
   config = 0;
-  status = confit_cli_load_checked_project(args.project_root, args.profile_name,
-                                           args.target_name, 1, &project,
-                                           &graph, &config, &diagnostic);
+  status = confit_cli_load_checked_project(
+      args.project.project_root, args.project.profile_name,
+      args.project.target_name, 1, &project, &graph, &config, &audit,
+      &diagnostic);
+  warning_status = confit_cli_print_schema_warnings(&audit);
+  if (status == CONFIT_OK && warning_status != CONFIT_OK) {
+    status = warning_status;
+  }
+  if (status == CONFIT_OK && args.strict && audit.warning_count > 0U) {
+    confit_diagnostic_set(&diagnostic, CONFIT_ERR_SCHEMA,
+                          args.project.project_root, 0, 0,
+                          "schema warnings are fatal under --strict");
+    status = CONFIT_ERR_SCHEMA;
+  }
   confit_resolved_config_free(config);
   confit_graph_free(graph);
   confit_project_free(project);
+  confit_schema_audit_clear(&audit);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
   }
@@ -1472,7 +1557,8 @@ static int confit_cli_run_gen(int argc, char **argv) {
   config = 0;
   status = confit_cli_load_checked_project(
       args.project.project_root, args.project.profile_name,
-      args.project.target_name, 1, &project, &graph, &config, &diagnostic);
+      args.project.target_name, 1, &project, &graph, &config, 0,
+      &diagnostic);
   if (status == CONFIT_OK) {
     status =
         confit_cli_generate_artifacts(project, graph, config, &args,
@@ -1567,7 +1653,8 @@ static int confit_cli_run_explain(int argc, char **argv) {
   explanation = 0;
   status = confit_cli_load_checked_project(
       args.project.project_root, args.project.profile_name,
-      args.project.target_name, 1, &project, &graph, &config, &diagnostic);
+      args.project.target_name, 1, &project, &graph, &config, 0,
+      &diagnostic);
   if (status == CONFIT_OK) {
     status = confit_explain_option(project, config, args.option_id,
                                    &explanation, &diagnostic);
@@ -1696,12 +1783,12 @@ static int confit_cli_run_compat(int argc, char **argv) {
   status = confit_cli_load_checked_project(args.parus_root, args.profile_name,
                                            args.target_name, 1, &parus,
                                            &parus_graph, &parus_config,
-                                           &diagnostic);
+                                           0, &diagnostic);
   if (status == CONFIT_OK) {
     status = confit_cli_load_checked_project(args.delos_root, args.profile_name,
                                              args.target_name, 1, &delos,
                                              &delos_graph, &delos_config,
-                                             &diagnostic);
+                                             0, &diagnostic);
   }
   if (status == CONFIT_OK) {
     if (args.compat_root != 0) {
@@ -2010,7 +2097,7 @@ static int confit_cli_run_graph(int argc, char **argv) {
   status = confit_cli_load_checked_project(
       args.project.project_root, args.project.profile_name,
       args.project.target_name, args.project.profile_name != 0, &project,
-      &graph, &config, &diagnostic);
+      &graph, &config, 0, &diagnostic);
   if (status == CONFIT_OK && strcmp(args.format, "dot") == 0) {
     status = confit_cli_print_dot_graph(graph);
   } else if (status == CONFIT_OK) {

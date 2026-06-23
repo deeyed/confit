@@ -174,6 +174,20 @@ typedef struct ConfitOption {
   char **tags;
   /** tag 개수. */
   size_t tag_count;
+  /** deprecated alias 목록. */
+  char **deprecated_aliases;
+  /** deprecated alias 개수. */
+  size_t deprecated_alias_count;
+  /** owner metadata. 없으면 `NULL`. */
+  char *owner;
+  /** first-supported version metadata. 없으면 `NULL`. */
+  char *since;
+  /** stability metadata. 없으면 `NULL`. */
+  char *stability;
+  /** deprecated option이면 1. */
+  int deprecated;
+  /** replacement option id. 없으면 `NULL`. */
+  char *replaced_by;
   /** dependency reference 목록. */
   ConfitDependencyRef *dependencies;
   /** dependency reference 개수. */
@@ -480,6 +494,47 @@ ConfitStatus confit_option_set_metadata(ConfitOption *option,
  * @return 성공하면 CONFIT_OK.
  */
 ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag);
+
+/**
+ * @brief option에 deprecated alias를 추가한다.
+ *
+ * Alias는 profile/target value가 옛 id를 사용할 때 canonical option id로
+ * migration하기 위한 compatibility surface다.
+ *
+ * @param option 갱신할 option.
+ * @param alias 복사할 deprecated alias id.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_add_deprecated_alias(ConfitOption *option,
+                                                const char *alias);
+
+/**
+ * @brief option stability metadata를 설정한다.
+ *
+ * 각 문자열은 optional이며 deep-copy된다.
+ *
+ * @param option 갱신할 option.
+ * @param owner owner/team metadata. 없으면 `NULL`.
+ * @param since first-supported version metadata. 없으면 `NULL`.
+ * @param stability stability class. 없으면 `NULL`.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_set_stability_metadata(ConfitOption *option,
+                                                  const char *owner,
+                                                  const char *since,
+                                                  const char *stability);
+
+/**
+ * @brief option deprecation metadata를 설정한다.
+ *
+ * @param option 갱신할 option.
+ * @param deprecated deprecated option이면 1.
+ * @param replaced_by replacement option id. 없으면 `NULL`.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_set_deprecation(ConfitOption *option,
+                                           int deprecated,
+                                           const char *replaced_by);
 
 /**
  * @brief option에 dependency reference를 추가한다.

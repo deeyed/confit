@@ -1,0 +1,6 @@
+[option."parus.debug.ddc"]
+type = "bool"
+default = false
+owner = "parus"
+since = "0.1.0"
+stability = "stable"

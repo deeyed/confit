@@ -67,6 +67,49 @@ static ConfitTarget *find_target(ConfitProject *project, const char *name) {
   return 0;
 }
 
+static int expect_alias_canonicalization(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitSchemaAudit audit;
+  ConfitProject *project;
+  ConfitProfile *profile;
+  char path[512];
+  int ok;
+
+  if (!join_fixture(path, sizeof(path),
+                    "tests/fixtures/schema/valid/alias")) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  confit_schema_audit_init(&audit);
+  project = 0;
+  ok = 0;
+  if (confit_schema_load_project_with_audit(path, &project, &audit,
+                                            &diagnostic) != CONFIT_OK) {
+    goto done;
+  }
+  profile = find_profile(project, "default");
+  if (profile == 0 || profile->value_count != 1U ||
+      strcmp(profile->values[0].option_id, "delos.debug.ddc") != 0 ||
+      profile->values[0].value.kind != CONFIT_VALUE_BOOL ||
+      profile->values[0].value.as.bool_value != 1) {
+    goto done;
+  }
+  if (audit.warning_count != 1U || audit.warnings[0].option_id == 0 ||
+      strcmp(audit.warnings[0].option_id, "delos.debug.old_ddc") != 0 ||
+      audit.warnings[0].message == 0 ||
+      strcmp(audit.warnings[0].message,
+             "deprecated alias canonicalized to current option id") != 0) {
+    goto done;
+  }
+  ok = 1;
+
+done:
+  confit_project_free(project);
+  confit_schema_audit_clear(&audit);
+  return ok;
+}
+
 int main(void) {
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
@@ -271,6 +314,21 @@ int main(void) {
   if (!expect_schema_error("tests/fixtures/schema/invalid/target-bad-value",
                            "invalid target value")) {
     return 30;
+  }
+  if (!expect_alias_canonicalization()) {
+    return 31;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/bad-stability",
+                           "invalid stability metadata")) {
+    return 32;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/duplicate-alias",
+                           "duplicate deprecated alias")) {
+    return 33;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/bad-namespace",
+                           "option id must use project namespace")) {
+    return 34;
   }
 
   return 0;

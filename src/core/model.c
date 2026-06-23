@@ -402,6 +402,13 @@ static void confit_option_init(ConfitOption *option) {
   option->help = 0;
   option->tags = 0;
   option->tag_count = 0;
+  option->deprecated_aliases = 0;
+  option->deprecated_alias_count = 0;
+  option->owner = 0;
+  option->since = 0;
+  option->stability = 0;
+  option->deprecated = 0;
+  option->replaced_by = 0;
   option->dependencies = 0;
   option->dependency_count = 0;
 }
@@ -420,6 +427,12 @@ static void confit_option_clear(ConfitOption *option) {
   free(option->category);
   free(option->help);
   confit_model_string_array_clear(option->tags, option->tag_count);
+  confit_model_string_array_clear(option->deprecated_aliases,
+                                  option->deprecated_alias_count);
+  free(option->owner);
+  free(option->since);
+  free(option->stability);
+  free(option->replaced_by);
   confit_dependency_ref_array_clear(option->dependencies,
                                     option->dependency_count);
   confit_option_init(option);
@@ -720,6 +733,54 @@ ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag) {
   }
 
   return confit_model_append_string(&option->tags, &option->tag_count, tag);
+}
+
+ConfitStatus confit_option_add_deprecated_alias(ConfitOption *option,
+                                                const char *alias) {
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  return confit_model_append_string(&option->deprecated_aliases,
+                                    &option->deprecated_alias_count, alias);
+}
+
+ConfitStatus confit_option_set_stability_metadata(ConfitOption *option,
+                                                  const char *owner,
+                                                  const char *since,
+                                                  const char *stability) {
+  ConfitStatus status;
+
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_model_replace_string(&option->owner, owner);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_model_replace_string(&option->since, since);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  return confit_model_replace_string(&option->stability, stability);
+}
+
+ConfitStatus confit_option_set_deprecation(ConfitOption *option,
+                                           int deprecated,
+                                           const char *replaced_by) {
+  ConfitStatus status;
+
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_model_replace_string(&option->replaced_by, replaced_by);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  option->deprecated = deprecated != 0;
+  return CONFIT_OK;
 }
 
 ConfitStatus confit_option_add_dependency(ConfitOption *option,

@@ -1,0 +1,11 @@
+[option."delos.debug.ddc"]
+type = "bool"
+default = false
+prompt = "Enable DDC"
+category = "debug"
+tags = ["debug"]
+help = "Include the development DDC command parser."
+owner = "delos"
+since = "0.1.0"
+stability = "stable"
+deprecated_aliases = ["delos.debug.old_ddc"]

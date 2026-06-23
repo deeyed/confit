@@ -43,6 +43,19 @@ parus.boot.path
 이름을 바꿔야 한다면 새 option을 추가하고, 기존 option은 deprecated alias로 남긴다. Alias는
 explanation report에 표시되어야 한다.
 
+```toml
+[option."delos.debug.dsh"]
+type = "bool"
+default = false
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
+deprecated_aliases = ["delos.debug.old_dsh"]
+```
+
+Loader는 profile과 target 값에서 deprecated alias를 만나면 canonical option id로 해석해야 한다.
+동일 alias가 둘 이상의 option을 가리키거나 실제 option id와 충돌하면 schema error다.
+
 ## Additive Evolution
 
 Confit 문법은 additive evolution을 기본으로 한다.
@@ -96,12 +109,18 @@ Deprecation은 명시 metadata로 표현한다.
 [option."delos.debug.old_dsh"]
 type = "bool"
 default = false
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "deprecated"
 deprecated = true
 replaced_by = "delos.debug.dsh"
 ```
 
 Deprecated option은 즉시 삭제하지 않는다. Confit은 warning을 내고, generated report에 migration
 hint를 남긴다.
+
+`owner`, `since`, `stability` metadata는 장기 유지보수 표면이다. 일반 validation은 누락을 warning으로
+보고, strict validation은 warning을 failure로 승격한다.
 
 ## Scale Requirements
 

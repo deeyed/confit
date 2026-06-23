@@ -1,0 +1,6 @@
+[profile]
+name = "default"
+schema_version = 1
+
+[values]
+"delos.debug.old_ddc" = true

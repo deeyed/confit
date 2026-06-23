@@ -60,6 +60,9 @@ prompt = "Enable Delos Debug Console"
 category = "debug"
 tags = ["debug", "host-tooling"]
 help = "개발용 DDC command parser와 command table을 build에 포함한다."
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
 ```
 
 지원 type:
@@ -81,6 +84,25 @@ help = "개발용 DDC command parser와 command table을 build에 포함한다."
 `float`는 지원하지만 제한적으로 사용한다. `NaN`, `inf`, locale-dependent 표현은 금지한다. Runtime
 configuration에서 exact value가 중요한 곳은 `int`, `uint`, fixed-point convention을 우선한다.
 `float`는 simulation, threshold, tuning metadata처럼 사람이 조정하는 profile 값에 적합하다.
+
+## Stability Metadata
+
+Public option은 migration과 ownership metadata를 가질 수 있다.
+
+```toml
+[option."delos.debug.dsh"]
+type = "bool"
+default = false
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
+deprecated_aliases = ["delos.debug.old_dsh"]
+```
+
+`stability` 값은 `experimental`, `stable`, `deprecated`, `internal` 중 하나다. `owner`,
+`since`, `stability`가 없으면 기본 check에서는 warning이며, strict validation에서는 failure로
+승격된다. `deprecated_aliases`는 기존 profile/target 값이 새 canonical option id로 deterministic하게
+해석되도록 하는 migration surface다.
 
 ## Dependencies
 
