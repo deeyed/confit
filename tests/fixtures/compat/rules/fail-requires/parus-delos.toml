@@ -1,0 +1,7 @@
+[compat]
+name = "parus-delos"
+
+[[assert]]
+when = { option = "parus.rt_executor.delos", equals = true }
+requires = { option = "delos.debug.dsh_rx", equals = true }
+message = "Parus Delos RT Executor requires Delos DSH RX in this negative fixture."

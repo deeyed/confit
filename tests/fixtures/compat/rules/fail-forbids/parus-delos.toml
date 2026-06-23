@@ -1,0 +1,7 @@
+[compat]
+name = "parus-delos"
+
+[[assert]]
+when = { option = "parus.rt_executor.delos", equals = true }
+forbids = { option = "delos.dcg.enabled", equals = true }
+message = "This negative fixture forbids the required Delos DCG path."

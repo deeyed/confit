@@ -1,0 +1,7 @@
+[profile]
+name = "parus-delos-debug"
+schema_version = 1
+
+[values]
+"parus.rt_executor.delos" = true
+"parus.debug.release" = true

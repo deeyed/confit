@@ -1,0 +1,15 @@
+[option."parus.rt_executor.delos"]
+type = "bool"
+default = false
+prompt = "Use Delos RT Executor"
+category = "runtime"
+tags = ["runtime", "delos"]
+help = "Routes Parus runtime execution through Delos."
+
+[option."parus.debug.release"]
+type = "bool"
+default = false
+prompt = "Release Debug Boundary"
+category = "debug"
+tags = ["debug", "release"]
+help = "Release compatibility boundary probe."

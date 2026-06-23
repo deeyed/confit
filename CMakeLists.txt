@@ -157,6 +157,21 @@ else()
   )
 endif()
 
+add_library(confit_compat STATIC
+  src/compat/compat.c
+)
+
+target_link_libraries(confit_compat PUBLIC confit_schema)
+target_compile_features(confit_compat PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_compat PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_compat PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -403,6 +418,31 @@ endif()
 add_test(
   NAME confit.unit.reports
   COMMAND confit_test_reports
+)
+
+add_executable(confit_test_compat
+  tests/unit/test_compat.c
+)
+
+target_link_libraries(confit_test_compat PRIVATE
+  confit_compat
+  confit_resolver
+)
+target_compile_definitions(confit_test_compat PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_compat PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_compat PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.compat
+  COMMAND confit_test_compat
 )
 
 add_test(

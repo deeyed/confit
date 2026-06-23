@@ -1,0 +1,7 @@
+[profile]
+name = "parus-delos-debug"
+schema_version = 1
+
+[values]
+"delos.dcg.enabled" = true
+"delos.debug.dsh_rx" = false

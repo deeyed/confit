@@ -1,0 +1,15 @@
+[option."delos.dcg.enabled"]
+type = "bool"
+default = false
+prompt = "Enable DCG"
+category = "runtime"
+tags = ["runtime", "dcg"]
+help = "Enables the Delos DCG runtime path."
+
+[option."delos.debug.dsh_rx"]
+type = "bool"
+default = false
+prompt = "Enable DSH RX"
+category = "debug"
+tags = ["debug", "dsh"]
+help = "Exposes the DSH RX debug command parser."
