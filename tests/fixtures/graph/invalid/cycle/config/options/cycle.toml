@@ -1,0 +1,14 @@
+[option."delos.a"]
+type = "bool"
+default = false
+requires = ["delos.b"]
+
+[option."delos.b"]
+type = "bool"
+default = false
+requires = ["delos.c"]
+
+[option."delos.c"]
+type = "bool"
+default = false
+requires = ["delos.a"]

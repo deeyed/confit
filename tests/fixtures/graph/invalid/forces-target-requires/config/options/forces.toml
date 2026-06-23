@@ -1,0 +1,13 @@
+[option."delos.source"]
+type = "bool"
+default = false
+forces = ["delos.internal.target"]
+
+[option."delos.internal.target"]
+type = "bool"
+default = false
+requires = ["delos.internal.prereq"]
+
+[option."delos.internal.prereq"]
+type = "bool"
+default = false

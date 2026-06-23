@@ -1,0 +1,9 @@
+[option."delos.source"]
+type = "bool"
+default = false
+forces = ["delos.visible.target"]
+
+[option."delos.visible.target"]
+type = "bool"
+default = false
+prompt = "Visible Target"

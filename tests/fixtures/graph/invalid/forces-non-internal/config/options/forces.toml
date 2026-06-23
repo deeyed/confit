@@ -1,0 +1,8 @@
+[option."delos.source"]
+type = "bool"
+default = false
+forces = ["delos.hidden.target"]
+
+[option."delos.hidden.target"]
+type = "bool"
+default = false

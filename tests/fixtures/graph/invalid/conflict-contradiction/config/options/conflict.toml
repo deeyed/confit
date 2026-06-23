@@ -1,0 +1,9 @@
+[option."delos.debug.dsh"]
+type = "bool"
+default = false
+requires = ["delos.debug.ddc"]
+conflicts = ["delos.debug.ddc"]
+
+[option."delos.debug.ddc"]
+type = "bool"
+default = false

@@ -21,6 +21,8 @@ typedef struct ConfitGraphNode {
   char *id;
   /** option type. */
   ConfitOptionType type;
+  /** prompt가 있으면 1. */
+  int is_visible;
 } ConfitGraphNode;
 
 /**
@@ -71,6 +73,19 @@ typedef struct ConfitGraph {
 ConfitStatus confit_graph_build(const ConfitProject *project,
                                 ConfitGraph **out_graph,
                                 ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief graph-level dependency constraints를 검증한다.
+ *
+ * Round 10 검증은 cycle, illegal forces, visible force, conflict contradiction을
+ * 다룬다. Unknown reference와 self-edge는 build 단계에서 이미 검증된다.
+ *
+ * @param graph 검사할 graph.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.
+ * @return 유효하면 CONFIT_OK.
+ */
+ConfitStatus confit_graph_validate(const ConfitGraph *graph,
+                                   ConfitDiagnostic *diagnostic);
 
 /**
  * @brief graph와 그 하위 ownership tree를 해제한다.

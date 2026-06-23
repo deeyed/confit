@@ -1,0 +1,198 @@
+[option."delos.synthetic.n00"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n01"]
+
+[option."delos.synthetic.n01"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n02"]
+
+[option."delos.synthetic.n02"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n03"]
+
+[option."delos.synthetic.n03"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n04"]
+
+[option."delos.synthetic.n04"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n05"]
+
+[option."delos.synthetic.n05"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n06"]
+
+[option."delos.synthetic.n06"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n07"]
+
+[option."delos.synthetic.n07"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n08"]
+
+[option."delos.synthetic.n08"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n09"]
+
+[option."delos.synthetic.n09"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n10"]
+
+[option."delos.synthetic.n10"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n11"]
+
+[option."delos.synthetic.n11"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n12"]
+
+[option."delos.synthetic.n12"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n13"]
+
+[option."delos.synthetic.n13"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n14"]
+
+[option."delos.synthetic.n14"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n15"]
+
+[option."delos.synthetic.n15"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n16"]
+
+[option."delos.synthetic.n16"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n17"]
+
+[option."delos.synthetic.n17"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n18"]
+
+[option."delos.synthetic.n18"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n19"]
+
+[option."delos.synthetic.n19"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n20"]
+
+[option."delos.synthetic.n20"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n21"]
+
+[option."delos.synthetic.n21"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n22"]
+
+[option."delos.synthetic.n22"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n23"]
+
+[option."delos.synthetic.n23"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n24"]
+
+[option."delos.synthetic.n24"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n25"]
+
+[option."delos.synthetic.n25"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n26"]
+
+[option."delos.synthetic.n26"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n27"]
+
+[option."delos.synthetic.n27"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n28"]
+
+[option."delos.synthetic.n28"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n29"]
+
+[option."delos.synthetic.n29"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n30"]
+
+[option."delos.synthetic.n30"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n31"]
+
+[option."delos.synthetic.n31"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n32"]
+
+[option."delos.synthetic.n32"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n33"]
+
+[option."delos.synthetic.n33"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n34"]
+
+[option."delos.synthetic.n34"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n35"]
+
+[option."delos.synthetic.n35"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n36"]
+
+[option."delos.synthetic.n36"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n37"]
+
+[option."delos.synthetic.n37"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n38"]
+
+[option."delos.synthetic.n38"]
+type = "bool"
+default = false
+requires = ["delos.synthetic.n39"]
+
+[option."delos.synthetic.n39"]
+type = "bool"
+default = false

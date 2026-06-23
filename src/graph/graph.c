@@ -52,6 +52,8 @@ static ConfitStatus confit_graph_add_node(ConfitGraph *graph,
   graph->nodes = new_nodes;
   graph->nodes[graph->node_count].id = copy;
   graph->nodes[graph->node_count].type = option->type;
+  graph->nodes[graph->node_count].is_visible =
+      option->prompt != 0 && option->prompt[0] != '\0';
   graph->node_count += 1U;
   return CONFIT_OK;
 }
@@ -102,6 +104,45 @@ static const ConfitOption *confit_graph_find_option(
     }
   }
   return 0;
+}
+
+static size_t confit_graph_find_node_index(const ConfitGraph *graph,
+                                           const char *id) {
+  size_t index;
+
+  if (graph == 0 || id == 0) {
+    return (size_t)-1;
+  }
+
+  for (index = 0U; index < graph->node_count; ++index) {
+    if (strcmp(graph->nodes[index].id, id) == 0) {
+      return index;
+    }
+  }
+  return (size_t)-1;
+}
+
+static const ConfitGraphNode *confit_graph_find_node(const ConfitGraph *graph,
+                                                     const char *id) {
+  const size_t index = confit_graph_find_node_index(graph, id);
+  return index == (size_t)-1 ? 0 : &graph->nodes[index];
+}
+
+static int confit_graph_edge_is_cycle_edge(const ConfitGraphEdge *edge) {
+  return edge->kind != CONFIT_DEPENDENCY_CONFLICTS;
+}
+
+static int confit_graph_edge_is_hard_edge(const ConfitGraphEdge *edge) {
+  return edge->kind == CONFIT_DEPENDENCY_REQUIRES ||
+         edge->kind == CONFIT_DEPENDENCY_FORCES;
+}
+
+static int confit_graph_same_unordered_pair(const ConfitGraphEdge *left,
+                                            const ConfitGraphEdge *right) {
+  return (strcmp(left->from, right->from) == 0 &&
+          strcmp(left->to, right->to) == 0) ||
+         (strcmp(left->from, right->to) == 0 &&
+          strcmp(left->to, right->from) == 0);
 }
 
 ConfitStatus confit_graph_build(const ConfitProject *project,
@@ -185,6 +226,170 @@ ConfitStatus confit_graph_build(const ConfitProject *project,
 
   *out_graph = graph;
   return CONFIT_OK;
+}
+
+static int confit_graph_dfs_has_cycle(const ConfitGraph *graph,
+                                      size_t node_index, unsigned char *colors,
+                                      const char **cycle_node) {
+  size_t edge_index;
+
+  colors[node_index] = 1U;
+  for (edge_index = 0U; edge_index < graph->edge_count; ++edge_index) {
+    const ConfitGraphEdge *edge = &graph->edges[edge_index];
+    size_t to_index;
+
+    if (!confit_graph_edge_is_cycle_edge(edge) ||
+        strcmp(edge->from, graph->nodes[node_index].id) != 0) {
+      continue;
+    }
+
+    to_index = confit_graph_find_node_index(graph, edge->to);
+    if (to_index == (size_t)-1) {
+      continue;
+    }
+    if (colors[to_index] == 1U) {
+      *cycle_node = edge->to;
+      return 1;
+    }
+    if (colors[to_index] == 0U &&
+        confit_graph_dfs_has_cycle(graph, to_index, colors, cycle_node)) {
+      return 1;
+    }
+  }
+  colors[node_index] = 2U;
+  return 0;
+}
+
+static ConfitStatus confit_graph_validate_cycles(
+    const ConfitGraph *graph, ConfitDiagnostic *diagnostic) {
+  unsigned char *colors;
+  size_t index;
+
+  colors = (unsigned char *)calloc(graph->node_count, sizeof(colors[0]));
+  if (graph->node_count > 0U && colors == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
+                          "failed to allocate graph cycle state");
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  for (index = 0U; index < graph->node_count; ++index) {
+    const char *cycle_node;
+
+    if (colors[index] != 0U) {
+      continue;
+    }
+    cycle_node = graph->nodes[index].id;
+    if (confit_graph_dfs_has_cycle(graph, index, colors, &cycle_node)) {
+      free(colors);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_DEPENDENCY, cycle_node, 0,
+                            0, "dependency cycle");
+      return CONFIT_ERR_DEPENDENCY;
+    }
+  }
+
+  free(colors);
+  return CONFIT_OK;
+}
+
+static int confit_graph_is_internal_id(const char *id) {
+  return id != 0 && strstr(id, ".internal.") != 0;
+}
+
+static int confit_graph_node_has_requires(const ConfitGraph *graph,
+                                          const char *id) {
+  size_t index;
+
+  for (index = 0U; index < graph->edge_count; ++index) {
+    if (graph->edges[index].kind == CONFIT_DEPENDENCY_REQUIRES &&
+        strcmp(graph->edges[index].from, id) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static ConfitStatus confit_graph_validate_forces(
+    const ConfitGraph *graph, ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  for (index = 0U; index < graph->edge_count; ++index) {
+    const ConfitGraphEdge *edge = &graph->edges[index];
+    const ConfitGraphNode *target;
+
+    if (edge->kind != CONFIT_DEPENDENCY_FORCES) {
+      continue;
+    }
+
+    target = confit_graph_find_node(graph, edge->to);
+    if (target != 0 && target->is_visible) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_DEPENDENCY, edge->from, 0,
+                            0, "forces visible option");
+      return CONFIT_ERR_DEPENDENCY;
+    }
+    if (!confit_graph_is_internal_id(edge->to)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_DEPENDENCY, edge->from, 0,
+                            0, "forces non-internal option");
+      return CONFIT_ERR_DEPENDENCY;
+    }
+    if (confit_graph_node_has_requires(graph, edge->to)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_DEPENDENCY, edge->from, 0,
+                            0, "forces option with requirements");
+      return CONFIT_ERR_DEPENDENCY;
+    }
+  }
+
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_graph_validate_conflicts(
+    const ConfitGraph *graph, ConfitDiagnostic *diagnostic) {
+  size_t conflict_index;
+
+  for (conflict_index = 0U; conflict_index < graph->edge_count;
+       ++conflict_index) {
+    const ConfitGraphEdge *conflict = &graph->edges[conflict_index];
+    size_t edge_index;
+
+    if (conflict->kind != CONFIT_DEPENDENCY_CONFLICTS) {
+      continue;
+    }
+
+    for (edge_index = 0U; edge_index < graph->edge_count; ++edge_index) {
+      const ConfitGraphEdge *edge = &graph->edges[edge_index];
+
+      if (edge_index == conflict_index || !confit_graph_edge_is_hard_edge(edge)) {
+        continue;
+      }
+      if (confit_graph_same_unordered_pair(conflict, edge)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_CONFLICT, conflict->from,
+                              0, 0, "conflict contradiction");
+        return CONFIT_ERR_CONFLICT;
+      }
+    }
+  }
+
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_graph_validate(const ConfitGraph *graph,
+                                   ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+
+  if (graph == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "missing graph");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_graph_validate_cycles(graph, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_graph_validate_forces(graph, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  return confit_graph_validate_conflicts(graph, diagnostic);
 }
 
 void confit_graph_free(ConfitGraph *graph) {
