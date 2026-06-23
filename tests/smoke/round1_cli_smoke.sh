@@ -21,6 +21,9 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/core/status.c" \
   "$ROOT_DIR/src/core/diagnostic.c" \
   "$ROOT_DIR/src/core/version.c" \
+  "$ROOT_DIR/src/host/host_file.c" \
+  "$ROOT_DIR/src/host/host_io.c" \
+  "$ROOT_DIR/src/host/host_path.c" \
   "$ROOT_DIR/src/cli/main.c" \
   -o "$BUILD_DIR/confit"
 

@@ -30,11 +30,26 @@ else()
   target_compile_options(confit_core PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
+add_library(confit_host STATIC
+  src/host/host_file.c
+  src/host/host_io.c
+  src/host/host_path.c
+)
+
+target_link_libraries(confit_host PUBLIC confit_core)
+target_compile_features(confit_host PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_host PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_host PRIVATE -Wall -Wextra -Werror -pedantic)
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
 
-target_link_libraries(confit PRIVATE confit_core)
+target_link_libraries(confit PRIVATE confit_host)
 
 if(MSVC)
   target_compile_options(confit PRIVATE /W4 /WX)
@@ -61,6 +76,28 @@ endif()
 add_test(
   NAME confit.unit.status_diagnostic
   COMMAND confit_test_status_diagnostic
+)
+
+add_executable(confit_test_host_boundary
+  tests/unit/test_host_boundary.c
+)
+
+target_link_libraries(confit_test_host_boundary PRIVATE confit_host)
+target_compile_definitions(confit_test_host_boundary PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_host_boundary PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_host_boundary PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.host_boundary
+  COMMAND confit_test_host_boundary
 )
 
 add_test(
