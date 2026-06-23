@@ -124,6 +124,23 @@ const char *confit_value_kind_name(ConfitValueKind kind) {
   }
 }
 
+const char *confit_dependency_kind_name(ConfitDependencyKind kind) {
+  switch (kind) {
+  case CONFIT_DEPENDENCY_REQUIRES:
+    return "requires";
+  case CONFIT_DEPENDENCY_CONFLICTS:
+    return "conflicts";
+  case CONFIT_DEPENDENCY_RECOMMENDS:
+    return "recommends";
+  case CONFIT_DEPENDENCY_FORCES:
+    return "forces";
+  case CONFIT_DEPENDENCY_VISIBLE_IF:
+    return "visible_if";
+  default:
+    return "unknown";
+  }
+}
+
 void confit_value_init(ConfitValue *value) {
   if (value == 0) {
     return;
@@ -339,6 +356,34 @@ static void confit_named_value_array_clear(ConfitNamedValue *values,
   free(values);
 }
 
+static void confit_dependency_ref_init(ConfitDependencyRef *dependency) {
+  if (dependency == 0) {
+    return;
+  }
+
+  dependency->kind = CONFIT_DEPENDENCY_REQUIRES;
+  dependency->option_id = 0;
+}
+
+static void confit_dependency_ref_clear(ConfitDependencyRef *dependency) {
+  if (dependency == 0) {
+    return;
+  }
+
+  free(dependency->option_id);
+  confit_dependency_ref_init(dependency);
+}
+
+static void confit_dependency_ref_array_clear(
+    ConfitDependencyRef *dependencies, size_t dependency_count) {
+  size_t index;
+
+  for (index = 0U; index < dependency_count; ++index) {
+    confit_dependency_ref_clear(&dependencies[index]);
+  }
+  free(dependencies);
+}
+
 static void confit_option_init(ConfitOption *option) {
   if (option == 0) {
     return;
@@ -357,6 +402,8 @@ static void confit_option_init(ConfitOption *option) {
   option->help = 0;
   option->tags = 0;
   option->tag_count = 0;
+  option->dependencies = 0;
+  option->dependency_count = 0;
 }
 
 static void confit_option_clear(ConfitOption *option) {
@@ -373,6 +420,8 @@ static void confit_option_clear(ConfitOption *option) {
   free(option->category);
   free(option->help);
   confit_model_string_array_clear(option->tags, option->tag_count);
+  confit_dependency_ref_array_clear(option->dependencies,
+                                    option->dependency_count);
   confit_option_init(option);
 }
 
@@ -671,6 +720,38 @@ ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag) {
   }
 
   return confit_model_append_string(&option->tags, &option->tag_count, tag);
+}
+
+ConfitStatus confit_option_add_dependency(ConfitOption *option,
+                                          ConfitDependencyKind kind,
+                                          const char *option_id) {
+  ConfitDependencyRef *new_dependencies;
+  char *copy;
+
+  if (option == 0 || option_id == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  copy = confit_model_copy_string(option_id);
+  if (copy == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  new_dependencies =
+      (ConfitDependencyRef *)realloc(
+          option->dependencies,
+          (option->dependency_count + 1U) * sizeof(option->dependencies[0]));
+  if (new_dependencies == 0) {
+    free(copy);
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  option->dependencies = new_dependencies;
+  confit_dependency_ref_init(&option->dependencies[option->dependency_count]);
+  option->dependencies[option->dependency_count].kind = kind;
+  option->dependencies[option->dependency_count].option_id = copy;
+  option->dependency_count += 1U;
+  return CONFIT_OK;
 }
 
 ConfitStatus confit_option_set_default(ConfitOption *option,

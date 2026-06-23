@@ -91,7 +91,7 @@ int main(void) {
     confit_project_free(project);
     return 3;
   }
-  if (project->option_count != 7U) {
+  if (project->option_count != 8U) {
     confit_project_free(project);
     return 4;
   }
@@ -105,7 +105,11 @@ int main(void) {
       option->default_value.kind != CONFIT_VALUE_BOOL ||
       option->default_value.as.bool_value != 0 ||
       strcmp(option->prompt, "Enable DDC") != 0 ||
-      option->tag_count != 2U) {
+      option->tag_count != 2U || option->dependency_count != 2U ||
+      option->dependencies[0].kind != CONFIT_DEPENDENCY_RECOMMENDS ||
+      strcmp(option->dependencies[0].option_id,
+             "delos.internal.debug_gate") != 0 ||
+      option->dependencies[1].kind != CONFIT_DEPENDENCY_FORCES) {
     confit_project_free(project);
     return 6;
   }
@@ -115,7 +119,9 @@ int main(void) {
       option->default_value.kind != CONFIT_VALUE_UINT ||
       option->default_value.as.uint_value != 16U ||
       !option->has_range || option->range_min.as.uint_value != 1U ||
-      option->range_max.as.uint_value != 128U) {
+      option->range_max.as.uint_value != 128U ||
+      option->dependency_count != 1U ||
+      option->dependencies[0].kind != CONFIT_DEPENDENCY_CONFLICTS) {
     confit_project_free(project);
     return 7;
   }
@@ -124,9 +130,18 @@ int main(void) {
   if (option == 0 || option->type != CONFIT_OPTION_TYPE_ENUM ||
       option->default_value.kind != CONFIT_VALUE_ENUM ||
       strcmp(option->default_value.as.string_value, "host-sim") != 0 ||
-      option->enum_value_count != 2U) {
+      option->enum_value_count != 2U || option->dependency_count != 2U ||
+      option->dependencies[0].kind != CONFIT_DEPENDENCY_REQUIRES ||
+      option->dependencies[1].kind != CONFIT_DEPENDENCY_VISIBLE_IF) {
     confit_project_free(project);
     return 8;
+  }
+
+  option = confit_project_find_option(project, "delos.internal.debug_gate");
+  if (option == 0 || option->type != CONFIT_OPTION_TYPE_BOOL ||
+      option->prompt != 0 || option->dependency_count != 0U) {
+    confit_project_free(project);
+    return 9;
   }
 
   option = confit_project_find_option(project, "delos.memory.flash_base");
@@ -135,7 +150,7 @@ int main(void) {
       option->default_value.as.uint_value != 0x08000000U ||
       option->range_max.as.uint_value != 0x080FFFFFU) {
     confit_project_free(project);
-    return 9;
+    return 10;
   }
 
   option = confit_project_find_option(project, "delos.sim.default_gain");
@@ -145,7 +160,7 @@ int main(void) {
       option->default_value.as.float_value > 0.126 ||
       option->range_max.as.float_value < 0.99) {
     confit_project_free(project);
-    return 10;
+    return 11;
   }
 
   option = confit_project_find_option(project, "delos.paths.config_root");
@@ -154,7 +169,7 @@ int main(void) {
       strcmp(option->default_value.as.string_value,
              "build/generated/config") != 0) {
     confit_project_free(project);
-    return 11;
+    return 12;
   }
 
   profile = find_profile(project, "sim-dsh");
@@ -163,21 +178,21 @@ int main(void) {
       strcmp(profile->target, "host-sim") != 0 ||
       profile->value_count != 4U) {
     confit_project_free(project);
-    return 12;
+    return 13;
   }
   if (strcmp(profile->values[0].option_id,
              "delos.scheduler.task_slots") != 0 ||
       profile->values[0].value.kind != CONFIT_VALUE_UINT ||
       profile->values[0].value.as.uint_value != 32U) {
     confit_project_free(project);
-    return 13;
+    return 14;
   }
   if (strcmp(profile->values[2].option_id, "delos.sim.default_gain") != 0 ||
       profile->values[2].value.kind != CONFIT_VALUE_FLOAT ||
       profile->values[2].value.as.float_value < 0.249 ||
       profile->values[2].value.as.float_value > 0.251) {
     confit_project_free(project);
-    return 14;
+    return 15;
   }
 
   profile = find_profile(project, "debug");
@@ -187,7 +202,7 @@ int main(void) {
       profile->values[0].value.kind != CONFIT_VALUE_BOOL ||
       profile->values[0].value.as.bool_value != 1) {
     confit_project_free(project);
-    return 15;
+    return 16;
   }
 
   target = find_target(project, "host-sim");
@@ -198,64 +213,64 @@ int main(void) {
       target->values[0].value.kind != CONFIT_VALUE_ENUM ||
       strcmp(target->values[0].value.as.string_value, "host-sim") != 0) {
     confit_project_free(project);
-    return 16;
+    return 17;
   }
   target = find_target(project, "qemu-mps2-an500");
   if (target == 0 || target->arch == 0 ||
       strcmp(target->arch, "armv7m") != 0 || target->value_count != 2U) {
     confit_project_free(project);
-    return 17;
+    return 18;
   }
   confit_project_free(project);
 
   if (!expect_schema_error("tests/fixtures/schema/invalid/duplicate",
                            "duplicate option id")) {
-    return 18;
+    return 19;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/unknown-field",
                            "unknown option field")) {
-    return 19;
+    return 20;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/missing-type",
                            "missing option type")) {
-    return 20;
+    return 21;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/invalid-id",
                            "invalid option id")) {
-    return 21;
+    return 22;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/bad-project-version",
                            "unsupported schema_version")) {
-    return 22;
+    return 23;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/out-of-range",
                            "default outside range")) {
-    return 23;
+    return 24;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/enum-candidate",
                            "enum default is not a candidate")) {
-    return 24;
+    return 25;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/nonfinite-float",
                            "float default must be finite")) {
-    return 25;
+    return 26;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/bad-range-type",
                            "range is only valid for numeric options")) {
-    return 26;
+    return 27;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/profile-unknown-base",
                            "unknown base profile")) {
-    return 27;
+    return 28;
   }
   if (!expect_schema_error(
           "tests/fixtures/schema/invalid/profile-unknown-option",
           "unknown value option")) {
-    return 28;
+    return 29;
   }
   if (!expect_schema_error("tests/fixtures/schema/invalid/target-bad-value",
                            "invalid target value")) {
-    return 29;
+    return 30;
   }
 
   return 0;

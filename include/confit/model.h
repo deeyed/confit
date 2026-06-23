@@ -61,6 +61,35 @@ typedef enum ConfitValueKind {
 } ConfitValueKind;
 
 /**
+ * @brief option 간 dependency edge 종류다.
+ */
+typedef enum ConfitDependencyKind {
+  /** hard dependency. */
+  CONFIT_DEPENDENCY_REQUIRES = 1,
+  /** 동시에 만족할 수 없는 조합. */
+  CONFIT_DEPENDENCY_CONFLICTS = 2,
+  /** soft recommendation. */
+  CONFIT_DEPENDENCY_RECOMMENDS = 3,
+  /** 제한된 reverse dependency. */
+  CONFIT_DEPENDENCY_FORCES = 4,
+  /** TUI/display visibility 조건. */
+  CONFIT_DEPENDENCY_VISIBLE_IF = 5,
+} ConfitDependencyKind;
+
+/**
+ * @brief option schema에 기록된 dependency reference다.
+ *
+ * `option_id` 문자열은 reference가 소유한다. Graph builder가 project 전체를
+ * 본 뒤 unknown reference와 self-edge를 검증한다.
+ */
+typedef struct ConfitDependencyRef {
+  /** dependency edge kind. */
+  ConfitDependencyKind kind;
+  /** 대상 option id. */
+  char *option_id;
+} ConfitDependencyRef;
+
+/**
  * @brief Confit resolved 또는 default value를 담는 tagged union이다.
  *
  * 문자열 payload는 이 구조체가 소유한다. `confit_value_clear`는 소유 문자열을
@@ -117,9 +146,6 @@ typedef struct ConfitChoice {
 
 /**
  * @brief 하나의 Confit option schema record다.
- *
- * Round 5에서는 dependency edge를 아직 담지 않는다. Dependency graph는 이후
- * graph builder 라운드가 별도 model을 추가한다.
  */
 typedef struct ConfitOption {
   /** global option id. */
@@ -148,6 +174,10 @@ typedef struct ConfitOption {
   char **tags;
   /** tag 개수. */
   size_t tag_count;
+  /** dependency reference 목록. */
+  ConfitDependencyRef *dependencies;
+  /** dependency reference 개수. */
+  size_t dependency_count;
 } ConfitOption;
 
 /**
@@ -236,6 +266,14 @@ const char *confit_option_type_name(ConfitOptionType type);
  * @return 안정적인 ASCII 문자열.
  */
 const char *confit_value_kind_name(ConfitValueKind kind);
+
+/**
+ * @brief dependency kind 이름을 반환한다.
+ *
+ * @param kind 조회할 dependency kind.
+ * @return 안정적인 ASCII 문자열.
+ */
+const char *confit_dependency_kind_name(ConfitDependencyKind kind);
 
 /**
  * @brief value를 empty 상태로 초기화한다.
@@ -442,6 +480,18 @@ ConfitStatus confit_option_set_metadata(ConfitOption *option,
  * @return 성공하면 CONFIT_OK.
  */
 ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag);
+
+/**
+ * @brief option에 dependency reference를 추가한다.
+ *
+ * @param option 갱신할 option.
+ * @param kind dependency edge kind.
+ * @param option_id 대상 option id.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_option_add_dependency(ConfitOption *option,
+                                          ConfitDependencyKind kind,
+                                          const char *option_id);
 
 /**
  * @brief option default value를 deep-copy한다.

@@ -5,4 +5,10 @@ prompt = "Enable DDC"
 category = "debug"
 tags = ["debug", "host-tooling"]
 help = "Include the development DDC command parser."
+recommends = ["delos.internal.debug_gate"]
+forces = ["delos.internal.debug_gate"]
 x_ui_group = "debug"
+
+[option."delos.internal.debug_gate"]
+type = "bool"
+default = false

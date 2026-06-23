@@ -981,6 +981,31 @@ static int confit_schema_is_known_option_field(const char *key) {
   return 0;
 }
 
+static int confit_schema_dependency_kind_for_key(
+    const char *key, ConfitDependencyKind *out_kind) {
+  if (strcmp(key, "requires") == 0) {
+    *out_kind = CONFIT_DEPENDENCY_REQUIRES;
+    return 1;
+  }
+  if (strcmp(key, "conflicts") == 0) {
+    *out_kind = CONFIT_DEPENDENCY_CONFLICTS;
+    return 1;
+  }
+  if (strcmp(key, "recommends") == 0) {
+    *out_kind = CONFIT_DEPENDENCY_RECOMMENDS;
+    return 1;
+  }
+  if (strcmp(key, "forces") == 0) {
+    *out_kind = CONFIT_DEPENDENCY_FORCES;
+    return 1;
+  }
+  if (strcmp(key, "visible_if") == 0) {
+    *out_kind = CONFIT_DEPENDENCY_VISIBLE_IF;
+    return 1;
+  }
+  return 0;
+}
+
 static int confit_schema_slice_has_char(const char *text, size_t begin,
                                         size_t end, char needle) {
   size_t index;
@@ -1407,6 +1432,7 @@ static ConfitStatus confit_schema_parse_option_value(
   size_t array_count;
   size_t index;
   ConfitOptionType option_type;
+  ConfitDependencyKind dependency_kind;
 
   if (!confit_schema_is_known_option_field(key)) {
     confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
@@ -1414,10 +1440,28 @@ static ConfitStatus confit_schema_parse_option_value(
     return CONFIT_ERR_SCHEMA;
   }
 
-  if (strncmp(key, "x_", 2U) == 0 || strcmp(key, "requires") == 0 ||
-      strcmp(key, "conflicts") == 0 || strcmp(key, "recommends") == 0 ||
-      strcmp(key, "forces") == 0 || strcmp(key, "visible_if") == 0 ||
-      strcmp(key, "deprecated") == 0 || strcmp(key, "replaced_by") == 0) {
+  if (strncmp(key, "x_", 2U) == 0 || strcmp(key, "deprecated") == 0 ||
+      strcmp(key, "replaced_by") == 0) {
+    return CONFIT_OK;
+  }
+
+  if (confit_schema_dependency_kind_for_key(key, &dependency_kind)) {
+    array_items = 0;
+    array_count = 0U;
+    if (!confit_schema_parse_string_array(line_text, value_begin, value_end,
+                                          &array_items, &array_count, path,
+                                          line, diagnostic)) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; index < array_count; ++index) {
+      status = confit_option_add_dependency(option, dependency_kind,
+                                            array_items[index]);
+      if (status != CONFIT_OK) {
+        confit_schema_string_array_free(array_items, array_count);
+        return status;
+      }
+    }
+    confit_schema_string_array_free(array_items, array_count);
     return CONFIT_OK;
   }
 

@@ -291,6 +291,19 @@ int main(void) {
     confit_project_free(project);
     return 52;
   }
+  if (!expect_status(confit_option_add_dependency(
+          option, CONFIT_DEPENDENCY_REQUIRES, "delos.debug.ddc"))) {
+    confit_project_free(project);
+    return 53;
+  }
+  if (option->dependency_count != 1U ||
+      option->dependencies[0].kind != CONFIT_DEPENDENCY_REQUIRES ||
+      strcmp(option->dependencies[0].option_id, "delos.debug.ddc") != 0 ||
+      strcmp(confit_dependency_kind_name(option->dependencies[0].kind),
+             "requires") != 0) {
+    confit_project_free(project);
+    return 54;
+  }
 
   confit_value_clear(&min_value);
   confit_value_clear(&max_value);
