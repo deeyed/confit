@@ -11,6 +11,8 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+find_package(Curses REQUIRED)
+
 add_library(confit_core STATIC
   src/core/diagnostic.c
   src/core/model.c
@@ -47,53 +49,16 @@ else()
   target_compile_options(confit_host PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
-add_library(confit_toml_vendor STATIC
-  vendor/toml/confit_toml.c
-)
-
-target_include_directories(confit_toml_vendor
-  PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/toml
-)
-
-target_compile_features(confit_toml_vendor PUBLIC c_std_17)
-
-if(MSVC)
-  target_compile_options(confit_toml_vendor PRIVATE /W4 /WX)
-else()
-  target_compile_options(confit_toml_vendor PRIVATE
-    -Wall -Wextra -Werror -pedantic
-  )
-endif()
-
-add_library(confit_tui_vendor STATIC
-  vendor/tui/confit_tui.c
-)
-
-target_include_directories(confit_tui_vendor
-  PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tui
-)
-
-target_compile_features(confit_tui_vendor PUBLIC c_std_17)
-
-if(MSVC)
-  target_compile_options(confit_tui_vendor PRIVATE /W4 /WX)
-else()
-  target_compile_options(confit_tui_vendor PRIVATE
-    -Wall -Wextra -Werror -pedantic
-  )
-endif()
-
 add_library(confit_parser STATIC
   src/parser/parser.c
+  src/parser/toml_scan.c
 )
 
-target_link_libraries(confit_parser
-  PUBLIC
-    confit_host
+target_link_libraries(confit_parser PUBLIC confit_host)
+
+target_include_directories(confit_parser
   PRIVATE
-    confit_toml_vendor
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parser
 )
 
 target_compile_features(confit_parser PUBLIC c_std_17)
@@ -201,7 +166,12 @@ target_link_libraries(confit_tui
   PRIVATE
     confit_graph
     confit_resolver
-    confit_tui_vendor
+    ${CURSES_LIBRARIES}
+)
+
+target_include_directories(confit_tui
+  PRIVATE
+    ${CURSES_INCLUDE_DIRS}
 )
 target_compile_features(confit_tui PUBLIC c_std_17)
 

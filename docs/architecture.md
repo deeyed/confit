@@ -115,9 +115,12 @@ Confit core는 C로 작성한다. 목표는 C23-host-friendly code지만, host p
 초기 기준으로 둘 수 있다. Runtime 프로젝트와 달리 hosted libc 사용은 허용되지만, hosted 기능은
 `src/host/` 같은 host boundary에 엄격하게 격리한다.
 
-TOML parser는 permissive license C library를 vendoring하거나 wrapper로 연결한다. Parser API는
-Confit 내부 adapter 뒤에 숨긴다. 나중에 parser를 바꾸더라도 core model과 generator가 흔들리면 안
-된다.
+현재 TOML syntax scanner는 `src/parser/` 안의 first-party adapter support code다. 나중에 외부 TOML
+library로 교체한다면 그때만 `vendor/` 아래에 원본 header/library를 둔다. Parser API는 Confit 내부
+adapter 뒤에 숨긴다. 나중에 parser를 바꾸더라도 core model과 generator가 흔들리면 안 된다.
+
+TUI는 host-side ncurses frontend다. Confit이 직접 만든 terminal shim을 `vendor/`에 두지 않는다.
+`vendor/`는 외부에서 가져온 header/library만 보관하는 곳이다.
 
 ## Source Layout Boundary
 
@@ -132,7 +135,7 @@ tools/confit/
   src/host/
   src/cli/
   src/tui/
-  vendor/
+  vendor/        # third-party header/library only
 ```
 
 `src/core/`는 terminal, filesystem, path separator, environment variable, clock, locale을 직접 알지

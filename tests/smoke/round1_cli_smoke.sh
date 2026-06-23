@@ -3,6 +3,7 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 BUILD_DIR="${TMPDIR:-/tmp}/confit-round1-smoke"
+CURSES_LIBS=${CONFIT_CURSES_LIBS:-"-lcurses"}
 
 mkdir -p "$BUILD_DIR"
 
@@ -19,8 +20,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
 
 cc -std=c17 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT_DIR/include" \
-  -I"$ROOT_DIR/vendor/toml" \
-  -I"$ROOT_DIR/vendor/tui" \
+  -I"$ROOT_DIR/src/parser" \
   "$ROOT_DIR/src/core/status.c" \
   "$ROOT_DIR/src/core/diagnostic.c" \
   "$ROOT_DIR/src/core/model.c" \
@@ -31,6 +31,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/generator/reports.c" \
   "$ROOT_DIR/src/graph/graph.c" \
   "$ROOT_DIR/src/parser/parser.c" \
+  "$ROOT_DIR/src/parser/toml_scan.c" \
   "$ROOT_DIR/src/resolver/resolver.c" \
   "$ROOT_DIR/src/schema/schema.c" \
   "$ROOT_DIR/src/tui/tui.c" \
@@ -39,8 +40,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/host/host_io.c" \
   "$ROOT_DIR/src/host/host_path.c" \
   "$ROOT_DIR/src/cli/main.c" \
-  "$ROOT_DIR/vendor/toml/confit_toml.c" \
-  "$ROOT_DIR/vendor/tui/confit_tui.c" \
+  $CURSES_LIBS \
   -o "$BUILD_DIR/confit"
 
 "$BUILD_DIR/confit" --version | grep -Fx "confit 0.1.0-round1" >/dev/null

@@ -1,8 +1,8 @@
-#include "confit_toml.h"
+#include "toml_scan.h"
 
 #include <stdlib.h>
 
-struct ConfitTomlVendorDocument {
+struct ConfitTomlScanDocument {
   size_t line_count;
   size_t table_count;
   size_t key_count;
@@ -15,7 +15,7 @@ typedef struct ConfitTomlValueState {
   size_t open_column;
 } ConfitTomlValueState;
 
-static void confit_toml_set_error(ConfitTomlVendorError *error, size_t line,
+static void confit_toml_set_error(ConfitTomlScanError *error, size_t line,
                                   size_t column, const char *message) {
   if (error == 0) {
     return;
@@ -67,7 +67,7 @@ static int confit_toml_line_is_done(const char *line, size_t index,
 
 static int confit_toml_validate_key(const char *line, size_t begin, size_t end,
                                     size_t line_number,
-                                    ConfitTomlVendorError *error) {
+                                    ConfitTomlScanError *error) {
   size_t index;
   int in_string;
   char quote;
@@ -123,8 +123,8 @@ static int confit_toml_validate_key(const char *line, size_t begin, size_t end,
 
 static int confit_toml_parse_table(const char *line, size_t length,
                                    size_t line_number,
-                                   ConfitTomlVendorDocument *document,
-                                   ConfitTomlVendorError *error) {
+                                   ConfitTomlScanDocument *document,
+                                   ConfitTomlScanError *error) {
   const int array_table = length > 1U && line[1] == '[';
   size_t index;
   size_t body_begin;
@@ -209,7 +209,7 @@ static int confit_toml_parse_value_fragment(const char *line, size_t begin,
                                             size_t length, size_t line_number,
                                             int require_value,
                                             ConfitTomlValueState *state,
-                                            ConfitTomlVendorError *error) {
+                                            ConfitTomlScanError *error) {
   size_t index;
   int in_string;
   char quote;
@@ -337,9 +337,9 @@ static int confit_toml_find_equals(const char *line, size_t length,
 
 static int confit_toml_parse_key_value(const char *line, size_t begin,
                                        size_t length, size_t line_number,
-                                       ConfitTomlVendorDocument *document,
+                                       ConfitTomlScanDocument *document,
                                        ConfitTomlValueState *state,
-                                       ConfitTomlVendorError *error) {
+                                       ConfitTomlScanError *error) {
   size_t equals_index;
 
   if (!confit_toml_find_equals(line + begin, length - begin, &equals_index)) {
@@ -365,9 +365,9 @@ static int confit_toml_parse_key_value(const char *line, size_t begin,
 
 static int confit_toml_parse_line(const char *line, size_t length,
                                   size_t line_number,
-                                  ConfitTomlVendorDocument *document,
+                                  ConfitTomlScanDocument *document,
                                   ConfitTomlValueState *state,
-                                  ConfitTomlVendorError *error) {
+                                  ConfitTomlScanError *error) {
   const size_t begin = confit_toml_trim_left(line, length);
 
   if (state->square_depth > 0U || state->brace_depth > 0U) {
@@ -388,10 +388,10 @@ static int confit_toml_parse_line(const char *line, size_t length,
                                      document, state, error);
 }
 
-int confit_toml_vendor_parse(const char *source, size_t source_size,
-                             ConfitTomlVendorDocument **out_document,
-                             ConfitTomlVendorError *error) {
-  ConfitTomlVendorDocument *document;
+int confit_toml_scan_parse(const char *source, size_t source_size,
+                             ConfitTomlScanDocument **out_document,
+                             ConfitTomlScanError *error) {
+  ConfitTomlScanDocument *document;
   ConfitTomlValueState state;
   size_t offset;
   size_t line_number;
@@ -402,7 +402,7 @@ int confit_toml_vendor_parse(const char *source, size_t source_size,
   }
 
   *out_document = 0;
-  document = (ConfitTomlVendorDocument *)calloc(1U, sizeof(*document));
+  document = (ConfitTomlScanDocument *)calloc(1U, sizeof(*document));
   if (document == 0) {
     confit_toml_set_error(error, 0, 0, "failed to allocate TOML document");
     return 0;
@@ -453,18 +453,18 @@ int confit_toml_vendor_parse(const char *source, size_t source_size,
   return 1;
 }
 
-void confit_toml_vendor_free(ConfitTomlVendorDocument *document) {
+void confit_toml_scan_free(ConfitTomlScanDocument *document) {
   free(document);
 }
 
-size_t confit_toml_vendor_line_count(const ConfitTomlVendorDocument *document) {
+size_t confit_toml_scan_line_count(const ConfitTomlScanDocument *document) {
   return document != 0 ? document->line_count : 0U;
 }
 
-size_t confit_toml_vendor_table_count(const ConfitTomlVendorDocument *document) {
+size_t confit_toml_scan_table_count(const ConfitTomlScanDocument *document) {
   return document != 0 ? document->table_count : 0U;
 }
 
-size_t confit_toml_vendor_key_count(const ConfitTomlVendorDocument *document) {
+size_t confit_toml_scan_key_count(const ConfitTomlScanDocument *document) {
   return document != 0 ? document->key_count : 0U;
 }

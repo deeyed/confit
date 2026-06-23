@@ -94,7 +94,8 @@ rg --files tools/confit
 - 공개 header의 함수, 타입, enum, macro에는 한국어 Doxygen 주석을 쓴다.
 - Core는 C로 작성한다. C17 subset을 기본으로 하되 C23-friendly style을 유지한다.
 - C++, Rust, Python-heavy generator는 명시 결정 전까지 쓰지 않는다.
-- Parser와 TUI vendor code는 각각 `vendor/toml/`, `vendor/tui/` 뒤에 격리한다.
+- `vendor/`에는 외부에서 가져온 header/library만 둔다. First-party TOML scanner와 TUI glue는
+  `src/parser/`, `src/tui/` 아래에 둔다.
 - CLI만 사람이 읽는 diagnostic을 format한다.
 - Core model은 numeric status와 diagnostic record를 함께 사용한다.
 - Generated artifact에는 timestamp나 absolute path를 넣지 않는다.
@@ -195,18 +196,17 @@ Commit:
 feat(confit): isolate hosted platform services
 ```
 
-## Round 4: TOML Vendor Adapter
+## Round 4: TOML Parser Adapter
 
 목표:
 
-- Permissive C TOML library를 `vendor/toml/`에 격리한다.
+- TOML syntax scanner를 parser adapter 뒤에 격리한다.
 - `src/parser/` adapter를 추가한다.
 - 아직 schema 해석은 하지 않는다.
 - TOML load와 error 위치 reporting만 검증한다.
 
 범위:
 
-- `vendor/toml/`
 - `include/confit/parser.h`
 - `src/parser/`
 - valid/invalid TOML fixtures
@@ -526,11 +526,11 @@ Commit:
 feat(confit): complete command line workflow
 ```
 
-## Round 17: TUI Vendor + Shell
+## Round 17: ncurses TUI Shell
 
 목표:
 
-- TUI library를 `vendor/tui/`에 격리한다.
+- ncurses 기반 TUI shell을 만든다.
 - `confit tui` 실행 skeleton을 만든다.
 - Keyboard input, list view, status bar를 만든다.
 - Core dependency inversion을 만들지 않는다.

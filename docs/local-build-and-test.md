@@ -9,6 +9,8 @@ last_verified: 2026-06-23
 
 Confit은 Delos runtime build와 분리된 host-side tool이다. Confit 자체 build/test harness는
 `tools/confit/` 안에서만 정의하고, build output은 source tree 밖 임시 디렉터리에 둔다.
+TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가 찾을 수 있는
+curses/ncurses 개발 파일이 있어야 한다.
 
 ## CI-like Local Gate
 

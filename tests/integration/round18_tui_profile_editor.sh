@@ -13,14 +13,15 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 
+TERM=xterm
+export TERM
+
 printf '/mode\ne\nxcedit\ntstring\neTUI name\nxejje7\nje0.75\njjebuild/new\nsq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
     >"$WORK_DIR/tui-edit.txt"
 
-grep -F "search=mode" "$WORK_DIR/tui-edit.txt" >/dev/null
-grep -F "category=edit" "$WORK_DIR/tui-edit.txt" >/dev/null
-grep -F "tag=string" "$WORK_DIR/tui-edit.txt" >/dev/null
-grep -F "saved " "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "option 1/6" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile edit \

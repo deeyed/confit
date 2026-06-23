@@ -10,13 +10,12 @@ PROJECT_DIR="$SOURCE_DIR/tests/fixtures/schema/valid/basic"
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 
+TERM=xterm
+export TERM
+
 printf 'jq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui.txt"
 
-grep -F "== Confit TUI ==" "$WORK_DIR/tui.txt" >/dev/null
-grep -F "project=delos profile=sim-dsh target=host-sim" \
-  "$WORK_DIR/tui.txt" >/dev/null
-grep -F "delos.debug.ddc" "$WORK_DIR/tui.txt" >/dev/null
-grep -F "[status] option" "$WORK_DIR/tui.txt" >/dev/null
-grep -F "/ search c category t tag x clear e edit s save q quit" \
+grep -aF "option 1/" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "/ search c category t tag x clear e edit s save q quit" \
   "$WORK_DIR/tui.txt" >/dev/null

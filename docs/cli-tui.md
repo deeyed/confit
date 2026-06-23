@@ -7,7 +7,7 @@ last_verified: 2026-06-23
 
 # CLI And TUI Strategy
 
-Confit의 첫 interface는 CLI다. TUI는 core evaluator가 안정화된 뒤 붙인다. TUI가 없더라도 모든
+Confit의 첫 interface는 CLI다. TUI는 ncurses 기반 host frontend로 제공한다. TUI가 없더라도 모든
 configuration resolution, validation, generation, explanation은 CLI만으로 가능해야 한다.
 
 ## CLI Commands

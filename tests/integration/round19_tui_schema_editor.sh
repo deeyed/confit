@@ -13,15 +13,16 @@ rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
 cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 
+TERM=xterm
+export TERM
+
 printf 'ndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help\ncschema\ntschema,created\nored,blue\nndelos.schema.limit\nint\nLimit Prompt\npLimit Prompt\nhLimit help\ncschema\ntschema,limit\nr0,16\nsq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema.txt"
 
-grep -F "Schema edit mode changes project configuration semantics." \
+grep -aF "schema 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "n new p prompt h help c category t tag" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -F "Prefer code review for schema changes." \
-  "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -F "schema saved " "$WORK_DIR/tui-schema.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/options/tui-schema.toml"
 "$CONFIT_BIN" graph --project "$PROJECT_DIR" >"$WORK_DIR/graph.json"

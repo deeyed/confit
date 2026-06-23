@@ -14,12 +14,16 @@ mkdir -p "$WORK_DIR"
 cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 rm -f "$PROJECT_DIR/config/profiles/fresh.toml"
 
+TERM=xterm
+export TERM
+
 printf 'sq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile fresh \
     >"$WORK_DIR/tui-profile-create.txt"
 
-grep -F "profile=fresh" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -F "saved " "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "option 1/6" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "/ search c category t tag x clear e edit s save q quit" \
+  "$WORK_DIR/tui-profile-create.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/fresh.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile fresh \

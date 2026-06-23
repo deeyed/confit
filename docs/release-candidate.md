@@ -113,7 +113,6 @@ $CONFIT_BIN tui \
 
 - `config.cmake` and `config.qst` generators are intentionally not implemented.
 - Real Parus/Delos `config/` adoption remains a later integration round.
-- The TUI vendor is a small local shim for deterministic tests, not a polished
-  terminal UI library.
+- The TUI is ncurses-based and no longer uses a first-party vendor shim.
 - Schema edit mode writes human-readable TOML and displays a warning, but schema
   changes still require code review.

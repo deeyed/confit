@@ -4,13 +4,13 @@
 #include <string.h>
 
 #include "confit/host.h"
-#include "confit_toml.h"
+#include "toml_scan.h"
 
 struct ConfitParserDocument {
   char *source_name;
   char *source_text;
   size_t source_size;
-  ConfitTomlVendorDocument *toml;
+  ConfitTomlScanDocument *toml;
 };
 
 static char *confit_parser_copy_bytes(const char *text, size_t size) {
@@ -38,7 +38,7 @@ static char *confit_parser_copy_string(const char *text) {
 
 static ConfitStatus confit_parser_make_document(
     const char *source_name, char *owned_text, size_t text_size,
-    ConfitTomlVendorDocument *toml, ConfitParserDocument **out_document,
+    ConfitTomlScanDocument *toml, ConfitParserDocument **out_document,
     ConfitDiagnostic *diagnostic) {
   ConfitParserDocument *document;
 
@@ -69,8 +69,8 @@ ConfitStatus confit_parser_load_text(const char *source_name, const char *text,
                                      ConfitParserDocument **out_document,
                                      ConfitDiagnostic *diagnostic) {
   char *owned_text;
-  ConfitTomlVendorDocument *toml;
-  ConfitTomlVendorError error;
+  ConfitTomlScanDocument *toml;
+  ConfitTomlScanError error;
   ConfitStatus status;
 
   if (out_document == 0 || text == 0) {
@@ -91,7 +91,7 @@ ConfitStatus confit_parser_load_text(const char *source_name, const char *text,
   error.column = 0U;
   error.message = 0;
   toml = 0;
-  if (!confit_toml_vendor_parse(owned_text, text_size, &toml, &error)) {
+  if (!confit_toml_scan_parse(owned_text, text_size, &toml, &error)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, error.line,
                           error.column, error.message);
     free(owned_text);
@@ -101,7 +101,7 @@ ConfitStatus confit_parser_load_text(const char *source_name, const char *text,
   status = confit_parser_make_document(source_name, owned_text, text_size, toml,
                                        out_document, diagnostic);
   if (status != CONFIT_OK) {
-    confit_toml_vendor_free(toml);
+    confit_toml_scan_free(toml);
     free(owned_text);
     return status;
   }
@@ -115,8 +115,8 @@ ConfitStatus confit_parser_load_file(const char *path,
   char *text;
   char *owned_text;
   size_t text_size;
-  ConfitTomlVendorDocument *toml;
-  ConfitTomlVendorError error;
+  ConfitTomlScanDocument *toml;
+  ConfitTomlScanError error;
   ConfitStatus status;
 
   if (out_document == 0) {
@@ -137,7 +137,7 @@ ConfitStatus confit_parser_load_file(const char *path,
   error.column = 0U;
   error.message = 0;
   toml = 0;
-  if (!confit_toml_vendor_parse(text, text_size, &toml, &error)) {
+  if (!confit_toml_scan_parse(text, text_size, &toml, &error)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, path, error.line,
                           error.column, error.message);
     confit_host_free(text);
@@ -147,7 +147,7 @@ ConfitStatus confit_parser_load_file(const char *path,
   owned_text = confit_parser_copy_bytes(text, text_size);
   confit_host_free(text);
   if (owned_text == 0) {
-    confit_toml_vendor_free(toml);
+    confit_toml_scan_free(toml);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
                           "failed to allocate parser source text");
     return CONFIT_ERR_INTERNAL;
@@ -156,7 +156,7 @@ ConfitStatus confit_parser_load_file(const char *path,
   status = confit_parser_make_document(path, owned_text, text_size, toml,
                                        out_document, diagnostic);
   if (status != CONFIT_OK) {
-    confit_toml_vendor_free(toml);
+    confit_toml_scan_free(toml);
     free(owned_text);
     return status;
   }
@@ -171,7 +171,7 @@ void confit_parser_document_free(ConfitParserDocument *document) {
 
   free(document->source_name);
   free(document->source_text);
-  confit_toml_vendor_free(document->toml);
+  confit_toml_scan_free(document->toml);
   free(document);
 }
 
@@ -192,14 +192,14 @@ confit_parser_document_source_size(const ConfitParserDocument *document) {
 
 size_t
 confit_parser_document_line_count(const ConfitParserDocument *document) {
-  return document != 0 ? confit_toml_vendor_line_count(document->toml) : 0U;
+  return document != 0 ? confit_toml_scan_line_count(document->toml) : 0U;
 }
 
 size_t
 confit_parser_document_table_count(const ConfitParserDocument *document) {
-  return document != 0 ? confit_toml_vendor_table_count(document->toml) : 0U;
+  return document != 0 ? confit_toml_scan_table_count(document->toml) : 0U;
 }
 
 size_t confit_parser_document_key_count(const ConfitParserDocument *document) {
-  return document != 0 ? confit_toml_vendor_key_count(document->toml) : 0U;
+  return document != 0 ? confit_toml_scan_key_count(document->toml) : 0U;
 }
