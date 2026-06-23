@@ -77,6 +77,9 @@ ConfitStatus confit_tui_text_append_value(ConfitTuiTextBuilder *builder,
                                           const ConfitValue *value);
 
 int confit_tui_curses_render(const ConfitTuiScreen *screen);
+int confit_tui_curses_render_text(const char *title, const char *header,
+                                  const char *body, const char *key_legend,
+                                  const char *status, size_t first_line);
 ConfitTuiKey confit_tui_curses_read_key(void);
 size_t confit_tui_curses_page_step(void);
 int confit_tui_curses_read_line(const char *prompt, char *out, size_t out_size);

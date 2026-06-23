@@ -1219,6 +1219,364 @@ static void confit_tui_clear_filters(ConfitTuiState *state) {
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 
+static ConfitStatus confit_tui_detail_append_line(ConfitTuiTextBuilder *builder,
+                                                  const char *label,
+                                                  const char *value) {
+  ConfitStatus status;
+
+  status = confit_tui_text_append(builder, label);
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(builder, value != 0 ? value : "-");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(builder, "\n");
+  }
+  return status;
+}
+
+static ConfitStatus confit_tui_detail_append_tags(ConfitTuiTextBuilder *builder,
+                                                  const ConfitOption *option) {
+  ConfitStatus status;
+  size_t index;
+
+  status = confit_tui_text_append(builder, "tags: ");
+  if (status == CONFIT_OK && option->tag_count == 0U) {
+    status = confit_tui_text_append(builder, "-");
+  }
+  for (index = 0U; status == CONFIT_OK && index < option->tag_count; ++index) {
+    if (index > 0U) {
+      status = confit_tui_text_append(builder, ", ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_tui_text_append(
+          builder, confit_tui_text_or_dash(option->tags[index]));
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(builder, "\n");
+  }
+  return status;
+}
+
+static ConfitStatus confit_tui_detail_append_dependency_kind(
+    ConfitTuiTextBuilder *builder, const ConfitOption *option,
+    ConfitDependencyKind kind, const char *label) {
+  ConfitStatus status;
+  size_t index;
+  size_t written;
+
+  status = confit_tui_text_append(builder, label);
+  written = 0U;
+  for (index = 0U; status == CONFIT_OK && index < option->dependency_count;
+       ++index) {
+    if (option->dependencies[index].kind != kind) {
+      continue;
+    }
+    if (written > 0U) {
+      status = confit_tui_text_append(builder, ", ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_tui_text_append(
+          builder,
+          confit_tui_text_or_dash(option->dependencies[index].option_id));
+    }
+    written += 1U;
+  }
+  if (status == CONFIT_OK && written == 0U) {
+    status = confit_tui_text_append(builder, "-");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(builder, "\n");
+  }
+  return status;
+}
+
+static ConfitStatus
+confit_tui_detail_append_dependencies(ConfitTuiTextBuilder *builder,
+                                      const ConfitOption *option) {
+  ConfitStatus status;
+
+  status = confit_tui_text_append(builder, "\nDependencies\n");
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependency_kind(
+        builder, option, CONFIT_DEPENDENCY_REQUIRES, "requires: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependency_kind(
+        builder, option, CONFIT_DEPENDENCY_CONFLICTS, "conflicts: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependency_kind(
+        builder, option, CONFIT_DEPENDENCY_FORCES, "forces: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependency_kind(
+        builder, option, CONFIT_DEPENDENCY_RECOMMENDS, "recommends: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependency_kind(
+        builder, option, CONFIT_DEPENDENCY_VISIBLE_IF, "visible_if: ");
+  }
+  return status;
+}
+
+static ConfitStatus
+confit_tui_build_option_detail(const ConfitTuiState *state,
+                               const ConfitOption *option, char **out_text,
+                               ConfitDiagnostic *diagnostic) {
+  ConfitTuiTextBuilder builder;
+  const ConfitResolvedValue *resolved;
+  char current_value[128];
+  char default_value[128];
+  ConfitStatus status;
+
+  *out_text = 0;
+  if (option == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
+                          "missing detail option");
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  resolved = confit_resolved_config_find(state->config, option->id);
+  confit_tui_format_value(
+      option, resolved != 0 ? &resolved->value : &option->default_value,
+      current_value, sizeof(current_value));
+  confit_tui_format_value(option, &option->default_value, default_value,
+                          sizeof(default_value));
+
+  confit_tui_text_builder_init(&builder);
+  status = confit_tui_detail_append_line(
+      &builder, "prompt: ", confit_tui_text_or_dash(option->prompt));
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(&builder, "id: ", option->id);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        &builder, "type: ", confit_option_type_name(option->type));
+  }
+  if (status == CONFIT_OK) {
+    status =
+        confit_tui_detail_append_line(&builder, "current: ", current_value);
+  }
+  if (status == CONFIT_OK) {
+    status =
+        confit_tui_detail_append_line(&builder, "default: ", default_value);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        &builder, "source: ",
+        resolved != 0 ? confit_tui_text_or_dash(resolved->source) : "default");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        &builder, "category: ", confit_tui_option_category_name(option));
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_tags(&builder, option);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_dependencies(&builder, option);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(&builder, "\nHelp\n");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(
+        &builder,
+        option->help != 0 && option->help[0] != '\0' ? option->help : "-");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(&builder, "\n");
+  }
+  if (status != CONFIT_OK) {
+    free(builder.text);
+    confit_diagnostic_set(diagnostic, status, option->id, 0, 0,
+                          "failed to build tui detail");
+    return status;
+  }
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static ConfitStatus
+confit_tui_build_category_detail(const ConfitTuiState *state,
+                                 const ConfitTuiRow *row, char **out_text,
+                                 ConfitDiagnostic *diagnostic) {
+  ConfitTuiTextBuilder builder;
+  ConfitStatus status;
+  char count_line[128];
+  const char *name;
+
+  *out_text = 0;
+  if (row == 0 || row->category_index >= state->category_count) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
+                          "missing detail category");
+    return CONFIT_ERR_INTERNAL;
+  }
+  name = state->categories[row->category_index].name;
+  (void)snprintf(
+      count_line, sizeof(count_line), "%lu visible, %lu total",
+      (unsigned long)state->categories[row->category_index].visible_count,
+      (unsigned long)state->categories[row->category_index].option_count);
+  count_line[sizeof(count_line) - 1U] = '\0';
+
+  confit_tui_text_builder_init(&builder);
+  status = confit_tui_detail_append_line(&builder, "menu: ", name);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        &builder, "state: ",
+        state->categories[row->category_index].collapsed ? "collapsed"
+                                                         : "expanded");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(&builder, "options: ", count_line);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(&builder, "summary: ", row->detail);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(&builder,
+                                    "\nSelect an option inside this menu to "
+                                    "inspect current value, default, "
+                                    "source, dependencies, and help text.\n");
+  }
+  if (status != CONFIT_OK) {
+    free(builder.text);
+    confit_diagnostic_set(diagnostic, status, name, 0, 0,
+                          "failed to build tui category detail");
+    return status;
+  }
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static size_t confit_tui_detail_line_count(const char *text) {
+  size_t count;
+  const char *cursor;
+
+  if (text == 0 || text[0] == '\0') {
+    return 0U;
+  }
+  count = 1U;
+  for (cursor = text; *cursor != '\0'; ++cursor) {
+    if (*cursor == '\n') {
+      count += 1U;
+    }
+  }
+  return count;
+}
+
+static void confit_tui_detail_scroll(size_t line_count, size_t *first_line,
+                                     ConfitTuiKey key) {
+  size_t step;
+
+  switch (key) {
+  case CONFIT_TUI_KEY_DOWN:
+    if (*first_line + 1U < line_count) {
+      *first_line += 1U;
+    }
+    break;
+  case CONFIT_TUI_KEY_UP:
+    if (*first_line > 0U) {
+      *first_line -= 1U;
+    }
+    break;
+  case CONFIT_TUI_KEY_PAGE_DOWN:
+    step = confit_tui_curses_page_step();
+    if (*first_line + step < line_count) {
+      *first_line += step;
+    } else if (line_count > 0U) {
+      *first_line = line_count - 1U;
+    }
+    break;
+  case CONFIT_TUI_KEY_PAGE_UP:
+    step = confit_tui_curses_page_step();
+    if (*first_line > step) {
+      *first_line -= step;
+    } else {
+      *first_line = 0U;
+    }
+    break;
+  case CONFIT_TUI_KEY_HOME:
+    *first_line = 0U;
+    break;
+  case CONFIT_TUI_KEY_END:
+    *first_line = line_count > 0U ? line_count - 1U : 0U;
+    break;
+  default:
+    break;
+  }
+}
+
+static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
+                                           const char *target_name,
+                                           ConfitDiagnostic *diagnostic) {
+  ConfitTuiRow *row;
+  char *body;
+  char header[320];
+  char status_line[256];
+  size_t first_line;
+  size_t line_count;
+  ConfitStatus status;
+
+  row = confit_tui_selected_row(state);
+  if (row == 0) {
+    (void)snprintf(state->status, sizeof(state->status), "no detail selected");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+
+  body = 0;
+  if (row->kind == CONFIT_TUI_ROW_CATEGORY) {
+    status = confit_tui_build_category_detail(state, row, &body, diagnostic);
+  } else {
+    status =
+        confit_tui_build_option_detail(state, row->option, &body, diagnostic);
+  }
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  (void)snprintf(header, sizeof(header),
+                 "project=%s profile=%s target=%s selected=%s",
+                 confit_tui_text_or_dash(state->project->name),
+                 confit_tui_text_or_dash(state->options->profile_name),
+                 confit_tui_text_or_dash(target_name),
+                 confit_tui_text_or_dash(row->item.label));
+  header[sizeof(header) - 1U] = '\0';
+  first_line = 0U;
+  line_count = confit_tui_detail_line_count(body);
+
+  do {
+    ConfitTuiKey key;
+
+    (void)snprintf(status_line, sizeof(status_line), "detail line %lu/%lu",
+                   line_count == 0U ? 0UL : (unsigned long)(first_line + 1U),
+                   (unsigned long)line_count);
+    status_line[sizeof(status_line) - 1U] = '\0';
+    if (confit_tui_curses_render_text(
+            "Confit Help", header, body,
+            "arrows/jk scroll PgUp/PgDn Home/End Esc/q/h/? close", status_line,
+            first_line) != 0) {
+      free(body);
+      return CONFIT_ERR_INTERNAL;
+    }
+
+    key = confit_tui_curses_read_key();
+    if (key == CONFIT_TUI_KEY_QUIT || key == CONFIT_TUI_KEY_CANCEL ||
+        key == CONFIT_TUI_KEY_HELP || key == CONFIT_TUI_KEY_KEYMAP_HELP ||
+        key == CONFIT_TUI_KEY_ENTER) {
+      break;
+    }
+    confit_tui_detail_scroll(line_count, &first_line, key);
+  } while (1);
+
+  free(body);
+  (void)snprintf(state->status, sizeof(state->status), "closed detail");
+  state->status[sizeof(state->status) - 1U] = '\0';
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                                              const char *target_name) {
   ConfitTuiListItem *items;
@@ -1253,7 +1611,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(key_legend, sizeof(key_legend),
                  "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / "
-                 "search ? help Esc cancel q quit");
+                 "search ?/h detail Esc cancel q quit");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "row %lu/%lu | %s",
                  state->view_count == 0U
@@ -1349,15 +1707,9 @@ static int confit_tui_profile_move_selection(ConfitTuiState *state,
   return 0;
 }
 
-static void confit_tui_profile_show_keymap(ConfitTuiState *state) {
-  (void)snprintf(state->status, sizeof(state->status),
-                 "keys: arrows/jk PgUp/PgDn Home/End Enter/Space ? help Esc "
-                 "cancel q quit");
-  state->status[sizeof(state->status) - 1U] = '\0';
-}
-
 static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
                                           ConfitTuiKey key,
+                                          const char *target_name,
                                           ConfitDiagnostic *diagnostic) {
   const ConfitOption *option;
   ConfitTuiRow *row;
@@ -1365,9 +1717,8 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
   if (confit_tui_profile_move_selection(state, key)) {
     return CONFIT_OK;
   }
-  if (key == CONFIT_TUI_KEY_KEYMAP_HELP) {
-    confit_tui_profile_show_keymap(state);
-    return CONFIT_OK;
+  if (key == CONFIT_TUI_KEY_KEYMAP_HELP || key == CONFIT_TUI_KEY_HELP) {
+    return confit_tui_show_detail(state, target_name, diagnostic);
   }
   if (key == CONFIT_TUI_KEY_SEARCH) {
     return confit_tui_set_filter(state->search, sizeof(state->search),
@@ -1448,7 +1799,7 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
       break;
     }
     confit_diagnostic_init(&diagnostic);
-    status = confit_tui_handle_key(state, key, &diagnostic);
+    status = confit_tui_handle_key(state, key, target_name, &diagnostic);
     if (status != CONFIT_OK) {
       (void)snprintf(state->status, sizeof(state->status), "error: %s",
                      diagnostic.message != 0 ? diagnostic.message

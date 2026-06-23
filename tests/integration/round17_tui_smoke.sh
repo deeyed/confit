@@ -26,7 +26,7 @@ grep -aF "Menu" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search" \
+grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search ?/h detail" \
   "$WORK_DIR/tui.txt" >/dev/null
 
 printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
@@ -52,11 +52,30 @@ printf '%sq' "$END_KEY" |
 
 grep -aF "moved End" "$WORK_DIR/tui-end.txt" >/dev/null
 
-printf '?q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
-  >"$WORK_DIR/tui-help.txt"
+printf 'j?qq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-detail-question.txt"
 
-grep -aF "keys: arrows/jk PgUp/PgDn Home/End" "$WORK_DIR/tui-help.txt" \
+grep -aF "Confit Help" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "prompt: Enable DDC" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "id: delos.debug.ddc" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "type: bool" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "current: true" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "default: false" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "source:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "category: debug" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "tags: debug, host-tooling" "$WORK_DIR/tui-detail-question.txt" \
   >/dev/null
+grep -aF "requires:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "conflicts:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "forces:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "recommends:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Help" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+
+printf 'jhqq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-detail-h.txt"
+
+grep -aF "Confit Help" "$WORK_DIR/tui-detail-h.txt" >/dev/null
+grep -aF "closed detail" "$WORK_DIR/tui-detail-h.txt" >/dev/null
 
 printf '/\033q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-cancel.txt"

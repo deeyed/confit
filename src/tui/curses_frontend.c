@@ -398,6 +398,207 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
   return refresh() == OK ? 0 : -1;
 }
 
+static size_t confit_tui_curses_count_text_lines(const char *text) {
+  size_t count;
+  const char *cursor;
+
+  text = confit_tui_curses_text(text);
+  if (text[0] == '\0') {
+    return 0U;
+  }
+  count = 1U;
+  for (cursor = text; *cursor != '\0'; ++cursor) {
+    if (*cursor == '\n') {
+      count += 1U;
+    }
+  }
+  return count;
+}
+
+static const char *confit_tui_curses_skip_text_lines(const char *text,
+                                                     size_t line_count) {
+  const char *cursor;
+  size_t index;
+
+  cursor = confit_tui_curses_text(text);
+  for (index = 0U; index < line_count && *cursor != '\0'; ++index) {
+    while (*cursor != '\0' && *cursor != '\n') {
+      cursor += 1;
+    }
+    if (*cursor == '\n') {
+      cursor += 1;
+    }
+  }
+  return cursor;
+}
+
+static void confit_tui_curses_render_text_body(const char *body, int top,
+                                               int left, int height, int width,
+                                               size_t first_line) {
+  const char *cursor;
+  int row;
+
+  if (height <= 0 || width <= 0) {
+    return;
+  }
+  if (confit_tui_curses_text(body)[0] == '\0') {
+    confit_tui_curses_add_clipped(top, left, "(no detail)", width);
+    return;
+  }
+
+  cursor = confit_tui_curses_skip_text_lines(body, first_line);
+  for (row = 0; row < height && *cursor != '\0'; ++row) {
+    const char *line_begin = cursor;
+    size_t line_size;
+
+    while (*cursor != '\0' && *cursor != '\n') {
+      cursor += 1;
+    }
+    line_size = (size_t)(cursor - line_begin);
+    move(top + row, left);
+    addnstr(line_begin, line_size < (size_t)width ? (int)line_size : width);
+    if (*cursor == '\n') {
+      cursor += 1;
+    }
+  }
+}
+
+int confit_tui_curses_render_text(const char *title, const char *header,
+                                  const char *body, const char *key_legend,
+                                  const char *status, size_t first_line) {
+  size_t body_lines;
+  size_t last_visible;
+  int header_row;
+  int box_top;
+  int box_left;
+  int box_width;
+  int box_height;
+  int body_top;
+  int body_height;
+  int width;
+
+  if (confit_tui_curses_start() != 0) {
+    return -1;
+  }
+
+  erase();
+  width = COLS > 0 ? COLS : 80;
+  if (has_colors()) {
+    attron(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attron(A_BOLD);
+  }
+  confit_tui_curses_add_centered(0, confit_tui_curses_text(title));
+  if (has_colors()) {
+    attroff(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attroff(A_BOLD);
+  }
+
+  if (LINES < 9 || width < 40) {
+    if (LINES > 1) {
+      confit_tui_curses_add_clipped(1, 0, confit_tui_curses_text(status),
+                                    width);
+    }
+    confit_tui_curses_render_text_body(body, 2, 0, LINES > 4 ? LINES - 4 : 0,
+                                       width, first_line);
+    if (LINES > 1) {
+      if (has_colors()) {
+        attron(COLOR_PAIR(1));
+      } else {
+        attron(A_REVERSE);
+      }
+      move(LINES - 1, 0);
+      clrtoeol();
+      confit_tui_curses_add_clipped(LINES - 1, 0,
+                                    confit_tui_curses_text(key_legend), width);
+      if (has_colors()) {
+        attroff(COLOR_PAIR(1));
+      } else {
+        attroff(A_REVERSE);
+      }
+    }
+    return refresh() == OK ? 0 : -1;
+  }
+
+  header_row = 1;
+  confit_tui_curses_render_lines(header, &header_row, LINES - 7, 2,
+                                 width > 4 ? width - 4 : width, 2, A_BOLD);
+  box_top = header_row + 1;
+  box_left = 1;
+  box_width = width > 2 ? width - 2 : width;
+  box_height = LINES - box_top - 3;
+  if (box_height < 3) {
+    confit_tui_curses_render_text_body(
+        body, header_row + 1, 1, LINES - header_row - 3, width - 2, first_line);
+    return refresh() == OK ? 0 : -1;
+  }
+
+  if (has_colors()) {
+    attron(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attron(A_BOLD);
+  }
+  confit_tui_curses_draw_box(box_top, box_left, box_height, box_width, "Help");
+  if (has_colors()) {
+    attroff(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attroff(A_BOLD);
+  }
+
+  body_top = box_top + 1;
+  body_height = box_height - 2;
+  confit_tui_curses_render_text_body(body, body_top, box_left + 2, body_height,
+                                     box_width - 4, first_line);
+
+  body_lines = confit_tui_curses_count_text_lines(body);
+  last_visible = first_line + (body_height > 0 ? (size_t)body_height : 0U);
+  if (last_visible > body_lines) {
+    last_visible = body_lines;
+  }
+  if (first_line > 0U) {
+    mvaddch(box_top, box_left + 3, ACS_UARROW);
+  }
+  if (last_visible < body_lines) {
+    mvaddch(box_top + box_height - 1, box_left + 3, ACS_DARROW);
+  }
+  {
+    char range[64];
+
+    (void)snprintf(range, sizeof(range), " %lu-%lu/%lu ",
+                   body_lines == 0U ? 0UL : (unsigned long)(first_line + 1U),
+                   (unsigned long)last_visible, (unsigned long)body_lines);
+    range[sizeof(range) - 1U] = '\0';
+    confit_tui_curses_add_clipped(box_top,
+                                  box_left + box_width - 2 - (int)strlen(range),
+                                  range, (int)strlen(range));
+  }
+
+  if (LINES > 3) {
+    move(LINES - 2, 0);
+    clrtoeol();
+    if (has_colors()) {
+      attron(COLOR_PAIR(1));
+    } else {
+      attron(A_REVERSE);
+    }
+    confit_tui_curses_add_clipped(
+        LINES - 2, 1, confit_tui_curses_text(key_legend), width - 2);
+    if (has_colors()) {
+      attroff(COLOR_PAIR(1));
+    } else {
+      attroff(A_REVERSE);
+    }
+  }
+  if (LINES > 2) {
+    move(LINES - 1, 0);
+    clrtoeol();
+    confit_tui_curses_add_clipped(LINES - 1, 1, confit_tui_curses_text(status),
+                                  width - 2);
+  }
+  return refresh() == OK ? 0 : -1;
+}
+
 ConfitTuiKey confit_tui_curses_read_key(void) {
   const int ch = getch();
 
