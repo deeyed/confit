@@ -105,6 +105,24 @@ not discover or modify sibling repositories implicitly.
 Schema editing is a guarded workflow. It writes human-readable TOML and must
 perform validation before saving.
 
+## Profile Subcommands
+
+`confit profile` provides non-interactive profile TOML management:
+
+```text
+confit profile list --project <path>
+confit profile show --project <path> <name>
+confit profile new --project <path> <name> [--base <profile>] [--target <target>] [--force]
+confit profile set --project <path> <name> <option-id=value>
+confit profile unset --project <path> <name> <option-id>
+confit profile validate --project <path> <name>
+```
+
+Profile writes must be deterministic, human-readable TOML writes. `profile new`
+must refuse to replace an existing profile unless `--force` is present.
+`profile set` and `profile unset` must validate option ids and value types before
+writing, then resolve the profile successfully before saving the TOML file.
+
 ## Command Examples
 
 ```sh
@@ -119,8 +137,11 @@ confit graph --project config/confit --profile sim-dsh --format dot
 confit diff --project config/confit --profile sim-dsh --base hw-debug
 confit compat --parus ../parus/config/confit --delos config/confit --profile parus-delos-debug --compat config/compat
 confit profile list --project config/confit
+confit profile show --project config/confit sim-dsh
 confit profile new --project config/confit debug-dsh --base sim-dsh
 confit profile set --project config/confit debug-dsh delos.debug.dsh=true
+confit profile unset --project config/confit debug-dsh delos.debug.dsh
+confit profile validate --project config/confit debug-dsh
 confit tui --project config/confit --profile sim-dsh
 confit tui --project config/confit --schema-edit
 confit completion --shell zsh

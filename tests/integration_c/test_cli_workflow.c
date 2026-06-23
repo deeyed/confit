@@ -153,6 +153,17 @@ static void test_expect_file_contains(const char *path, const char *needle) {
   confit_test_fs_free(text);
 }
 
+static void test_expect_file_not_contains(const char *path,
+                                          const char *needle) {
+  char *text;
+
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(path));
+  text = confit_test_fs_read_file(path);
+  CONFIT_TEST_ASSERT(text != 0);
+  CONFIT_TEST_ASSERT_NOT_CONTAINS(text, needle);
+  confit_test_fs_free(text);
+}
+
 static void test_doctor(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "doctor", "--project", 0, 0};
@@ -355,6 +366,124 @@ static void test_init_templates(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_profile_cli(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  char profile_path[4096];
+  const char *list_argv[] = {0, "profile", "list", "--project", 0, 0};
+  const char *show_argv[] = {0, "profile", "show", "--project", 0,
+                             "default", 0};
+  const char *new_argv[] = {0, "profile", "new", "--project", 0,
+                            "debug-dsh", "--base", "default", 0};
+  const char *new_again_argv[] = {0, "profile", "new", "--project", 0,
+                                  "debug-dsh", "--base", "default", 0};
+  const char *set_ddc_argv[] = {0, "profile", "set", "--project", 0,
+                                "debug-dsh", "delos.debug.ddc=true", 0};
+  const char *set_dsh_argv[] = {0, "profile", "set", "--project", 0,
+                                "debug-dsh", "delos.debug.dsh=true", 0};
+  const char *set_name_argv[] = {0, "profile", "set", "--project", 0,
+                                 "debug-dsh",
+                                 "delos.output.name=cli-profile", 0};
+  const char *unset_name_argv[] = {0, "profile", "unset", "--project", 0,
+                                   "debug-dsh", "delos.output.name", 0};
+  const char *validate_argv[] = {0, "profile", "validate", "--project", 0,
+                                 "debug-dsh", 0};
+  const char *check_argv[] = {0, "check", "--project", 0, "--profile",
+                              "debug-dsh", 0};
+  const char *invalid_set_argv[] = {0, "profile", "set", "--project", 0,
+                                    "debug-dsh", "delos.debug.ddc=maybe", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  test_join4(profile_path, sizeof(profile_path), context->init_delos_dir,
+             "config", "profiles", "debug-dsh.toml");
+
+  list_argv[0] = context->confit_bin;
+  list_argv[4] = context->init_delos_dir;
+  test_run(context, list_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "default");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "target=host");
+  confit_test_process_result_clear(&result);
+
+  show_argv[0] = context->confit_bin;
+  show_argv[4] = context->init_delos_dir;
+  test_run(context, show_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "[profile]");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"delos.output.name\" = \"delos-host\"");
+  confit_test_process_result_clear(&result);
+
+  new_argv[0] = context->confit_bin;
+  new_argv[4] = context->init_delos_dir;
+  test_run(context, new_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "profile new ok: debug-dsh");
+  test_expect_file_contains(profile_path, "base = \"default\"");
+  confit_test_process_result_clear(&result);
+
+  new_again_argv[0] = context->confit_bin;
+  new_again_argv[4] = context->init_delos_dir;
+  test_run(context, new_again_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(1, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "profile already exists");
+  confit_test_process_result_clear(&result);
+
+  set_ddc_argv[0] = context->confit_bin;
+  set_ddc_argv[4] = context->init_delos_dir;
+  test_run(context, set_ddc_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "profile set ok: debug-dsh");
+  test_expect_file_contains(profile_path, "\"delos.debug.ddc\" = true");
+  confit_test_process_result_clear(&result);
+
+  set_dsh_argv[0] = context->confit_bin;
+  set_dsh_argv[4] = context->init_delos_dir;
+  test_run(context, set_dsh_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  test_expect_file_contains(profile_path, "\"delos.debug.dsh\" = true");
+  confit_test_process_result_clear(&result);
+
+  set_name_argv[0] = context->confit_bin;
+  set_name_argv[4] = context->init_delos_dir;
+  test_run(context, set_name_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  test_expect_file_contains(profile_path,
+                            "\"delos.output.name\" = \"cli-profile\"");
+  confit_test_process_result_clear(&result);
+
+  unset_name_argv[0] = context->confit_bin;
+  unset_name_argv[4] = context->init_delos_dir;
+  test_run(context, unset_name_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "profile unset ok: debug-dsh");
+  test_expect_file_not_contains(profile_path, "cli-profile");
+  confit_test_process_result_clear(&result);
+
+  validate_argv[0] = context->confit_bin;
+  validate_argv[4] = context->init_delos_dir;
+  test_run(context, validate_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "profile ok: debug-dsh");
+  confit_test_process_result_clear(&result);
+
+  check_argv[0] = context->confit_bin;
+  check_argv[3] = context->init_delos_dir;
+  test_run(context, check_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "check ok");
+  confit_test_process_result_clear(&result);
+
+  invalid_set_argv[0] = context->confit_bin;
+  invalid_set_argv[4] = context->init_delos_dir;
+  test_run(context, invalid_set_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(3, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "invalid --set bool value");
+  confit_test_process_result_clear(&result);
+}
+
 static void test_list(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "list", "--project", 0, "--category", "debug", 0};
@@ -503,6 +632,7 @@ int main(int argc, char **argv) {
   CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(context.work_dir));
 
   test_init_templates(&context);
+  test_profile_cli(&context);
   test_doctor(&context);
   test_check(&context);
   test_resolve(&context);

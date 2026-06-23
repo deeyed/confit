@@ -38,6 +38,21 @@ if grep -F "delos.scheduler.task_slots" "$WORK_DIR/list.txt" >/dev/null; then
   exit 1
 fi
 
+"$CONFIT_BIN" profile list --project "$PROJECT_DIR" \
+  >"$WORK_DIR/profile-list.txt"
+grep -F "sim-dsh" "$WORK_DIR/profile-list.txt" >/dev/null
+
+"$CONFIT_BIN" profile show --project "$PROJECT_DIR" sim-dsh \
+  >"$WORK_DIR/profile-show.toml"
+grep -F "[profile]" "$WORK_DIR/profile-show.toml" >/dev/null
+grep -F "base = \"debug\"" "$WORK_DIR/profile-show.toml" >/dev/null
+grep -F "\"delos.scheduler.task_slots\" = 32" "$WORK_DIR/profile-show.toml" \
+  >/dev/null
+
+"$CONFIT_BIN" profile validate --project "$PROJECT_DIR" sim-dsh \
+  >"$WORK_DIR/profile-validate.txt"
+grep -Fx "profile ok: sim-dsh" "$WORK_DIR/profile-validate.txt" >/dev/null
+
 "$CONFIT_BIN" graph --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/graph.json"
 grep -F '"nodes":' "$WORK_DIR/graph.json" >/dev/null
