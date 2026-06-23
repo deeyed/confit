@@ -23,6 +23,15 @@ int main(void) {
   if (confit_host_path_separator() == '\0') {
     return 1;
   }
+#if defined(_WIN32)
+  if (confit_host_path_separator() != '\\') {
+    return 19;
+  }
+#else
+  if (confit_host_path_separator() != '/') {
+    return 19;
+  }
+#endif
 
   if (confit_host_path_join(joined_path, sizeof(joined_path), "left",
                             "right", &diagnostic) != CONFIT_OK) {
@@ -39,6 +48,14 @@ int main(void) {
   }
   if (strcmp(joined_path, "left/right") != 0) {
     return 5;
+  }
+
+  if (confit_host_path_join(joined_path, sizeof(joined_path), "left\\",
+                            "right", &diagnostic) != CONFIT_OK) {
+    return 20;
+  }
+  if (strcmp(joined_path, "left\\right") != 0) {
+    return 21;
   }
 
   if (confit_host_path_join(joined_path, 4U, "left", "right",

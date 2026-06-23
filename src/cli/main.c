@@ -990,6 +990,14 @@ static const char *confit_cli_doctor_platform_note(void) {
 #endif
 }
 
+static const char *confit_cli_doctor_install_rule(void) {
+#if defined(_WIN32)
+  return "single executable artifact: <prefix>/bin/confit.exe";
+#else
+  return "single executable artifact: <prefix>/bin/confit";
+#endif
+}
+
 static ConfitStatus confit_cli_parse_doctor_args(int argc, char **argv,
                                                  ConfitCliDoctorArgs *args) {
   int index;
@@ -1055,8 +1063,8 @@ static int confit_cli_run_doctor(int argc, char **argv) {
 #endif
   }
   if (status == CONFIT_OK) {
-    status = confit_cli_write_doctor_kv(
-        "install rule", "single executable artifact: <prefix>/bin/confit");
+    status = confit_cli_write_doctor_kv("install rule",
+                                        confit_cli_doctor_install_rule());
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(

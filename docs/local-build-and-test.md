@@ -2,28 +2,30 @@
 doc_type: developer-guide
 status: draft
 authority: operational
-last_verified: 2026-06-23
+last_verified: 2026-06-24
 ---
 
 # Local Build And Test
 
 Confit은 Delos runtime build와 분리된 host-side tool이다. Confit 자체 build/test harness는
 `tools/confit/` 안에서만 정의하고, build output은 source tree 밖 임시 디렉터리에 둔다.
-TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가 찾을 수 있는
-curses/ncurses 개발 파일이 있어야 한다.
+macOS/Linux TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가
+찾을 수 있는 curses/ncurses 개발 파일이 있어야 한다. Windows는 이 구현 단계에서 CLI-only lane이며
+TUI target은 unsupported stub으로 빌드된다.
 
 ## Build Dependencies
 
-Confit TUI는 `tools/confit/CMakeLists.txt`에서 `find_package(Curses REQUIRED)`로 system curses/ncurses를
-찾는다. `vendor/`에는 TUI shim을 두지 않는다.
+Confit TUI는 macOS/Linux에서 `tools/confit/CMakeLists.txt`의 `find_package(Curses REQUIRED)`로 system
+curses/ncurses를 찾는다. `vendor/`에는 TUI shim을 두지 않는다. Windows에서는 curses를 찾지 않고
+`confit tui`가 명시적인 unsupported-platform 결과를 반환한다.
 
 필수 항목:
 
 ```text
 CMake >= 3.20
 C17 compiler
-system curses/ncurses headers and library
-/bin/sh for integration scripts
+system curses/ncurses headers and library (macOS/Linux TUI build only)
+/bin/sh for Unix integration scripts
 ```
 
 Platform별 확인 사항:
@@ -32,9 +34,10 @@ Platform별 확인 사항:
 |---|---|
 | macOS | Xcode Command Line Tools 또는 Xcode SDK의 curses가 CMake에 잡혀야 한다. Round 11에서는 `/Applications/Xcode.app/.../libcurses.tbd`가 감지됐다. |
 | Linux | 배포판 개발 package가 필요하다. 예: Debian/Ubuntu `libncurses-dev`, Fedora `ncurses-devel`, Arch `ncurses`. |
-| Windows | native Windows curses build는 아직 release gate가 아니다. MSVC flag는 준비되어 있지만 `/bin/sh` integration wrapper와 curses provider 정책이 더 필요하다. |
+| Windows | CLI-only lane이다. GNU-style Clang과 Ninja 계열 build driver를 사용한다. MSVC와 `clang-cl`은 지원하지 않는다. curses/ncurses와 `/bin/sh`는 Windows gate의 필수 조건이 아니다. |
 
-의존성 탐지 실패 시 `cmake -S tools/confit -B /tmp/confit-build` 단계에서 Curses package 오류가 난다.
+macOS/Linux에서 의존성 탐지 실패 시 `cmake -S tools/confit -B /tmp/confit-build` 단계에서 Curses package
+오류가 난다. Windows에서는 Curses package를 찾지 않는다.
 
 ## CI-like Local Gate
 
@@ -56,6 +59,10 @@ tools/confit/tests/run_tests.sh
 
 CTest에는 Round 20 synthetic scale gate도 포함된다. 이 gate는 build directory 안에 2,500개 option을
 가진 임시 project를 생성하고 `check`, `list`, `graph`, `gen`을 순서대로 실행한다.
+
+Windows CTest lane에서는 POSIX shell integration tests를 등록하지 않는다. 대신 C 기반
+`confit_test_cli_workflow`가 child process로 CLI command를 실행하고, `doctor`가 Windows clang-only
+CLI lane을 보고하는지와 `confit tui`가 exit code `8`로 실패하는지를 검증한다.
 
 기본 build directory:
 
@@ -80,6 +87,17 @@ ctest --test-dir /tmp/confit-build --output-on-failure
 /tmp/confit-build/confit --version
 /tmp/confit-build/confit help
 /tmp/confit-build/confit_test_cli_workflow
+```
+
+Windows native CLI-only 확인 예시는 다음과 같다.
+
+```sh
+cmake -S tools/confit -B build/confit -G Ninja \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build/confit --target confit
+ctest --test-dir build/confit --output-on-failure
+build/confit/confit.exe doctor
 ```
 
 ## Local Install

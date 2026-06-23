@@ -36,6 +36,18 @@ Confit has thirteen operational top-level commands plus the `help` command.
 | `tui` | Open the terminal UI where supported by the host platform. |
 | `completion` | Emit shell completion text. |
 
+## Platform Support
+
+Confit is a single-executable host tool on every supported platform.
+
+macOS and Linux support the CLI command set and the ncurses-backed TUI when the
+build host provides a CMake-detectable curses/ncurses development package.
+
+Windows support is CLI-only during this contract phase. The supported Windows
+compiler lane is GNU-style Clang with a native Windows build driver such as
+Ninja. MSVC and `clang-cl` are not supported. `confit tui ...` on Windows must
+fail explicitly with exit code `8` instead of attempting a partial terminal UI.
+
 ## Global Options
 
 | Option | Contract |

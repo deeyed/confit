@@ -176,7 +176,21 @@ static void test_doctor(ConfitCliWorkflowContext *context) {
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "doctor ok");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "platform note:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "options:");
+#if defined(_WIN32)
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "windows clang-only CLI lane");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "curses: not available; TUI unsupported");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "single executable artifact: <prefix>/bin/"
+                              "confit.exe");
+#else
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "single executable artifact: <prefix>/bin/"
+                              "confit");
+#endif
   confit_test_process_result_clear(&result);
 }
 
@@ -754,6 +768,29 @@ static void test_unknown_command(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_platform_tui_lane(ConfitCliWorkflowContext *context) {
+#if defined(_WIN32)
+  ConfitTestProcessResult result;
+  const char *argv[] = {0, "tui", "--project", 0, "--profile",
+                        "sim-dsh", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  argv[0] = context->confit_bin;
+  argv[3] = context->project_dir;
+  test_run(context, argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(8, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "unsupported command or platform");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "confit tui is unsupported");
+  confit_test_process_result_clear(&result);
+#else
+  (void)context;
+#endif
+}
+
 int main(int argc, char **argv) {
   ConfitCliWorkflowContext context;
   char confit_bin_buffer[4096];
@@ -780,6 +817,7 @@ int main(int argc, char **argv) {
   test_compat(&context);
   test_completion_and_globals(&context);
   test_unknown_command(&context);
+  test_platform_tui_lane(&context);
 
   return 0;
 }
