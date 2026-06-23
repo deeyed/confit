@@ -650,8 +650,11 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == 'x' || ch == 'X') {
     return CONFIT_TUI_KEY_CLEAR_FILTER;
   }
-  if (ch == 'n' || ch == 'N') {
+  if (ch == 'n') {
     return CONFIT_TUI_KEY_NEW;
+  }
+  if (ch == 'N') {
+    return CONFIT_TUI_KEY_SEARCH_PREVIOUS;
   }
   if (ch == 'p' || ch == 'P') {
     return CONFIT_TUI_KEY_PROMPT;

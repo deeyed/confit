@@ -26,7 +26,7 @@ grep -aF "Menu" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search ?/h detail" \
+grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
   "$WORK_DIR/tui.txt" >/dev/null
 
 printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
@@ -51,6 +51,21 @@ printf '%sq' "$END_KEY" |
     >"$WORK_DIR/tui-end.txt"
 
 grep -aF "moved End" "$WORK_DIR/tui-end.txt" >/dev/null
+
+printf '/board\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-search-single.txt"
+
+grep -aF "search 1/1: delos.target.board" "$WORK_DIR/tui-search-single.txt" \
+  >/dev/null
+grep -aF "result=1/1" "$WORK_DIR/tui-search-single.txt" >/dev/null
+grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
+
+printf '/delos\nnNq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-search-next-prev.txt"
+
+grep -aF "search 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
+grep -aF "next result 2/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
+grep -aF "previous result 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 
 printf 'j?qq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-detail-question.txt"
