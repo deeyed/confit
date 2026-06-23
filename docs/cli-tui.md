@@ -10,47 +10,9 @@ last_verified: 2026-06-23
 Confit의 첫 interface는 CLI다. TUI는 ncurses 기반 host frontend로 제공한다. TUI가 없더라도 모든
 configuration resolution, validation, generation, explanation은 CLI만으로 가능해야 한다.
 
-## CLI Commands
-
-추천 command surface:
-
-```sh
-confit check --project /path/to/delos --profile sim-dsh
-confit gen --project /path/to/delos --profile sim-dsh --out build/generated/config/delos/sim-dsh
-confit explain --project /path/to/delos --profile sim-dsh delos.debug.dsh
-confit compat --parus /path/to/kairon --delos /path/to/delos --profile parus-delos-debug
-confit list --project /path/to/delos --category debug
-confit graph --project /path/to/delos --profile sim-dsh --format dot
-confit tui --project /path/to/delos --profile sim-dsh
-confit tui --project /path/to/delos --schema-edit
-```
-
-## Command Semantics
-
-| Command | 의미 |
-|---|---|
-| `check` | parse, schema validate, graph validate, profile resolve를 수행한다. |
-| `gen` | `check` 후 `config.h`, report, explanation, graph, input manifest를 만든다. |
-| `explain` | 특정 option의 value와 이유를 출력한다. |
-| `compat` | 여러 project profile 조합의 compatibility를 검사한다. |
-| `list` | option 목록을 category/tag/filter로 표시한다. |
-| `graph` | dependency graph를 DOT/JSON으로 출력한다. |
-| `tui` | profile editing 또는 schema editing TUI를 실행한다. Core evaluator를 재구현하지 않는다. |
-
-## Exit Codes
-
-```text
-0  success
-1  invalid command line
-2  parse error
-3  schema error
-4  dependency or conflict error
-5  compatibility error
-6  generation error
-7  internal error
-```
-
-Codex agent와 CI가 오류 종류를 분리할 수 있어야 한다.
+CLI command, option, exit-code, and installation contracts are defined by
+`docs/cli-contract.md`. This document only defines the TUI strategy and
+keyboard behavior that sits behind `confit tui`.
 
 ## TUI Principles
 
