@@ -150,6 +150,8 @@ Schema editor:
 | Key | 동작 |
 |---|---|
 | `n` | 새 schema option draft를 만든다. |
+| `y` | 현재 option type을 수정한다. type이 바뀌면 default가 새 type 기준으로 reset되고, 호환되지 않는 range/choices draft는 지운다. |
+| `d`, `e`, `Enter` | 현재 option default value를 수정한다. |
 | `p` | 현재 option prompt를 수정한다. |
 | `h` | 현재 option help text를 수정한다. `?` help와 구분한다. |
 | `c` | 현재 option category를 수정한다. |
@@ -157,6 +159,18 @@ Schema editor:
 | `r` | 현재 option range를 수정한다. |
 | `o` | 현재 enum option choices comma-list를 수정한다. |
 | `s` | schema TOML을 저장하기 전에 full validation을 수행하고 저장한다. |
+
+Schema edit mode는 진입 시 `Schema Edit Warning` 선택 dialog를 먼저 표시한다. 기본 선택은 실제
+editor 진입이고, `Esc`, `q`, 또는 cancel 선택은 파일을 건드리지 않고 종료한다. Editor 화면 header와
+status line은 항상 `SCHEMA EDIT MODE`를 포함해서 profile value 편집이 아니라 schema authority 편집임을
+계속 보여준다.
+
+Schema field 수정은 profile value editor와 같은 menuconfig-style field dialog를 쓴다. `id`, `type`,
+`default`, `prompt`, `help`, `category`, `tags`, `range`, `choices`는 입력 시점에 검증하고, 실패하면
+dialog를 닫지 않은 채 status row에 원인을 표시한다. `range`는 numeric type에만 허용하고 현재 default를
+포함해야 한다. `choices`는 enum에만 허용하며 comma-list empty item과 duplicate를 거부한다. 저장 경로는
+draft option을 core model로 다시 구성한 뒤 schema validation, graph build, graph validation을 통과해야
+TOML write를 수행한다. Write 후에도 project를 reload하고 graph validation을 다시 실행한다.
 
 ## TUI Data Source
 

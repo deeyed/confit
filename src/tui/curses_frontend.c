@@ -658,8 +658,14 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == 'c' || ch == 'C') {
     return CONFIT_TUI_KEY_CATEGORY;
   }
+  if (ch == 'd' || ch == 'D') {
+    return CONFIT_TUI_KEY_DEFAULT;
+  }
   if (ch == 't' || ch == 'T') {
     return CONFIT_TUI_KEY_TAG;
+  }
+  if (ch == 'y' || ch == 'Y') {
+    return CONFIT_TUI_KEY_TYPE;
   }
   if (ch == 'x' || ch == 'X') {
     return CONFIT_TUI_KEY_CLEAR_FILTER;

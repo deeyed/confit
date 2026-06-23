@@ -1,7 +1,7 @@
 [option."delos.schema.mode"]
 type = "enum"
 choices = ["red", "blue"]
-default = "red"
+default = "blue"
 prompt = "Created Prompt"
 category = "schema"
 tags = ["schema", "created"]

@@ -16,25 +16,47 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 TERM=xterm
 export TERM
 
-printf 'ndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help\ncschema\ntschema,created\nored,blue\nndelos.schema.limit\nint\nLimit Prompt\npLimit Prompt\nhLimit help\ncschema\ntschema,limit\nr0,16\nsq' |
+printf '\nndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help\ncschema\ntschema,created\nored,blue\ndblue\nndelos.schema.limit\nint\nLimit Prompt\npLimit Prompt\nyint\nhLimit help\ncschema\ntschema,limit\nr0,16\nsq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema.txt"
 
+grep -aF "Schema Edit Warning" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "SCHEMA EDIT MODE is a guarded workflow." \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "schema 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "SCHEMA EDIT MODE - guarded" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Editor - menuconfig guarded schema" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Confit Schema Field" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Menu" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "arrows/jk PgUp/PgDn Home/End n new p prompt h help ? keys" \
+grep -aF "arrows/jk PgUp/PgDn Home/End n new y type d/e default p prompt h help" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
 
-printf 'n\033?q' |
+printf '\nn\033?q' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-cancel-help.txt"
 
 grep -aF "cancelled" "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
 grep -aF "keys: arrows/jk PgUp/PgDn Home/End" \
   "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
+grep -aF "y type d/e default" "$WORK_DIR/tui-schema-cancel-help.txt" \
+  >/dev/null
+
+printf '\nninvalid\n\033q' |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
+    >"$WORK_DIR/tui-schema-invalid-id.txt"
+
+grep -aF "option id:" "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
+grep -aF "invalid" "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
+
+printf '\nndelos.schema.bad\nint\nBad\nr10,1\n\033q' |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
+    >"$WORK_DIR/tui-schema-invalid-range.txt"
+
+grep -aF "schema range does not contain the default" \
+  "$WORK_DIR/tui-schema-invalid-range.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/options/tui-schema.toml"
 "$CONFIT_BIN" graph --project "$PROJECT_DIR" >"$WORK_DIR/graph.json"
