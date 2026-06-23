@@ -10,6 +10,8 @@
     {"path": "config/options/runtime.toml", "sha256": "fb30823bc4fde7579a79e4d08ebeadee83609d9cab68270b2f55f8e2481458c4"},
     {"path": "config/options/target.toml", "sha256": "9b456279bd8790dad54ed4b608143bb8c49c59406cf8c2be986a82768c2cc1c4"},
     {"path": "config/profiles/debug.toml", "sha256": "8a4b1aabeaf5419568b54e5f66883a338ccc2386cd9ea333f743f03b61805610"},
+    {"path": "config/profiles/parus-delos-debug.toml", "sha256": "dc6a797ed83dd4d26db58d25418d7700f837dedbebaa88d2e0b958f6dc589593"},
+    {"path": "config/profiles/parus-delos-mismatch.toml", "sha256": "aaa4acd23774d0af68ceea06aaa1822d99a0d3287b3cfc838fdfacb91d286bea"},
     {"path": "config/profiles/release.toml", "sha256": "d328cdbbfdf37f060bba41034a351b98648e827ae2342091ec998520e339c806"},
     {"path": "config/profiles/sim-dsh.toml", "sha256": "1614a8a86521a39971d62850e7d34c0afb2ea15ec0c7663af73c2679245b34c2"},
     {"path": "config/project.toml", "sha256": "8946e21bb0521e1567affe24e35cf58a4302aa734c513f2465adc3d4cb0943fc"},

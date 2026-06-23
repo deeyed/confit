@@ -88,7 +88,9 @@ int main(void) {
   ConfitResolvedConfig *delos_config;
   ConfitCompatProject projects[2];
   ConfitCompatSuite *suite;
+  ConfitCompatReport *report;
   ConfitDiagnostic diagnostic;
+  char *json;
 
   if (!load_resolved_pair(&parus, &parus_config, &delos, &delos_config)) {
     return 1;
@@ -99,6 +101,8 @@ int main(void) {
   projects[1].config = delos_config;
 
   suite = 0;
+  report = 0;
+  json = 0;
   if (!load_suite("tests/fixtures/compat/rules/pass", &suite)) {
     confit_resolved_config_free(parus_config);
     confit_resolved_config_free(delos_config);
@@ -108,7 +112,16 @@ int main(void) {
   }
   confit_diagnostic_init(&diagnostic);
   if (suite->assertion_count != 2U ||
-      confit_compat_check(suite, projects, 2U, &diagnostic) != CONFIT_OK) {
+      confit_compat_check_report(suite, projects, 2U, &report, &diagnostic) !=
+          CONFIT_OK ||
+      report == 0 || report->pass_count != 2U || report->fail_count != 0U ||
+      report->skipped_count != 0U ||
+      confit_compat_report_to_json(report, &json) != CONFIT_OK ||
+      json == 0 ||
+      strstr(json, "\"schema\": \"confit-compat-report-v1\"") == 0 ||
+      strstr(json, "\"summary\": {\"assertions\": 2, \"passed\": 2, \"failed\": 0, \"skipped\": 0}") == 0) {
+    confit_compat_string_free(json);
+    confit_compat_report_free(report);
     confit_compat_suite_free(suite);
     confit_resolved_config_free(parus_config);
     confit_resolved_config_free(delos_config);
@@ -116,6 +129,10 @@ int main(void) {
     confit_project_free(delos);
     return 3;
   }
+  confit_compat_string_free(json);
+  json = 0;
+  confit_compat_report_free(report);
+  report = 0;
   confit_compat_suite_free(suite);
 
   if (!load_suite("tests/fixtures/compat/rules/fail-requires", &suite)) {

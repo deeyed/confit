@@ -94,6 +94,7 @@ host-local absolute paths unless the selected artifact explicitly requires them.
 | `--parus <path>` | Select the Parus-side project root for compatibility checks. |
 | `--delos <path>` | Select the Delos-side project root for compatibility checks. |
 | `--compat <path>` | Select compatibility rule files. |
+| `--format text|json` | Select human text or structured compatibility report output. |
 
 Compatibility checks must read explicit project roots and rule paths. They must
 not discover or modify sibling repositories implicitly.

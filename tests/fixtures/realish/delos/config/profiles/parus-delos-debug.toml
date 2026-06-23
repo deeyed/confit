@@ -1,0 +1,12 @@
+[profile]
+name = "parus-delos-debug"
+schema_version = 1
+base = "sim-dsh"
+target = "sim-dsh"
+
+[values]
+"delos.dcg.enabled" = true
+"delos.debug.dsh" = true
+"delos.sim.hosted_stdio" = true
+"delos.scheduler.task_slots" = 1
+"delos.trace.capacity" = 4

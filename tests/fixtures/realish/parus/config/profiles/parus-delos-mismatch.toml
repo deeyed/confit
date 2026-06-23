@@ -1,0 +1,8 @@
+[profile]
+name = "parus-delos-mismatch"
+schema_version = 1
+base = "parus-delos-debug"
+target = "qemu-virt-aarch64"
+
+[values]
+"parus.executor.delos_target" = true

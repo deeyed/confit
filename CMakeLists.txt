@@ -557,6 +557,15 @@ add_test(
           ${CMAKE_CURRENT_BINARY_DIR}/round12-realish-parus
 )
 
+add_test(
+  NAME confit.cli.realish_compat
+  COMMAND /bin/sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round13_realish_compat.sh
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round13-realish-compat
+)
+
 add_executable(confit_test_cli_workflow
   tests/integration_c/test_cli_workflow.c
 )

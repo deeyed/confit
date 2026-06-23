@@ -1,0 +1,17 @@
+[compat]
+name = "parus-delos-realish"
+
+[[assert]]
+when = { option = "parus.executor.delos_target", equals = true }
+requires = { option = "delos.dcg.enabled", equals = true }
+message = "Parus Delos executor target requires Delos DCG."
+
+[[assert]]
+when = { option = "parus.executor.delos_target", equals = true }
+requires = { option = "delos.debug.dsh", equals = true }
+message = "Parus Delos executor target requires Delos DSH debug shell."
+
+[[assert]]
+when = { option = "parus.boot.direct_dtb", equals = true }
+forbids = { option = "delos.target.arch", equals = "armv7m" }
+message = "Parus direct-DTB debug pairing must not bind to the Delos armv7m board fixture."

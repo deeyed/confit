@@ -1,0 +1,11 @@
+{
+  "schema": "confit-compat-report-v1",
+  "suite": "parus-delos-realish",
+  "status": "failed",
+  "summary": {"assertions": 3, "passed": 0, "failed": 3, "skipped": 0},
+  "results": [
+    {"index": 0, "status": "fail", "action": "requires", "source": "parus-delos.toml", "message": "Parus Delos executor target requires Delos DCG.", "when": {"option": "parus.executor.delos_target", "expected": true, "actual": true, "project": "parus", "matches": true, "evaluated": true}, "condition": {"option": "delos.dcg.enabled", "expected": true, "actual": false, "project": "delos", "matches": false, "evaluated": true}},
+    {"index": 1, "status": "fail", "action": "requires", "source": "parus-delos.toml", "message": "Parus Delos executor target requires Delos DSH debug shell.", "when": {"option": "parus.executor.delos_target", "expected": true, "actual": true, "project": "parus", "matches": true, "evaluated": true}, "condition": {"option": "delos.debug.dsh", "expected": true, "actual": false, "project": "delos", "matches": false, "evaluated": true}},
+    {"index": 2, "status": "fail", "action": "forbids", "source": "parus-delos.toml", "message": "Parus direct-DTB debug pairing must not bind to the Delos armv7m board fixture.", "when": {"option": "parus.boot.direct_dtb", "expected": true, "actual": true, "project": "parus", "matches": true, "evaluated": true}, "condition": {"option": "delos.target.arch", "expected": "armv7m", "actual": "armv7m", "project": "delos", "matches": true, "evaluated": true}}
+  ]
+}

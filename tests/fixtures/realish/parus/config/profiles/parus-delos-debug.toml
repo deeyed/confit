@@ -1,0 +1,11 @@
+[profile]
+name = "parus-delos-debug"
+schema_version = 1
+base = "qemu-aarch64"
+target = "qemu-virt-aarch64"
+
+[values]
+"parus.kcg.core_model" = true
+"parus.kcg.capability_binding" = true
+"parus.executor.rt_executor" = true
+"parus.executor.delos_target" = true

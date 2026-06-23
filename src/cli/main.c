@@ -58,6 +58,7 @@ typedef struct ConfitCliCompatArgs {
   const char *profile_name;
   const char *target_name;
   const char *compat_root;
+  const char *format;
 } ConfitCliCompatArgs;
 
 typedef struct ConfitCliListArgs {
@@ -240,9 +241,9 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      0},
     {"compat", "Check compatibility assertions across project roots.",
      "confit compat --parus <path> --delos <path> --profile <name> "
-     "[--target <name>] [--compat <path>]",
+     "[--target <name>] [--compat <path>] [--format text|json]",
      "--parus <path>\n  --delos <path>\n  --profile <name>\n  --target "
-     "<name>\n  --compat <path>",
+     "<name>\n  --compat <path>\n  --format text|json",
      confit_cli_run_compat},
     {"profile", "Manage profile TOML without opening the TUI.",
      "confit profile list --project <path>\n"
@@ -3465,6 +3466,7 @@ static ConfitStatus confit_cli_parse_compat_args(int argc, char **argv,
   args->profile_name = 0;
   args->target_name = 0;
   args->compat_root = 0;
+  args->format = "text";
   for (index = 2; index < argc; ++index) {
     const char *arg = argv[index];
 
@@ -3508,6 +3510,14 @@ static ConfitStatus confit_cli_parse_compat_args(int argc, char **argv,
       args->compat_root = argv[index];
       continue;
     }
+    if (strcmp(arg, "--format") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --format");
+      }
+      index += 1;
+      args->format = argv[index];
+      continue;
+    }
     if (arg[0] == '-') {
       return confit_cli_write_error("unknown compat option");
     }
@@ -3522,6 +3532,9 @@ static ConfitStatus confit_cli_parse_compat_args(int argc, char **argv,
   }
   if (args->profile_name == 0) {
     return confit_cli_write_error("compat requires --profile");
+  }
+  if (strcmp(args->format, "text") != 0 && strcmp(args->format, "json") != 0) {
+    return confit_cli_write_error("compat --format must be text or json");
   }
   return CONFIT_OK;
 }
@@ -3545,6 +3558,8 @@ static int confit_cli_run_compat(int argc, char **argv) {
   ConfitResolvedConfig *delos_config;
   ConfitCompatProject projects[2];
   ConfitCompatSuite *suite;
+  ConfitCompatReport *report;
+  char *json;
   char compat_path[1024];
   ConfitStatus status;
 
@@ -3561,6 +3576,8 @@ static int confit_cli_run_compat(int argc, char **argv) {
   parus_config = 0;
   delos_config = 0;
   suite = 0;
+  report = 0;
+  json = 0;
 
   status = confit_cli_load_checked_project(args.parus_root, args.profile_name,
                                            args.target_name, 1, &parus,
@@ -3590,9 +3607,41 @@ static int confit_cli_run_compat(int argc, char **argv) {
     projects[0].config = parus_config;
     projects[1].project = delos;
     projects[1].config = delos_config;
-    status = confit_compat_check(suite, projects, 2U, &diagnostic);
+    status = confit_compat_check_report(suite, projects, 2U, &report,
+                                        &diagnostic);
+  }
+  if (status == CONFIT_OK || status == CONFIT_ERR_COMPATIBILITY) {
+    if (strcmp(args.format, "json") == 0) {
+      ConfitStatus json_status;
+
+      json_status = confit_compat_report_to_json(report, &json);
+      if (json_status != CONFIT_OK) {
+        status = json_status;
+        confit_diagnostic_set(&diagnostic, status, compat_path, 0, 0,
+                              "failed to render compatibility report JSON");
+      }
+    }
   }
 
+  if ((status == CONFIT_OK || status == CONFIT_ERR_COMPATIBILITY) &&
+      strcmp(args.format, "json") == 0) {
+    ConfitStatus write_status;
+
+    write_status = confit_host_stdout_write(json);
+    confit_compat_string_free(json);
+    json = 0;
+    confit_compat_report_free(report);
+    confit_compat_suite_free(suite);
+    confit_cli_free_project_bundle(parus, parus_graph, parus_config);
+    confit_cli_free_project_bundle(delos, delos_graph, delos_config);
+    if (write_status != CONFIT_OK) {
+      return confit_status_exit_code(write_status);
+    }
+    return confit_status_exit_code(status);
+  }
+
+  confit_compat_string_free(json);
+  confit_compat_report_free(report);
   confit_compat_suite_free(suite);
   confit_cli_free_project_bundle(parus, parus_graph, parus_config);
   confit_cli_free_project_bundle(delos, delos_graph, delos_config);

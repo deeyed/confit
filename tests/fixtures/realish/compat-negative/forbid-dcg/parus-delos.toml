@@ -1,0 +1,7 @@
+[compat]
+name = "parus-delos-realish-negative"
+
+[[assert]]
+when = { option = "parus.executor.delos_target", equals = true }
+forbids = { option = "delos.dcg.enabled", equals = true }
+message = "Negative realish fixture forbids the required Delos DCG path."

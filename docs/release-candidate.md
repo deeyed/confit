@@ -102,10 +102,11 @@ Check Parus/Delos-style compatibility fixtures:
 
 ```sh
 $CONFIT_BIN compat \
-  --parus tools/confit/tests/fixtures/compat/parus \
-  --delos tools/confit/tests/fixtures/compat/delos \
+  --parus tools/confit/tests/fixtures/realish/parus \
+  --delos tools/confit/tests/fixtures/realish/delos \
   --profile parus-delos-debug \
-  --compat tools/confit/tests/fixtures/compat/rules/pass
+  --compat tools/confit/tests/fixtures/realish/compat \
+  --format json
 ```
 
 Open profile editing TUI:

@@ -1,0 +1,14 @@
+[profile]
+name = "parus-delos-mismatch"
+schema_version = 1
+base = "release"
+target = "qemu-mps2-an500"
+
+[values]
+"delos.dcg.enabled" = false
+"delos.debug.dsh" = false
+"delos.sim.hosted_stdio" = false
+"delos.target.kind" = "qemu:mps2-an500"
+"delos.target.arch" = "armv7m"
+"delos.target.board" = "qemu-mps2-an500"
+"delos.target.cpu" = "cortex-m3"
