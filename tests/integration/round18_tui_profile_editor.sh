@@ -16,17 +16,60 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 TERM=xterm
 export TERM
 
-printf '/bool\nex/mode\ne\nx/count\ne7\nx/gain\ne0.75\nx/name\neTUI name\nx/path\nebuild/new\nsq' |
-  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
-    >"$WORK_DIR/tui-edit.txt"
+{
+  printf '%s\n' '/bool'
+  printf '%s' 'e'
+  printf '%s\n' 'x/mode'
+  printf '%s' 'e'
+  printf '%s\n' 'j'
+  printf '%s\n' 'x/count'
+  printf '%s' 'e'
+  printf '%s\n' '99'
+  printf '%s\n' '7'
+  printf '%s\n' 'x/threads'
+  printf '%s' 'e'
+  printf '%s\n' '99'
+  printf '%s\n' '6'
+  printf '%s\n' 'x/mask'
+  printf '%s' 'e'
+  printf '%s\n' '0x100'
+  printf '%s\n' '0x2A'
+  printf '%s\n' 'x/gain'
+  printf '%s' 'e'
+  printf '%s\n' 'nan'
+  printf '%s\n' '0.75'
+  printf '%s\n' 'x/name'
+  printf '%s' 'e'
+  printf '\n'
+  printf '%s\n' 'TUI name'
+  printf '%s\n' 'x/path'
+  printf '%s' 'e'
+  printf '%s\n' '/tmp/bad'
+  printf '%s\n' 'build/new'
+  printf '%s' 's'
+  printf '%s' 'q'
+} >"$WORK_DIR/tui-edit.keys"
 
-grep -aF "row 1/7" "$WORK_DIR/tui-edit.txt" >/dev/null
+"$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
+  <"$WORK_DIR/tui-edit.keys" >"$WORK_DIR/tui-edit.txt"
+
+grep -aF "row 1/9" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Menu" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "Confit Choice" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "Confit Value" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "invalid int: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "invalid uint: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "invalid hex: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "invalid float: expected finite value" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
+grep -aF "invalid string: value required" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "invalid path: expected relative path" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile edit \

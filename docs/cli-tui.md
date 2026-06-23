@@ -131,6 +131,10 @@ Search jump mode와 filter mode는 분리한다. Search jump mode(`/`, `n`, `N`)
 일치하는 option으로 이동하고, header/status에 `result=current/total`을 표시한다. Filter mode(`c`, `t`)는
 category/tag에 맞지 않는 menu row를 숨긴다. Search는 현재 category/tag filter 안에서만 결과를 센다.
 
+Profile edit는 입력 시점에 검증한다. Bool은 즉시 toggle된다. Enum은 choice popup에서 후보만 선택할 수
+있다. Int/uint/hex/float/string/path는 value dialog에서 입력하며, range, enum candidate, finite float,
+relative path, non-empty string/path 조건을 만족하지 않으면 dialog를 닫지 않고 같은 자리에서 다시 입력받는다.
+
 Schema editor:
 
 | Key | 동작 |

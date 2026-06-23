@@ -24,6 +24,24 @@ category = "edit"
 tags = ["edit", "int"]
 help = "Integer editor fixture."
 
+[option."delos.edit.threads"]
+type = "uint"
+default = 4
+range = [0, 8]
+prompt = "Edit Threads"
+category = "edit"
+tags = ["edit", "uint"]
+help = "Unsigned integer editor fixture."
+
+[option."delos.edit.mask"]
+type = "hex"
+default = 0x10
+range = [0x0, 0xFF]
+prompt = "Edit Mask"
+category = "edit"
+tags = ["edit", "hex"]
+help = "Hex editor fixture."
+
 [option."delos.edit.gain"]
 type = "float"
 default = 0.5

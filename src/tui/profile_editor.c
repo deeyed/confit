@@ -1,5 +1,6 @@
 #include "tui_internal.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +54,10 @@ typedef struct ConfitTuiState {
   char status[256];
   int dirty;
 } ConfitTuiState;
+
+typedef struct ConfitTuiValueValidator {
+  const ConfitOption *option;
+} ConfitTuiValueValidator;
 
 static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
                                             ConfitDiagnostic *diagnostic);
@@ -772,10 +777,130 @@ confit_tui_load_checked_project(ConfitTuiState *state,
   return status;
 }
 
+static void confit_tui_validation_message(char *message, size_t message_size,
+                                          const char *text) {
+  if (message == 0 || message_size == 0U) {
+    return;
+  }
+  (void)snprintf(message, message_size, "%s", text);
+  message[message_size - 1U] = '\0';
+}
+
+static int confit_tui_text_has_control(const char *text) {
+  size_t index;
+
+  for (index = 0U; text != 0 && text[index] != '\0'; ++index) {
+    if (iscntrl((unsigned char)text[index])) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int confit_tui_path_is_absolute(const char *text) {
+  if (text == 0 || text[0] == '\0') {
+    return 0;
+  }
+  if (text[0] == '/' || text[0] == '\\') {
+    return 1;
+  }
+  return isalpha((unsigned char)text[0]) && text[1] == ':';
+}
+
+static int confit_tui_option_value_in_range(const ConfitOption *option,
+                                            const ConfitValue *value) {
+  if (option == 0 || value == 0 || !option->has_range) {
+    return 1;
+  }
+  if (option->type == CONFIT_OPTION_TYPE_INT &&
+      value->kind == CONFIT_VALUE_INT &&
+      option->range_min.kind == CONFIT_VALUE_INT &&
+      option->range_max.kind == CONFIT_VALUE_INT) {
+    return value->as.int_value >= option->range_min.as.int_value &&
+           value->as.int_value <= option->range_max.as.int_value;
+  }
+  if ((option->type == CONFIT_OPTION_TYPE_UINT ||
+       option->type == CONFIT_OPTION_TYPE_HEX) &&
+      value->kind == CONFIT_VALUE_UINT &&
+      option->range_min.kind == CONFIT_VALUE_UINT &&
+      option->range_max.kind == CONFIT_VALUE_UINT) {
+    return value->as.uint_value >= option->range_min.as.uint_value &&
+           value->as.uint_value <= option->range_max.as.uint_value;
+  }
+  if (option->type == CONFIT_OPTION_TYPE_FLOAT &&
+      value->kind == CONFIT_VALUE_FLOAT &&
+      option->range_min.kind == CONFIT_VALUE_FLOAT &&
+      option->range_max.kind == CONFIT_VALUE_FLOAT) {
+    return value->as.float_value >= option->range_min.as.float_value &&
+           value->as.float_value <= option->range_max.as.float_value;
+  }
+  return 0;
+}
+
+static void confit_tui_format_range_message(const ConfitOption *option,
+                                            char *message,
+                                            size_t message_size) {
+  if (message == 0 || message_size == 0U) {
+    return;
+  }
+  if (option->type == CONFIT_OPTION_TYPE_INT &&
+      option->range_min.kind == CONFIT_VALUE_INT &&
+      option->range_max.kind == CONFIT_VALUE_INT) {
+    (void)snprintf(message, message_size,
+                   "invalid int: outside range [%lld, %lld]",
+                   (long long)option->range_min.as.int_value,
+                   (long long)option->range_max.as.int_value);
+  } else if (option->type == CONFIT_OPTION_TYPE_UINT &&
+             option->range_min.kind == CONFIT_VALUE_UINT &&
+             option->range_max.kind == CONFIT_VALUE_UINT) {
+    (void)snprintf(message, message_size,
+                   "invalid uint: outside range [%llu, %llu]",
+                   (unsigned long long)option->range_min.as.uint_value,
+                   (unsigned long long)option->range_max.as.uint_value);
+  } else if (option->type == CONFIT_OPTION_TYPE_HEX &&
+             option->range_min.kind == CONFIT_VALUE_UINT &&
+             option->range_max.kind == CONFIT_VALUE_UINT) {
+    (void)snprintf(message, message_size,
+                   "invalid hex: outside range [0x%llX, 0x%llX]",
+                   (unsigned long long)option->range_min.as.uint_value,
+                   (unsigned long long)option->range_max.as.uint_value);
+  } else if (option->type == CONFIT_OPTION_TYPE_FLOAT &&
+             option->range_min.kind == CONFIT_VALUE_FLOAT &&
+             option->range_max.kind == CONFIT_VALUE_FLOAT) {
+    (void)snprintf(
+        message, message_size, "invalid float: outside range [%.6g, %.6g]",
+        option->range_min.as.float_value, option->range_max.as.float_value);
+  } else {
+    (void)snprintf(message, message_size, "invalid value: outside range");
+  }
+  message[message_size - 1U] = '\0';
+}
+
+static ConfitStatus confit_tui_validate_parsed_value(const ConfitOption *option,
+                                                     const ConfitValue *value,
+                                                     char *message,
+                                                     size_t message_size) {
+  ConfitOption validation_option;
+
+  if (!confit_tui_option_value_in_range(option, value)) {
+    confit_tui_format_range_message(option, message, message_size);
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  validation_option = *option;
+  validation_option.default_value = *value;
+  if (confit_option_validate_default(&validation_option) != CONFIT_OK) {
+    confit_tui_validation_message(message, message_size,
+                                  "invalid value: schema validation failed");
+    return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_tui_parse_value(const ConfitOption *option,
                                            const char *text,
                                            ConfitValue *out_value,
-                                           ConfitDiagnostic *diagnostic) {
+                                           char *message, size_t message_size) {
   ConfitStatus status;
 
   confit_value_init(out_value);
@@ -783,57 +908,123 @@ static ConfitStatus confit_tui_parse_value(const ConfitOption *option,
   case CONFIT_OPTION_TYPE_BOOL:
     if (strcmp(text, "true") == 0 || strcmp(text, "1") == 0) {
       confit_value_set_bool(out_value, 1);
-      return CONFIT_OK;
+      return confit_tui_validate_parsed_value(option, out_value, message,
+                                              message_size);
     }
     if (strcmp(text, "false") == 0 || strcmp(text, "0") == 0) {
       confit_value_set_bool(out_value, 0);
-      return CONFIT_OK;
+      return confit_tui_validate_parsed_value(option, out_value, message,
+                                              message_size);
     }
+    confit_tui_validation_message(message, message_size,
+                                  "invalid bool: expected true or false");
     break;
   case CONFIT_OPTION_TYPE_INT: {
     int64_t value;
     status = confit_tui_parse_int64(text, &value);
-    if (status == CONFIT_OK) {
-      confit_value_set_int(out_value, value);
+    if (status != CONFIT_OK) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid int: expected integer");
+      return status;
     }
-    return status;
+    confit_value_set_int(out_value, value);
+    return confit_tui_validate_parsed_value(option, out_value, message,
+                                            message_size);
   }
   case CONFIT_OPTION_TYPE_UINT:
   case CONFIT_OPTION_TYPE_HEX: {
     uint64_t value;
     status = confit_tui_parse_uint64(text, &value);
-    if (status == CONFIT_OK) {
-      confit_value_set_uint(out_value, value);
+    if (status != CONFIT_OK) {
+      confit_tui_validation_message(
+          message, message_size,
+          option->type == CONFIT_OPTION_TYPE_HEX
+              ? "invalid hex: expected unsigned integer or 0x value"
+              : "invalid uint: expected unsigned integer");
+      return status;
     }
-    return status;
+    confit_value_set_uint(out_value, value);
+    return confit_tui_validate_parsed_value(option, out_value, message,
+                                            message_size);
   }
   case CONFIT_OPTION_TYPE_STRING:
-    return confit_value_set_string(out_value, text);
+    if (text == 0 || text[0] == '\0') {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid string: value required");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (confit_tui_text_has_control(text)) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid string: control characters");
+      return CONFIT_ERR_SCHEMA;
+    }
+    status = confit_value_set_string(out_value, text);
+    if (status != CONFIT_OK) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid string: allocation failed");
+      return status;
+    }
+    return confit_tui_validate_parsed_value(option, out_value, message,
+                                            message_size);
   case CONFIT_OPTION_TYPE_ENUM: {
     size_t index;
     for (index = 0U; index < option->enum_value_count; ++index) {
       if (strcmp(option->enum_values[index], text) == 0) {
-        return confit_value_set_enum(out_value, text);
+        status = confit_value_set_enum(out_value, text);
+        if (status != CONFIT_OK) {
+          confit_tui_validation_message(message, message_size,
+                                        "invalid enum: allocation failed");
+          return status;
+        }
+        return confit_tui_validate_parsed_value(option, out_value, message,
+                                                message_size);
       }
     }
+    confit_tui_validation_message(message, message_size,
+                                  "invalid enum: not a candidate");
     break;
   }
   case CONFIT_OPTION_TYPE_FLOAT: {
     double value;
     status = confit_tui_parse_double(text, &value);
-    if (status == CONFIT_OK) {
-      confit_value_set_float(out_value, value);
+    if (status != CONFIT_OK) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid float: expected finite value");
+      return status;
     }
-    return status;
+    confit_value_set_float(out_value, value);
+    return confit_tui_validate_parsed_value(option, out_value, message,
+                                            message_size);
   }
   case CONFIT_OPTION_TYPE_PATH:
-    return confit_value_set_path(out_value, text);
+    if (text == 0 || text[0] == '\0') {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid path: value required");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (confit_tui_text_has_control(text)) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid path: control characters");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (confit_tui_path_is_absolute(text)) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid path: expected relative path");
+      return CONFIT_ERR_SCHEMA;
+    }
+    status = confit_value_set_path(out_value, text);
+    if (status != CONFIT_OK) {
+      confit_tui_validation_message(message, message_size,
+                                    "invalid path: allocation failed");
+      return status;
+    }
+    return confit_tui_validate_parsed_value(option, out_value, message,
+                                            message_size);
   default:
     break;
   }
 
-  confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
-                        "invalid tui value");
+  confit_tui_validation_message(message, message_size, "invalid tui value");
   return CONFIT_ERR_SCHEMA;
 }
 
@@ -892,14 +1083,54 @@ static ConfitStatus confit_tui_toggle_bool(ConfitTuiState *state,
   return status;
 }
 
-static ConfitStatus confit_tui_next_enum(ConfitTuiState *state,
-                                         const ConfitOption *option,
-                                         ConfitDiagnostic *diagnostic) {
-  const ConfitValue *current;
-  const char *next;
-  size_t index;
+static int confit_tui_value_dialog_validator(const char *text, char *message,
+                                             size_t message_size, void *user) {
+  ConfitTuiValueValidator *validator = (ConfitTuiValueValidator *)user;
   ConfitValue value;
   ConfitStatus status;
+
+  if (validator == 0 || validator->option == 0) {
+    confit_tui_validation_message(message, message_size,
+                                  "invalid value validator");
+    return 1;
+  }
+  confit_value_init(&value);
+  status = confit_tui_parse_value(validator->option, text, &value, message,
+                                  message_size);
+  confit_value_clear(&value);
+  return status == CONFIT_OK ? 0 : 1;
+}
+
+static size_t confit_tui_current_enum_index(const ConfitOption *option,
+                                            const ConfitValue *current) {
+  size_t index;
+
+  if (option == 0 || current == 0 ||
+      (current->kind != CONFIT_VALUE_ENUM &&
+       current->kind != CONFIT_VALUE_STRING)) {
+    return 0U;
+  }
+  for (index = 0U; index < option->enum_value_count; ++index) {
+    if (current->as.string_value != 0 &&
+        strcmp(option->enum_values[index], current->as.string_value) == 0) {
+      return index;
+    }
+  }
+  return 0U;
+}
+
+static ConfitStatus confit_tui_prompt_enum(ConfitTuiState *state,
+                                           const ConfitOption *option,
+                                           ConfitDiagnostic *diagnostic) {
+  const ConfitValue *current;
+  const char **choices;
+  size_t selected_index;
+  size_t index;
+  char header[384];
+  char message[160];
+  ConfitValue value;
+  ConfitStatus status;
+  int select_status;
 
   if (option->enum_value_count == 0U) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
@@ -911,22 +1142,100 @@ static ConfitStatus confit_tui_next_enum(ConfitTuiState *state,
   if (status != CONFIT_OK) {
     return status;
   }
-  next = option->enum_values[0];
-  if (current->kind == CONFIT_VALUE_ENUM ||
-      current->kind == CONFIT_VALUE_STRING) {
-    for (index = 0U; index < option->enum_value_count; ++index) {
-      if (current->as.string_value != 0 &&
-          strcmp(option->enum_values[index], current->as.string_value) == 0) {
-        next = option->enum_values[(index + 1U) % option->enum_value_count];
-        break;
-      }
-    }
+
+  choices = (const char **)calloc(option->enum_value_count, sizeof(choices[0]));
+  if (choices == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, option->id, 0, 0,
+                          "failed to allocate enum choices");
+    return CONFIT_ERR_INTERNAL;
+  }
+  for (index = 0U; index < option->enum_value_count; ++index) {
+    choices[index] = option->enum_values[index];
+  }
+  selected_index = confit_tui_current_enum_index(option, current);
+  (void)snprintf(header, sizeof(header), "option: %s\nprompt: %s\ncurrent: %s",
+                 confit_tui_text_or_dash(option->id),
+                 confit_tui_text_or_dash(option->prompt),
+                 current->kind == CONFIT_VALUE_ENUM ||
+                         current->kind == CONFIT_VALUE_STRING
+                     ? confit_tui_text_or_dash(current->as.string_value)
+                     : "-");
+  header[sizeof(header) - 1U] = '\0';
+  select_status = confit_tui_curses_select_dialog(
+      "Confit Choice", header, choices, option->enum_value_count,
+      selected_index, &selected_index);
+  free(choices);
+  if (select_status != 0) {
+    (void)snprintf(state->status, sizeof(state->status), "cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
   }
 
   confit_value_init(&value);
-  status = confit_value_set_enum(&value, next);
+  status = confit_tui_parse_value(option, option->enum_values[selected_index],
+                                  &value, message, sizeof(message));
   if (status == CONFIT_OK) {
     status = confit_tui_apply_value_edit(state, option, &value, diagnostic);
+    if (status == CONFIT_OK) {
+      (void)snprintf(state->status, sizeof(state->status), "selected %s = %s",
+                     option->id, option->enum_values[selected_index]);
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
+  } else {
+    confit_diagnostic_set(diagnostic, status, option->id, 0, 0,
+                          message[0] != '\0' ? message : "invalid enum value");
+  }
+  confit_value_clear(&value);
+  return status;
+}
+
+static ConfitStatus
+confit_tui_prompt_typed_value(ConfitTuiState *state, const ConfitOption *option,
+                              ConfitDiagnostic *diagnostic) {
+  ConfitTuiValueValidator validator;
+  char input[256];
+  char header[512];
+  char prompt[64];
+  char message[160];
+  ConfitValue value;
+  ConfitStatus status;
+  int input_status;
+
+  (void)snprintf(
+      header, sizeof(header),
+      "option: %s\ntype: %s\nprompt: %s\nEnter commits a valid value. Esc "
+      "cancels.",
+      confit_tui_text_or_dash(option->id),
+      confit_option_type_name(option->type),
+      confit_tui_text_or_dash(option->prompt));
+  header[sizeof(header) - 1U] = '\0';
+  (void)snprintf(prompt, sizeof(prompt),
+                 "%s value: ", confit_option_type_name(option->type));
+  prompt[sizeof(prompt) - 1U] = '\0';
+  validator.option = option;
+  input_status = confit_tui_curses_read_value_dialog(
+      "Confit Value", header, prompt, "Enter a value",
+      confit_tui_value_dialog_validator, &validator, input, sizeof(input));
+  if (input_status != 0) {
+    (void)snprintf(state->status, sizeof(state->status), "cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+
+  confit_value_init(&value);
+  message[0] = '\0';
+  status =
+      confit_tui_parse_value(option, input, &value, message, sizeof(message));
+  if (status == CONFIT_OK) {
+    status = confit_tui_apply_value_edit(state, option, &value, diagnostic);
+    if (status == CONFIT_OK) {
+      (void)snprintf(state->status, sizeof(state->status), "accepted %s = %s",
+                     option->id, input);
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
+  } else {
+    confit_diagnostic_set(diagnostic, status, option->id, 0, 0,
+                          message[0] != '\0' ? message : "invalid tui value");
   }
   confit_value_clear(&value);
   return status;
@@ -935,47 +1244,13 @@ static ConfitStatus confit_tui_next_enum(ConfitTuiState *state,
 static ConfitStatus confit_tui_prompt_edit(ConfitTuiState *state,
                                            const ConfitOption *option,
                                            ConfitDiagnostic *diagnostic) {
-  char input[256];
-  ConfitValue value;
-  ConfitStatus status;
-
   if (option->type == CONFIT_OPTION_TYPE_BOOL) {
     return confit_tui_toggle_bool(state, option, diagnostic);
   }
   if (option->type == CONFIT_OPTION_TYPE_ENUM) {
-    char prompt[256];
-
-    (void)snprintf(prompt, sizeof(prompt),
-                   "enum value for %s (empty = next): ", option->id);
-    prompt[sizeof(prompt) - 1U] = '\0';
-    if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
-      return CONFIT_OK;
-    }
-    if (input[0] == '\0') {
-      return confit_tui_next_enum(state, option, diagnostic);
-    }
-  } else {
-    char prompt[256];
-
-    (void)snprintf(prompt, sizeof(prompt), "value for %s: ", option->id);
-    prompt[sizeof(prompt) - 1U] = '\0';
-    if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0 ||
-        input[0] == '\0') {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
-      return CONFIT_OK;
-    }
+    return confit_tui_prompt_enum(state, option, diagnostic);
   }
-
-  confit_value_init(&value);
-  status = confit_tui_parse_value(option, input, &value, diagnostic);
-  if (status == CONFIT_OK) {
-    status = confit_tui_apply_value_edit(state, option, &value, diagnostic);
-  }
-  confit_value_clear(&value);
-  return status;
+  return confit_tui_prompt_typed_value(state, option, diagnostic);
 }
 
 static const ConfitOption *

@@ -21,7 +21,7 @@ printf 'sq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile fresh \
     >"$WORK_DIR/tui-profile-create.txt"
 
-grep -aF "row 1/7" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "row 1/9" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
   >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null

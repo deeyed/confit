@@ -60,6 +60,9 @@ typedef struct ConfitTuiTextBuilder {
   size_t capacity;
 } ConfitTuiTextBuilder;
 
+typedef int (*ConfitTuiInputValidator)(const char *text, char *message,
+                                       size_t message_size, void *user);
+
 const char *confit_tui_text_or_dash(const char *text);
 
 ConfitStatus confit_tui_parse_int64(const char *text, int64_t *out);
@@ -84,6 +87,16 @@ int confit_tui_curses_render_text(const char *title, const char *header,
 ConfitTuiKey confit_tui_curses_read_key(void);
 size_t confit_tui_curses_page_step(void);
 int confit_tui_curses_read_line(const char *prompt, char *out, size_t out_size);
+int confit_tui_curses_read_value_dialog(const char *title, const char *header,
+                                        const char *prompt,
+                                        const char *initial_status,
+                                        ConfitTuiInputValidator validator,
+                                        void *validator_user, char *out,
+                                        size_t out_size);
+int confit_tui_curses_select_dialog(const char *title, const char *header,
+                                    const char *const *items, size_t item_count,
+                                    size_t selected_index,
+                                    size_t *out_selected_index);
 void confit_tui_curses_stop(void);
 
 ConfitStatus confit_tui_run_profile_editor(const ConfitTuiOptions *options,

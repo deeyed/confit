@@ -50,6 +50,14 @@ static void confit_tui_curses_add_clipped(int row, int col, const char *text,
   mvaddnstr(row, col, confit_tui_curses_text(text), width);
 }
 
+static void confit_tui_curses_fill_span(int row, int col, int width) {
+  int index;
+
+  for (index = 0; index < width; ++index) {
+    mvaddch(row, col + index, ' ');
+  }
+}
+
 static void confit_tui_curses_add_centered(int row, const char *text) {
   const int width = COLS > 0 ? COLS : 80;
   const int size = (int)strlen(confit_tui_curses_text(text));
@@ -759,4 +767,313 @@ int confit_tui_curses_read_line(const char *prompt, char *out,
   (void)curs_set(0);
   out[out_size - 1U] = '\0';
   return 0;
+}
+
+static void confit_tui_curses_dialog_rect(int *top, int *left, int *height,
+                                          int *width, int preferred_height) {
+  const int screen_width = COLS > 0 ? COLS : 80;
+  const int screen_height = LINES > 0 ? LINES : 24;
+
+  *width = screen_width > 78 ? 76 : screen_width - 2;
+  if (*width < 36) {
+    *width = screen_width;
+  }
+  *height = preferred_height;
+  if (*height > screen_height - 2) {
+    *height = screen_height - 2;
+  }
+  if (*height < 7) {
+    *height = screen_height;
+  }
+  *left = screen_width > *width ? (screen_width - *width) / 2 : 0;
+  *top = screen_height > *height ? (screen_height - *height) / 2 : 0;
+}
+
+static void confit_tui_curses_render_value_dialog(const char *title,
+                                                  const char *header,
+                                                  const char *prompt,
+                                                  const char *input,
+                                                  const char *status) {
+  int top;
+  int left;
+  int height;
+  int width;
+  int row;
+  int input_col;
+  int input_width;
+
+  erase();
+  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 10);
+  if (height < 7 || width < 36) {
+    confit_tui_curses_add_clipped(0, 0, confit_tui_curses_text(title),
+                                  COLS > 0 ? COLS : 80);
+    confit_tui_curses_add_clipped(1, 0, confit_tui_curses_text(status),
+                                  COLS > 0 ? COLS : 80);
+    confit_tui_curses_add_clipped(2, 0, confit_tui_curses_text(prompt),
+                                  COLS > 0 ? COLS : 80);
+    addnstr(confit_tui_curses_text(input), COLS > 0 ? COLS : 80);
+    (void)refresh();
+    return;
+  }
+
+  if (has_colors()) {
+    attron(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attron(A_BOLD);
+  }
+  confit_tui_curses_draw_box(top, left, height, width, title);
+  if (has_colors()) {
+    attroff(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attroff(A_BOLD);
+  }
+
+  row = top + 2;
+  confit_tui_curses_render_lines(header, &row, top + height - 5, left + 2,
+                                 width - 4, 0, A_NORMAL);
+  if (has_colors()) {
+    attron(COLOR_PAIR(1));
+  } else {
+    attron(A_REVERSE);
+  }
+  confit_tui_curses_fill_span(top + height - 3, left + 1, width - 2);
+  confit_tui_curses_add_clipped(top + height - 3, left + 2,
+                                confit_tui_curses_text(status), width - 4);
+  if (has_colors()) {
+    attroff(COLOR_PAIR(1));
+  } else {
+    attroff(A_REVERSE);
+  }
+  input_col = left + 2 + (int)strlen(confit_tui_curses_text(prompt));
+  input_width = width - 4 - (int)strlen(confit_tui_curses_text(prompt));
+  if (input_width < 1) {
+    input_width = 1;
+  }
+  confit_tui_curses_add_clipped(top + height - 2, left + 2,
+                                confit_tui_curses_text(prompt), width - 4);
+  confit_tui_curses_add_clipped(top + height - 2, input_col,
+                                confit_tui_curses_text(input), input_width);
+  move(top + height - 2,
+       input_col + (int)strlen(confit_tui_curses_text(input)));
+  (void)refresh();
+}
+
+int confit_tui_curses_read_value_dialog(const char *title, const char *header,
+                                        const char *prompt,
+                                        const char *initial_status,
+                                        ConfitTuiInputValidator validator,
+                                        void *validator_user, char *out,
+                                        size_t out_size) {
+  char status[160];
+  size_t input_size;
+
+  if (out == 0 || out_size == 0U || confit_tui_curses_start() != 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  input_size = 0U;
+  (void)snprintf(status, sizeof(status), "%s",
+                 confit_tui_curses_text(initial_status));
+  status[sizeof(status) - 1U] = '\0';
+  (void)curs_set(1);
+
+  do {
+    int ch;
+
+    confit_tui_curses_render_value_dialog(title, header, prompt, out, status);
+    ch = getch();
+    if (ch == ERR) {
+      (void)curs_set(0);
+      out[0] = '\0';
+      return -1;
+    }
+    if (ch == 27) {
+      (void)curs_set(0);
+      out[0] = '\0';
+      return 1;
+    }
+    if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
+      char message[160];
+
+      message[0] = '\0';
+      if (validator == 0 ||
+          validator(out, message, sizeof(message), validator_user) == 0) {
+        (void)curs_set(0);
+        out[out_size - 1U] = '\0';
+        return 0;
+      }
+      (void)snprintf(status, sizeof(status), "%s",
+                     message[0] != '\0' ? message : "invalid value");
+      status[sizeof(status) - 1U] = '\0';
+      input_size = 0U;
+      out[0] = '\0';
+      continue;
+    }
+    if (ch == KEY_BACKSPACE || ch == 127 || ch == '\b') {
+      if (input_size > 0U) {
+        input_size -= 1U;
+        out[input_size] = '\0';
+      }
+      continue;
+    }
+    if (ch == 21) {
+      input_size = 0U;
+      out[0] = '\0';
+      continue;
+    }
+    if (ch >= 0 && ch <= 255 && isprint((unsigned char)ch) &&
+        input_size + 1U < out_size) {
+      out[input_size] = (char)ch;
+      input_size += 1U;
+      out[input_size] = '\0';
+    }
+  } while (1);
+}
+
+static void confit_tui_curses_render_choice_dialog(
+    const char *title, const char *header, const char *const *items,
+    size_t item_count, size_t selected_index, const char *status) {
+  int top;
+  int left;
+  int height;
+  int width;
+  int row;
+  int list_top;
+  int list_height;
+  size_t first;
+  size_t index;
+
+  erase();
+  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 14);
+  if (height < 8 || width < 36) {
+    confit_tui_curses_add_clipped(0, 0, confit_tui_curses_text(title),
+                                  COLS > 0 ? COLS : 80);
+    for (index = 0U; index < item_count && (int)index + 2 < LINES; ++index) {
+      confit_tui_curses_add_clipped((int)index + 2, 0,
+                                    confit_tui_curses_text(items[index]),
+                                    COLS > 0 ? COLS : 80);
+    }
+    (void)refresh();
+    return;
+  }
+
+  if (has_colors()) {
+    attron(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attron(A_BOLD);
+  }
+  confit_tui_curses_draw_box(top, left, height, width, title);
+  if (has_colors()) {
+    attroff(COLOR_PAIR(3) | A_BOLD);
+  } else {
+    attroff(A_BOLD);
+  }
+
+  row = top + 2;
+  confit_tui_curses_render_lines(header, &row, top + 3, left + 2, width - 4, 0,
+                                 A_NORMAL);
+  list_top = top + 4;
+  list_height = height - 7;
+  first = 0U;
+  if (list_height > 0 && selected_index >= (size_t)list_height) {
+    first = selected_index - (size_t)list_height + 1U;
+  }
+  for (index = 0U; index < (size_t)list_height && first + index < item_count;
+       ++index) {
+    const size_t item_index = first + index;
+    char line[256];
+
+    (void)snprintf(line, sizeof(line), "%c %s",
+                   item_index == selected_index ? '>' : ' ',
+                   confit_tui_curses_text(items[item_index]));
+    line[sizeof(line) - 1U] = '\0';
+    if (item_index == selected_index) {
+      attron(A_REVERSE);
+    }
+    confit_tui_curses_add_clipped(list_top + (int)index, left + 2, line,
+                                  width - 4);
+    if (item_index == selected_index) {
+      attroff(A_REVERSE);
+    }
+  }
+  if (has_colors()) {
+    attron(COLOR_PAIR(1));
+  } else {
+    attron(A_REVERSE);
+  }
+  confit_tui_curses_fill_span(top + height - 2, left + 1, width - 2);
+  confit_tui_curses_add_clipped(top + height - 2, left + 2,
+                                confit_tui_curses_text(status), width - 4);
+  if (has_colors()) {
+    attroff(COLOR_PAIR(1));
+  } else {
+    attroff(A_REVERSE);
+  }
+  (void)refresh();
+}
+
+int confit_tui_curses_select_dialog(const char *title, const char *header,
+                                    const char *const *items, size_t item_count,
+                                    size_t selected_index,
+                                    size_t *out_selected_index) {
+  char status[128];
+
+  if (items == 0 || item_count == 0U || out_selected_index == 0 ||
+      confit_tui_curses_start() != 0) {
+    return -1;
+  }
+  if (selected_index >= item_count) {
+    selected_index = 0U;
+  }
+  (void)snprintf(status, sizeof(status), "Enter selects, Esc cancels");
+  status[sizeof(status) - 1U] = '\0';
+
+  do {
+    int ch;
+
+    confit_tui_curses_render_choice_dialog(title, header, items, item_count,
+                                           selected_index, status);
+    ch = getch();
+    if (ch == ERR) {
+      return -1;
+    }
+    if (ch == 27 || ch == 'q' || ch == 'Q') {
+      return 1;
+    }
+    if ((ch == KEY_UP || ch == 'k' || ch == 'K') && selected_index > 0U) {
+      selected_index -= 1U;
+      continue;
+    }
+    if ((ch == KEY_DOWN || ch == 'j' || ch == 'J') &&
+        selected_index + 1U < item_count) {
+      selected_index += 1U;
+      continue;
+    }
+    if (ch == KEY_HOME) {
+      selected_index = 0U;
+      continue;
+    }
+    if (ch == KEY_END) {
+      selected_index = item_count - 1U;
+      continue;
+    }
+    if (ch == KEY_PPAGE) {
+      const size_t step = confit_tui_curses_page_step();
+      selected_index = selected_index > step ? selected_index - step : 0U;
+      continue;
+    }
+    if (ch == KEY_NPAGE) {
+      const size_t step = confit_tui_curses_page_step();
+      if (selected_index + step < item_count) {
+        selected_index += step;
+      } else {
+        selected_index = item_count - 1U;
+      }
+      continue;
+    }
+    if (ch == '\n' || ch == '\r' || ch == KEY_ENTER || ch == ' ') {
+      *out_selected_index = selected_index;
+      return 0;
+    }
+  } while (1);
 }
