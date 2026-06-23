@@ -100,6 +100,25 @@ ctest --test-dir build/confit --output-on-failure
 build/confit/confit.exe doctor
 ```
 
+## Cutover Dry-Run
+
+실제 Parus/Delos build tree에 generated artifact를 연결하기 전에는 fixture mirror 기반 dry-run을 먼저
+수행한다.
+
+```sh
+tools/confit/scripts/confit-cutover-dry-run.sh \
+  --project delos-realish \
+  --out /tmp/confit-cutover
+
+tools/confit/scripts/confit-cutover-dry-run.sh \
+  --project parus-realish \
+  --out /tmp/confit-cutover
+```
+
+이 명령은 `check`, `strict check`, `compat`, `gen`, golden diff, input manifest 검증을 수행하고
+`CUTOVER_SUMMARY.txt`와 `ROLLBACK.md`를 output directory에 남긴다. 자세한 절차는
+`docs/cutover-dry-run.md`와 `docs/rollback.md`를 따른다.
+
 ## Local Install
 
 Confit의 필수 설치 산출물은 단일 실행 파일이다.

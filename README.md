@@ -45,6 +45,8 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 - [resolution-dag.md](docs/resolution-dag.md): option graph, dependency resolution, conflict explanation.
 - [generators.md](docs/generators.md): generated `config.h`, report, graph, input manifest 산출물.
 - [cli-tui.md](docs/cli-tui.md): CLI, TUI, profile/schema editing workflow 전략.
+- [cutover-dry-run.md](docs/cutover-dry-run.md): fixture mirror 기반 cutover rehearsal 절차.
+- [rollback.md](docs/rollback.md): generated artifact와 TOML edit rollback 규칙.
 - [coding-and-doc-rules.md](docs/coding-and-doc-rules.md): 구현팀이 따라야 할 C/Doxygen/문서 규칙.
 - [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
 - [release-candidate.md](docs/release-candidate.md): v0 RC 검증 gate, 예제 command, portability review.
