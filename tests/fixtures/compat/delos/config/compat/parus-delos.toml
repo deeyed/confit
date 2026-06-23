@@ -1,0 +1,12 @@
+[compat]
+name = "parus-delos"
+
+[[assert]]
+when = { option = "parus.rt_executor.delos", equals = true }
+requires = { option = "delos.dcg.enabled", equals = true }
+message = "Parus Delos RT Executor requires Delos DCG."
+
+[[assert]]
+when = { option = "parus.debug.release", equals = true }
+forbids = { option = "delos.debug.dsh_rx", equals = true }
+message = "Release system must not expose Delos DSH RX command parser."

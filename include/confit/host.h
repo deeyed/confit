@@ -56,6 +56,33 @@ ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
                                         ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief UTF-8 또는 ASCII text file을 host filesystem에 쓴다.
+ *
+ * Parent directory는 caller가 먼저 만들어야 한다. 이 API는 host layer가 파일
+ * writing을 소유하게 해 core/CLI가 `fopen` 같은 hosted API를 직접 의존하지
+ * 않도록 한다.
+ *
+ * @param path 쓸 host path.
+ * @param text 쓸 NUL 종료 문자열.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받을 optional diagnostic.
+ * @return 성공하면 CONFIT_OK, 실패하면 오류 status.
+ */
+ConfitStatus confit_host_write_text_file(const char *path, const char *text,
+                                         ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief directory path를 재귀적으로 생성한다.
+ *
+ * 이미 존재하는 directory는 성공으로 처리한다.
+ *
+ * @param path 생성할 host directory path.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받을 optional diagnostic.
+ * @return 성공하면 CONFIT_OK, 실패하면 오류 status.
+ */
+ConfitStatus confit_host_make_directories(const char *path,
+                                          ConfitDiagnostic *diagnostic);
+
+/**
  * @brief directory 바로 아래의 `.toml` file path 목록을 deterministic order로 읽는다.
  *
  * Directory가 없으면 빈 목록을 성공으로 반환한다. 반환된 문자열 배열과 각

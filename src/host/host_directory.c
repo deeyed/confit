@@ -9,7 +9,107 @@
 #include <windows.h>
 #else
 #include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #endif
+
+static int confit_host_is_path_separator_local(char value) {
+  return value == '/' || value == '\\';
+}
+
+static int confit_host_directory_exists(const char *path) {
+#if defined(_WIN32)
+  const DWORD attributes = GetFileAttributesA(path);
+  return attributes != INVALID_FILE_ATTRIBUTES &&
+         (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0U;
+#else
+  struct stat info;
+  return stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+#endif
+}
+
+static int confit_host_create_directory_once(const char *path) {
+  if (confit_host_directory_exists(path)) {
+    return 1;
+  }
+
+#if defined(_WIN32)
+  if (CreateDirectoryA(path, 0) != 0) {
+    return 1;
+  }
+  return GetLastError() == ERROR_ALREADY_EXISTS &&
+         confit_host_directory_exists(path);
+#else
+  if (mkdir(path, 0777) == 0) {
+    return 1;
+  }
+  return errno == EEXIST && confit_host_directory_exists(path);
+#endif
+}
+
+static int confit_host_should_create_component(const char *path) {
+  const size_t size = strlen(path);
+
+  if (size == 0U) {
+    return 0;
+  }
+  if (size == 2U && path[1] == ':') {
+    return 0;
+  }
+  return 1;
+}
+
+ConfitStatus confit_host_make_directories(const char *path,
+                                          ConfitDiagnostic *diagnostic) {
+  char *copy;
+  size_t size;
+  size_t index;
+
+  if (path == 0 || path[0] == '\0') {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "missing directory path");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  size = strlen(path);
+  copy = (char *)malloc(size + 1U);
+  if (copy == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to allocate directory path");
+    return CONFIT_ERR_INTERNAL;
+  }
+  memcpy(copy, path, size + 1U);
+
+  for (index = 1U; index < size; ++index) {
+    char saved;
+
+    if (!confit_host_is_path_separator_local(copy[index])) {
+      continue;
+    }
+
+    saved = copy[index];
+    copy[index] = '\0';
+    if (confit_host_should_create_component(copy) &&
+        !confit_host_create_directory_once(copy)) {
+      copy[index] = saved;
+      free(copy);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                            "failed to create output directory");
+      return CONFIT_ERR_GENERATION;
+    }
+    copy[index] = saved;
+  }
+
+  if (!confit_host_create_directory_once(path)) {
+    free(copy);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                          "failed to create output directory");
+    return CONFIT_ERR_GENERATION;
+  }
+
+  free(copy);
+  return CONFIT_OK;
+}
 
 static int confit_host_has_toml_suffix(const char *name) {
   const size_t size = name != 0 ? strlen(name) : 0U;

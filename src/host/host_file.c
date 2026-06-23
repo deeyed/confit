@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static ConfitStatus confit_host_file_error(ConfitDiagnostic *diagnostic,
                                            const char *path,
@@ -80,6 +81,48 @@ ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
   *out_text = buffer;
   if (out_size != 0) {
     *out_size = bytes_read;
+  }
+
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_host_write_text_file(const char *path, const char *text,
+                                         ConfitDiagnostic *diagnostic) {
+  FILE *file;
+  size_t text_size;
+  size_t bytes_written;
+
+  if (path == 0 || path[0] == '\0') {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "missing output path");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  if (text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "missing output text");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  file = fopen(path, "wb");
+  if (file == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                          "failed to open output file");
+    return CONFIT_ERR_GENERATION;
+  }
+
+  text_size = strlen(text);
+  bytes_written = fwrite(text, 1U, text_size, file);
+  if (bytes_written != text_size) {
+    fclose(file);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                          "failed to write output file");
+    return CONFIT_ERR_GENERATION;
+  }
+
+  if (fclose(file) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                          "failed to close output file");
+    return CONFIT_ERR_GENERATION;
   }
 
   return CONFIT_OK;

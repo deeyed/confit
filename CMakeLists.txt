@@ -177,7 +177,9 @@ add_executable(confit
 )
 
 target_link_libraries(confit PRIVATE
+  confit_compat
   confit_explain
+  confit_generator
   confit_graph
   confit_schema
 )
@@ -472,4 +474,13 @@ add_test(
 
 set_tests_properties(confit.cli.explain
   PROPERTIES PASS_REGULAR_EXPRESSION "forced by:"
+)
+
+add_test(
+  NAME confit.cli.workflow
+  COMMAND /bin/sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round16_cli_workflow.sh
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round16-cli
 )
