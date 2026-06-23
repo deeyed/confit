@@ -26,6 +26,9 @@ tools/confit/tests/run_tests.sh
 4. `ctest --test-dir <build-dir> --output-on-failure`로 unit/CLI tests를 실행한다.
 5. Round 1 smoke script를 실행해 직접 compiler 기반 smoke도 유지한다.
 
+CTest에는 Round 20 synthetic scale gate도 포함된다. 이 gate는 build directory 안에 2,500개 option을
+가진 임시 project를 생성하고 `check`, `list`, `graph`, `gen`을 순서대로 실행한다.
+
 기본 build directory:
 
 ```text
@@ -78,3 +81,14 @@ tools/confit/tests/golden/
 
 Golden file에는 timestamp와 absolute path를 넣지 않는다. Source path가 필요하면 fixture root 기준
 상대 경로를 사용한다.
+
+## Manual QA Notes
+
+Computer Use 또는 사람이 직접 확인한 TUI 흐름은 다음 위치에 짧은 transcript로 남긴다.
+
+```text
+tools/confit/tests/manual/
+```
+
+Manual note는 자동 테스트를 대체하지 않는다. 자동 테스트가 다루기 어려운 실제 TUI 화면 흐름과
+platform/tooling 제한을 기록하는 보조 evidence다.

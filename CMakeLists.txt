@@ -560,3 +560,12 @@ add_test(
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round19-schema-editor
 )
+
+add_test(
+  NAME confit.cli.stress
+  COMMAND /bin/sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round20_stress.sh
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round20-stress
+)
