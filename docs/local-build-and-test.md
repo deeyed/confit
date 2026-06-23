@@ -50,7 +50,9 @@ tools/confit/tests/run_tests.sh
 2. `cmake -S tools/confit -B <build-dir>`로 clean configure를 수행한다.
 3. `cmake --build <build-dir>`로 `confit`과 unit test binary를 build한다.
 4. `ctest --test-dir <build-dir> --output-on-failure`로 unit/CLI tests를 실행한다.
-5. Round 1 smoke script를 실행해 직접 compiler 기반 smoke도 유지한다.
+5. C 기반 integration runner가 shell 없이 `confit` child process를 실행해 stdout/stderr와 exit code를
+   검증한다.
+6. Round 1 smoke script를 실행해 직접 compiler 기반 smoke도 유지한다.
 
 CTest에는 Round 20 synthetic scale gate도 포함된다. 이 gate는 build directory 안에 2,500개 option을
 가진 임시 project를 생성하고 `check`, `list`, `graph`, `gen`을 순서대로 실행한다.
@@ -77,6 +79,7 @@ cmake --build /tmp/confit-build
 ctest --test-dir /tmp/confit-build --output-on-failure
 /tmp/confit-build/confit --version
 /tmp/confit-build/confit help
+/tmp/confit-build/confit_test_cli_workflow
 ```
 
 ## Local Install

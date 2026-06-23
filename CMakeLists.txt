@@ -215,6 +215,27 @@ install(TARGETS confit RUNTIME DESTINATION bin)
 
 enable_testing()
 
+add_library(confit_test_support STATIC
+  tests/support/test_assert.c
+  tests/support/test_fs.c
+  tests/support/test_process.c
+)
+
+target_include_directories(confit_test_support
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/support
+)
+
+target_compile_features(confit_test_support PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_test_support PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_support PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit_test_status_diagnostic
   tests/unit/test_status_diagnostic.c
 )
@@ -515,6 +536,31 @@ add_test(
           $<TARGET_FILE:confit>
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round16-cli
+)
+
+add_executable(confit_test_cli_workflow
+  tests/integration_c/test_cli_workflow.c
+)
+
+target_link_libraries(confit_test_cli_workflow PRIVATE confit_test_support)
+target_compile_definitions(confit_test_cli_workflow PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_cli_workflow PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_cli_workflow PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.cli.workflow_c
+  COMMAND confit_test_cli_workflow
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round3-cli-c
 )
 
 add_test(
