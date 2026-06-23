@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "confit/version.h"
+
 typedef struct ConfitReportBuilder {
   char *text;
   size_t size;
@@ -685,6 +687,12 @@ ConfitStatus confit_generate_inputs_json(const ConfitProject *project,
   CONFIT_INPUTS_APPEND(",\n");
   CONFIT_INPUTS_APPEND("  \"profile\": ");
   CONFIT_INPUTS_APPEND_JSON(confit_report_profile_name(options));
+  CONFIT_INPUTS_APPEND(",\n");
+  CONFIT_INPUTS_APPEND("  \"target\": ");
+  CONFIT_INPUTS_APPEND_JSON(confit_report_target_name(options));
+  CONFIT_INPUTS_APPEND(",\n");
+  CONFIT_INPUTS_APPEND("  \"confit_version\": ");
+  CONFIT_INPUTS_APPEND_JSON(confit_version_string());
   CONFIT_INPUTS_APPEND(",\n");
   CONFIT_INPUTS_APPEND("  \"files\": [\n");
 

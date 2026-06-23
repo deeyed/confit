@@ -557,12 +557,34 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   char explain_txt[4096];
   char graph_json[4096];
   char inputs_json[4096];
+  char cmake_file[4096];
+  char qstar_file[4096];
+  char header_only_dir[4096];
+  char header_only_config_h[4096];
+  char header_only_report_json[4096];
+  char dry_run_dir[4096];
+  char dry_run_config_h[4096];
   const char *argv[] = {0, "gen", "--project", 0, "--profile", "sim-dsh",
                         "--out", 0, 0};
+  const char *overwrite_argv[] = {0, "gen", "--project", 0, "--profile",
+                                  "sim-dsh", "--out", 0, 0};
+  const char *force_argv[] = {0, "gen", "--project", 0, "--profile",
+                              "sim-dsh", "--out", 0, "--force", 0};
+  const char *header_argv[] = {0, "gen", "--project", 0, "--profile",
+                               "sim-dsh", "--out", 0, "--artifact",
+                               "header", 0};
+  const char *dry_run_argv[] = {0, "gen", "--project", 0, "--profile",
+                                "sim-dsh", "--out", 0, "--artifact",
+                                "cmake", "--dry-run", 0};
 
   result.exit_code = -1;
   result.stdout_text = 0;
   result.stderr_text = 0;
+  test_join(header_only_dir, sizeof(header_only_dir), context->work_dir,
+            "generated-header-only");
+  test_join(dry_run_dir, sizeof(dry_run_dir), context->work_dir,
+            "generated-dry-run");
+
   argv[0] = context->confit_bin;
   argv[3] = context->project_dir;
   argv[7] = context->gen_dir;
@@ -580,12 +602,58 @@ static void test_gen(ConfitCliWorkflowContext *context) {
             "config.graph.json");
   test_join(inputs_json, sizeof(inputs_json), context->gen_dir,
             "config.inputs.json");
+  test_join(cmake_file, sizeof(cmake_file), context->gen_dir, "config.cmake");
+  test_join(qstar_file, sizeof(qstar_file), context->gen_dir, "config.qst");
 
   test_expect_file_contains(config_h, "DELOS_CONFIG_DEBUG_DDC");
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(report_json));
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(explain_txt));
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(graph_json));
-  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(inputs_json));
+  test_expect_file_contains(inputs_json, "\"config/targets/host-sim.toml\"");
+  test_expect_file_contains(cmake_file, "CONFIT_CONFIG_HEADER");
+  test_expect_file_contains(qstar_file, "confit-qstar-manifest-v1");
+
+  overwrite_argv[0] = context->confit_bin;
+  overwrite_argv[3] = context->project_dir;
+  overwrite_argv[7] = context->gen_dir;
+  test_run(context, overwrite_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(6, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "generated artifact exists");
+  confit_test_process_result_clear(&result);
+
+  force_argv[0] = context->confit_bin;
+  force_argv[3] = context->project_dir;
+  force_argv[7] = context->gen_dir;
+  test_run(context, force_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "gen ok:");
+  confit_test_process_result_clear(&result);
+
+  header_argv[0] = context->confit_bin;
+  header_argv[3] = context->project_dir;
+  header_argv[7] = header_only_dir;
+  test_run(context, header_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  test_join(header_only_config_h, sizeof(header_only_config_h),
+            header_only_dir, "config.h");
+  test_join(header_only_report_json, sizeof(header_only_report_json),
+            header_only_dir, "config.report.json");
+  test_expect_file_contains(header_only_config_h, "DELOS_CONFIG_DEBUG_DDC");
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(header_only_report_json));
+  confit_test_process_result_clear(&result);
+
+  dry_run_argv[0] = context->confit_bin;
+  dry_run_argv[3] = context->project_dir;
+  dry_run_argv[7] = dry_run_dir;
+  test_run(context, dry_run_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "gen dry-run:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "config.cmake");
+  test_join(dry_run_config_h, sizeof(dry_run_config_h), dry_run_dir,
+            "config.h");
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(dry_run_config_h));
+  confit_test_process_result_clear(&result);
 }
 
 static void test_compat(ConfitCliWorkflowContext *context) {

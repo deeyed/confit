@@ -27,6 +27,8 @@ build/generated/config/delos/sim-dsh/
   config.explain.txt
   config.graph.json
   config.inputs.json
+  config.cmake
+  config.qst
 ```
 
 ## C Header
@@ -56,44 +58,50 @@ Header generator 규칙:
 
 ## CMake Artifact
 
-이 기능은 초기 필수 기능이 아니다. Confit core, TUI, Parus/Delos 적용이 안정화된 뒤 도입한다.
-
-`config.cmake`는 CMake가 option value를 읽는 파일이다.
+`config.cmake`는 CMake build graph가 generated config bundle 위치와
+provenance를 읽는 include-only fragment다. 실제 Delos/Parus root CMake를
+수정하지 않고, 명시적 `--out` 아래에만 생성한다.
 
 ```cmake
-set(DELOS_CONFIG_DEBUG_DDC ON)
-set(DELOS_CONFIG_DEBUG_DSH ON)
-set(DELOS_CONFIG_DEBUG_DSH_RX OFF)
-set(DELOS_CONFIG_SCHEDULER_TASK_SLOTS 16)
+set(CONFIT_PROJECT "delos")
+set(CONFIT_PROFILE "sim-dsh")
+set(CONFIT_TARGET "host-sim")
+set(CONFIT_SOURCE_HASH "0x9C11AEAD955DCA37")
+set(CONFIT_CONFIG_HEADER "${CMAKE_CURRENT_LIST_DIR}/config.h")
+set(DELOS_CONFIG_HEADER "${CONFIT_CONFIG_HEADER}")
 ```
 
 CMake generator 규칙:
 
-- `ON/OFF`와 숫자/string을 명확히 구분한다.
 - Generated file은 include-only fragment다.
 - Fragment 안에서 target을 만들지 않는다.
 - Fragment 안에서 source list를 직접 선언하지 않는다.
+- Fragment 안에 timestamp와 host-local absolute path를 넣지 않는다.
+- Project-specific alias variable은 generated artifact path를 가리킨다.
 
 ## QStar Artifact
 
-이 기능은 초기 필수 기능이 아니다. Confit core, TUI, Parus/Delos 적용이 안정화된 뒤 도입한다.
-
-`config.qst`는 QStar graph가 소비하는 generated fragment다.
+`config.qst`는 QStar graph가 소비할 수 있는 generated manifest fragment다.
+실제 QStar project를 수정하지 않고, 명시적 `--out` 아래에만 생성한다.
 
 ```lua
-qstar.config "delos_generated_config" {
-  defines = {
-    "DELOS_CONFIG_DEBUG_DDC=1",
-    "DELOS_CONFIG_DEBUG_DSH=1",
-    "DELOS_CONFIG_DEBUG_DSH_RX=0",
-    "DELOS_CONFIG_SCHEDULER_TASK_SLOTS=16",
-  },
+return {
+  schema = "confit-qstar-manifest-v1",
+  project = "delos",
+  profile = "sim-dsh",
+  target = "host-sim",
+  source_hash = "0x9C11AEAD955DCA37",
+  artifacts = {
+    header = "config.h",
+    report_json = "config.report.json",
+    inputs_json = "config.inputs.json"
+  }
 }
 ```
 
 QStar generator 규칙:
 
-- Generated fragment는 config declaration만 포함한다.
+- Generated fragment는 config artifact manifest만 포함한다.
 - Project, toolset, target, stage, run target을 선언하지 않는다.
 - `.qsm` helper로 숨기지 않는다. Generated config는 graph declaration이므로 `.qst`가 맞다.
 - QStar root or target layer가 명시적으로 import한다.
@@ -150,6 +158,8 @@ QStar generator 규칙:
   "schema": "confit-inputs-v1",
   "project": "delos",
   "profile": "sim-dsh",
+  "target": "host-sim",
+  "confit_version": "confit 0.1.0-round1",
   "files": [
     {"path": "config/project.toml", "sha256": "..."},
     {"path": "config/profiles/sim-dsh.toml", "sha256": "..."}

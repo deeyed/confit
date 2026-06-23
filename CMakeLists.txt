@@ -126,6 +126,7 @@ else()
 endif()
 
 add_library(confit_generator STATIC
+  src/generator/build_integration.c
   src/generator/config_header.c
   src/generator/reports.c
 )

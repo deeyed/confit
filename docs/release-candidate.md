@@ -13,8 +13,10 @@ profiles, explain resolved values, generate C configuration artifacts, check
 cross-project compatibility rules, and edit profile/schema TOML through the TUI.
 
 Confit remains confined to `tools/confit/` in this repository. Real Parus/Delos
-`config/`, CMake, QStar, runtime source, and generated build fragments stay out
-of scope for this 20-round prototype.
+`config/`, CMake, QStar, and runtime source edits stay out of scope unless the
+user explicitly widens the edit boundary. Confit may generate apply-ready build
+fragments such as `config.cmake` and `config.qst` under an explicit `--out`
+directory.
 
 ## RC Gate
 

@@ -27,6 +27,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/core/version.c" \
   "$ROOT_DIR/src/compat/compat.c" \
   "$ROOT_DIR/src/explain/explain.c" \
+  "$ROOT_DIR/src/generator/build_integration.c" \
   "$ROOT_DIR/src/generator/config_header.c" \
   "$ROOT_DIR/src/generator/reports.c" \
   "$ROOT_DIR/src/graph/graph.c" \

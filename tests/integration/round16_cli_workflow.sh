@@ -74,7 +74,15 @@ test -s "$GEN_DIR/config.report.json"
 test -s "$GEN_DIR/config.explain.txt"
 test -s "$GEN_DIR/config.graph.json"
 test -s "$GEN_DIR/config.inputs.json"
+test -s "$GEN_DIR/config.cmake"
+test -s "$GEN_DIR/config.qst"
 grep -F "DELOS_CONFIG_DEBUG_DDC" "$GEN_DIR/config.h" >/dev/null
+grep -F "CONFIT_CONFIG_HEADER" "$GEN_DIR/config.cmake" >/dev/null
+grep -F "confit-qstar-manifest-v1" "$GEN_DIR/config.qst" >/dev/null
+grep -F '"confit_version": "confit 0.1.0-round1"' \
+  "$GEN_DIR/config.inputs.json" >/dev/null
+grep -F '"config/targets/host-sim.toml"' "$GEN_DIR/config.inputs.json" \
+  >/dev/null
 
 "$CONFIT_BIN" compat --parus "$PARUS_DIR" --delos "$DELOS_DIR" \
   --profile parus-delos-debug >"$WORK_DIR/compat.txt"

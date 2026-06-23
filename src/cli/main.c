@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,10 @@ typedef struct ConfitCliResolveArgs {
 typedef struct ConfitCliGenArgs {
   ConfitCliProjectArgs project;
   const char *out_dir;
+  unsigned artifact_mask;
+  int artifact_seen;
+  int dry_run;
+  int force;
 } ConfitCliGenArgs;
 
 typedef struct ConfitCliExplainArgs {
@@ -115,6 +120,18 @@ typedef struct ConfitCliTextBuilder {
   size_t capacity;
 } ConfitCliTextBuilder;
 
+typedef struct ConfitCliInputFiles {
+  ConfitInputFile *items;
+  size_t count;
+} ConfitCliInputFiles;
+
+typedef struct ConfitCliSha256 {
+  uint32_t state[8];
+  uint64_t bit_count;
+  unsigned char buffer[64];
+  size_t buffer_size;
+} ConfitCliSha256;
+
 typedef struct ConfitCliGlobalArgs {
   const char *color;
   int quiet;
@@ -143,6 +160,18 @@ static int confit_cli_run_list(int argc, char **argv);
 static int confit_cli_run_graph(int argc, char **argv);
 static int confit_cli_run_profile(int argc, char **argv);
 static int confit_cli_run_tui(int argc, char **argv);
+
+static ConfitStatus confit_cli_find_config_root(const char *project_root,
+                                                char *out, size_t out_size,
+                                                ConfitDiagnostic *diagnostic);
+
+#define CONFIT_CLI_ARTIFACT_HEADER 0x01U
+#define CONFIT_CLI_ARTIFACT_REPORTS 0x02U
+#define CONFIT_CLI_ARTIFACT_CMAKE 0x04U
+#define CONFIT_CLI_ARTIFACT_QSTAR 0x08U
+#define CONFIT_CLI_ARTIFACT_ALL                                                \
+  (CONFIT_CLI_ARTIFACT_HEADER | CONFIT_CLI_ARTIFACT_REPORTS |                 \
+   CONFIT_CLI_ARTIFACT_CMAKE | CONFIT_CLI_ARTIFACT_QSTAR)
 
 static const ConfitCliCommandSpec confit_cli_help_spec = {
     "help", "Show global help or command-specific help.",
@@ -176,7 +205,8 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "confit gen --project <path> --profile <name> [--target <name>] --out "
      "<path> [--artifact header|reports|cmake|qstar|all] [--force] "
      "[--dry-run]",
-     "--project <path>\n  --profile <name>\n  --target <name>\n  --out <path>",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  --out <path>"
+     "\n  --artifact header|reports|cmake|qstar|all\n  --force\n  --dry-run",
      confit_cli_run_gen},
     {"explain", "Explain one resolved option value.",
      "confit explain --project <path> --profile <name> [--target <name>] "
@@ -837,11 +867,11 @@ static int confit_cli_run_doctor(int argc, char **argv) {
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
-        "generators", "header, reports, explain text, graph, inputs");
+        "generators", "header, reports, cmake, qstar manifest");
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
-        "deferred generators", "cmake and qstar are not installed yet");
+        "deferred generators", "none in this build");
   }
 
   if (status != CONFIT_OK) {
@@ -1359,6 +1389,385 @@ static ConfitStatus confit_cli_text_append_value(
   default:
     return CONFIT_ERR_SCHEMA;
   }
+}
+
+static uint32_t confit_cli_sha256_rotr(uint32_t value, unsigned int bits) {
+  return (value >> bits) | (value << (32U - bits));
+}
+
+static uint32_t confit_cli_sha256_load_be32(const unsigned char *data) {
+  return ((uint32_t)data[0] << 24U) | ((uint32_t)data[1] << 16U) |
+         ((uint32_t)data[2] << 8U) | (uint32_t)data[3];
+}
+
+static void confit_cli_sha256_store_be32(unsigned char *out,
+                                         uint32_t value) {
+  out[0] = (unsigned char)(value >> 24U);
+  out[1] = (unsigned char)(value >> 16U);
+  out[2] = (unsigned char)(value >> 8U);
+  out[3] = (unsigned char)value;
+}
+
+static void confit_cli_sha256_init(ConfitCliSha256 *sha) {
+  sha->state[0] = UINT32_C(0x6A09E667);
+  sha->state[1] = UINT32_C(0xBB67AE85);
+  sha->state[2] = UINT32_C(0x3C6EF372);
+  sha->state[3] = UINT32_C(0xA54FF53A);
+  sha->state[4] = UINT32_C(0x510E527F);
+  sha->state[5] = UINT32_C(0x9B05688C);
+  sha->state[6] = UINT32_C(0x1F83D9AB);
+  sha->state[7] = UINT32_C(0x5BE0CD19);
+  sha->bit_count = 0U;
+  sha->buffer_size = 0U;
+}
+
+static void confit_cli_sha256_transform(ConfitCliSha256 *sha,
+                                        const unsigned char block[64]) {
+  static const uint32_t constants[64] = {
+      UINT32_C(0x428A2F98), UINT32_C(0x71374491), UINT32_C(0xB5C0FBCF),
+      UINT32_C(0xE9B5DBA5), UINT32_C(0x3956C25B), UINT32_C(0x59F111F1),
+      UINT32_C(0x923F82A4), UINT32_C(0xAB1C5ED5), UINT32_C(0xD807AA98),
+      UINT32_C(0x12835B01), UINT32_C(0x243185BE), UINT32_C(0x550C7DC3),
+      UINT32_C(0x72BE5D74), UINT32_C(0x80DEB1FE), UINT32_C(0x9BDC06A7),
+      UINT32_C(0xC19BF174), UINT32_C(0xE49B69C1), UINT32_C(0xEFBE4786),
+      UINT32_C(0x0FC19DC6), UINT32_C(0x240CA1CC), UINT32_C(0x2DE92C6F),
+      UINT32_C(0x4A7484AA), UINT32_C(0x5CB0A9DC), UINT32_C(0x76F988DA),
+      UINT32_C(0x983E5152), UINT32_C(0xA831C66D), UINT32_C(0xB00327C8),
+      UINT32_C(0xBF597FC7), UINT32_C(0xC6E00BF3), UINT32_C(0xD5A79147),
+      UINT32_C(0x06CA6351), UINT32_C(0x14292967), UINT32_C(0x27B70A85),
+      UINT32_C(0x2E1B2138), UINT32_C(0x4D2C6DFC), UINT32_C(0x53380D13),
+      UINT32_C(0x650A7354), UINT32_C(0x766A0ABB), UINT32_C(0x81C2C92E),
+      UINT32_C(0x92722C85), UINT32_C(0xA2BFE8A1), UINT32_C(0xA81A664B),
+      UINT32_C(0xC24B8B70), UINT32_C(0xC76C51A3), UINT32_C(0xD192E819),
+      UINT32_C(0xD6990624), UINT32_C(0xF40E3585), UINT32_C(0x106AA070),
+      UINT32_C(0x19A4C116), UINT32_C(0x1E376C08), UINT32_C(0x2748774C),
+      UINT32_C(0x34B0BCB5), UINT32_C(0x391C0CB3), UINT32_C(0x4ED8AA4A),
+      UINT32_C(0x5B9CCA4F), UINT32_C(0x682E6FF3), UINT32_C(0x748F82EE),
+      UINT32_C(0x78A5636F), UINT32_C(0x84C87814), UINT32_C(0x8CC70208),
+      UINT32_C(0x90BEFFFA), UINT32_C(0xA4506CEB), UINT32_C(0xBEF9A3F7),
+      UINT32_C(0xC67178F2)};
+  uint32_t words[64];
+  uint32_t a;
+  uint32_t b;
+  uint32_t c;
+  uint32_t d;
+  uint32_t e;
+  uint32_t f;
+  uint32_t g;
+  uint32_t h;
+  size_t index;
+
+  for (index = 0U; index < 16U; ++index) {
+    words[index] = confit_cli_sha256_load_be32(block + index * 4U);
+  }
+  for (index = 16U; index < 64U; ++index) {
+    const uint32_t s0 = confit_cli_sha256_rotr(words[index - 15U], 7U) ^
+                        confit_cli_sha256_rotr(words[index - 15U], 18U) ^
+                        (words[index - 15U] >> 3U);
+    const uint32_t s1 = confit_cli_sha256_rotr(words[index - 2U], 17U) ^
+                        confit_cli_sha256_rotr(words[index - 2U], 19U) ^
+                        (words[index - 2U] >> 10U);
+    words[index] = words[index - 16U] + s0 + words[index - 7U] + s1;
+  }
+
+  a = sha->state[0];
+  b = sha->state[1];
+  c = sha->state[2];
+  d = sha->state[3];
+  e = sha->state[4];
+  f = sha->state[5];
+  g = sha->state[6];
+  h = sha->state[7];
+
+  for (index = 0U; index < 64U; ++index) {
+    const uint32_t s1 = confit_cli_sha256_rotr(e, 6U) ^
+                        confit_cli_sha256_rotr(e, 11U) ^
+                        confit_cli_sha256_rotr(e, 25U);
+    const uint32_t ch = (e & f) ^ ((~e) & g);
+    const uint32_t temp1 = h + s1 + ch + constants[index] + words[index];
+    const uint32_t s0 = confit_cli_sha256_rotr(a, 2U) ^
+                        confit_cli_sha256_rotr(a, 13U) ^
+                        confit_cli_sha256_rotr(a, 22U);
+    const uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+    const uint32_t temp2 = s0 + maj;
+
+    h = g;
+    g = f;
+    f = e;
+    e = d + temp1;
+    d = c;
+    c = b;
+    b = a;
+    a = temp1 + temp2;
+  }
+
+  sha->state[0] += a;
+  sha->state[1] += b;
+  sha->state[2] += c;
+  sha->state[3] += d;
+  sha->state[4] += e;
+  sha->state[5] += f;
+  sha->state[6] += g;
+  sha->state[7] += h;
+}
+
+static void confit_cli_sha256_update(ConfitCliSha256 *sha,
+                                     const unsigned char *data,
+                                     size_t data_size) {
+  size_t offset;
+
+  sha->bit_count += (uint64_t)data_size * 8U;
+  offset = 0U;
+  while (offset < data_size) {
+    const size_t space = sizeof(sha->buffer) - sha->buffer_size;
+    const size_t chunk =
+        data_size - offset < space ? data_size - offset : space;
+
+    memcpy(sha->buffer + sha->buffer_size, data + offset, chunk);
+    sha->buffer_size += chunk;
+    offset += chunk;
+    if (sha->buffer_size == sizeof(sha->buffer)) {
+      confit_cli_sha256_transform(sha, sha->buffer);
+      sha->buffer_size = 0U;
+    }
+  }
+}
+
+static void confit_cli_sha256_final(ConfitCliSha256 *sha,
+                                    unsigned char out_digest[32]) {
+  uint64_t bit_count;
+  size_t index;
+
+  bit_count = sha->bit_count;
+  sha->buffer[sha->buffer_size] = 0x80U;
+  sha->buffer_size += 1U;
+
+  if (sha->buffer_size > 56U) {
+    while (sha->buffer_size < sizeof(sha->buffer)) {
+      sha->buffer[sha->buffer_size] = 0U;
+      sha->buffer_size += 1U;
+    }
+    confit_cli_sha256_transform(sha, sha->buffer);
+    sha->buffer_size = 0U;
+  }
+
+  while (sha->buffer_size < 56U) {
+    sha->buffer[sha->buffer_size] = 0U;
+    sha->buffer_size += 1U;
+  }
+  for (index = 0U; index < 8U; ++index) {
+    sha->buffer[63U - index] = (unsigned char)(bit_count >> (index * 8U));
+  }
+  confit_cli_sha256_transform(sha, sha->buffer);
+
+  for (index = 0U; index < 8U; ++index) {
+    confit_cli_sha256_store_be32(out_digest + index * 4U, sha->state[index]);
+  }
+}
+
+static void confit_cli_sha256_hex(const char *text, size_t text_size,
+                                  char out_hex[65]) {
+  static const char digits[] = "0123456789abcdef";
+  ConfitCliSha256 sha;
+  unsigned char digest[32];
+  size_t index;
+
+  confit_cli_sha256_init(&sha);
+  confit_cli_sha256_update(&sha, (const unsigned char *)text, text_size);
+  confit_cli_sha256_final(&sha, digest);
+  for (index = 0U; index < sizeof(digest); ++index) {
+    out_hex[index * 2U] = digits[digest[index] >> 4U];
+    out_hex[index * 2U + 1U] = digits[digest[index] & 0x0FU];
+  }
+  out_hex[64] = '\0';
+}
+
+static void confit_cli_input_files_init(ConfitCliInputFiles *files) {
+  files->items = 0;
+  files->count = 0U;
+}
+
+static void confit_cli_input_files_clear(ConfitCliInputFiles *files) {
+  size_t index;
+
+  if (files == 0) {
+    return;
+  }
+  for (index = 0U; index < files->count; ++index) {
+    free((void *)files->items[index].path);
+    free((void *)files->items[index].sha256);
+  }
+  free(files->items);
+  confit_cli_input_files_init(files);
+}
+
+static ConfitStatus confit_cli_input_files_append(
+    ConfitCliInputFiles *files, const char *path, const char *sha256,
+    ConfitDiagnostic *diagnostic) {
+  ConfitInputFile *new_items;
+  char *path_copy;
+  char *sha_copy;
+
+  path_copy = confit_cli_copy_string(path);
+  sha_copy = confit_cli_copy_string(sha256);
+  if (path_copy == 0 || sha_copy == 0) {
+    free(path_copy);
+    free(sha_copy);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to allocate input manifest record");
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  new_items =
+      (ConfitInputFile *)realloc(files->items,
+                                 (files->count + 1U) * sizeof(files->items[0]));
+  if (new_items == 0) {
+    free(path_copy);
+    free(sha_copy);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to grow input manifest");
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  files->items = new_items;
+  files->items[files->count].path = path_copy;
+  files->items[files->count].sha256 = sha_copy;
+  files->count += 1U;
+  return CONFIT_OK;
+}
+
+static const char *confit_cli_basename(const char *path) {
+  size_t index;
+  size_t begin;
+
+  begin = 0U;
+  for (index = 0U; path != 0 && path[index] != '\0'; ++index) {
+    if (path[index] == '/' || path[index] == '\\') {
+      begin = index + 1U;
+    }
+  }
+  return path + begin;
+}
+
+static ConfitStatus confit_cli_collect_input_file(
+    ConfitCliInputFiles *files, const char *relative_path,
+    const char *absolute_path, ConfitDiagnostic *diagnostic) {
+  char *text;
+  size_t text_size;
+  char digest[65];
+  ConfitStatus status;
+
+  text = 0;
+  text_size = 0U;
+  status =
+      confit_host_read_text_file(absolute_path, &text, &text_size, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  confit_cli_sha256_hex(text, text_size, digest);
+  status =
+      confit_cli_input_files_append(files, relative_path, digest, diagnostic);
+  confit_host_free(text);
+  return status;
+}
+
+static ConfitStatus confit_cli_collect_input_dir(
+    ConfitCliInputFiles *files, const char *directory,
+    const char *relative_directory, ConfitDiagnostic *diagnostic) {
+  char **paths;
+  size_t path_count;
+  size_t index;
+  ConfitStatus status;
+
+  paths = 0;
+  path_count = 0U;
+  status =
+      confit_host_list_toml_files(directory, &paths, &path_count, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  for (index = 0U; status == CONFIT_OK && index < path_count; ++index) {
+    char relative_path[512];
+    const char *name = confit_cli_basename(paths[index]);
+
+    if (snprintf(relative_path, sizeof(relative_path), "%s/%s",
+                 relative_directory, name) >= (int)sizeof(relative_path)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT,
+                            relative_directory, 0, 0,
+                            "input manifest path is too long");
+      status = CONFIT_ERR_INVALID_ARGUMENT;
+    } else {
+      status =
+          confit_cli_collect_input_file(files, relative_path, paths[index],
+                                        diagnostic);
+    }
+  }
+
+  confit_host_string_list_free(paths, path_count);
+  return status;
+}
+
+static ConfitStatus confit_cli_collect_input_files(
+    const char *project_root, ConfitCliInputFiles *files,
+    ConfitDiagnostic *diagnostic) {
+  char config_root[1024];
+  char path[1024];
+  char relative[512];
+  const char *prefix;
+  ConfitStatus status;
+
+  confit_cli_input_files_init(files);
+  status = confit_cli_find_config_root(project_root, config_root,
+                                       sizeof(config_root), diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  prefix = strcmp(config_root, project_root) == 0 ? "" : "config/";
+  status = confit_host_path_join(path, sizeof(path), config_root,
+                                 "project.toml", diagnostic);
+  if (status == CONFIT_OK) {
+    if (snprintf(relative, sizeof(relative), "%sproject.toml", prefix) >=
+        (int)sizeof(relative)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT,
+                            project_root, 0, 0,
+                            "input manifest path is too long");
+      status = CONFIT_ERR_INVALID_ARGUMENT;
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_collect_input_file(files, relative, path, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_path_join(path, sizeof(path), config_root, "options",
+                                   diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    (void)snprintf(relative, sizeof(relative), "%soptions", prefix);
+    status = confit_cli_collect_input_dir(files, path, relative, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_path_join(path, sizeof(path), config_root, "profiles",
+                                   diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    (void)snprintf(relative, sizeof(relative), "%sprofiles", prefix);
+    status = confit_cli_collect_input_dir(files, path, relative, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_path_join(path, sizeof(path), config_root, "targets",
+                                   diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    (void)snprintf(relative, sizeof(relative), "%stargets", prefix);
+    status = confit_cli_collect_input_dir(files, path, relative, diagnostic);
+  }
+
+  if (status != CONFIT_OK) {
+    confit_cli_input_files_clear(files);
+  }
+  return status;
 }
 
 static ConfitStatus confit_cli_add_raw_set(const char ***sets,
@@ -2279,6 +2688,155 @@ static ConfitStatus confit_cli_write_artifact(const char *out_dir,
   return confit_host_write_text_file(path, text, diagnostic);
 }
 
+static int confit_cli_gen_wants(const ConfitCliGenArgs *args,
+                                unsigned artifact) {
+  return (args->artifact_mask & artifact) != 0U;
+}
+
+static ConfitStatus confit_cli_gen_artifact_mask(const char *text,
+                                                 unsigned *out_mask) {
+  if (strcmp(text, "header") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_HEADER;
+    return CONFIT_OK;
+  }
+  if (strcmp(text, "reports") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_REPORTS;
+    return CONFIT_OK;
+  }
+  if (strcmp(text, "cmake") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_CMAKE;
+    return CONFIT_OK;
+  }
+  if (strcmp(text, "qstar") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_QSTAR;
+    return CONFIT_OK;
+  }
+  if (strcmp(text, "all") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_ALL;
+    return CONFIT_OK;
+  }
+  return confit_cli_write_error(
+      "gen --artifact must be header, reports, cmake, qstar, or all");
+}
+
+static ConfitStatus confit_cli_gen_check_output(
+    const ConfitCliGenArgs *args, const char *name,
+    ConfitDiagnostic *diagnostic) {
+  char path[1024];
+  ConfitStatus status;
+
+  status = confit_host_path_join(path, sizeof(path), args->out_dir, name,
+                                 diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  if (!args->force && confit_cli_path_has_file(path)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                          "generated artifact exists; use --force");
+    return CONFIT_ERR_GENERATION;
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_gen_preflight(
+    const ConfitCliGenArgs *args, ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+
+  if (args->dry_run) {
+    return CONFIT_OK;
+  }
+  status = CONFIT_OK;
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_HEADER)) {
+    status = confit_cli_gen_check_output(args, "config.h", diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_check_output(args, "config.report.json",
+                                         diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_check_output(args, "config.explain.txt",
+                                         diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_check_output(args, "config.graph.json",
+                                         diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_check_output(args, "config.inputs.json",
+                                         diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_CMAKE)) {
+    status = confit_cli_gen_check_output(args, "config.cmake", diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_gen_check_output(args, "config.qst", diagnostic);
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_gen_print_dry_run_line(
+    const ConfitCliGenArgs *args, const char *name) {
+  ConfitStatus status;
+
+  status = confit_host_stdout_write("would write: ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(args->out_dir);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write("/");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(name);
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_gen_print_dry_run(
+    const ConfitCliGenArgs *args) {
+  ConfitStatus status;
+
+  status = confit_host_stdout_write("gen dry-run: ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(args->out_dir);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_HEADER)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.h");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.report.json");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.explain.txt");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.graph.json");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_REPORTS)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.inputs.json");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_CMAKE)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.cmake");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config.qst");
+  }
+  return status;
+}
+
 static ConfitStatus confit_cli_generate_artifacts(
     const ConfitProject *project, const ConfitGraph *graph,
     const ConfitResolvedConfig *config, const ConfitCliGenArgs *args,
@@ -2286,11 +2844,15 @@ static ConfitStatus confit_cli_generate_artifacts(
   const char *target_name;
   ConfitConfigHeaderOptions header_options;
   ConfitReportOptions report_options;
+  ConfitBuildIntegrationOptions build_options;
+  ConfitCliInputFiles input_files;
   char *header;
   char *report_json;
   char *explain_text;
   char *graph_json;
   char *inputs_json;
+  char *cmake_fragment;
+  char *qstar_manifest;
   ConfitStatus status;
 
   target_name = confit_cli_effective_target_name(
@@ -2301,56 +2863,110 @@ static ConfitStatus confit_cli_generate_artifacts(
   report_options.target_name = target_name;
   report_options.input_files = 0;
   report_options.input_file_count = 0U;
+  build_options.profile_name = args->project.profile_name;
+  build_options.target_name = target_name;
+  build_options.header_path = "config.h";
+  build_options.report_json_path = "config.report.json";
+  build_options.explain_text_path = "config.explain.txt";
+  build_options.graph_json_path = "config.graph.json";
+  build_options.inputs_json_path = "config.inputs.json";
   header = 0;
   report_json = 0;
   explain_text = 0;
   graph_json = 0;
   inputs_json = 0;
+  cmake_fragment = 0;
+  qstar_manifest = 0;
+  confit_cli_input_files_init(&input_files);
 
-  status = confit_generate_config_header(project, config, &header_options,
-                                         &header, diagnostic);
+  status = confit_cli_collect_input_files(args->project.project_root,
+                                          &input_files, diagnostic);
   if (status == CONFIT_OK) {
+    report_options.input_files = input_files.items;
+    report_options.input_file_count = input_files.count;
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_gen_preflight(args, diagnostic);
+  }
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_HEADER)) {
+    status = confit_generate_config_header(project, config, &header_options,
+                                           &header, diagnostic);
+  }
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_generate_report_json(project, config, &report_options,
                                          &report_json, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_generate_explain_report(project, config, &report_options,
                                             &explain_text, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_graph_to_json(graph, &graph_json);
     if (status != CONFIT_OK) {
       confit_diagnostic_set(diagnostic, status, args->out_dir, 0, 0,
                             "failed to generate graph report");
     }
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_generate_inputs_json(project, &report_options, &inputs_json,
                                          diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_CMAKE)) {
+    status = confit_generate_cmake_fragment(project, config, &build_options,
+                                            &cmake_fragment, diagnostic);
+  }
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_generate_qstar_manifest(project, config, &build_options,
+                                            &qstar_manifest, diagnostic);
+  }
+  if (status == CONFIT_OK && args->dry_run) {
+    status = confit_cli_gen_print_dry_run(args);
+  }
+  if (status == CONFIT_OK && !args->dry_run) {
     status = confit_host_make_directories(args->out_dir, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_HEADER)) {
     status =
         confit_cli_write_artifact(args->out_dir, "config.h", header,
                                   diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_cli_write_artifact(args->out_dir, "config.report.json",
                                        report_json, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_cli_write_artifact(args->out_dir, "config.explain.txt",
                                        explain_text, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_cli_write_artifact(args->out_dir, "config.graph.json",
                                        graph_json, diagnostic);
   }
-  if (status == CONFIT_OK) {
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_REPORTS)) {
     status = confit_cli_write_artifact(args->out_dir, "config.inputs.json",
                                        inputs_json, diagnostic);
+  }
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_CMAKE)) {
+    status = confit_cli_write_artifact(args->out_dir, "config.cmake",
+                                       cmake_fragment, diagnostic);
+  }
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_write_artifact(args->out_dir, "config.qst",
+                                       qstar_manifest, diagnostic);
   }
 
   confit_generator_string_free(header);
@@ -2358,6 +2974,9 @@ static ConfitStatus confit_cli_generate_artifacts(
   confit_generator_string_free(explain_text);
   confit_graph_string_free(graph_json);
   confit_generator_string_free(inputs_json);
+  confit_generator_string_free(cmake_fragment);
+  confit_generator_string_free(qstar_manifest);
+  confit_cli_input_files_clear(&input_files);
   return status;
 }
 
@@ -2367,6 +2986,10 @@ static ConfitStatus confit_cli_parse_gen_args(int argc, char **argv,
 
   confit_cli_project_args_init(&args->project);
   args->out_dir = 0;
+  args->artifact_mask = CONFIT_CLI_ARTIFACT_ALL;
+  args->artifact_seen = 0;
+  args->dry_run = 0;
+  args->force = 0;
   for (index = 2; index < argc; ++index) {
     const char *arg = argv[index];
 
@@ -2402,6 +3025,34 @@ static ConfitStatus confit_cli_parse_gen_args(int argc, char **argv,
       args->out_dir = argv[index];
       continue;
     }
+    if (strcmp(arg, "--artifact") == 0) {
+      unsigned mask;
+      ConfitStatus status;
+
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --artifact");
+      }
+      index += 1;
+      mask = 0U;
+      status = confit_cli_gen_artifact_mask(argv[index], &mask);
+      if (status != CONFIT_OK) {
+        return status;
+      }
+      if (!args->artifact_seen) {
+        args->artifact_mask = 0U;
+        args->artifact_seen = 1;
+      }
+      args->artifact_mask |= mask;
+      continue;
+    }
+    if (strcmp(arg, "--dry-run") == 0) {
+      args->dry_run = 1;
+      continue;
+    }
+    if (strcmp(arg, "--force") == 0) {
+      args->force = 1;
+      continue;
+    }
     if (arg[0] == '-') {
       return confit_cli_write_error("unknown gen option");
     }
@@ -2416,6 +3067,9 @@ static ConfitStatus confit_cli_parse_gen_args(int argc, char **argv,
   }
   if (args->out_dir == 0) {
     return confit_cli_write_error("gen requires --out");
+  }
+  if (args->artifact_mask == 0U) {
+    return confit_cli_write_error("gen requires at least one artifact");
   }
   return CONFIT_OK;
 }
