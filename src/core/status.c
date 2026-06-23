@@ -12,6 +12,7 @@ int confit_status_exit_code(ConfitStatus status) {
   case CONFIT_ERR_COMPATIBILITY:
   case CONFIT_ERR_GENERATION:
   case CONFIT_ERR_INTERNAL:
+  case CONFIT_ERR_UNSUPPORTED:
     return (int)status;
   default:
     return (int)CONFIT_ERR_INTERNAL;
@@ -36,6 +37,8 @@ const char *confit_status_name(ConfitStatus status) {
     return "generation error";
   case CONFIT_ERR_INTERNAL:
     return "internal error";
+  case CONFIT_ERR_UNSUPPORTED:
+    return "unsupported command or platform";
   default:
     return "unknown status";
   }

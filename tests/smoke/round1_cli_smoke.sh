@@ -48,4 +48,34 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   -o "$BUILD_DIR/confit"
 
 "$BUILD_DIR/confit" --version | grep -Fx "confit 0.1.0-round1" >/dev/null
-"$BUILD_DIR/confit" help | grep -F "Usage:" >/dev/null
+"$BUILD_DIR/confit" --color never --quiet help >"$BUILD_DIR/help.txt"
+grep -F "Usage:" "$BUILD_DIR/help.txt" >/dev/null
+for command in help doctor init check resolve gen explain list graph diff compat profile tui completion
+do
+  grep -F "  $command" "$BUILD_DIR/help.txt" >/dev/null
+done
+
+"$BUILD_DIR/confit" help check | grep -F "confit check --project" >/dev/null
+"$BUILD_DIR/confit" resolve --help | grep -F "confit resolve --project" >/dev/null
+"$BUILD_DIR/confit" --verbose help completion | \
+  grep -F "confit completion --shell" >/dev/null
+
+set +e
+"$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out" 2>"$BUILD_DIR/doctor.err"
+STATUS=$?
+set -e
+if [ "$STATUS" -ne 8 ]; then
+  echo "doctor exit code was $STATUS, expected 8" >&2
+  exit 1
+fi
+grep -F "unsupported command: doctor" "$BUILD_DIR/doctor.err" >/dev/null
+
+set +e
+"$BUILD_DIR/confit" unknown >"$BUILD_DIR/unknown.out" 2>"$BUILD_DIR/unknown.err"
+STATUS=$?
+set -e
+if [ "$STATUS" -ne 1 ]; then
+  echo "unknown exit code was $STATUS, expected 1" >&2
+  exit 1
+fi
+grep -F "try 'confit help'" "$BUILD_DIR/unknown.err" >/dev/null

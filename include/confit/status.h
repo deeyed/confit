@@ -31,6 +31,8 @@ typedef enum ConfitStatus {
   CONFIT_ERR_GENERATION = 6,
   /** Confit 내부 invariant가 깨졌다. */
   CONFIT_ERR_INTERNAL = 7,
+  /** 명령 또는 host platform이 현재 지원되지 않는다. */
+  CONFIT_ERR_UNSUPPORTED = 8,
 } ConfitStatus;
 
 /**

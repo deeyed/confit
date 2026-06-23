@@ -47,6 +47,111 @@ typedef struct ConfitCliGraphArgs {
   const char *format;
 } ConfitCliGraphArgs;
 
+typedef struct ConfitCliGlobalArgs {
+  const char *color;
+  int quiet;
+  int verbose;
+  int command_index;
+} ConfitCliGlobalArgs;
+
+typedef int (*ConfitCliCommandHandler)(int argc, char **argv);
+
+typedef struct ConfitCliCommandSpec {
+  const char *name;
+  const char *summary;
+  const char *usage;
+  const char *options;
+  ConfitCliCommandHandler handler;
+} ConfitCliCommandSpec;
+
+static int confit_cli_run_check(int argc, char **argv);
+static int confit_cli_run_gen(int argc, char **argv);
+static int confit_cli_run_explain(int argc, char **argv);
+static int confit_cli_run_compat(int argc, char **argv);
+static int confit_cli_run_list(int argc, char **argv);
+static int confit_cli_run_graph(int argc, char **argv);
+static int confit_cli_run_tui(int argc, char **argv);
+
+static const ConfitCliCommandSpec confit_cli_help_spec = {
+    "help", "Show global help or command-specific help.",
+    "confit help [command]", "Use `confit help <command>` for details.", 0};
+
+static const ConfitCliCommandSpec confit_cli_commands[] = {
+    {"doctor",
+     "Check host installation, platform support, project layout, and "
+     "generators.",
+     "confit doctor [--project <path>]",
+     "--project <path>", 0},
+    {"init", "Create a Confit project skeleton from a named template.",
+     "confit init --project <path> --template minimal|delos|parus [--force] "
+     "[--dry-run]",
+     "--project <path>\n  --template minimal|delos|parus\n  --force\n  "
+     "--dry-run",
+     0},
+    {"check",
+     "Parse project TOML, validate schema and graph, and resolve a profile.",
+     "confit check --project <path> --profile <name> [--target <name>] "
+     "[--strict]",
+     "--project <path>\n  --profile <name>\n  --target <name>",
+     confit_cli_run_check},
+    {"resolve", "Emit the resolved configuration without writing artifacts.",
+     "confit resolve --project <path> --profile <name> [--target <name>] "
+     "[--set <id=value>] [--format text|json|toml]",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  "
+     "--set <id=value>\n  --format text|json|toml",
+     0},
+    {"gen", "Generate deterministic configuration artifacts.",
+     "confit gen --project <path> --profile <name> [--target <name>] --out "
+     "<path> [--artifact header|reports|cmake|qstar|all] [--force] "
+     "[--dry-run]",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  --out <path>",
+     confit_cli_run_gen},
+    {"explain", "Explain one resolved option value.",
+     "confit explain --project <path> --profile <name> [--target <name>] "
+     "<option-id>",
+     "--project <path>\n  --profile <name>\n  --target <name>",
+     confit_cli_run_explain},
+    {"list", "List schema entities.",
+     "confit list --project <path> [--kind options|profiles|targets|"
+     "categories|tags] [--category <name>] [--tag <name>] [--query <text>] "
+     "[--show-hidden]",
+     "--project <path>\n  --category <name>\n  --tag <name>",
+     confit_cli_run_list},
+    {"graph", "Emit the option dependency graph as JSON or DOT.",
+     "confit graph --project <path> [--profile <name>] [--target <name>] "
+     "[--format json|dot]",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  --format "
+     "json|dot",
+     confit_cli_run_graph},
+    {"diff", "Compare resolved configurations.",
+     "confit diff --project <path> --profile <name> --base <profile> "
+     "[--target <name>] [--format text|json]",
+     "--project <path>\n  --profile <name>\n  --base <profile>\n  "
+     "--target <name>\n  --format text|json",
+     0},
+    {"compat", "Check compatibility assertions across project roots.",
+     "confit compat --parus <path> --delos <path> --profile <name> "
+     "[--target <name>] [--compat <path>]",
+     "--parus <path>\n  --delos <path>\n  --profile <name>\n  --target "
+     "<name>\n  --compat <path>",
+     confit_cli_run_compat},
+    {"profile", "Manage profile TOML without opening the TUI.",
+     "confit profile list|new|set|unset ...",
+     "Subcommands: list, new, set, unset", 0},
+    {"tui", "Open the terminal UI where supported.",
+     "confit tui --project <path> --profile <name> [--target <name>]\n"
+     "confit tui --project <path> --schema-edit",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  "
+     "--schema-edit",
+     confit_cli_run_tui},
+    {"completion", "Emit shell completion text.",
+     "confit completion --shell bash|zsh|fish",
+     "--shell bash|zsh|fish", 0},
+};
+
+static const size_t confit_cli_command_count =
+    sizeof(confit_cli_commands) / sizeof(confit_cli_commands[0]);
+
 static ConfitStatus confit_cli_write_error(const char *message) {
   ConfitStatus status;
 
@@ -93,8 +198,76 @@ static int confit_cli_return_error(ConfitStatus status,
   return confit_status_exit_code(status);
 }
 
+static const ConfitCliCommandSpec *confit_cli_find_command(const char *name) {
+  size_t index;
+
+  for (index = 0U; index < confit_cli_command_count; ++index) {
+    if (strcmp(confit_cli_commands[index].name, name) == 0) {
+      return &confit_cli_commands[index];
+    }
+  }
+  return 0;
+}
+
+static int confit_cli_is_help_arg(const char *arg) {
+  return strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0 ||
+         strcmp(arg, "help") == 0;
+}
+
+static ConfitStatus confit_cli_print_command_help(
+    const ConfitCliCommandSpec *command) {
+  ConfitStatus status;
+
+  if (command == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_host_stdout_write("Confit command: ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(command->name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write("\nSummary:\n  ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(command->summary);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write("\nUsage:\n  ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(command->usage);
+  }
+  if (status == CONFIT_OK && command->options != 0) {
+    status = confit_host_stdout_write("\nOptions:\n  ");
+  }
+  if (status == CONFIT_OK && command->options != 0) {
+    status = confit_host_stdout_write_line(command->options);
+  }
+  if (status == CONFIT_OK && command->handler == 0) {
+    status = confit_host_stdout_write("\nStatus:\n  ");
+  }
+  if (status == CONFIT_OK && command->handler == 0) {
+    status = confit_host_stdout_write_line(
+        "Command is recognized but not implemented in this build.");
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_write_spaces(size_t count) {
+  ConfitStatus status;
+  size_t index;
+
+  status = CONFIT_OK;
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    status = confit_host_stdout_write(" ");
+  }
+  return status;
+}
+
 static ConfitStatus confit_cli_print_help(void) {
   ConfitStatus status;
+  size_t index;
 
   status = confit_host_stdout_write("Confit host configuration tool\n");
   if (status != CONFIT_OK) {
@@ -112,86 +285,163 @@ static ConfitStatus confit_cli_print_help(void) {
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_host_stdout_write(
-      "  confit check --project <path> --profile <name> "
-      "[--target <name>]\n");
+  status = confit_host_stdout_write("  confit help <command>\n");
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_host_stdout_write(
-      "  confit gen --project <path> --profile <name> "
-      "[--target <name>] --out <path>\n");
+  status = confit_host_stdout_write("  confit <command> [options]\n");
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_host_stdout_write(
-      "  confit explain --project <path> --profile <name> "
-      "[--target <name>] <option-id>\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_host_stdout_write(
-      "  confit compat --parus <path> --delos <path> --profile <name> "
-      "[--target <name>] [--compat <path>]\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_host_stdout_write(
-      "  confit list --project <path> [--category <name>] [--tag <name>]\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_host_stdout_write(
-      "  confit graph --project <path> [--profile <name>] "
-      "[--target <name>] [--format json|dot]\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_host_stdout_write(
-      "  confit tui --project <path> --profile <name> "
-      "[--target <name>]\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_host_stdout_write(
-      "  confit tui --project <path> --schema-edit\n");
-  if (status != CONFIT_OK) {
-    return status;
-  }
+
   status = confit_host_stdout_write("\nCommands:\n");
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_host_stdout_write("  check       Validate schema, graph, and profile resolution.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  status = confit_host_stdout_write("  help        ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(confit_cli_help_spec.summary);
   }
-  status = confit_host_stdout_write("  gen         Generate config.h and deterministic reports.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  for (index = 0U; status == CONFIT_OK && index < confit_cli_command_count;
+       ++index) {
+    status = confit_host_stdout_write("  ");
+    if (status == CONFIT_OK) {
+      status = confit_host_stdout_write(confit_cli_commands[index].name);
+    }
+    if (status == CONFIT_OK &&
+        strlen(confit_cli_commands[index].name) < 10U) {
+      status =
+          confit_cli_write_spaces(10U - strlen(confit_cli_commands[index].name));
+    }
+    if (status == CONFIT_OK) {
+      status = confit_host_stdout_write("  ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_host_stdout_write_line(
+          confit_cli_commands[index].summary);
+    }
   }
-  status = confit_host_stdout_write("  explain     Explain one resolved option.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write("\nGlobal options:\n");
   }
-  status = confit_host_stdout_write("  compat      Check cross-project compatibility assertions.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --help                  Show help.");
   }
-  status = confit_host_stdout_write("  list        List option schema entries.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --version               Show Confit version.");
   }
-  status = confit_host_stdout_write("  graph       Emit dependency graph JSON or DOT.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --color auto|always|never");
   }
-  status = confit_host_stdout_write("  tui         Start the terminal UI shell.\n");
-  if (status != CONFIT_OK) {
-    return status;
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --quiet");
   }
-  status = confit_host_stdout_write("  --version   Show Confit version.\n");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --verbose");
+  }
   return status;
+}
+
+static ConfitStatus confit_cli_parse_global_args(int argc, char **argv,
+                                                 ConfitCliGlobalArgs *args) {
+  int index;
+
+  args->color = "auto";
+  args->quiet = 0;
+  args->verbose = 0;
+  args->command_index = 1;
+
+  for (index = 1; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--color") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --color");
+      }
+      index += 1;
+      if (strcmp(argv[index], "auto") != 0 &&
+          strcmp(argv[index], "always") != 0 &&
+          strcmp(argv[index], "never") != 0) {
+        return confit_cli_write_error(
+            "--color must be auto, always, or never");
+      }
+      args->color = argv[index];
+      args->command_index = index + 1;
+      continue;
+    }
+    if (strcmp(arg, "--quiet") == 0) {
+      args->quiet = 1;
+      args->command_index = index + 1;
+      continue;
+    }
+    if (strcmp(arg, "--verbose") == 0) {
+      args->verbose = 1;
+      args->command_index = index + 1;
+      continue;
+    }
+    break;
+  }
+
+  if (args->quiet && args->verbose) {
+    return confit_cli_write_error("--quiet and --verbose cannot be combined");
+  }
+  return CONFIT_OK;
+}
+
+static int confit_cli_run_help(int argc, char **argv) {
+  const ConfitCliCommandSpec *command;
+  ConfitStatus status;
+
+  if (argc == 2) {
+    return confit_status_exit_code(confit_cli_print_help());
+  }
+  if (argc == 3 && confit_cli_is_help_arg(argv[2])) {
+    return confit_status_exit_code(
+        confit_cli_print_command_help(&confit_cli_help_spec));
+  }
+  if (argc == 3) {
+    command = strcmp(argv[2], "help") == 0 ? &confit_cli_help_spec
+                                            : confit_cli_find_command(argv[2]);
+    if (command == 0) {
+      status = confit_host_stderr_write("confit: unknown help command: ");
+      if (status == CONFIT_OK) {
+        status = confit_host_stderr_write_line(argv[2]);
+      }
+      if (status == CONFIT_OK) {
+        status = confit_host_stderr_write_line("try 'confit help'");
+      }
+      if (status != CONFIT_OK) {
+        return confit_status_exit_code(status);
+      }
+      return confit_status_exit_code(CONFIT_ERR_INVALID_ARGUMENT);
+    }
+    return confit_status_exit_code(confit_cli_print_command_help(command));
+  }
+  return confit_status_exit_code(
+      confit_cli_write_error("help accepts at most one command name"));
+}
+
+static int confit_cli_run_unsupported_command(
+    const ConfitCliCommandSpec *command) {
+  ConfitStatus status;
+
+  status = confit_host_stderr_write("confit: unsupported command: ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write_line(command->name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write("try 'confit help ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write(command->name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write_line("'");
+  }
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+  return confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
 }
 
 static void confit_cli_project_args_init(ConfitCliProjectArgs *args) {
@@ -1180,47 +1430,53 @@ static int confit_cli_run_tui(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+  ConfitCliGlobalArgs global_args;
+  const ConfitCliCommandSpec *command;
   ConfitStatus status;
+  int normalized_argc;
+  char **normalized_argv;
 
-  if (argc <= 1) {
+  status = confit_cli_parse_global_args(argc, argv, &global_args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  if (global_args.command_index >= argc) {
     return confit_status_exit_code(confit_cli_print_help());
   }
 
-  if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "version") == 0) {
+  normalized_argc = argc - global_args.command_index + 1;
+  normalized_argv = argv + global_args.command_index - 1;
+
+  if (strcmp(normalized_argv[1], "--version") == 0 ||
+      strcmp(normalized_argv[1], "version") == 0) {
     return confit_status_exit_code(
         confit_host_stdout_write_line(confit_version_string()));
   }
 
-  if (strcmp(argv[1], "help") == 0 || strcmp(argv[1], "--help") == 0 ||
-      strcmp(argv[1], "-h") == 0) {
+  if (strcmp(normalized_argv[1], "--help") == 0 ||
+      strcmp(normalized_argv[1], "-h") == 0) {
     return confit_status_exit_code(confit_cli_print_help());
   }
 
-  if (strcmp(argv[1], "check") == 0) {
-    return confit_cli_run_check(argc, argv);
+  if (strcmp(normalized_argv[1], "help") == 0) {
+    return confit_cli_run_help(normalized_argc, normalized_argv);
   }
-  if (strcmp(argv[1], "gen") == 0) {
-    return confit_cli_run_gen(argc, argv);
-  }
-  if (strcmp(argv[1], "explain") == 0) {
-    return confit_cli_run_explain(argc, argv);
-  }
-  if (strcmp(argv[1], "compat") == 0) {
-    return confit_cli_run_compat(argc, argv);
-  }
-  if (strcmp(argv[1], "list") == 0) {
-    return confit_cli_run_list(argc, argv);
-  }
-  if (strcmp(argv[1], "graph") == 0) {
-    return confit_cli_run_graph(argc, argv);
-  }
-  if (strcmp(argv[1], "tui") == 0) {
-    return confit_cli_run_tui(argc, argv);
+
+  command = confit_cli_find_command(normalized_argv[1]);
+  if (command != 0) {
+    if (normalized_argc == 3 && confit_cli_is_help_arg(normalized_argv[2])) {
+      return confit_status_exit_code(confit_cli_print_command_help(command));
+    }
+    if (command->handler == 0) {
+      return confit_cli_run_unsupported_command(command);
+    }
+    return command->handler(normalized_argc, normalized_argv);
   }
 
   status = confit_host_stderr_write("confit: unknown command or option: ");
   if (status == CONFIT_OK) {
-    status = confit_host_stderr_write(argv[1]);
+    status = confit_host_stderr_write(normalized_argv[1]);
   }
   if (status == CONFIT_OK) {
     status = confit_host_stderr_write("\n");

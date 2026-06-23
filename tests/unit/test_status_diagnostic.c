@@ -13,9 +13,16 @@ int main(void) {
   if (confit_status_exit_code(CONFIT_ERR_SCHEMA) != 3) {
     return 2;
   }
+  if (confit_status_exit_code(CONFIT_ERR_UNSUPPORTED) != 8) {
+    return 12;
+  }
   if (strcmp(confit_status_name(CONFIT_ERR_CONFLICT),
              "dependency or conflict error") != 0) {
     return 3;
+  }
+  if (strcmp(confit_status_name(CONFIT_ERR_UNSUPPORTED),
+             "unsupported command or platform") != 0) {
+    return 13;
   }
   if (strcmp(confit_version_string(), "confit 0.1.0-round1") != 0) {
     return 4;
