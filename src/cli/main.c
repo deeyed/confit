@@ -72,6 +72,14 @@ typedef struct ConfitCliGraphArgs {
   const char *format;
 } ConfitCliGraphArgs;
 
+typedef struct ConfitCliDiffArgs {
+  const char *project_root;
+  const char *profile_name;
+  const char *base_name;
+  const char *target_name;
+  const char *format;
+} ConfitCliDiffArgs;
+
 typedef struct ConfitCliCompletionArgs {
   const char *shell;
 } ConfitCliCompletionArgs;
@@ -163,6 +171,7 @@ static int confit_cli_run_explain(int argc, char **argv);
 static int confit_cli_run_compat(int argc, char **argv);
 static int confit_cli_run_list(int argc, char **argv);
 static int confit_cli_run_graph(int argc, char **argv);
+static int confit_cli_run_diff(int argc, char **argv);
 static int confit_cli_run_profile(int argc, char **argv);
 static int confit_cli_run_completion(int argc, char **argv);
 static int confit_cli_run_tui(int argc, char **argv);
@@ -238,7 +247,7 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "[--target <name>] [--format text|json]",
      "--project <path>\n  --profile <name>\n  --base <profile>\n  "
      "--target <name>\n  --format text|json",
-     0},
+     confit_cli_run_diff},
     {"compat", "Check compatibility assertions across project roots.",
      "confit compat --parus <path> --delos <path> --profile <name> "
      "[--target <name>] [--compat <path>] [--format text|json]",
@@ -4905,6 +4914,477 @@ static int confit_cli_run_graph(int argc, char **argv) {
 
   confit_graph_string_free(json);
   confit_resolved_config_free(config);
+  confit_graph_free(graph);
+  confit_project_free(project);
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+  return confit_status_exit_code(CONFIT_OK);
+}
+
+static ConfitStatus confit_cli_parse_diff_args(int argc, char **argv,
+                                               ConfitCliDiffArgs *args) {
+  int index;
+
+  args->project_root = 0;
+  args->profile_name = 0;
+  args->base_name = 0;
+  args->target_name = 0;
+  args->format = "text";
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      args->project_root = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--profile") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --profile");
+      }
+      index += 1;
+      args->profile_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--base") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --base");
+      }
+      index += 1;
+      args->base_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--target") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --target");
+      }
+      index += 1;
+      args->target_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--format") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --format");
+      }
+      index += 1;
+      args->format = argv[index];
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown diff option");
+    }
+    return confit_cli_write_error("diff does not accept positional arguments");
+  }
+
+  if (args->project_root == 0) {
+    return confit_cli_write_error("diff requires --project");
+  }
+  if (args->profile_name == 0) {
+    return confit_cli_write_error("diff requires --profile");
+  }
+  if (args->base_name == 0) {
+    return confit_cli_write_error("diff requires --base");
+  }
+  if (strcmp(args->format, "text") != 0 && strcmp(args->format, "json") != 0) {
+    return confit_cli_write_error("diff --format must be text or json");
+  }
+  return CONFIT_OK;
+}
+
+static int confit_cli_value_equals(const ConfitValue *left,
+                                   const ConfitValue *right) {
+  if (left == 0 || right == 0 || left->kind != right->kind) {
+    return 0;
+  }
+
+  switch (left->kind) {
+  case CONFIT_VALUE_BOOL:
+    return left->as.bool_value == right->as.bool_value;
+  case CONFIT_VALUE_INT:
+    return left->as.int_value == right->as.int_value;
+  case CONFIT_VALUE_UINT:
+    return left->as.uint_value == right->as.uint_value;
+  case CONFIT_VALUE_FLOAT:
+    return left->as.float_value == right->as.float_value;
+  case CONFIT_VALUE_STRING:
+  case CONFIT_VALUE_ENUM:
+  case CONFIT_VALUE_PATH:
+    if (left->as.string_value == 0 || right->as.string_value == 0) {
+      return left->as.string_value == right->as.string_value;
+    }
+    return strcmp(left->as.string_value, right->as.string_value) == 0;
+  case CONFIT_VALUE_EMPTY:
+  default:
+    return 1;
+  }
+}
+
+static const ConfitOption *confit_cli_project_find_const_option(
+    const ConfitProject *project, const char *option_id) {
+  size_t index;
+
+  if (project == 0 || option_id == 0) {
+    return 0;
+  }
+  for (index = 0U; index < project->option_count; ++index) {
+    if (project->options[index].id != 0 &&
+        strcmp(project->options[index].id, option_id) == 0) {
+      return &project->options[index];
+    }
+  }
+  return 0;
+}
+
+static ConfitStatus confit_cli_append_nullable_json_string(
+    ConfitCliTextBuilder *builder, const char *text) {
+  if (text == 0 || text[0] == '\0') {
+    return confit_cli_text_append(builder, "null");
+  }
+  return confit_cli_text_append_quoted(builder, text);
+}
+
+static ConfitStatus confit_cli_append_json_value(ConfitCliTextBuilder *builder,
+                                                 const ConfitValue *value) {
+  char buffer[128];
+
+  switch (value->kind) {
+  case CONFIT_VALUE_BOOL:
+    return confit_cli_text_append(builder,
+                                  value->as.bool_value ? "true" : "false");
+  case CONFIT_VALUE_INT:
+    (void)snprintf(buffer, sizeof(buffer), "%lld",
+                   (long long)value->as.int_value);
+    return confit_cli_text_append(builder, buffer);
+  case CONFIT_VALUE_UINT:
+    (void)snprintf(buffer, sizeof(buffer), "%llu",
+                   (unsigned long long)value->as.uint_value);
+    return confit_cli_text_append(builder, buffer);
+  case CONFIT_VALUE_FLOAT:
+    (void)snprintf(buffer, sizeof(buffer), "%.17g", value->as.float_value);
+    return confit_cli_text_append(builder, buffer);
+  case CONFIT_VALUE_STRING:
+  case CONFIT_VALUE_ENUM:
+  case CONFIT_VALUE_PATH:
+    return confit_cli_text_append_quoted(builder, value->as.string_value);
+  case CONFIT_VALUE_EMPTY:
+  default:
+    return confit_cli_text_append(builder, "null");
+  }
+}
+
+static ConfitStatus confit_cli_append_diff_text(
+    ConfitCliTextBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedConfig *base_config,
+    const ConfitResolvedConfig *profile_config, const ConfitCliDiffArgs *args,
+    const char *base_target, const char *profile_target,
+    size_t *out_change_count) {
+  ConfitStatus status;
+  size_t index;
+  size_t change_count;
+  char buffer[128];
+
+  change_count = 0U;
+  status = confit_cli_text_append(builder, "diff: ");
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, args->base_name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, " -> ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, args->profile_name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, "\nbase target: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(
+        builder, base_target != 0 ? base_target : "<none>");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, "\nprofile target: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(
+        builder, profile_target != 0 ? profile_target : "<none>");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, "\n");
+  }
+
+  for (index = 0U; status == CONFIT_OK && index < profile_config->value_count;
+       ++index) {
+    const ConfitResolvedValue *profile_value = &profile_config->values[index];
+    const ConfitResolvedValue *base_value =
+        confit_resolved_config_find(base_config, profile_value->option_id);
+    const ConfitOption *option;
+
+    if (base_value == 0 ||
+        !confit_cli_value_equals(&base_value->value, &profile_value->value)) {
+      change_count += 1U;
+      option = confit_cli_project_find_const_option(project,
+                                                    profile_value->option_id);
+      status = confit_cli_text_append(builder, profile_value->option_id);
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, "\n  base: ");
+      }
+      if (status == CONFIT_OK && base_value != 0) {
+        status =
+            confit_cli_text_append_value(builder, option, &base_value->value);
+      } else if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, "<missing>");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, " (");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(
+            builder, base_value != 0 && base_value->source != 0
+                         ? base_value->source
+                         : "missing");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, ")\n  profile: ");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append_value(builder, option,
+                                              &profile_value->value);
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, " (");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(
+            builder, profile_value->source != 0 ? profile_value->source : "");
+      }
+      if (status == CONFIT_OK) {
+        status = confit_cli_text_append(builder, ")\n");
+      }
+    }
+  }
+
+  (void)snprintf(buffer, sizeof(buffer), "changes: %lu\n",
+                 (unsigned long)change_count);
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, buffer);
+  }
+  if (out_change_count != 0) {
+    *out_change_count = change_count;
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_append_diff_json(
+    ConfitCliTextBuilder *builder, const ConfitResolvedConfig *base_config,
+    const ConfitResolvedConfig *profile_config, const ConfitCliDiffArgs *args,
+    const char *base_target, const char *profile_target,
+    size_t *out_change_count) {
+  ConfitStatus status;
+  size_t index;
+  size_t change_count;
+  int first_change;
+  char buffer[128];
+
+  change_count = 0U;
+  first_change = 1;
+  status = confit_cli_text_append(builder, "{\n  \"schema\": ");
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append_quoted(builder, "confit-diff-v1");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"project\": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append_quoted(builder, args->project_root);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"base\": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append_quoted(builder, args->base_name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"profile\": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append_quoted(builder, args->profile_name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"base_target\": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_append_nullable_json_string(builder, base_target);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"profile_target\": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_append_nullable_json_string(builder, profile_target);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, ",\n  \"changes\": [");
+  }
+
+  for (index = 0U; status == CONFIT_OK && index < profile_config->value_count;
+       ++index) {
+    const ConfitResolvedValue *profile_value = &profile_config->values[index];
+    const ConfitResolvedValue *base_value =
+        confit_resolved_config_find(base_config, profile_value->option_id);
+
+    if (base_value != 0 &&
+        confit_cli_value_equals(&base_value->value, &profile_value->value)) {
+      continue;
+    }
+
+    change_count += 1U;
+    status = confit_cli_text_append(builder, first_change ? "\n" : ",\n");
+    first_change = 0;
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, "    {\"id\": ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append_quoted(builder, profile_value->option_id);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, ", \"base\": ");
+    }
+    if (status == CONFIT_OK && base_value != 0) {
+      status = confit_cli_append_json_value(builder, &base_value->value);
+    } else if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, "null");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, ", \"base_source\": ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_append_nullable_json_string(
+          builder, base_value != 0 ? base_value->source : 0);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, ", \"profile\": ");
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_append_json_value(builder, &profile_value->value);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, ", \"profile_source\": ");
+    }
+    if (status == CONFIT_OK) {
+      status =
+          confit_cli_append_nullable_json_string(builder, profile_value->source);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, "}");
+    }
+  }
+
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, first_change ? "]" : "\n  ]");
+  }
+  (void)snprintf(buffer, sizeof(buffer),
+                 ",\n  \"summary\": {\"changed\": %lu}\n}\n",
+                 (unsigned long)change_count);
+  if (status == CONFIT_OK) {
+    status = confit_cli_text_append(builder, buffer);
+  }
+  if (out_change_count != 0) {
+    *out_change_count = change_count;
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_build_diff_output(
+    const ConfitProject *project, const ConfitResolvedConfig *base_config,
+    const ConfitResolvedConfig *profile_config, const ConfitCliDiffArgs *args,
+    char **out_text, ConfitDiagnostic *diagnostic) {
+  ConfitCliTextBuilder builder;
+  const char *base_target;
+  const char *profile_target;
+  size_t change_count;
+  ConfitStatus status;
+
+  *out_text = 0;
+  change_count = 0U;
+  base_target =
+      args->target_name != 0
+          ? args->target_name
+          : confit_cli_effective_target_name(project, args->base_name, 0);
+  profile_target =
+      args->target_name != 0
+          ? args->target_name
+          : confit_cli_effective_target_name(project, args->profile_name, 0);
+
+  confit_cli_text_builder_init(&builder);
+  if (strcmp(args->format, "json") == 0) {
+    status = confit_cli_append_diff_json(&builder, base_config, profile_config,
+                                         args, base_target, profile_target,
+                                         &change_count);
+  } else {
+    status = confit_cli_append_diff_text(&builder, project, base_config,
+                                         profile_config, args, base_target,
+                                         profile_target, &change_count);
+  }
+  (void)change_count;
+
+  if (status != CONFIT_OK) {
+    free(builder.text);
+    confit_diagnostic_set(diagnostic, status, args->project_root, 0, 0,
+                          "failed to serialize diff");
+    return status;
+  }
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static int confit_cli_run_diff(int argc, char **argv) {
+  ConfitCliDiffArgs args;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitGraph *graph;
+  ConfitResolvedConfig *base_config;
+  ConfitResolvedConfig *profile_config;
+  char *output;
+  ConfitStatus status;
+
+  status = confit_cli_parse_diff_args(argc, argv, &args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  graph = 0;
+  base_config = 0;
+  profile_config = 0;
+  output = 0;
+
+  status =
+      confit_cli_load_project_graph(args.project_root, &project, &graph, 0,
+                                    &diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_resolver_resolve(project, args.base_name, args.target_name,
+                                     0, 0U, &base_config, &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_resolver_resolve(project, args.profile_name,
+                                     args.target_name, 0, 0U, &profile_config,
+                                     &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_build_diff_output(project, base_config, profile_config,
+                                          &args, &output, &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(output);
+  }
+
+  free(output);
+  confit_resolved_config_free(profile_config);
+  confit_resolved_config_free(base_config);
   confit_graph_free(graph);
   confit_project_free(project);
   if (status != CONFIT_OK) {

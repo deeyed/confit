@@ -2,7 +2,7 @@
 doc_type: tool-spec
 status: draft
 authority: informative
-last_verified: 2026-06-23
+last_verified: 2026-06-24
 ---
 
 # Confit
@@ -14,7 +14,8 @@ host-side configuration tool을 제공하는 것이다.
 Confit은 Delos runtime 기능이 아니다. Parus kernel, Delos runtime, MCU image 안에는 TOML parser,
 TUI, constraint solver, config service가 들어가지 않는다. Confit은 build 전에 실행되는 host
 tool이며, 초기 결과는 `config.h`, machine-readable report, explanation report 같은 정적 산출물로만
-전달된다. `config.cmake`와 `config.qst` 생성은 장기 확장으로 둔다.
+전달된다. `config.cmake`와 `config.qst`도 명시적인 `--out` directory 아래에 생성되는 보조 build
+integration artifact로만 다룬다.
 
 ## Goals
 
@@ -34,7 +35,7 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 - `select`의 위험한 dependency 우회를 그대로 허용하지 않는다.
 - TUI를 core evaluator로 만들지 않는다.
 - Build system, package manager, dependency resolver를 Confit 안에 합치지 않는다.
-- CMake/QStar build graph fragment 생성을 초기 필수 기능으로 넣지 않는다.
+- 실제 Parus/Delos build graph를 암묵적으로 수정하지 않는다.
 
 ## Document Map
 
@@ -50,7 +51,6 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 - [coding-and-doc-rules.md](docs/coding-and-doc-rules.md): 구현팀이 따라야 할 C/Doxygen/문서 규칙.
 - [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
 - [release-candidate.md](docs/release-candidate.md): v0 RC 검증 gate, 예제 command, portability review.
-- [implementation-rounds.md](docs/implementation-rounds.md): 임시 20라운드 구현 자동화 계획과 라운드별 검증/커밋 계약.
 
 ## Recommended Repository Placement
 

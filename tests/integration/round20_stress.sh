@@ -4,7 +4,7 @@ set -eu
 CONFIT_BIN=$1
 SOURCE_DIR=$2
 WORK_DIR=$3
-COUNT=${CONFIT_STRESS_OPTION_COUNT:-2500}
+COUNT=${CONFIT_STRESS_OPTION_COUNT:-5000}
 
 case "$COUNT" in
   "" | *[!0-9]*)
@@ -43,7 +43,10 @@ mkdir -p "$PROJECT_DIR/config/options" "$PROJECT_DIR/config/profiles"
     printf 'prompt = "Synthetic Stress Option %04d"\n' "$index"
     printf 'category = "stress"\n'
     printf 'tags = ["stress", "scale"]\n'
-    printf 'help = "Synthetic scale fixture option %04d."\n\n' "$index"
+    printf 'help = "Synthetic scale fixture option %04d."\n' "$index"
+    printf 'owner = "confit-stress"\n'
+    printf 'since = "0.1.0"\n'
+    printf 'stability = "stable"\n\n'
     index=$((index + 1))
   done
 } >"$PROJECT_DIR/config/options/stress.toml"

@@ -548,6 +548,48 @@ static void test_graph_dot(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_diff(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  const char *text_argv[] = {0, "diff", "--project", 0, "--profile",
+                             "sim-dsh", "--base", "debug", 0};
+  const char *json_argv[] = {0, "diff", "--project", 0, "--profile",
+                             "sim-dsh", "--base", "debug", "--format",
+                             "json", 0};
+  const char *help_argv[] = {0, "help", "diff", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+
+  text_argv[0] = context->confit_bin;
+  text_argv[3] = context->project_dir;
+  test_run(context, text_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "diff: debug -> sim-dsh");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "delos.scheduler.task_slots");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "changes:");
+  confit_test_process_result_clear(&result);
+
+  json_argv[0] = context->confit_bin;
+  json_argv[3] = context->project_dir;
+  test_run(context, json_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"schema\": \"confit-diff-v1\"");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"id\": \"delos.scheduler.task_slots\"");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "\"changed\":");
+  confit_test_process_result_clear(&result);
+
+  help_argv[0] = context->confit_bin;
+  test_run(context, help_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "Confit command: diff");
+  CONFIT_TEST_ASSERT_NOT_CONTAINS(result.stdout_text, "not implemented");
+  confit_test_process_result_clear(&result);
+}
+
 static void test_explain(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "explain", "--project", 0, "--profile", "sim-dsh",
@@ -812,6 +854,7 @@ int main(int argc, char **argv) {
   test_list(&context);
   test_graph_json(&context);
   test_graph_dot(&context);
+  test_diff(&context);
   test_explain(&context);
   test_gen(&context);
   test_compat(&context);

@@ -90,6 +90,16 @@ grep -F '"nodes":' "$WORK_DIR/graph.json" >/dev/null
 grep -F "digraph confit" "$WORK_DIR/graph.dot" >/dev/null
 grep -F "delos.debug.ddc" "$WORK_DIR/graph.dot" >/dev/null
 
+"$CONFIT_BIN" diff --project "$PROJECT_DIR" --profile sim-dsh --base debug \
+  >"$WORK_DIR/diff.txt"
+grep -F "diff: debug -> sim-dsh" "$WORK_DIR/diff.txt" >/dev/null
+grep -F "delos.scheduler.task_slots" "$WORK_DIR/diff.txt" >/dev/null
+
+"$CONFIT_BIN" diff --project "$PROJECT_DIR" --profile sim-dsh --base debug \
+  --format json >"$WORK_DIR/diff.json"
+grep -F '"schema": "confit-diff-v1"' "$WORK_DIR/diff.json" >/dev/null
+grep -F '"id": "delos.scheduler.task_slots"' "$WORK_DIR/diff.json" >/dev/null
+
 "$CONFIT_BIN" explain --project "$PROJECT_DIR" --profile sim-dsh \
   delos.debug.ddc >"$WORK_DIR/explain.txt"
 grep -F "forced by:" "$WORK_DIR/explain.txt" >/dev/null

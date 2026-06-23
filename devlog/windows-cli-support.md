@@ -1,38 +1,60 @@
-# Windows CLI Support Plan
+# Windows CLI Support Notes
 
 Date: 2026-06-24
 
-This note records the working plan for Windows support during the next Confit
-implementation push. It is intentionally a devlog entry, not a normative CLI
-contract.
+This note records current implementation status and remaining Windows work. It
+is intentionally a devlog entry, not a normative CLI contract.
 
 ## Decision
 
-Windows support during the 18-round implementation push is CLI-only.
+Windows support during the current Confit hardening push is CLI-only.
 
 Supported target:
 
 ```text
 Windows native host
-Clang-family compiler
+GNU-style Clang compiler
 Ninja or equivalent non-Visual-Studio build driver
 single installed executable: confit.exe
 ```
 
-Out of scope for the 18-round push:
+Out of scope for this push:
 
 ```text
 Windows TUI
 PDCurses integration
 MSVC compiler support
+clang-cl / MSVC frontend mode
 Visual Studio solution workflow
 external runtime DLL bundle
 PowerShell-only test or install requirement
 ```
 
-The Windows TUI should be explicitly unsupported rather than partially enabled.
+The Windows TUI is explicitly unsupported rather than partially enabled.
 `confit tui ...` on Windows should fail with a clear unsupported-platform
-diagnostic until a dedicated Windows TUI effort starts.
+diagnostic and exit code `8` until a dedicated Windows TUI effort starts.
+
+## Current Implementation State
+
+Current code already has the main Windows boundary work in place:
+
+- `tools/confit/CMakeLists.txt` rejects MSVC and MSVC-frontend Clang.
+- `tools/confit/CMakeLists.txt` skips curses discovery on `WIN32`.
+- Windows builds use `src/tui/tui_unsupported.c` instead of ncurses-backed TUI
+  sources.
+- `confit doctor` reports a Windows clang-only CLI lane when compiled for
+  Windows.
+- `confit tui` on Windows is covered by the C integration runner as an
+  unsupported-platform command.
+- The C integration runner exercises CLI workflows without requiring POSIX shell
+  scripts.
+
+Remaining evidence gap:
+
+```text
+Native Windows machine or CI execution has not yet been completed in this repo.
+The lane is implemented and testable, but not fully validated on a Windows host.
+```
 
 ## Compiler Policy
 
@@ -45,21 +67,10 @@ Rationale:
 - It matches the single-binary host-tool direction better than a Visual Studio
   oriented workflow.
 
-`clang-cl` is deferred because it commonly enters MSVC ABI and CMake behavior
-even though the compiler front-end is Clang.
+`clang-cl` remains deferred because it commonly enters MSVC ABI and CMake
+behavior even though the compiler front-end is Clang.
 
-## Current Code Observations
-
-Current state that must be cleaned up during implementation:
-
-- `tools/confit/CMakeLists.txt` still contains repeated `if(MSVC)` warning
-  branches.
-- TUI currently links through CMake `find_package(Curses REQUIRED)`.
-- Scripted integration tests are POSIX shell based.
-- The host boundary is already structurally useful: core/model/schema/graph/
-  resolver/generator code should continue to avoid direct platform APIs.
-
-## 18-Round Windows Goal
+## CLI Goal
 
 Windows should be able to run non-interactive Confit workflows:
 
@@ -79,7 +90,7 @@ confit.exe profile
 confit.exe completion
 ```
 
-Expected Windows TUI behavior during this phase:
+Expected Windows TUI behavior:
 
 ```text
 confit.exe tui ...
@@ -88,9 +99,10 @@ confit.exe tui ...
 
 ## C Test Runner Direction
 
-Windows integration tests should be written in C rather than shell or Python.
+Windows integration tests should continue to be written in C rather than shell
+or Python.
 
-Proposed layout:
+Current layout:
 
 ```text
 tools/confit/tests/integration_c/
@@ -107,7 +119,7 @@ tools/confit/tests/support/
 
 The C runner should:
 
-1. Create a temporary project directory.
+1. Create temporary project directories.
 2. Materialize minimal TOML fixtures or copy checked-in fixtures.
 3. Invoke `confit.exe` as a child process.
 4. Capture exit code, stdout, and stderr.
@@ -138,9 +150,9 @@ Expected artifact:
 
 No project configuration should be edited by install.
 
-## Post-18-Round Windows TUI Work
+## Post-CLI Windows TUI Work
 
 Windows TUI support should be a separate effort after the CLI authority path is
-usable. That effort should decide whether to vendor PDCurses, how to static link
-it, how to test real terminal behavior, and how to keep curses calls isolated in
-the TUI frontend.
+usable on a real Windows host. That effort should decide whether to vendor
+PDCurses, how to static link it, how to test real terminal behavior, and how to
+keep curses calls isolated in the TUI frontend.
