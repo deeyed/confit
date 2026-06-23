@@ -126,11 +126,30 @@ else()
   )
 endif()
 
+add_library(confit_explain STATIC
+  src/explain/explain.c
+)
+
+target_link_libraries(confit_explain PUBLIC confit_resolver)
+target_compile_features(confit_explain PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_explain PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_explain PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
 
-target_link_libraries(confit PRIVATE confit_host)
+target_link_libraries(confit PRIVATE
+  confit_explain
+  confit_graph
+  confit_schema
+)
 
 if(MSVC)
   target_compile_options(confit PRIVATE /W4 /WX)
@@ -294,6 +313,31 @@ add_test(
   COMMAND confit_test_resolver
 )
 
+add_executable(confit_test_explain
+  tests/unit/test_explain.c
+)
+
+target_link_libraries(confit_test_explain PRIVATE
+  confit_explain
+  confit_schema
+)
+target_compile_definitions(confit_test_explain PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_explain PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_explain PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.explain
+  COMMAND confit_test_explain
+)
+
 add_test(
   NAME confit.cli.version
   COMMAND confit --version
@@ -310,4 +354,15 @@ add_test(
 
 set_tests_properties(confit.cli.help
   PROPERTIES PASS_REGULAR_EXPRESSION "Usage:"
+)
+
+add_test(
+  NAME confit.cli.explain
+  COMMAND confit explain --project
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/schema/valid/basic
+          --profile sim-dsh delos.debug.ddc
+)
+
+set_tests_properties(confit.cli.explain
+  PROPERTIES PASS_REGULAR_EXPRESSION "forced by:"
 )

@@ -1,0 +1,32 @@
+option: delos.internal.debug_gate
+state: disabled
+value: false
+set by: default
+
+why:
+  disabled because resolved bool is false
+  value comes from default
+
+requires:
+  none
+
+conflicts:
+  none
+
+recommends:
+  none
+
+forces:
+  none
+
+required by:
+  none
+
+conflicted by:
+  delos.scheduler.task_slots = 32 (active)
+
+recommended by:
+  delos.debug.ddc = true (active)
+
+forced by:
+  delos.debug.ddc = true (active)

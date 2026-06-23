@@ -19,14 +19,22 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
 
 cc -std=c17 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT_DIR/include" \
+  -I"$ROOT_DIR/vendor/toml" \
   "$ROOT_DIR/src/core/status.c" \
   "$ROOT_DIR/src/core/diagnostic.c" \
   "$ROOT_DIR/src/core/model.c" \
   "$ROOT_DIR/src/core/version.c" \
+  "$ROOT_DIR/src/explain/explain.c" \
+  "$ROOT_DIR/src/graph/graph.c" \
+  "$ROOT_DIR/src/parser/parser.c" \
+  "$ROOT_DIR/src/resolver/resolver.c" \
+  "$ROOT_DIR/src/schema/schema.c" \
+  "$ROOT_DIR/src/host/host_directory.c" \
   "$ROOT_DIR/src/host/host_file.c" \
   "$ROOT_DIR/src/host/host_io.c" \
   "$ROOT_DIR/src/host/host_path.c" \
   "$ROOT_DIR/src/cli/main.c" \
+  "$ROOT_DIR/vendor/toml/confit_toml.c" \
   -o "$BUILD_DIR/confit"
 
 "$BUILD_DIR/confit" --version | grep -Fx "confit 0.1.0-round1" >/dev/null
