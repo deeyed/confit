@@ -1,0 +1,87 @@
+profile: sim-dsh
+target: sim-dsh
+
+enabled:
+  delos.build.output_root
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
+  delos.build.profile
+    because resolved text is non-empty
+    set by profiles/debug.toml
+  delos.dcg.enabled
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.debug.ddc
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.debug.dsh
+    because resolved bool is true
+    set by profiles/sim-dsh.toml
+  delos.debug.observability
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.generated.cmake_fragment
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.generated.config_header
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.generated.config_root
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.generated.qstar_manifest
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.generated.reports
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.hal.device_inventory
+    because resolved bool is true
+    set by default
+  delos.internal.debug_surface
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.profile.debug
+    because resolved bool is true
+    set by profiles/debug.toml
+  delos.scheduler.dispatch_window_ticks
+    because resolved number is non-zero
+    set by default
+  delos.scheduler.task_slots
+    because resolved number is non-zero
+    set by profiles/sim-dsh.toml
+  delos.sim.hosted_stdio
+    because resolved bool is true
+    set by profiles/sim-dsh.toml
+  delos.target.arch
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
+  delos.target.artifact_entry
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.target.board
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.target.cpu
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.target.kind
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.target.output_name
+    because resolved text is non-empty
+    set by profiles/sim-dsh.toml
+  delos.trace.capacity
+    because resolved number is non-zero
+    set by profiles/sim-dsh.toml
+
+disabled:
+  delos.debug.release_diagnostic_dump
+    because resolved bool is false
+    set by default
+  delos.memory.flash_origin
+    because resolved number is zero
+    set by default
+  delos.profile.release
+    because resolved bool is false
+    set by default

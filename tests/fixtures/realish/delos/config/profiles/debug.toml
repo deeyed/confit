@@ -1,0 +1,17 @@
+[profile]
+name = "debug"
+schema_version = 1
+
+[values]
+"delos.profile.debug" = true
+"delos.build.profile" = "debug"
+"delos.debug.ddc" = true
+"delos.debug.observability" = true
+"delos.internal.debug_surface" = true
+"delos.generated.config_header" = true
+"delos.generated.reports" = true
+"delos.generated.cmake_fragment" = true
+"delos.generated.qstar_manifest" = true
+"delos.dcg.enabled" = true
+"delos.scheduler.task_slots" = 16
+"delos.trace.capacity" = 64

@@ -1,0 +1,20 @@
+[target]
+name = "sim-dsh"
+schema_version = 1
+arch = "host"
+board = "host-sim"
+
+[target.claim]
+level = "host-simulator"
+
+[values]
+"delos.target.kind" = "sim:dsh"
+"delos.target.arch" = "host"
+"delos.target.board" = "host-sim"
+"delos.target.cpu" = "host"
+"delos.target.output_name" = "delos-sim"
+"delos.target.artifact_entry" = "build/target/delos-sim"
+"delos.build.output_root" = "build/target"
+"delos.sim.hosted_stdio" = true
+"delos.scheduler.task_slots" = 1
+"delos.trace.capacity" = 4

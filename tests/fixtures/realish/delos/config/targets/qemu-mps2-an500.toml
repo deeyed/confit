@@ -1,0 +1,17 @@
+[target]
+name = "qemu-mps2-an500"
+schema_version = 1
+arch = "armv7m"
+board = "qemu-mps2-an500"
+
+[target.claim]
+level = "qemu-smoke"
+
+[values]
+"delos.target.kind" = "qemu:mps2-an500"
+"delos.target.arch" = "armv7m"
+"delos.target.board" = "qemu-mps2-an500"
+"delos.target.cpu" = "cortex-m3"
+"delos.target.output_name" = "delos-qemu-mps2-an500"
+"delos.target.artifact_entry" = "build/target/debug/qemu/mps2-an500/delos.elf"
+"delos.memory.flash_origin" = 0x00000000

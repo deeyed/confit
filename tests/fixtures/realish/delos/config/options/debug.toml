@@ -1,0 +1,91 @@
+[option."delos.profile.debug"]
+type = "bool"
+default = false
+category = "profile"
+tags = ["profile", "debug"]
+help = "Internal marker for debug-oriented profile resolution."
+owner = "delos-build"
+since = "0.1.0"
+stability = "internal"
+
+[option."delos.profile.release"]
+type = "bool"
+default = false
+category = "profile"
+tags = ["profile", "release"]
+help = "Internal marker for release-boundary profile resolution."
+owner = "delos-build"
+since = "0.1.0"
+stability = "internal"
+
+[option."delos.internal.debug_surface"]
+type = "bool"
+default = false
+category = "debug"
+tags = ["debug", "internal"]
+help = "Hidden aggregate marker for debug-only DDC/DSH surfaces."
+owner = "delos-debug"
+since = "0.1.0"
+stability = "internal"
+
+[option."delos.debug.ddc"]
+type = "bool"
+default = false
+prompt = "Enable Delos Debug Console"
+category = "debug"
+tags = ["debug", "ddc", "development"]
+help = "Include the DDC parser and byte-stream debug console support."
+owner = "delos-debug"
+since = "0.1.0"
+stability = "stable"
+conflicts = ["delos.profile.release"]
+forces = ["delos.internal.debug_surface"]
+
+[option."delos.debug.dsh"]
+type = "bool"
+default = false
+prompt = "Enable Delos Shell"
+category = "debug"
+tags = ["debug", "dsh", "sim"]
+help = "Include the DSH prompt and read-only command table on top of DDC."
+owner = "delos-debug"
+since = "0.1.0"
+stability = "stable"
+requires = ["delos.debug.ddc"]
+conflicts = ["delos.profile.release"]
+
+[option."delos.debug.observability"]
+type = "bool"
+default = false
+prompt = "Enable DDC observability"
+category = "debug"
+tags = ["debug", "observability"]
+help = "Expose trace, tasks, DCG, inventory, HAL, and fault snapshots through DDC."
+owner = "delos-debug"
+since = "0.1.0"
+stability = "stable"
+requires = ["delos.debug.ddc"]
+
+[option."delos.debug.release_diagnostic_dump"]
+type = "bool"
+default = false
+prompt = "Release diagnostic dump"
+category = "debug"
+tags = ["debug", "release"]
+help = "Allow a one-way diagnostic marker without enabling DDC command input."
+owner = "delos-debug"
+since = "0.1.0"
+stability = "experimental"
+conflicts = ["delos.debug.dsh"]
+
+[option."delos.sim.hosted_stdio"]
+type = "bool"
+default = false
+prompt = "Hosted stdio DDC transport"
+category = "sim"
+tags = ["sim", "transport", "stdio"]
+help = "Use hosted stdin/stdout as the simulator DDC byte stream."
+owner = "delos-sim"
+since = "0.1.0"
+stability = "stable"
+requires = ["delos.debug.dsh"]

@@ -1,0 +1,16 @@
+[profile]
+name = "release"
+schema_version = 1
+
+[values]
+"delos.profile.release" = true
+"delos.build.profile" = "release"
+"delos.debug.ddc" = false
+"delos.debug.dsh" = false
+"delos.debug.observability" = false
+"delos.debug.release_diagnostic_dump" = false
+"delos.internal.debug_surface" = false
+"delos.generated.config_header" = true
+"delos.generated.reports" = true
+"delos.generated.cmake_fragment" = true
+"delos.generated.qstar_manifest" = true

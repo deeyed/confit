@@ -1,0 +1,10 @@
+[project]
+name = "delos"
+version = "0.1.0"
+schema_version = 1
+imports = [
+  "options/build.toml",
+  "options/debug.toml",
+  "options/runtime.toml",
+  "options/target.toml",
+]

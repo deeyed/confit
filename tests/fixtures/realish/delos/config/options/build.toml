@@ -1,0 +1,77 @@
+[option."delos.build.profile"]
+type = "enum"
+default = "debug"
+choices = ["debug", "release", "verify"]
+prompt = "Build profile"
+category = "build"
+tags = ["build", "profile"]
+help = "Delos public artifact profile selected by the host build."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.build.output_root"]
+type = "path"
+default = "build/target"
+prompt = "Output root"
+category = "build"
+tags = ["build", "artifact"]
+help = "User-facing Delos artifact output root."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.generated.config_root"]
+type = "path"
+default = "build/generated/config/delos"
+prompt = "Generated config root"
+category = "build"
+tags = ["generated", "config"]
+help = "Build-relative root for Confit generated configuration artifacts."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.generated.config_header"]
+type = "bool"
+default = true
+prompt = "Generate config.h"
+category = "build"
+tags = ["generated", "header"]
+help = "Emit the C configuration header consumed by compile-time gates."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.generated.reports"]
+type = "bool"
+default = true
+prompt = "Generate reports"
+category = "build"
+tags = ["generated", "report"]
+help = "Emit deterministic JSON and text reports for review and audit."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.generated.cmake_fragment"]
+type = "bool"
+default = true
+prompt = "Generate CMake fragment"
+category = "build"
+tags = ["generated", "cmake"]
+help = "Emit a build-tree CMake fragment for future Delos integration."
+owner = "delos-build"
+since = "0.1.0"
+stability = "experimental"
+
+[option."delos.generated.qstar_manifest"]
+type = "bool"
+default = true
+prompt = "Generate QStar manifest"
+category = "build"
+tags = ["generated", "qstar"]
+help = "Emit a build-tree QStar manifest for future Delos integration."
+owner = "delos-build"
+since = "0.1.0"
+stability = "experimental"

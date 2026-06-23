@@ -1,0 +1,42 @@
+{
+  "schema": "confit-graph-v1",
+  "project": "delos",
+  "nodes": [
+    {"id": "delos.build.profile", "type": "enum"},
+    {"id": "delos.build.output_root", "type": "path"},
+    {"id": "delos.generated.config_root", "type": "path"},
+    {"id": "delos.generated.config_header", "type": "bool"},
+    {"id": "delos.generated.reports", "type": "bool"},
+    {"id": "delos.generated.cmake_fragment", "type": "bool"},
+    {"id": "delos.generated.qstar_manifest", "type": "bool"},
+    {"id": "delos.profile.debug", "type": "bool"},
+    {"id": "delos.profile.release", "type": "bool"},
+    {"id": "delos.internal.debug_surface", "type": "bool"},
+    {"id": "delos.debug.ddc", "type": "bool"},
+    {"id": "delos.debug.dsh", "type": "bool"},
+    {"id": "delos.debug.observability", "type": "bool"},
+    {"id": "delos.debug.release_diagnostic_dump", "type": "bool"},
+    {"id": "delos.sim.hosted_stdio", "type": "bool"},
+    {"id": "delos.dcg.enabled", "type": "bool"},
+    {"id": "delos.scheduler.task_slots", "type": "uint"},
+    {"id": "delos.scheduler.dispatch_window_ticks", "type": "uint"},
+    {"id": "delos.trace.capacity", "type": "uint"},
+    {"id": "delos.hal.device_inventory", "type": "bool"},
+    {"id": "delos.memory.flash_origin", "type": "hex"},
+    {"id": "delos.target.kind", "type": "enum"},
+    {"id": "delos.target.arch", "type": "enum"},
+    {"id": "delos.target.board", "type": "enum"},
+    {"id": "delos.target.cpu", "type": "enum"},
+    {"id": "delos.target.output_name", "type": "string"},
+    {"id": "delos.target.artifact_entry", "type": "path"}
+  ],
+  "edges": [
+    {"from": "delos.debug.ddc", "to": "delos.profile.release", "kind": "conflicts"},
+    {"from": "delos.debug.ddc", "to": "delos.internal.debug_surface", "kind": "forces"},
+    {"from": "delos.debug.dsh", "to": "delos.debug.ddc", "kind": "requires"},
+    {"from": "delos.debug.dsh", "to": "delos.profile.release", "kind": "conflicts"},
+    {"from": "delos.debug.observability", "to": "delos.debug.ddc", "kind": "requires"},
+    {"from": "delos.debug.release_diagnostic_dump", "to": "delos.debug.dsh", "kind": "conflicts"},
+    {"from": "delos.sim.hosted_stdio", "to": "delos.debug.dsh", "kind": "requires"}
+  ]
+}

@@ -1,0 +1,69 @@
+[option."delos.dcg.enabled"]
+type = "bool"
+default = true
+prompt = "Enable DCG"
+category = "runtime"
+tags = ["runtime", "dcg"]
+help = "Build the Delos DCG request and completion runtime."
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.scheduler.task_slots"]
+type = "uint"
+default = 16
+range = [1, 128]
+prompt = "Scheduler task slots"
+category = "scheduler"
+tags = ["runtime", "scheduler"]
+help = "Static scheduler task slot capacity."
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.scheduler.dispatch_window_ticks"]
+type = "uint"
+default = 1000
+range = [1, 1000000]
+prompt = "Dispatch window ticks"
+category = "scheduler"
+tags = ["runtime", "scheduler", "time"]
+help = "Default scheduler dispatch accounting window in Delos ticks."
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "experimental"
+
+[option."delos.trace.capacity"]
+type = "uint"
+default = 64
+range = [1, 4096]
+prompt = "Trace ring capacity"
+category = "runtime"
+tags = ["runtime", "trace", "observability"]
+help = "Trace ring event capacity used by debug and test fixtures."
+owner = "delos-runtime"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.hal.device_inventory"]
+type = "bool"
+default = true
+prompt = "Board device inventory"
+category = "hal"
+tags = ["hal", "board", "inventory"]
+help = "Compile board-owned HAL device inventory tables."
+owner = "delos-hal"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.memory.flash_origin"]
+type = "hex"
+default = 0x00000000
+range = [0x00000000, 0xFFFFFFFF]
+prompt = "Flash origin"
+category = "memory"
+tags = ["target", "memory"]
+help = "Target flash or image load origin."
+owner = "delos-board"
+since = "0.1.0"
+stability = "stable"
