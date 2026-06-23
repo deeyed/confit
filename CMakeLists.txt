@@ -45,6 +45,44 @@ else()
   target_compile_options(confit_host PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
+add_library(confit_toml_vendor STATIC
+  vendor/toml/confit_toml.c
+)
+
+target_include_directories(confit_toml_vendor
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/toml
+)
+
+target_compile_features(confit_toml_vendor PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_toml_vendor PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_toml_vendor PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_library(confit_parser STATIC
+  src/parser/parser.c
+)
+
+target_link_libraries(confit_parser
+  PUBLIC
+    confit_host
+  PRIVATE
+    confit_toml_vendor
+)
+
+target_compile_features(confit_parser PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_parser PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_parser PRIVATE -Wall -Wextra -Werror -pedantic)
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -98,6 +136,28 @@ endif()
 add_test(
   NAME confit.unit.host_boundary
   COMMAND confit_test_host_boundary
+)
+
+add_executable(confit_test_parser_adapter
+  tests/unit/test_parser_adapter.c
+)
+
+target_link_libraries(confit_test_parser_adapter PRIVATE confit_parser)
+target_compile_definitions(confit_test_parser_adapter PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_parser_adapter PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_parser_adapter PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.parser_adapter
+  COMMAND confit_test_parser_adapter
 )
 
 add_test(

@@ -1,0 +1,17 @@
+[project]
+name = "delos"
+version = "0.1.0"
+schema_version = 1
+imports = [
+  "options/debug.toml",
+  "options/dcg.toml",
+]
+
+[option."delos.debug.ddc"]
+type = "bool"
+default = false
+prompt = "Enable Delos Debug Console"
+category = "debug"
+tags = ["debug", "host-tooling"]
+help = "Include the development DDC command parser."
+requires = [{ option = "delos.boot.ready", equals = true }]
