@@ -21,11 +21,13 @@ printf 'sq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile fresh \
     >"$WORK_DIR/tui-profile-create.txt"
 
-grep -aF "option 1/6" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "row 1/7" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
+  >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Menu" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "/ search c category t tag x clear e edit s save q quit" \
+grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "enter open e edit / search c category t tag x clear s save q quit" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/fresh.toml"

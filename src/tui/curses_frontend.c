@@ -135,6 +135,9 @@ static const char *confit_tui_curses_marker(const ConfitTuiListItem *item,
                                             char *buffer, size_t buffer_size) {
   const char *value;
 
+  if (item != 0 && item->is_heading) {
+    return item->expanded ? "[-]" : "[+]";
+  }
   value = confit_tui_curses_text(item->value);
   if (strcmp(value, "true") == 0) {
     return "[*]";
@@ -151,18 +154,36 @@ static void confit_tui_curses_render_row(int row, int col, int width,
                                          const ConfitTuiListItem *item,
                                          int selected) {
   char marker_buffer[80];
+  char label_buffer[192];
   char line[512];
   const char *marker =
       confit_tui_curses_marker(item, marker_buffer, sizeof(marker_buffer));
+  const unsigned depth = item != 0 ? item->depth : 0U;
+  const int indent = depth > 8U ? 16 : (int)(depth * 2U);
 
-  (void)snprintf(line, sizeof(line), "%c %-10s %-38s %s", selected ? '>' : ' ',
-                 marker, confit_tui_curses_text(item->label),
-                 confit_tui_curses_text(item->detail));
+  (void)snprintf(label_buffer, sizeof(label_buffer), "%*s%s", indent, "",
+                 confit_tui_curses_text(item != 0 ? item->label : 0));
+  label_buffer[sizeof(label_buffer) - 1U] = '\0';
+
+  if (item != 0 && item->is_heading) {
+    (void)snprintf(line, sizeof(line), "%c %-4s %-28s %s", selected ? '>' : ' ',
+                   marker, label_buffer, confit_tui_curses_text(item->detail));
+  } else {
+    (void)snprintf(line, sizeof(line), "%c %-10s %-38s %s",
+                   selected ? '>' : ' ', marker, label_buffer,
+                   confit_tui_curses_text(item != 0 ? item->detail : 0));
+  }
   line[sizeof(line) - 1U] = '\0';
   if (selected) {
     attron(A_REVERSE);
   }
+  if (item != 0 && item->is_heading) {
+    attron(A_BOLD);
+  }
   confit_tui_curses_add_clipped(row, col, line, width);
+  if (item != 0 && item->is_heading) {
+    attroff(A_BOLD);
+  }
   if (selected) {
     attroff(A_REVERSE);
   }

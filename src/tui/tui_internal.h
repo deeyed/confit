@@ -32,6 +32,9 @@ typedef struct ConfitTuiListItem {
   const char *label;
   const char *detail;
   const char *value;
+  unsigned depth;
+  int is_heading;
+  int expanded;
 } ConfitTuiListItem;
 
 typedef struct ConfitTuiScreen {

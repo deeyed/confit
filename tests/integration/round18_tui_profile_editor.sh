@@ -16,14 +16,16 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 TERM=xterm
 export TERM
 
-printf '/mode\ne\nxcedit\ntstring\neTUI name\nxejje7\nje0.75\njjebuild/new\nsq' |
+printf '/bool\nex/mode\ne\nx/count\ne7\nx/gain\ne0.75\nx/name\neTUI name\nx/path\nebuild/new\nsq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
     >"$WORK_DIR/tui-edit.txt"
 
-grep -aF "option 1/6" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "row 1/7" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Menu" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "[-]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "tags:" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
