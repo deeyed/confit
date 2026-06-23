@@ -1,0 +1,26 @@
+[target]
+name = "rpi5-direct-dtb"
+schema_version = 1
+arch = "arm64"
+board = "rpi5"
+
+[target.claim]
+level = "package-check"
+
+[values]
+"parus.config.profile" = "rpi5"
+"parus.arch.arm64" = true
+"parus.arch.amd64" = false
+"parus.board.qemu_virt_aarch64" = false
+"parus.board.rpi5" = true
+"parus.board.qemu_amd64" = false
+"parus.boot.path" = "direct-dtb"
+"parus.boot.direct_dtb" = true
+"parus.boot.ribon_lbpb" = false
+"parus.boot.allow_direct_dtb_fallback" = false
+"parus.boot.image_load_address" = 0x00080000
+"parus.target.board" = "rpi5"
+"parus.target.arch" = "arm64"
+"parus.target.output_name" = "parus-rpi5-direct-dtb-alive"
+"parus.target.image_path" = "build/target/debug/arm64/rpi5/direct-dtb-alive/parus-rpi5-direct-dtb-alive.img"
+"parus.target.qstar_label" = "//targets/arm64:parus_rpi5_direct_dtb_elf"

@@ -1,0 +1,19 @@
+{
+  "schema": "confit-inputs-v1",
+  "project": "parus",
+  "profile": "qemu-aarch64",
+  "target": "qemu-virt-aarch64",
+  "confit_version": "confit 0.1.0-round1",
+  "files": [
+    {"path": "config/options/boot.toml", "sha256": "357739c0702d44c5ec11588593748c829b2611c8af5e8630a6726979972a660b"},
+    {"path": "config/options/build.toml", "sha256": "3b89b404153b5751befead939a11a12fdaa1630a886cf04782a93d7d449b9d77"},
+    {"path": "config/options/executor.toml", "sha256": "7bdcfa9f0b69983a5b9f494650c936376ff2f69c92b3d4b8a6d85048685ead28"},
+    {"path": "config/options/target.toml", "sha256": "62c6406eb9bdbb61257ebf7c16e2fe73bf361d871ca84a8421b03f3079d576b6"},
+    {"path": "config/profiles/bringup.toml", "sha256": "7063d29bcb30882fd8caba5e6fa3a9854b24e5167f366ad9774a69dcd2b631ff"},
+    {"path": "config/profiles/qemu-aarch64.toml", "sha256": "d45928414df495820f19b0cceadfa720f9a503dee628bf661aadf880aab90d6e"},
+    {"path": "config/profiles/rpi5-direct-dtb.toml", "sha256": "9f7ff14764b5cd0890a22bd7881b7238758f293fb0c67cd260a509821cc1386f"},
+    {"path": "config/project.toml", "sha256": "a13add3434458372b1aad708eb0b7f7b529a0a2ab68c82a6626683b9312b7b00"},
+    {"path": "config/targets/qemu-virt-aarch64.toml", "sha256": "ab7acf94810e0d21bf56088deaa99c24ca859369516071581729c19427f7c42b"},
+    {"path": "config/targets/rpi5-direct-dtb.toml", "sha256": "bfe497a16f3605eb19b1cb116da223049be7caa0476943a6a2591f18acff14bc"}
+  ]
+}

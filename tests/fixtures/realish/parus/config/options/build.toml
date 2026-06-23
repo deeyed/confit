@@ -1,0 +1,88 @@
+[option."parus.config.profile"]
+type = "enum"
+default = "qemu-virt-aarch64"
+choices = ["qemu-virt-aarch64", "rpi5", "qemu-amd64"]
+prompt = "Config profile"
+category = "config"
+tags = ["config", "profile"]
+help = "Board profile that selects Parus source config inputs."
+owner = "parus-config"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.config.defconfig"]
+type = "path"
+default = "configs/boards/qemu-virt-aarch64/defconfig"
+prompt = "Defconfig"
+category = "config"
+tags = ["config", "defconfig"]
+help = "Hand-written board defconfig consumed by the resolver."
+owner = "parus-config"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.config.output_dir"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/config"
+prompt = "Resolved config output"
+category = "config"
+tags = ["config", "generated"]
+help = "Build-tree directory for resolved .config state."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.generated.include_root"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/generated/include"
+prompt = "Generated include root"
+category = "build"
+tags = ["generated", "header"]
+help = "Build-tree include root that contains parus/autoconf.h."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.generated.config_dir"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/generated/config"
+prompt = "Generated config dir"
+category = "build"
+tags = ["generated", "config"]
+help = "Build-tree directory for generated config.cmake and config JSON."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.generated.autoconf_header"]
+type = "bool"
+default = true
+prompt = "Generate autoconf.h"
+category = "build"
+tags = ["generated", "header"]
+help = "Emit the C/ASM generated configuration header."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.generated.cmake"]
+type = "bool"
+default = true
+prompt = "Generate config.cmake"
+category = "build"
+tags = ["generated", "cmake"]
+help = "Emit the CMake config fragment consumed by the build graph."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.generated.qstar_manifest"]
+type = "bool"
+default = true
+prompt = "Generate QStar manifest"
+category = "build"
+tags = ["generated", "qstar"]
+help = "Emit the QStar-readable generated config manifest."
+owner = "parus-build"
+since = "0.1.0"
+stability = "experimental"

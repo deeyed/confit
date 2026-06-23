@@ -1,0 +1,103 @@
+[option."parus.policy.hardware_first"]
+type = "bool"
+default = true
+prompt = "Hardware-first policy"
+category = "policy"
+tags = ["policy", "hardware"]
+help = "Keep RPi5 hardware and QEMU AArch64 as first-class validation lanes."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.policy.keep_v1_reference_only"]
+type = "bool"
+default = true
+prompt = "Keep Kairon v1 reference-only"
+category = "policy"
+tags = ["policy", "migration"]
+help = "Treat Kairon v1 as reference material rather than active source."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.boot.path"]
+type = "enum"
+default = "direct-dtb"
+choices = ["direct-dtb", "ribon-lbpb", "firmware-direct"]
+prompt = "Boot handoff path"
+category = "boot"
+tags = ["boot", "handoff"]
+help = "Primary handoff source that xibalba validates."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.boot.direct_dtb"]
+type = "bool"
+default = false
+prompt = "Direct DTB handoff"
+category = "boot"
+tags = ["boot", "dtb"]
+help = "Primary handoff pointer is a DTB blob candidate."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.boot.ribon_lbpb"]
+type = "bool"
+default = false
+prompt = "Ribon LBPB handoff"
+category = "boot"
+tags = ["boot", "ribon", "lbpb"]
+help = "Primary handoff pointer is a Ribon LBPB candidate."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+conflicts = ["parus.boot.direct_dtb"]
+
+[option."parus.boot.allow_direct_dtb_fallback"]
+type = "bool"
+default = false
+prompt = "Allow direct DTB fallback"
+category = "boot"
+tags = ["boot", "dtb", "fallback"]
+help = "Allow independently supplied DTB fallback when the primary path is Ribon LBPB."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+requires = ["parus.boot.ribon_lbpb"]
+
+[option."parus.boot.early_serial"]
+type = "bool"
+default = true
+prompt = "Early serial diagnostics"
+category = "boot"
+tags = ["boot", "serial", "diagnostics"]
+help = "Plan early UART marker diagnostics during bring-up."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.boot.stage_limit"]
+type = "enum"
+default = "eb2"
+choices = ["xibalba", "eb2", "kernel-main", "idle"]
+prompt = "Validated boot stage limit"
+category = "boot"
+tags = ["boot", "smoke"]
+help = "Highest expected smoke-test marker for this profile."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "experimental"
+
+[option."parus.boot.image_load_address"]
+type = "hex"
+default = 0x00080000
+range = [0x00000000, 0xFFFFFFFF]
+prompt = "Image load address"
+category = "boot"
+tags = ["boot", "image"]
+help = "Raw AArch64 image load address used by the selected lane."
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"

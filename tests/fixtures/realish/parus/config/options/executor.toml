@@ -1,0 +1,46 @@
+[option."parus.kcg.core_model"]
+type = "bool"
+default = false
+prompt = "KCG core model"
+category = "executor"
+tags = ["executor", "kcg"]
+help = "Enable compile-time surfaces for the KCG command substrate."
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+
+[option."parus.kcg.capability_binding"]
+type = "bool"
+default = false
+prompt = "KCG capability binding"
+category = "executor"
+tags = ["executor", "kcg", "capability"]
+help = "Model capability-backed runtime binding for KCG invocations."
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+requires = ["parus.kcg.core_model"]
+
+[option."parus.executor.rt_executor"]
+type = "bool"
+default = false
+prompt = "RT executor domain"
+category = "executor"
+tags = ["executor", "rt", "delos"]
+help = "Enable the RT Executor domain candidate that may lower KCG intent to Delos DCG."
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+requires = ["parus.kcg.core_model"]
+
+[option."parus.executor.delos_target"]
+type = "bool"
+default = false
+prompt = "Delos RT target"
+category = "executor"
+tags = ["executor", "delos", "dcg"]
+help = "Treat Delos as an RT execution substrate candidate. This is not a fabric ABI."
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+requires = ["parus.executor.rt_executor"]

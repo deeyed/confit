@@ -1,0 +1,140 @@
+[option."parus.arch.arm64"]
+type = "bool"
+default = false
+prompt = "AArch64 architecture"
+category = "target"
+tags = ["target", "arch"]
+help = "Build the arm64 Parus entry lane."
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.arch.amd64"]
+type = "bool"
+default = false
+prompt = "AMD64 architecture"
+category = "target"
+tags = ["target", "arch"]
+help = "Build the AMD64 UEFI Parus entry lane."
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+conflicts = ["parus.arch.arm64"]
+
+[option."parus.board.qemu_virt_aarch64"]
+type = "bool"
+default = false
+prompt = "QEMU virt AArch64 board"
+category = "target"
+tags = ["target", "board", "qemu"]
+help = "Select the QEMU virt AArch64 bring-up lane."
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+requires = ["parus.arch.arm64"]
+
+[option."parus.board.rpi5"]
+type = "bool"
+default = false
+prompt = "Raspberry Pi 5 board"
+category = "target"
+tags = ["target", "board", "rpi5"]
+help = "Select the Raspberry Pi 5 bring-up lane."
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+requires = ["parus.arch.arm64"]
+conflicts = ["parus.board.qemu_virt_aarch64"]
+
+[option."parus.board.qemu_amd64"]
+type = "bool"
+default = false
+prompt = "QEMU AMD64 board"
+category = "target"
+tags = ["target", "board", "qemu"]
+help = "Select the QEMU AMD64 smoke lane."
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+requires = ["parus.arch.amd64"]
+conflicts = ["parus.board.qemu_virt_aarch64", "parus.board.rpi5"]
+
+[option."parus.target.board"]
+type = "enum"
+default = "qemu-virt-aarch64"
+choices = ["qemu-virt-aarch64", "rpi5", "qemu-amd64"]
+prompt = "Target board"
+category = "target"
+tags = ["target", "board"]
+help = "Selected Parus board profile."
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.target.arch"]
+type = "enum"
+default = "arm64"
+choices = ["arm64", "amd64"]
+prompt = "Target architecture"
+category = "target"
+tags = ["target", "arch"]
+help = "Selected Parus architecture."
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.target.output_name"]
+type = "string"
+default = "parus-qemu-virt-aarch64-entry"
+prompt = "Output name"
+category = "target"
+tags = ["target", "artifact"]
+help = "Primary target artifact stem."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.target.image_path"]
+type = "path"
+default = "build/target/debug/arm64/qemu-virt-aarch64/parus-qemu-virt-aarch64-entry.img"
+prompt = "Image path"
+category = "target"
+tags = ["target", "artifact"]
+help = "Primary generated image path for the selected lane."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.target.qstar_label"]
+type = "string"
+default = "//targets/arm64:parus_qemu_virt_aarch64_entry_elf"
+prompt = "QStar label"
+category = "target"
+tags = ["target", "qstar"]
+help = "Primary QStar label for the selected build lane."
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.test.qemu_pairing"]
+type = "bool"
+default = true
+prompt = "Enable QEMU pairing"
+category = "test"
+tags = ["test", "qemu"]
+help = "Keep the paired QEMU validation lane enabled."
+owner = "parus-test"
+since = "0.1.0"
+stability = "stable"
+
+[option."parus.test.smoke_level"]
+type = "enum"
+default = "boot-smoke"
+choices = ["entry-smoke", "boot-smoke", "dtb-serial-smoke", "runtime-smoke", "package-check"]
+prompt = "Smoke level"
+category = "test"
+tags = ["test", "smoke"]
+help = "Validation level expected from this profile."
+owner = "parus-test"
+since = "0.1.0"
+stability = "stable"

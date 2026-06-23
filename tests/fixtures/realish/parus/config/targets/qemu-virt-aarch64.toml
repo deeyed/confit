@@ -1,0 +1,26 @@
+[target]
+name = "qemu-virt-aarch64"
+schema_version = 1
+arch = "arm64"
+board = "qemu-virt-aarch64"
+
+[target.claim]
+level = "qemu-boot-smoke"
+
+[values]
+"parus.config.profile" = "qemu-virt-aarch64"
+"parus.arch.arm64" = true
+"parus.arch.amd64" = false
+"parus.board.qemu_virt_aarch64" = true
+"parus.board.rpi5" = false
+"parus.board.qemu_amd64" = false
+"parus.boot.path" = "direct-dtb"
+"parus.boot.direct_dtb" = true
+"parus.boot.ribon_lbpb" = false
+"parus.boot.allow_direct_dtb_fallback" = false
+"parus.boot.image_load_address" = 0x00080000
+"parus.target.board" = "qemu-virt-aarch64"
+"parus.target.arch" = "arm64"
+"parus.target.output_name" = "parus-qemu-virt-aarch64-entry"
+"parus.target.image_path" = "build/target/debug/arm64/qemu-virt-aarch64/parus-qemu-virt-aarch64-entry.img"
+"parus.target.qstar_label" = "//targets/arm64:parus_qemu_virt_aarch64_entry_elf"

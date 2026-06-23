@@ -1,0 +1,16 @@
+[profile]
+name = "bringup"
+schema_version = 1
+
+[values]
+"parus.policy.hardware_first" = true
+"parus.policy.keep_v1_reference_only" = true
+"parus.boot.early_serial" = true
+"parus.test.qemu_pairing" = true
+"parus.generated.autoconf_header" = true
+"parus.generated.cmake" = true
+"parus.generated.qstar_manifest" = true
+"parus.kcg.core_model" = false
+"parus.kcg.capability_binding" = false
+"parus.executor.rt_executor" = false
+"parus.executor.delos_target" = false

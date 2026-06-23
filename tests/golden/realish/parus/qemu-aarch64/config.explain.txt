@@ -1,0 +1,105 @@
+profile: qemu-aarch64
+target: qemu-virt-aarch64
+
+enabled:
+  parus.arch.arm64
+    because resolved bool is true
+    set by profiles/qemu-aarch64.toml
+  parus.board.qemu_virt_aarch64
+    because resolved bool is true
+    set by profiles/qemu-aarch64.toml
+  parus.boot.direct_dtb
+    because resolved bool is true
+    set by profiles/qemu-aarch64.toml
+  parus.boot.early_serial
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.boot.image_load_address
+    because resolved number is non-zero
+    set by targets/qemu-virt-aarch64.toml
+  parus.boot.path
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.boot.stage_limit
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.config.defconfig
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.config.output_dir
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.config.profile
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.generated.autoconf_header
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.generated.cmake
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.generated.config_dir
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.generated.include_root
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.generated.qstar_manifest
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.policy.hardware_first
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.policy.keep_v1_reference_only
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.target.arch
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.target.board
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.target.image_path
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.target.output_name
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.target.qstar_label
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+  parus.test.qemu_pairing
+    because resolved bool is true
+    set by profiles/bringup.toml
+  parus.test.smoke_level
+    because resolved text is non-empty
+    set by profiles/qemu-aarch64.toml
+
+disabled:
+  parus.arch.amd64
+    because resolved bool is false
+    set by profiles/qemu-aarch64.toml
+  parus.board.qemu_amd64
+    because resolved bool is false
+    set by profiles/qemu-aarch64.toml
+  parus.board.rpi5
+    because resolved bool is false
+    set by profiles/qemu-aarch64.toml
+  parus.boot.allow_direct_dtb_fallback
+    because resolved bool is false
+    set by profiles/qemu-aarch64.toml
+  parus.boot.ribon_lbpb
+    because resolved bool is false
+    set by profiles/qemu-aarch64.toml
+  parus.executor.delos_target
+    because resolved bool is false
+    set by profiles/bringup.toml
+  parus.executor.rt_executor
+    because resolved bool is false
+    set by profiles/bringup.toml
+  parus.kcg.capability_binding
+    because resolved bool is false
+    set by profiles/bringup.toml
+  parus.kcg.core_model
+    because resolved bool is false
+    set by profiles/bringup.toml

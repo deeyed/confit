@@ -1,0 +1,10 @@
+[project]
+name = "parus"
+version = "0.1.0"
+schema_version = 1
+imports = [
+  "options/boot.toml",
+  "options/build.toml",
+  "options/executor.toml",
+  "options/target.toml",
+]
