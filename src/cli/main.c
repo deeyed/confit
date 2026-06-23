@@ -9,6 +9,7 @@
 #include "confit/resolver.h"
 #include "confit/schema.h"
 #include "confit/status.h"
+#include "confit/tui.h"
 #include "confit/version.h"
 
 typedef struct ConfitCliProjectArgs {
@@ -146,6 +147,12 @@ static ConfitStatus confit_cli_print_help(void) {
   if (status != CONFIT_OK) {
     return status;
   }
+  status = confit_host_stdout_write(
+      "  confit tui --project <path> --profile <name> "
+      "[--target <name>]\n");
+  if (status != CONFIT_OK) {
+    return status;
+  }
   status = confit_host_stdout_write("\nCommands:\n");
   if (status != CONFIT_OK) {
     return status;
@@ -171,6 +178,10 @@ static ConfitStatus confit_cli_print_help(void) {
     return status;
   }
   status = confit_host_stdout_write("  graph       Emit dependency graph JSON or DOT.\n");
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_stdout_write("  tui         Start the terminal UI shell.\n");
   if (status != CONFIT_OK) {
     return status;
   }
@@ -1091,6 +1102,30 @@ static int confit_cli_run_graph(int argc, char **argv) {
   return confit_status_exit_code(CONFIT_OK);
 }
 
+static int confit_cli_run_tui(int argc, char **argv) {
+  ConfitCliProjectArgs args;
+  ConfitTuiOptions options;
+  ConfitDiagnostic diagnostic;
+  ConfitStatus status;
+
+  status = confit_cli_parse_project_args(
+      argc, argv, 2, &args, 1, "unknown tui option",
+      "tui does not accept positional arguments");
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  options.project_root = args.project_root;
+  options.profile_name = args.profile_name;
+  options.target_name = args.target_name;
+  confit_diagnostic_init(&diagnostic);
+  status = confit_tui_run(&options, &diagnostic);
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+  return confit_status_exit_code(CONFIT_OK);
+}
+
 int main(int argc, char **argv) {
   ConfitStatus status;
 
@@ -1125,6 +1160,9 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "graph") == 0) {
     return confit_cli_run_graph(argc, argv);
+  }
+  if (strcmp(argv[1], "tui") == 0) {
+    return confit_cli_run_tui(argc, argv);
   }
 
   status = confit_host_stderr_write("confit: unknown command or option: ");

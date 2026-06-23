@@ -66,6 +66,25 @@ else()
   )
 endif()
 
+add_library(confit_tui_vendor STATIC
+  vendor/tui/confit_tui.c
+)
+
+target_include_directories(confit_tui_vendor
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tui
+)
+
+target_compile_features(confit_tui_vendor PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_tui_vendor PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_tui_vendor PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_library(confit_parser STATIC
   src/parser/parser.c
 )
@@ -172,6 +191,28 @@ else()
   )
 endif()
 
+add_library(confit_tui STATIC
+  src/tui/tui.c
+)
+
+target_link_libraries(confit_tui
+  PUBLIC
+    confit_schema
+  PRIVATE
+    confit_graph
+    confit_resolver
+    confit_tui_vendor
+)
+target_compile_features(confit_tui PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_tui PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_tui PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -180,8 +221,7 @@ target_link_libraries(confit PRIVATE
   confit_compat
   confit_explain
   confit_generator
-  confit_graph
-  confit_schema
+  confit_tui
 )
 
 if(MSVC)
@@ -483,4 +523,13 @@ add_test(
           $<TARGET_FILE:confit>
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round16-cli
+)
+
+add_test(
+  NAME confit.cli.tui
+  COMMAND /bin/sh
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round17_tui_smoke.sh
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round17-tui
 )
