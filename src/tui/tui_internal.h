@@ -42,6 +42,7 @@ typedef struct ConfitTuiListItem {
   unsigned depth;
   int is_heading;
   int expanded;
+  int is_disabled;
 } ConfitTuiListItem;
 
 typedef struct ConfitTuiScreen {

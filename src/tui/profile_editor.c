@@ -30,6 +30,8 @@ typedef struct ConfitTuiRow {
   char label[160];
   char detail[224];
   char value[128];
+  char dependency_state[160];
+  int is_disabled;
 } ConfitTuiRow;
 
 typedef struct ConfitTuiState {
@@ -56,6 +58,7 @@ typedef struct ConfitTuiState {
 } ConfitTuiState;
 
 typedef struct ConfitTuiValueValidator {
+  const ConfitTuiState *state;
   const ConfitOption *option;
 } ConfitTuiValueValidator;
 
@@ -351,6 +354,261 @@ static void confit_tui_format_value(const ConfitOption *option,
     break;
   }
   out[out_size - 1U] = '\0';
+}
+
+static int confit_tui_value_is_active(const ConfitValue *value) {
+  if (value == 0) {
+    return 0;
+  }
+  switch (value->kind) {
+  case CONFIT_VALUE_BOOL:
+    return value->as.bool_value != 0;
+  case CONFIT_VALUE_INT:
+    return value->as.int_value != 0;
+  case CONFIT_VALUE_UINT:
+    return value->as.uint_value != 0U;
+  case CONFIT_VALUE_FLOAT:
+    return value->as.float_value != 0.0;
+  case CONFIT_VALUE_STRING:
+  case CONFIT_VALUE_ENUM:
+  case CONFIT_VALUE_PATH:
+    return value->as.string_value != 0 && value->as.string_value[0] != '\0';
+  default:
+    return 0;
+  }
+}
+
+static int confit_tui_option_active(const ConfitTuiState *state,
+                                    const char *option_id) {
+  const ConfitResolvedValue *resolved;
+
+  if (state == 0 || option_id == 0) {
+    return 0;
+  }
+  resolved = confit_resolved_config_find(state->config, option_id);
+  return confit_tui_value_is_active(resolved != 0 ? &resolved->value : 0);
+}
+
+static void confit_tui_format_dependency_reason(char *out, size_t out_size,
+                                                const char *prefix,
+                                                const char *option_id) {
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  (void)snprintf(out, out_size, "%s %s", prefix,
+                 confit_tui_text_or_dash(option_id));
+  out[out_size - 1U] = '\0';
+}
+
+static const char *
+confit_tui_find_inactive_dependency(const ConfitTuiState *state,
+                                    const ConfitOption *option,
+                                    ConfitDependencyKind kind) {
+  size_t index;
+
+  if (state == 0 || option == 0) {
+    return 0;
+  }
+  for (index = 0U; index < option->dependency_count; ++index) {
+    const ConfitDependencyRef *dependency = &option->dependencies[index];
+
+    if (dependency->kind == kind &&
+        !confit_tui_option_active(state, dependency->option_id)) {
+      return dependency->option_id;
+    }
+  }
+  return 0;
+}
+
+static const char *
+confit_tui_find_active_dependency(const ConfitTuiState *state,
+                                  const ConfitOption *option,
+                                  ConfitDependencyKind kind) {
+  size_t index;
+
+  if (state == 0 || option == 0) {
+    return 0;
+  }
+  for (index = 0U; index < option->dependency_count; ++index) {
+    const ConfitDependencyRef *dependency = &option->dependencies[index];
+
+    if (dependency->kind == kind &&
+        confit_tui_option_active(state, dependency->option_id)) {
+      return dependency->option_id;
+    }
+  }
+  return 0;
+}
+
+static const char *
+confit_tui_find_active_incoming_dependency(const ConfitTuiState *state,
+                                           const char *option_id,
+                                           ConfitDependencyKind kind) {
+  size_t option_index;
+
+  if (state == 0 || option_id == 0) {
+    return 0;
+  }
+  for (option_index = 0U; option_index < state->project->option_count;
+       ++option_index) {
+    const ConfitOption *source = &state->project->options[option_index];
+    size_t dependency_index;
+
+    if (!confit_tui_option_active(state, source->id)) {
+      continue;
+    }
+    for (dependency_index = 0U; dependency_index < source->dependency_count;
+         ++dependency_index) {
+      const ConfitDependencyRef *dependency =
+          &source->dependencies[dependency_index];
+
+      if (dependency->kind == kind && dependency->option_id != 0 &&
+          strcmp(dependency->option_id, option_id) == 0) {
+        return source->id;
+      }
+    }
+  }
+  return 0;
+}
+
+static int confit_tui_candidate_block_reason(const ConfitTuiState *state,
+                                             const ConfitOption *option,
+                                             const ConfitValue *candidate,
+                                             char *reason, size_t reason_size) {
+  const int candidate_active = confit_tui_value_is_active(candidate);
+  const char *dependency_id;
+
+  dependency_id = confit_tui_find_inactive_dependency(
+      state, option, CONFIT_DEPENDENCY_VISIBLE_IF);
+  if (dependency_id != 0) {
+    confit_tui_format_dependency_reason(
+        reason, reason_size, "hidden: visible_if inactive", dependency_id);
+    return 1;
+  }
+
+  dependency_id = confit_tui_find_active_incoming_dependency(
+      state, option->id, CONFIT_DEPENDENCY_FORCES);
+  if (dependency_id != 0) {
+    confit_tui_format_dependency_reason(reason, reason_size,
+                                        "blocked: forced by", dependency_id);
+    return 1;
+  }
+
+  if (candidate_active) {
+    dependency_id = confit_tui_find_inactive_dependency(
+        state, option, CONFIT_DEPENDENCY_REQUIRES);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(reason, reason_size,
+                                          "blocked: requires", dependency_id);
+      return 1;
+    }
+    dependency_id = confit_tui_find_active_dependency(
+        state, option, CONFIT_DEPENDENCY_CONFLICTS);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(
+          reason, reason_size, "blocked: conflicts with", dependency_id);
+      return 1;
+    }
+    dependency_id = confit_tui_find_active_incoming_dependency(
+        state, option->id, CONFIT_DEPENDENCY_CONFLICTS);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(
+          reason, reason_size, "blocked: conflicted by", dependency_id);
+      return 1;
+    }
+  } else {
+    dependency_id = confit_tui_find_active_incoming_dependency(
+        state, option->id, CONFIT_DEPENDENCY_REQUIRES);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(
+          reason, reason_size, "blocked: required by", dependency_id);
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void confit_tui_format_dependency_state(const ConfitTuiState *state,
+                                               const ConfitOption *option,
+                                               const ConfitValue *current,
+                                               char *out, size_t out_size,
+                                               int *out_disabled) {
+  ConfitValue candidate;
+  const char *dependency_id;
+  int disabled;
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  out[0] = '\0';
+  disabled = 0;
+  confit_value_init(&candidate);
+
+  dependency_id = confit_tui_find_inactive_dependency(
+      state, option, CONFIT_DEPENDENCY_VISIBLE_IF);
+  if (dependency_id != 0) {
+    confit_tui_format_dependency_reason(
+        out, out_size, "hidden: visible_if inactive", dependency_id);
+    disabled = 1;
+  } else {
+    dependency_id = confit_tui_find_active_incoming_dependency(
+        state, option->id, CONFIT_DEPENDENCY_FORCES);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(out, out_size, "blocked: forced by",
+                                          dependency_id);
+      disabled = 1;
+    }
+  }
+
+  if (out[0] == '\0' && current != 0 &&
+      confit_value_copy(&candidate, current) == CONFIT_OK) {
+    switch (candidate.kind) {
+    case CONFIT_VALUE_BOOL:
+      candidate.as.bool_value = !candidate.as.bool_value;
+      break;
+    case CONFIT_VALUE_INT:
+      if (candidate.as.int_value != 0) {
+        candidate.as.int_value = 0;
+      }
+      break;
+    case CONFIT_VALUE_UINT:
+      if (candidate.as.uint_value != 0U) {
+        candidate.as.uint_value = 0U;
+      }
+      break;
+    case CONFIT_VALUE_FLOAT:
+      if (candidate.as.float_value != 0.0) {
+        candidate.as.float_value = 0.0;
+      }
+      break;
+    case CONFIT_VALUE_STRING:
+    case CONFIT_VALUE_ENUM:
+    case CONFIT_VALUE_PATH:
+    case CONFIT_VALUE_EMPTY:
+    default:
+      break;
+    }
+    if (confit_tui_candidate_block_reason(state, option, &candidate, out,
+                                          out_size)) {
+      disabled = 1;
+    }
+  }
+  confit_value_clear(&candidate);
+
+  if (out[0] == '\0') {
+    dependency_id = confit_tui_find_active_incoming_dependency(
+        state, option->id, CONFIT_DEPENDENCY_RECOMMENDS);
+    if (dependency_id != 0) {
+      confit_tui_format_dependency_reason(out, out_size, "recommended by",
+                                          dependency_id);
+    } else {
+      (void)snprintf(out, out_size, "deps ok");
+      out[out_size - 1U] = '\0';
+    }
+  }
+  if (out_disabled != 0) {
+    *out_disabled = disabled;
+  }
 }
 
 static int confit_tui_option_has_tag(const ConfitOption *option,
@@ -669,6 +927,7 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       const ConfitResolvedValue *resolved;
       const ConfitNamedValue *edit;
       const char *mark;
+      const ConfitValue *resolved_value;
       char tags[96];
       char deps[96];
       ConfitTuiRow *row;
@@ -679,6 +938,8 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       }
 
       resolved = confit_resolved_config_find(state->config, option->id);
+      resolved_value =
+          resolved != 0 ? &resolved->value : &option->default_value;
       edit = confit_tui_find_const_edit(state, option->id);
       mark = edit != 0 ? "*" : " ";
       confit_tui_format_tag_summary(option, tags, sizeof(tags));
@@ -690,21 +951,24 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       row->option = option;
       (void)snprintf(row->label, sizeof(row->label), "%s", option->id);
       row->label[sizeof(row->label) - 1U] = '\0';
-      (void)snprintf(row->detail, sizeof(row->detail),
-                     "%s%s | %s | tags: %s | %s", mark,
-                     confit_option_type_name(option->type), deps, tags,
-                     confit_tui_text_or_dash(option->prompt));
+      confit_tui_format_dependency_state(
+          state, option, resolved_value, row->dependency_state,
+          sizeof(row->dependency_state), &row->is_disabled);
+      (void)snprintf(
+          row->detail, sizeof(row->detail), "%s%s | %s | tags: %s | %s | %s",
+          mark, confit_option_type_name(option->type), deps, tags,
+          confit_tui_text_or_dash(option->prompt), row->dependency_state);
       row->detail[sizeof(row->detail) - 1U] = '\0';
 
-      confit_tui_format_value(
-          option, resolved != 0 ? &resolved->value : &option->default_value,
-          row->value, sizeof(row->value));
+      confit_tui_format_value(option, resolved_value, row->value,
+                              sizeof(row->value));
       row->item.label = row->label;
       row->item.detail = row->detail;
       row->item.value = row->value;
       row->item.depth = 1U;
       row->item.is_heading = 0;
       row->item.expanded = 0;
+      row->item.is_disabled = row->is_disabled;
       state->row_count += 1U;
     }
   }
@@ -1048,6 +1312,16 @@ static ConfitStatus confit_tui_apply_value_edit(ConfitTuiState *state,
                                                 const ConfitValue *value,
                                                 ConfitDiagnostic *diagnostic) {
   ConfitStatus status;
+  char reason[160];
+
+  reason[0] = '\0';
+  if (confit_tui_candidate_block_reason(state, option, value, reason,
+                                        sizeof(reason))) {
+    (void)snprintf(state->status, sizeof(state->status), "%s", reason);
+    state->status[sizeof(state->status) - 1U] = '\0';
+    (void)diagnostic;
+    return CONFIT_OK;
+  }
 
   status = confit_tui_set_edit(state, option->id, value, diagnostic);
   if (status != CONFIT_OK) {
@@ -1097,6 +1371,11 @@ static int confit_tui_value_dialog_validator(const char *text, char *message,
   confit_value_init(&value);
   status = confit_tui_parse_value(validator->option, text, &value, message,
                                   message_size);
+  if (status == CONFIT_OK &&
+      confit_tui_candidate_block_reason(validator->state, validator->option,
+                                        &value, message, message_size)) {
+    status = CONFIT_ERR_DEPENDENCY;
+  }
   confit_value_clear(&value);
   return status == CONFIT_OK ? 0 : 1;
 }
@@ -1212,6 +1491,7 @@ confit_tui_prompt_typed_value(ConfitTuiState *state, const ConfitOption *option,
   (void)snprintf(prompt, sizeof(prompt),
                  "%s value: ", confit_option_type_name(option->type));
   prompt[sizeof(prompt) - 1U] = '\0';
+  validator.state = state;
   validator.option = option;
   input_status = confit_tui_curses_read_value_dialog(
       "Confit Value", header, prompt, "Enter a value",
@@ -1776,6 +2056,87 @@ confit_tui_detail_append_dependencies(ConfitTuiTextBuilder *builder,
   return status;
 }
 
+static ConfitStatus confit_tui_detail_append_runtime_dependency_state(
+    ConfitTuiTextBuilder *builder, const ConfitTuiState *state,
+    const ConfitOption *option, const ConfitValue *current) {
+  char state_line[160];
+  const char *dependency_id;
+  int disabled;
+  ConfitStatus status;
+
+  disabled = 0;
+  confit_tui_format_dependency_state(state, option, current, state_line,
+                                     sizeof(state_line), &disabled);
+  status = confit_tui_text_append(builder, "\nDependency State\n");
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder, "display policy: ",
+        "show dimmed, not hidden, so blocked reasons remain inspectable");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder, "row state: ", state_line[0] != '\0' ? state_line : "deps ok");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder, "edit policy: ", disabled ? "blocked or guarded" : "editable");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder, "edit block: ", disabled ? state_line : "-");
+  }
+  dependency_id = confit_tui_find_inactive_dependency(
+      state, option, CONFIT_DEPENDENCY_VISIBLE_IF);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "visible_if inactive: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_inactive_dependency(
+      state, option, CONFIT_DEPENDENCY_REQUIRES);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "requires inactive: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_active_dependency(
+      state, option, CONFIT_DEPENDENCY_CONFLICTS);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "conflicts active: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_active_incoming_dependency(
+      state, option->id, CONFIT_DEPENDENCY_FORCES);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "forced by active: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_active_incoming_dependency(
+      state, option->id, CONFIT_DEPENDENCY_REQUIRES);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "required by active: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_active_incoming_dependency(
+      state, option->id, CONFIT_DEPENDENCY_CONFLICTS);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "conflicted by active: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  dependency_id = confit_tui_find_active_incoming_dependency(
+      state, option->id, CONFIT_DEPENDENCY_RECOMMENDS);
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder,
+        "recommended by active: ", dependency_id != 0 ? dependency_id : "-");
+  }
+  return status;
+}
+
 static ConfitStatus
 confit_tui_build_option_detail(const ConfitTuiState *state,
                                const ConfitOption *option, char **out_text,
@@ -1829,6 +2190,11 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_tags(&builder, option);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_runtime_dependency_state(
+        &builder, state, option,
+        resolved != 0 ? &resolved->value : &option->default_value);
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_dependencies(&builder, option);

@@ -1,0 +1,67 @@
+[option."confit.dep.gate"]
+type = "bool"
+default = false
+prompt = "Visibility Gate"
+category = "deps"
+tags = ["deps", "visible"]
+help = "Controls visibility for the dependent option."
+
+[option."confit.dep.hidden"]
+type = "bool"
+default = false
+prompt = "Visible If Gate"
+category = "deps"
+tags = ["deps", "visible"]
+help = "Hidden in policy when the gate is inactive."
+visible_if = ["confit.dep.gate"]
+
+[option."confit.dep.prereq"]
+type = "bool"
+default = false
+prompt = "Requirement Prereq"
+category = "deps"
+tags = ["deps", "requires"]
+help = "A required prerequisite left inactive in this fixture."
+
+[option."confit.dep.requires"]
+type = "bool"
+default = false
+prompt = "Requires Prereq"
+category = "deps"
+tags = ["deps", "requires"]
+help = "Cannot be enabled until the prereq is active."
+requires = ["confit.dep.prereq"]
+
+[option."confit.dep.conflict_target"]
+type = "bool"
+default = true
+prompt = "Conflict Target"
+category = "deps"
+tags = ["deps", "conflict"]
+help = "An active conflict target."
+
+[option."confit.dep.conflicted"]
+type = "bool"
+default = false
+prompt = "Conflicted Option"
+category = "deps"
+tags = ["deps", "conflict"]
+help = "Cannot be enabled while the conflict target is active."
+conflicts = ["confit.dep.conflict_target"]
+
+[option."confit.dep.recommender"]
+type = "bool"
+default = true
+prompt = "Recommender"
+category = "deps"
+tags = ["deps", "recommend"]
+help = "Active option that recommends another option."
+recommends = ["confit.dep.recommended"]
+
+[option."confit.dep.recommended"]
+type = "bool"
+default = false
+prompt = "Recommended Option"
+category = "deps"
+tags = ["deps", "recommend"]
+help = "Recommended but not blocked."

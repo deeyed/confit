@@ -135,6 +135,12 @@ Profile edit는 입력 시점에 검증한다. Bool은 즉시 toggle된다. Enum
 있다. Int/uint/hex/float/string/path는 value dialog에서 입력하며, range, enum candidate, finite float,
 relative path, non-empty string/path 조건을 만족하지 않으면 dialog를 닫지 않고 같은 자리에서 다시 입력받는다.
 
+Dependency/visibility UX 정책은 "숨기지 않고 흐리게 보여준다"이다. `visible_if`가 만족되지 않거나 active
+`forces`, active `requires`, active `conflicts` 때문에 값을 바꿀 수 없는 option도 menu row에 남겨서 reason을
+볼 수 있게 한다. Row detail과 help/detail은 `hidden: visible_if inactive ...`, `blocked: forced by ...`,
+`blocked: required by ...`, `blocked: conflicts with ...`, `recommended by ...`처럼 현재 profile 기준 상태를
+표시한다. `recommends`는 편집을 막지 않고 안내 상태로만 표시한다.
+
 Schema editor:
 
 | Key | 동작 |

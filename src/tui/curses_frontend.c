@@ -186,12 +186,18 @@ static void confit_tui_curses_render_row(int row, int col, int width,
   if (selected) {
     attron(A_REVERSE);
   }
+  if (item != 0 && item->is_disabled) {
+    attron(A_DIM);
+  }
   if (item != 0 && item->is_heading) {
     attron(A_BOLD);
   }
   confit_tui_curses_add_clipped(row, col, line, width);
   if (item != 0 && item->is_heading) {
     attroff(A_BOLD);
+  }
+  if (item != 0 && item->is_disabled) {
+    attroff(A_DIM);
   }
   if (selected) {
     attroff(A_REVERSE);
