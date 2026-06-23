@@ -22,6 +22,9 @@ printf 'sq' |
     >"$WORK_DIR/tui-profile-create.txt"
 
 grep -aF "option 1/6" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "Menu" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "/ search c category t tag x clear e edit s save q quit" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
 

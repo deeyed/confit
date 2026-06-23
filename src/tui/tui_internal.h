@@ -36,7 +36,8 @@ typedef struct ConfitTuiListItem {
 
 typedef struct ConfitTuiScreen {
   const char *title;
-  const char *subtitle;
+  const char *header;
+  const char *key_legend;
   const ConfitTuiListItem *items;
   size_t item_count;
   size_t selected_index;

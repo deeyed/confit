@@ -832,7 +832,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                                              const char *target_name) {
   ConfitTuiListItem *items;
   ConfitTuiScreen screen;
-  char subtitle[320];
+  char header[320];
+  char key_legend[128];
   char status_line[384];
   size_t index;
 
@@ -847,7 +848,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
     }
   }
 
-  (void)snprintf(subtitle, sizeof(subtitle),
+  (void)snprintf(header, sizeof(header),
                  "project=%s profile=%s target=%s search=%s category=%s "
                  "tag=%s dirty=%s",
                  confit_tui_text_or_dash(state->project->name),
@@ -857,10 +858,11 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                  confit_tui_text_or_dash(state->category),
                  confit_tui_text_or_dash(state->tag),
                  state->dirty ? "yes" : "no");
-  subtitle[sizeof(subtitle) - 1U] = '\0';
-  (void)snprintf(status_line, sizeof(status_line),
-                 "option %lu/%lu | / search c category t tag x clear e edit "
-                 "s save q quit | %s",
+  header[sizeof(header) - 1U] = '\0';
+  (void)snprintf(key_legend, sizeof(key_legend),
+                 "/ search c category t tag x clear e edit s save q quit");
+  key_legend[sizeof(key_legend) - 1U] = '\0';
+  (void)snprintf(status_line, sizeof(status_line), "option %lu/%lu | %s",
                  state->view_count == 0U
                      ? 0UL
                      : (unsigned long)(state->selected_view_index + 1U),
@@ -868,8 +870,9 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                  state->status[0] != '\0' ? state->status : "ready");
   status_line[sizeof(status_line) - 1U] = '\0';
 
-  screen.title = "Confit TUI";
-  screen.subtitle = subtitle;
+  screen.title = "Confit TUI - menuconfig profile";
+  screen.header = header;
+  screen.key_legend = key_legend;
   screen.items = items;
   screen.item_count = state->view_count;
   screen.selected_index = state->selected_view_index;

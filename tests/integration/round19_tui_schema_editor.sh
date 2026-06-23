@@ -21,6 +21,10 @@ printf 'ndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help
     >"$WORK_DIR/tui-schema.txt"
 
 grep -aF "schema 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Confit Schema Editor - menuconfig guarded schema" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Menu" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "n new p prompt h help c category t tag" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 

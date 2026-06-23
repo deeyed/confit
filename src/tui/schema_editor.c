@@ -513,7 +513,8 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   ConfitTuiListItem *items;
   ConfitTuiScreen screen;
   char status_line[384];
-  char subtitle[256];
+  char header[256];
+  char key_legend[128];
   char (*details)[224];
   char (*values)[64];
   size_t index;
@@ -552,24 +553,27 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   }
 
   (void)snprintf(
-      subtitle, sizeof(subtitle),
+      header, sizeof(header),
       "Schema edit mode changes project configuration semantics.\n"
       "Prefer code review for schema changes.\n"
       "project=%s dirty=%s",
       confit_tui_text_or_dash(state->project != 0 ? state->project->name : 0),
       state->dirty ? "yes" : "no");
-  subtitle[sizeof(subtitle) - 1U] = '\0';
-  (void)snprintf(status_line, sizeof(status_line),
-                 "schema %lu/%lu | n new p prompt h help c category t tag "
-                 "r range o choices s save q quit | %s",
+  header[sizeof(header) - 1U] = '\0';
+  (void)snprintf(key_legend, sizeof(key_legend),
+                 "n new p prompt h help c category t tag r range o choices "
+                 "s save q quit");
+  key_legend[sizeof(key_legend) - 1U] = '\0';
+  (void)snprintf(status_line, sizeof(status_line), "schema %lu/%lu | %s",
                  state->option_count == 0U
                      ? 0UL
                      : (unsigned long)(state->selected_index + 1U),
                  (unsigned long)state->option_count,
                  state->status[0] != '\0' ? state->status : "guarded");
   status_line[sizeof(status_line) - 1U] = '\0';
-  screen.title = "Confit Schema Editor";
-  screen.subtitle = subtitle;
+  screen.title = "Confit Schema Editor - menuconfig guarded schema";
+  screen.header = header;
+  screen.key_legend = key_legend;
   screen.items = items;
   screen.item_count = state->option_count;
   screen.selected_index = state->selected_index;

@@ -21,6 +21,9 @@ printf '/mode\ne\nxcedit\ntstring\neTUI name\nxejje7\nje0.75\njjebuild/new\nsq' 
     >"$WORK_DIR/tui-edit.txt"
 
 grep -aF "option 1/6" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "project=" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "Menu" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
