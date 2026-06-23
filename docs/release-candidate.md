@@ -36,6 +36,32 @@ check -> list -> graph -> gen
 The generated project lives under the CMake build directory and is not committed
 as a large fixture.
 
+## Round 11 Manual TUI QA
+
+Round 11 performed an interactive PTY-backed terminal QA session with temporary
+fixture copies under `/tmp/confit-round11-qa`.
+
+Evidence:
+
+```text
+tools/confit/tests/manual/round11-terminal-manual-qa.md
+```
+
+Coverage:
+
+```text
+profile tui:
+  browse -> search -> bool toggle -> help/detail -> int edit -> save
+  -> dirty quit confirmation -> discard
+
+schema tui:
+  schema warning -> guarded schema editor -> new enum option
+  -> choices/default/help/category/tags field dialogs -> save
+```
+
+The saved profile was rechecked with `confit check` and `confit explain`. The
+saved schema was rechecked with `confit graph` and `confit list`.
+
 ## Example Commands
 
 After the local gate, the default binary is:
@@ -116,3 +142,36 @@ $CONFIT_BIN tui \
 - The TUI is ncurses-based and no longer uses a first-party vendor shim.
 - Schema edit mode writes human-readable TOML and displays a warning, but schema
   changes still require code review.
+
+## Kconfiglib Comparison
+
+Confit TUI is now close enough to exercise real profile/schema workflows in a
+menuconfig-style terminal interface, but it should not yet be described as fully
+equivalent to Python kconfiglib menuconfig.
+
+What is comparable enough for early Confit use:
+
+- ncurses-backed full-screen menu layout with title, header, boxed menu, key
+  legend, and status line.
+- Kconfig-like navigation keys for arrows, `j/k`, page movement, home/end,
+  search, help/detail, save, and quit confirmation.
+- Profile editing with bool toggle, enum choice popup, typed value dialogs,
+  validation at edit time, save confirmation, reload after save, and dirty quit
+  confirmation.
+- Schema editing with an explicit guarded warning, field dialogs, type/default/
+  range/choice validation, schema/graph validation before save, and TOML output.
+
+Remaining gaps before claiming kconfiglib-level maturity:
+
+- Confit schema does not yet model a full Kconfig menu tree with explicit menu,
+  choice, comment, and source/include nodes. Category grouping approximates this
+  for Confit but is not the same structure.
+- Search is useful but still simpler than kconfiglib symbol search. It lacks a
+  dedicated rich result browser with jump history and all symbol metadata.
+- Help/detail is practical, but not as polished as mature menuconfig help for
+  long text wrapping, symbol references, and dependency expression rendering.
+- Dependency UX explains current blocking state, but complex reverse dependency
+  exploration and fix suggestions are still shallow.
+- Schema editor is guarded and useful for fixture-level schema work, but real
+  project schema changes still need review outside the TUI.
+- Native Windows terminal/curses behavior has not been validated.

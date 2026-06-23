@@ -12,6 +12,30 @@ Confit은 Delos runtime build와 분리된 host-side tool이다. Confit 자체 b
 TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가 찾을 수 있는
 curses/ncurses 개발 파일이 있어야 한다.
 
+## Build Dependencies
+
+Confit TUI는 `tools/confit/CMakeLists.txt`에서 `find_package(Curses REQUIRED)`로 system curses/ncurses를
+찾는다. `vendor/`에는 TUI shim을 두지 않는다.
+
+필수 항목:
+
+```text
+CMake >= 3.20
+C17 compiler
+system curses/ncurses headers and library
+/bin/sh for integration scripts
+```
+
+Platform별 확인 사항:
+
+| Platform | Dependency note |
+|---|---|
+| macOS | Xcode Command Line Tools 또는 Xcode SDK의 curses가 CMake에 잡혀야 한다. Round 11에서는 `/Applications/Xcode.app/.../libcurses.tbd`가 감지됐다. |
+| Linux | 배포판 개발 package가 필요하다. 예: Debian/Ubuntu `libncurses-dev`, Fedora `ncurses-devel`, Arch `ncurses`. |
+| Windows | native Windows curses build는 아직 release gate가 아니다. MSVC flag는 준비되어 있지만 `/bin/sh` integration wrapper와 curses provider 정책이 더 필요하다. |
+
+의존성 탐지 실패 시 `cmake -S tools/confit -B /tmp/confit-build` 단계에서 Curses package 오류가 난다.
+
 ## CI-like Local Gate
 
 라운드별 기본 local gate는 다음 명령이다.
