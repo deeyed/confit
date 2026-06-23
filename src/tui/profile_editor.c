@@ -55,6 +55,7 @@ typedef struct ConfitTuiState {
   char tag[64];
   char status[256];
   int dirty;
+  int profile_created;
 } ConfitTuiState;
 
 typedef struct ConfitTuiValueValidator {
@@ -64,6 +65,28 @@ typedef struct ConfitTuiValueValidator {
 
 static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
                                             ConfitDiagnostic *diagnostic);
+
+static void
+confit_tui_set_status_from_diagnostic(ConfitTuiState *state, const char *prefix,
+                                      ConfitStatus status,
+                                      const ConfitDiagnostic *diagnostic) {
+  const char *message;
+
+  if (state == 0) {
+    return;
+  }
+  message = diagnostic != 0 && diagnostic->message != 0
+                ? diagnostic->message
+                : confit_status_name(status);
+  if (diagnostic != 0 && diagnostic->path != 0 && diagnostic->path[0] != '\0') {
+    (void)snprintf(state->status, sizeof(state->status), "%s: %s: %s",
+                   confit_tui_text_or_dash(prefix), diagnostic->path, message);
+  } else {
+    (void)snprintf(state->status, sizeof(state->status), "%s: %s",
+                   confit_tui_text_or_dash(prefix), message);
+  }
+  state->status[sizeof(state->status) - 1U] = '\0';
+}
 
 static char *confit_tui_copy_string(const char *text) {
   char *copy;
@@ -1012,6 +1035,14 @@ static ConfitStatus confit_tui_ensure_profile(ConfitTuiState *state,
   if (status == CONFIT_OK && state->options->target_name != 0) {
     status = confit_profile_set_target(profile, state->options->target_name);
   }
+  if (status == CONFIT_OK) {
+    state->dirty = 1;
+    state->profile_created = 1;
+    (void)snprintf(state->status, sizeof(state->status),
+                   "created new profile %s; press s to save",
+                   state->options->profile_name);
+    state->status[sizeof(state->status) - 1U] = '\0';
+  }
   if (status != CONFIT_OK) {
     confit_diagnostic_set(diagnostic, status, state->options->profile_name, 0,
                           0, "failed to create tui profile");
@@ -1827,14 +1858,130 @@ confit_tui_build_profile_toml(const ConfitTuiState *state,
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_tui_profile_path(const ConfitTuiState *state,
+                                            const ConfitProfile *profile,
+                                            char *out_dir, size_t out_dir_size,
+                                            char *out_path,
+                                            size_t out_path_size,
+                                            ConfitDiagnostic *diagnostic) {
+  char config_dir[1024];
+  char file_name[256];
+  ConfitStatus status;
+
+  if (state == 0 || profile == 0 || out_dir == 0 || out_path == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "invalid profile path argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  status =
+      confit_host_path_join(config_dir, sizeof(config_dir),
+                            state->options->project_root, "config", diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_host_path_join(out_dir, out_dir_size, config_dir,
+                                   "profiles", diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    if (snprintf(file_name, sizeof(file_name), "%s.toml", profile->name) >=
+        (int)sizeof(file_name)) {
+      status = CONFIT_ERR_INVALID_ARGUMENT;
+      confit_diagnostic_set(diagnostic, status, profile->name, 0, 0,
+                            "profile name is too long");
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_path_join(out_path, out_path_size, out_dir, file_name,
+                                   diagnostic);
+  }
+  return status;
+}
+
+static int confit_tui_profile_file_exists(const char *profile_path) {
+  char *existing;
+  ConfitStatus status;
+
+  existing = 0;
+  status = confit_host_read_text_file(profile_path, &existing, 0, 0);
+  if (status == CONFIT_OK) {
+    confit_host_free(existing);
+    return 1;
+  }
+  return 0;
+}
+
+static int confit_tui_confirm_overwrite_profile(ConfitTuiState *state,
+                                                const char *profile_path) {
+  static const char *items[] = {"Overwrite profile", "Cancel"};
+  char header[512];
+  size_t selected_index;
+  int select_status;
+
+  (void)snprintf(header, sizeof(header),
+                 "profile=%s\npath=%s\nExisting profile TOML will be "
+                 "replaced.",
+                 confit_tui_text_or_dash(state->options->profile_name),
+                 confit_tui_text_or_dash(profile_path));
+  header[sizeof(header) - 1U] = '\0';
+  selected_index = 0U;
+  select_status = confit_tui_curses_select_dialog(
+      "Overwrite Profile", header, items, 2U, selected_index, &selected_index);
+  if (select_status != 0 || selected_index != 0U) {
+    (void)snprintf(state->status, sizeof(state->status), "save cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 0;
+  }
+  return 1;
+}
+
+static ConfitStatus
+confit_tui_reload_saved_project(ConfitTuiState *state,
+                                ConfitDiagnostic *diagnostic) {
+  ConfitProject *project;
+  ConfitGraph *graph;
+  ConfitResolvedConfig *config;
+  ConfitStatus status;
+
+  project = 0;
+  graph = 0;
+  config = 0;
+  status = confit_schema_load_project(state->options->project_root, &project,
+                                      diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_graph_build(project, &graph, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_graph_validate(graph, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_resolver_resolve(project, state->options->profile_name,
+                                     state->options->target_name, 0, 0, &config,
+                                     diagnostic);
+  }
+  if (status != CONFIT_OK) {
+    confit_resolved_config_free(config);
+    confit_graph_free(graph);
+    confit_project_free(project);
+    return status;
+  }
+
+  confit_project_free(state->project);
+  confit_graph_free(state->graph);
+  confit_resolved_config_free(state->config);
+  confit_tui_edits_clear(state);
+  state->project = project;
+  state->graph = graph;
+  state->config = config;
+  state->dirty = 0;
+  state->profile_created = 0;
+  return confit_tui_refresh_rows(state, diagnostic);
+}
+
 static ConfitStatus confit_tui_save_profile(ConfitTuiState *state,
                                             ConfitDiagnostic *diagnostic) {
   ConfitProfile *profile;
   char *toml;
-  char config_dir[1024];
   char profile_dir[1024];
-  char file_name[256];
   char profile_path[1024];
+  ConfitDiagnostic reload_diagnostic;
   ConfitStatus status;
 
   profile =
@@ -1852,27 +1999,17 @@ static ConfitStatus confit_tui_save_profile(ConfitTuiState *state,
   }
 
   toml = 0;
-  status = confit_tui_build_profile_toml(state, profile, &toml, diagnostic);
+  status =
+      confit_tui_profile_path(state, profile, profile_dir, sizeof(profile_dir),
+                              profile_path, sizeof(profile_path), diagnostic);
   if (status == CONFIT_OK) {
-    status = confit_host_path_join(config_dir, sizeof(config_dir),
-                                   state->options->project_root, "config",
-                                   diagnostic);
-  }
-  if (status == CONFIT_OK) {
-    status = confit_host_path_join(profile_dir, sizeof(profile_dir), config_dir,
-                                   "profiles", diagnostic);
-  }
-  if (status == CONFIT_OK) {
-    if (snprintf(file_name, sizeof(file_name), "%s.toml", profile->name) >=
-        (int)sizeof(file_name)) {
-      status = CONFIT_ERR_INVALID_ARGUMENT;
-      confit_diagnostic_set(diagnostic, status, profile->name, 0, 0,
-                            "profile name is too long");
+    if (confit_tui_profile_file_exists(profile_path) &&
+        !confit_tui_confirm_overwrite_profile(state, profile_path)) {
+      return CONFIT_OK;
     }
   }
   if (status == CONFIT_OK) {
-    status = confit_host_path_join(profile_path, sizeof(profile_path),
-                                   profile_dir, file_name, diagnostic);
+    status = confit_tui_build_profile_toml(state, profile, &toml, diagnostic);
   }
   if (status == CONFIT_OK) {
     status = confit_host_make_directories(profile_dir, diagnostic);
@@ -1882,10 +2019,17 @@ static ConfitStatus confit_tui_save_profile(ConfitTuiState *state,
   }
   free(toml);
   if (status == CONFIT_OK) {
-    state->dirty = 0;
-    (void)snprintf(state->status, sizeof(state->status), "saved %s",
-                   profile_path);
-    state->status[sizeof(state->status) - 1U] = '\0';
+    confit_diagnostic_init(&reload_diagnostic);
+    status = confit_tui_reload_saved_project(state, &reload_diagnostic);
+    if (status == CONFIT_OK) {
+      (void)snprintf(state->status, sizeof(state->status),
+                     "saved and reloaded %s", profile_path);
+      state->status[sizeof(state->status) - 1U] = '\0';
+    } else {
+      confit_tui_set_status_from_diagnostic(state, "saved but reload failed",
+                                            status, &reload_diagnostic);
+      return CONFIT_OK;
+    }
   }
   return status;
 }
@@ -2434,7 +2578,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(key_legend, sizeof(key_legend),
                  "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / "
-                 "search n/N result c/t filter ?/h detail q quit");
+                 "search n/N result s save c/t filter ?/h detail q quit");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(
       status_line, sizeof(status_line), "row %lu/%lu search %lu/%lu | %s",
@@ -2532,6 +2676,52 @@ static int confit_tui_profile_move_selection(ConfitTuiState *state,
   return 0;
 }
 
+static ConfitStatus
+confit_tui_confirm_dirty_quit(ConfitTuiState *state, int *out_quit,
+                              ConfitDiagnostic *diagnostic) {
+  static const char *items[] = {"Save profile", "Discard changes", "Cancel"};
+  char header[512];
+  size_t selected_index;
+  int select_status;
+  ConfitStatus status;
+
+  *out_quit = 0;
+  if (!state->dirty) {
+    *out_quit = 1;
+    return CONFIT_OK;
+  }
+
+  (void)snprintf(header, sizeof(header),
+                 "profile=%s\nproject=%s\nUnsaved profile changes are "
+                 "pending.",
+                 confit_tui_text_or_dash(state->options->profile_name),
+                 confit_tui_text_or_dash(state->project->name));
+  header[sizeof(header) - 1U] = '\0';
+  selected_index = 0U;
+  select_status =
+      confit_tui_curses_select_dialog("Unsaved Profile Changes", header, items,
+                                      3U, selected_index, &selected_index);
+  if (select_status != 0 || selected_index == 2U) {
+    (void)snprintf(state->status, sizeof(state->status), "quit cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (selected_index == 1U) {
+    (void)snprintf(state->status, sizeof(state->status),
+                   "discarded unsaved profile changes");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    *out_quit = 1;
+    return CONFIT_OK;
+  }
+
+  status = confit_tui_save_profile(state, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  *out_quit = state->dirty ? 0 : 1;
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
                                           ConfitTuiKey key,
                                           const char *target_name,
@@ -2614,28 +2804,41 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
   ConfitDiagnostic diagnostic;
   ConfitStatus status;
 
-  target_name = confit_tui_effective_target_name(state->project,
-                                                 state->options->profile_name,
-                                                 state->options->target_name);
-  (void)snprintf(state->status, sizeof(state->status), "ready");
-  state->status[sizeof(state->status) - 1U] = '\0';
+  if (state->status[0] == '\0') {
+    (void)snprintf(state->status, sizeof(state->status), "ready");
+    state->status[sizeof(state->status) - 1U] = '\0';
+  }
 
   do {
+    target_name = confit_tui_effective_target_name(state->project,
+                                                   state->options->profile_name,
+                                                   state->options->target_name);
     status = confit_tui_render_screen(state, target_name);
     if (status != CONFIT_OK) {
       return status;
     }
     key = confit_tui_curses_read_key();
     if (key == CONFIT_TUI_KEY_QUIT) {
-      break;
+      int should_quit;
+
+      confit_diagnostic_init(&diagnostic);
+      should_quit = 0;
+      status = confit_tui_confirm_dirty_quit(state, &should_quit, &diagnostic);
+      if (status != CONFIT_OK) {
+        confit_tui_set_status_from_diagnostic(state, "error", status,
+                                              &diagnostic);
+        continue;
+      }
+      if (should_quit) {
+        break;
+      }
+      continue;
     }
     confit_diagnostic_init(&diagnostic);
     status = confit_tui_handle_key(state, key, target_name, &diagnostic);
     if (status != CONFIT_OK) {
-      (void)snprintf(state->status, sizeof(state->status), "error: %s",
-                     diagnostic.message != 0 ? diagnostic.message
-                                             : confit_status_name(status));
-      state->status[sizeof(state->status) - 1U] = '\0';
+      confit_tui_set_status_from_diagnostic(state, "error", status,
+                                            &diagnostic);
     }
   } while (1);
 

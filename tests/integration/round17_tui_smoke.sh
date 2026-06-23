@@ -154,12 +154,15 @@ printf '/confit.dep.conflicted\neq' | "$CONFIT_BIN" tui \
 grep -aF "blocked: conflicts with confit.dep.conflict_target" \
   "$WORK_DIR/tui-conflicts-block.txt" >/dev/null
 
-printf '/confit.dep.recommended\neq' | "$CONFIT_BIN" tui \
+printf '/confit.dep.recommended\neqj\n' | "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-recommends-edit.txt"
 
 grep -aF "edited" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
 ! grep -aF "blocked:" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
+grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-recommends-edit.txt" \
+  >/dev/null
+grep -aF "Discard changes" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
 
 printf 'jhqq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-detail-h.txt"

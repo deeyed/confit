@@ -29,6 +29,9 @@ grep -aF "Menu" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "created new profile fresh" "$WORK_DIR/tui-profile-create.txt" \
+  >/dev/null
+grep -aF "saved and reloaded" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/fresh.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile fresh \

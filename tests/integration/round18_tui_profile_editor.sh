@@ -47,6 +47,7 @@ export TERM
   printf '%s\n' '/tmp/bad'
   printf '%s\n' 'build/new'
   printf '%s' 's'
+  printf '\n'
   printf '%s' 'q'
 } >"$WORK_DIR/tui-edit.keys"
 
@@ -70,8 +71,37 @@ grep -aF "invalid float: expected finite value" "$WORK_DIR/tui-edit.txt" \
 grep -aF "invalid string: value required" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid path: expected relative path" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
+grep -aF "Overwrite Profile" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "saved and reloaded" "$WORK_DIR/tui-edit.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile edit \
   >"$WORK_DIR/check.txt"
 grep -Fx "check ok" "$WORK_DIR/check.txt" >/dev/null
+
+DISCARD_DIR="$WORK_DIR/profile-discard"
+cp -R "$PROJECT_SRC" "$DISCARD_DIR"
+
+printf '/bool\neqj\n' |
+  "$CONFIT_BIN" tui --project "$DISCARD_DIR" --profile edit \
+    >"$WORK_DIR/tui-discard.txt"
+
+grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-discard.txt" >/dev/null
+grep -aF "Discard changes" "$WORK_DIR/tui-discard.txt" >/dev/null
+diff -u "$PROJECT_SRC/config/profiles/edit.toml" \
+  "$DISCARD_DIR/config/profiles/edit.toml"
+
+QUIT_SAVE_DIR="$WORK_DIR/profile-quit-save"
+cp -R "$PROJECT_SRC" "$QUIT_SAVE_DIR"
+
+printf '/bool\neq\n\n' |
+  "$CONFIT_BIN" tui --project "$QUIT_SAVE_DIR" --profile edit \
+    >"$WORK_DIR/tui-quit-save.txt"
+
+grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-quit-save.txt" >/dev/null
+grep -aF "Overwrite Profile" "$WORK_DIR/tui-quit-save.txt" >/dev/null
+grep -aF '"delos.edit.bool" = true' \
+  "$QUIT_SAVE_DIR/config/profiles/edit.toml" >/dev/null
+"$CONFIT_BIN" check --project "$QUIT_SAVE_DIR" --profile edit \
+  >"$WORK_DIR/check-quit-save.txt"
+grep -Fx "check ok" "$WORK_DIR/check-quit-save.txt" >/dev/null
