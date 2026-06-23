@@ -52,6 +52,24 @@ typedef struct ConfitCliDoctorArgs {
   const char *project_root;
 } ConfitCliDoctorArgs;
 
+typedef struct ConfitCliInitArgs {
+  const char *project_root;
+  const char *template_name;
+  int dry_run;
+  int force;
+} ConfitCliInitArgs;
+
+typedef struct ConfitCliTemplateFile {
+  const char *relative_path;
+  const char *text;
+} ConfitCliTemplateFile;
+
+typedef struct ConfitCliTemplateSpec {
+  const char *name;
+  const ConfitCliTemplateFile *files;
+  size_t file_count;
+} ConfitCliTemplateSpec;
+
 typedef struct ConfitCliGlobalArgs {
   const char *color;
   int quiet;
@@ -70,6 +88,7 @@ typedef struct ConfitCliCommandSpec {
 } ConfitCliCommandSpec;
 
 static int confit_cli_run_doctor(int argc, char **argv);
+static int confit_cli_run_init(int argc, char **argv);
 static int confit_cli_run_check(int argc, char **argv);
 static int confit_cli_run_gen(int argc, char **argv);
 static int confit_cli_run_explain(int argc, char **argv);
@@ -93,7 +112,7 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "[--dry-run]",
      "--project <path>\n  --template minimal|delos|parus\n  --force\n  "
      "--dry-run",
-     0},
+     confit_cli_run_init},
     {"check",
      "Parse project TOML, validate schema and graph, and resolve a profile.",
      "confit check --project <path> --profile <name> [--target <name>] "
@@ -159,6 +178,194 @@ static const size_t confit_cli_command_count =
     sizeof(confit_cli_commands) / sizeof(confit_cli_commands[0]);
 
 static const char *confit_cli_executable_path = "confit";
+
+static const ConfitCliTemplateFile confit_cli_template_minimal_files[] = {
+    {"config/project.toml",
+     "[project]\n"
+     "name = \"minimal\"\n"
+     "version = \"0.1.0\"\n"
+     "schema_version = 1\n"
+     "imports = [\n"
+     "  \"options/core.toml\",\n"
+     "]\n"},
+    {"config/options/core.toml",
+     "[option.\"minimal.enabled\"]\n"
+     "type = \"bool\"\n"
+     "default = true\n"
+     "prompt = \"Enable minimal configuration\"\n"
+     "category = \"general\"\n"
+     "tags = [\"minimal\"]\n"
+     "help = \"Starter option created by confit init.\"\n"
+     "\n"
+     "[option.\"minimal.output.name\"]\n"
+     "type = \"string\"\n"
+     "default = \"minimal\"\n"
+     "prompt = \"Output name\"\n"
+     "category = \"build\"\n"
+     "tags = [\"generated\"]\n"
+     "help = \"Generated configuration output label.\"\n"},
+    {"config/profiles/default.toml",
+     "[profile]\n"
+     "name = \"default\"\n"
+     "schema_version = 1\n"
+     "target = \"host\"\n"
+     "\n"
+     "[values]\n"
+     "\"minimal.enabled\" = true\n"
+     "\"minimal.output.name\" = \"minimal-host\"\n"},
+    {"config/targets/host.toml",
+     "[target]\n"
+     "name = \"host\"\n"
+     "schema_version = 1\n"
+     "arch = \"host\"\n"
+     "board = \"host\"\n"
+     "\n"
+     "[target.claim]\n"
+     "level = \"development\"\n"
+     "\n"
+     "[values]\n"
+     "\"minimal.output.name\" = \"minimal-host\"\n"}};
+
+static const ConfitCliTemplateFile confit_cli_template_delos_files[] = {
+    {"config/project.toml",
+     "[project]\n"
+     "name = \"delos\"\n"
+     "version = \"0.1.0\"\n"
+     "schema_version = 1\n"
+     "imports = [\n"
+     "  \"options/core.toml\",\n"
+     "]\n"},
+    {"config/options/core.toml",
+     "[option.\"delos.dcg.enabled\"]\n"
+     "type = \"bool\"\n"
+     "default = false\n"
+     "prompt = \"Enable Delos DCG\"\n"
+     "category = \"runtime\"\n"
+     "tags = [\"delos\", \"dcg\"]\n"
+     "help = \"Starter switch for the Delos DCG path.\"\n"
+     "\n"
+     "[option.\"delos.debug.ddc\"]\n"
+     "type = \"bool\"\n"
+     "default = false\n"
+     "prompt = \"Enable Delos Debug Console\"\n"
+     "category = \"debug\"\n"
+     "tags = [\"debug\"]\n"
+     "help = \"Include the development DDC command parser.\"\n"
+     "\n"
+     "[option.\"delos.debug.dsh\"]\n"
+     "type = \"bool\"\n"
+     "default = false\n"
+     "prompt = \"Enable Delos Shell\"\n"
+     "category = \"debug\"\n"
+     "tags = [\"debug\", \"shell\"]\n"
+     "requires = [\"delos.debug.ddc\"]\n"
+     "help = \"Include the development DSH command surface.\"\n"
+     "\n"
+     "[option.\"delos.output.name\"]\n"
+     "type = \"string\"\n"
+     "default = \"delos\"\n"
+     "prompt = \"Delos output name\"\n"
+     "category = \"build\"\n"
+     "tags = [\"generated\"]\n"
+     "help = \"Generated Delos configuration output label.\"\n"},
+    {"config/profiles/default.toml",
+     "[profile]\n"
+     "name = \"default\"\n"
+     "schema_version = 1\n"
+     "target = \"host\"\n"
+     "\n"
+     "[values]\n"
+     "\"delos.dcg.enabled\" = true\n"
+     "\"delos.output.name\" = \"delos-host\"\n"},
+    {"config/targets/host.toml",
+     "[target]\n"
+     "name = \"host\"\n"
+     "schema_version = 1\n"
+     "arch = \"host\"\n"
+     "board = \"host\"\n"
+     "\n"
+     "[target.claim]\n"
+     "level = \"portability-probe\"\n"
+     "\n"
+     "[values]\n"
+     "\"delos.output.name\" = \"delos-host\"\n"}};
+
+static const ConfitCliTemplateFile confit_cli_template_parus_files[] = {
+    {"config/project.toml",
+     "[project]\n"
+     "name = \"parus\"\n"
+     "version = \"0.1.0\"\n"
+     "schema_version = 1\n"
+     "imports = [\n"
+     "  \"options/core.toml\",\n"
+     "]\n"},
+    {"config/options/core.toml",
+     "[option.\"parus.rt_executor.delos\"]\n"
+     "type = \"bool\"\n"
+     "default = false\n"
+     "prompt = \"Route RT executor through Delos\"\n"
+     "category = \"runtime\"\n"
+     "tags = [\"parus\", \"delos\"]\n"
+     "help = \"Starter switch for a Parus and Delos compatibility path.\"\n"
+     "\n"
+     "[option.\"parus.debug.release\"]\n"
+     "type = \"bool\"\n"
+     "default = false\n"
+     "prompt = \"Use release debug boundary\"\n"
+     "category = \"debug\"\n"
+     "tags = [\"release\", \"debug\"]\n"
+     "help = \"Starter option for release/debug compatibility checks.\"\n"
+     "\n"
+     "[option.\"parus.output.name\"]\n"
+     "type = \"string\"\n"
+     "default = \"parus\"\n"
+     "prompt = \"Parus output name\"\n"
+     "category = \"build\"\n"
+     "tags = [\"generated\"]\n"
+     "help = \"Generated Parus configuration output label.\"\n"},
+    {"config/profiles/default.toml",
+     "[profile]\n"
+     "name = \"default\"\n"
+     "schema_version = 1\n"
+     "target = \"host\"\n"
+     "\n"
+     "[values]\n"
+     "\"parus.rt_executor.delos\" = false\n"
+     "\"parus.output.name\" = \"parus-host\"\n"},
+    {"config/targets/host.toml",
+     "[target]\n"
+     "name = \"host\"\n"
+     "schema_version = 1\n"
+     "arch = \"host\"\n"
+     "board = \"host\"\n"
+     "\n"
+     "[target.claim]\n"
+     "level = \"portability-probe\"\n"
+     "\n"
+     "[values]\n"
+     "\"parus.output.name\" = \"parus-host\"\n"}};
+
+static const ConfitCliTemplateSpec confit_cli_templates[] = {
+    {"minimal", confit_cli_template_minimal_files,
+     sizeof(confit_cli_template_minimal_files) /
+         sizeof(confit_cli_template_minimal_files[0])},
+    {"delos", confit_cli_template_delos_files,
+     sizeof(confit_cli_template_delos_files) /
+         sizeof(confit_cli_template_delos_files[0])},
+    {"parus", confit_cli_template_parus_files,
+     sizeof(confit_cli_template_parus_files) /
+         sizeof(confit_cli_template_parus_files[0])}};
+
+static const size_t confit_cli_template_count =
+    sizeof(confit_cli_templates) / sizeof(confit_cli_templates[0]);
+
+static const char *const confit_cli_init_directories[] = {
+    "config", "config/options", "config/profiles", "config/targets",
+    "config/compat"};
+
+static const size_t confit_cli_init_directory_count =
+    sizeof(confit_cli_init_directories) /
+    sizeof(confit_cli_init_directories[0]);
 
 static ConfitStatus confit_cli_write_error(const char *message) {
   ConfitStatus status;
@@ -616,6 +823,300 @@ static int confit_cli_run_doctor(int argc, char **argv) {
   }
 
   confit_project_free(project);
+  return confit_status_exit_code(status);
+}
+
+static const ConfitCliTemplateSpec *confit_cli_find_template(
+    const char *name) {
+  size_t index;
+
+  for (index = 0U; index < confit_cli_template_count; ++index) {
+    if (strcmp(confit_cli_templates[index].name, name) == 0) {
+      return &confit_cli_templates[index];
+    }
+  }
+  return 0;
+}
+
+static ConfitStatus confit_cli_parse_init_args(int argc, char **argv,
+                                               ConfitCliInitArgs *args) {
+  int index;
+
+  args->project_root = 0;
+  args->template_name = 0;
+  args->dry_run = 0;
+  args->force = 0;
+
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      args->project_root = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--template") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --template");
+      }
+      index += 1;
+      args->template_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--dry-run") == 0) {
+      args->dry_run = 1;
+      continue;
+    }
+    if (strcmp(arg, "--force") == 0) {
+      args->force = 1;
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown init option");
+    }
+    return confit_cli_write_error("init does not accept positional arguments");
+  }
+
+  if (args->project_root == 0) {
+    return confit_cli_write_error("init requires --project");
+  }
+  if (args->template_name == 0) {
+    return confit_cli_write_error("init requires --template");
+  }
+  if (confit_cli_find_template(args->template_name) == 0) {
+    return confit_cli_write_error(
+        "init --template must be minimal, delos, or parus");
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_join_relative_path(char *out, size_t out_size,
+                                                  const char *root,
+                                                  const char *relative,
+                                                  ConfitDiagnostic *diagnostic) {
+  char current[1024];
+  char segment[256];
+  size_t relative_index;
+  size_t segment_size;
+  ConfitStatus status;
+
+  if (root == 0 || relative == 0 || out == 0 || out_size == 0U) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "invalid relative path join argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  if (strlen(root) + 1U > sizeof(current)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, root, 0, 0,
+                          "project path is too long");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  memcpy(current, root, strlen(root) + 1U);
+
+  relative_index = 0U;
+  while (relative[relative_index] != '\0') {
+    segment_size = 0U;
+    while (relative[relative_index] != '\0' &&
+           relative[relative_index] != '/') {
+      if (segment_size + 1U >= sizeof(segment)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, relative,
+                              0, 0, "relative path segment is too long");
+        return CONFIT_ERR_INVALID_ARGUMENT;
+      }
+      segment[segment_size] = relative[relative_index];
+      segment_size += 1U;
+      relative_index += 1U;
+    }
+    segment[segment_size] = '\0';
+    if (relative[relative_index] == '/') {
+      relative_index += 1U;
+    }
+    if (segment_size == 0U) {
+      continue;
+    }
+    status =
+        confit_host_path_join(out, out_size, current, segment, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (strlen(out) + 1U > sizeof(current)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, out, 0, 0,
+                            "joined path is too long");
+      return CONFIT_ERR_INVALID_ARGUMENT;
+    }
+    memcpy(current, out, strlen(out) + 1U);
+  }
+
+  if (strlen(current) + 1U > out_size) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, current, 0,
+                          0, "joined path buffer is too small");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  memcpy(out, current, strlen(current) + 1U);
+  return CONFIT_OK;
+}
+
+static int confit_cli_path_has_file(const char *path) {
+  ConfitDiagnostic diagnostic;
+  char *text;
+  ConfitStatus status;
+
+  confit_diagnostic_init(&diagnostic);
+  text = 0;
+  status = confit_host_read_text_file(path, &text, 0, &diagnostic);
+  if (status == CONFIT_OK) {
+    confit_host_free(text);
+    return 1;
+  }
+  return 0;
+}
+
+static ConfitStatus confit_cli_write_init_line(const char *verb,
+                                               const char *path) {
+  ConfitStatus status;
+
+  status = confit_host_stdout_write(verb);
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(": ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(path);
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_init_preflight(
+    const ConfitCliInitArgs *args, const ConfitCliTemplateSpec *template_spec,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  for (index = 0U; index < template_spec->file_count; ++index) {
+    char path[1024];
+    ConfitStatus status;
+
+    status = confit_cli_join_relative_path(
+        path, sizeof(path), args->project_root,
+        template_spec->files[index].relative_path, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (confit_cli_path_has_file(path) && !args->force) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                            "init refuses to overwrite existing file");
+      return CONFIT_ERR_INVALID_ARGUMENT;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_init_manifest(
+    const ConfitCliInitArgs *args, const ConfitCliTemplateSpec *template_spec,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  size_t index;
+
+  status = confit_host_stdout_write("init template: ");
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(template_spec->name);
+  }
+  for (index = 0U; status == CONFIT_OK &&
+                   index < confit_cli_init_directory_count;
+       ++index) {
+    char path[1024];
+
+    status = confit_cli_join_relative_path(
+        path, sizeof(path), args->project_root,
+        confit_cli_init_directories[index], diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_cli_write_init_line("create dir", path);
+    }
+  }
+  for (index = 0U; status == CONFIT_OK && index < template_spec->file_count;
+       ++index) {
+    char path[1024];
+    const char *verb;
+
+    status = confit_cli_join_relative_path(
+        path, sizeof(path), args->project_root,
+        template_spec->files[index].relative_path, diagnostic);
+    if (status == CONFIT_OK) {
+      verb = confit_cli_path_has_file(path) ? "overwrite file" : "create file";
+      status = confit_cli_write_init_line(verb, path);
+    }
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_init_write(
+    const ConfitCliInitArgs *args, const ConfitCliTemplateSpec *template_spec,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  size_t index;
+
+  status = confit_host_make_directories(args->project_root, diagnostic);
+  for (index = 0U; status == CONFIT_OK &&
+                   index < confit_cli_init_directory_count;
+       ++index) {
+    char path[1024];
+
+    status = confit_cli_join_relative_path(
+        path, sizeof(path), args->project_root,
+        confit_cli_init_directories[index], diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_host_make_directories(path, diagnostic);
+    }
+  }
+
+  for (index = 0U; status == CONFIT_OK && index < template_spec->file_count;
+       ++index) {
+    char path[1024];
+
+    status = confit_cli_join_relative_path(
+        path, sizeof(path), args->project_root,
+        template_spec->files[index].relative_path, diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_host_write_text_file(path, template_spec->files[index].text,
+                                           diagnostic);
+    }
+  }
+  return status;
+}
+
+static int confit_cli_run_init(int argc, char **argv) {
+  ConfitCliInitArgs args;
+  const ConfitCliTemplateSpec *template_spec;
+  ConfitDiagnostic diagnostic;
+  ConfitStatus status;
+
+  status = confit_cli_parse_init_args(argc, argv, &args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  template_spec = confit_cli_find_template(args.template_name);
+  confit_diagnostic_init(&diagnostic);
+  status = confit_cli_init_preflight(&args, template_spec, &diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_cli_init_manifest(&args, template_spec, &diagnostic);
+  }
+  if (status == CONFIT_OK && !args.dry_run) {
+    status = confit_cli_init_write(&args, template_spec, &diagnostic);
+  }
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+
+  if (args.dry_run) {
+    status = confit_host_stdout_write("init dry-run ok: ");
+  } else {
+    status = confit_host_stdout_write("init ok: ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(args.project_root);
+  }
   return confit_status_exit_code(status);
 }
 

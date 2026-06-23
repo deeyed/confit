@@ -17,6 +17,10 @@ typedef struct ConfitCliWorkflowContext {
   char parus_dir[4096];
   char delos_dir[4096];
   char gen_dir[4096];
+  char init_minimal_dir[4096];
+  char init_delos_dir[4096];
+  char init_parus_dir[4096];
+  char init_dry_run_dir[4096];
   unsigned int run_index;
 } ConfitCliWorkflowContext;
 
@@ -107,6 +111,14 @@ static void test_context_init(ConfitCliWorkflowContext *context,
              context->source_dir, "tests", "fixtures", "compat", "delos");
   test_join(context->gen_dir, sizeof(context->gen_dir), context->work_dir,
             "generated");
+  test_join(context->init_minimal_dir, sizeof(context->init_minimal_dir),
+            context->work_dir, "init-minimal");
+  test_join(context->init_delos_dir, sizeof(context->init_delos_dir),
+            context->work_dir, "init-delos");
+  test_join(context->init_parus_dir, sizeof(context->init_parus_dir),
+            context->work_dir, "init-parus");
+  test_join(context->init_dry_run_dir, sizeof(context->init_dry_run_dir),
+            context->work_dir, "init-dry-run");
   context->run_index = 0U;
 }
 
@@ -157,19 +169,106 @@ static void test_doctor(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
-static void test_check(ConfitCliWorkflowContext *context) {
+static void test_init_template(ConfitCliWorkflowContext *context,
+                               const char *template_name,
+                               const char *project_dir) {
   ConfitTestProcessResult result;
-  const char *argv[] = {0, "check", "--project", 0, "--profile",
-                        "sim-dsh", 0};
+  char project_toml[4096];
+  const char *argv[] = {0, "init", "--project", 0, "--template", 0, 0};
 
   result.exit_code = -1;
   result.stdout_text = 0;
   result.stderr_text = 0;
   argv[0] = context->confit_bin;
-  argv[3] = context->project_dir;
+  argv[3] = project_dir;
+  argv[5] = template_name;
+  test_run(context, argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "init template:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "create dir:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "create file:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "init ok:");
+  confit_test_process_result_clear(&result);
+
+  test_join3(project_toml, sizeof(project_toml), project_dir, "config",
+             "project.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(project_toml));
+}
+
+static void test_check_project_profile(ConfitCliWorkflowContext *context,
+                                       const char *project_dir,
+                                       const char *profile_name) {
+  ConfitTestProcessResult result;
+  const char *argv[] = {0, "check", "--project", 0, "--profile",
+                        0, 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  argv[0] = context->confit_bin;
+  argv[3] = project_dir;
+  argv[5] = profile_name;
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "check ok");
+  confit_test_process_result_clear(&result);
+}
+
+static void test_check(ConfitCliWorkflowContext *context) {
+  test_check_project_profile(context, context->project_dir, "sim-dsh");
+}
+
+static void test_init_templates(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  char dry_run_project_toml[4096];
+  const char *dry_run_argv[] = {0, "init", "--project", 0, "--template",
+                                "minimal", "--dry-run", 0};
+  const char *refuse_argv[] = {0, "init", "--project", 0, "--template",
+                               "delos", 0};
+  const char *force_argv[] = {0, "init", "--project", 0, "--template",
+                              "delos", "--force", 0};
+
+  test_init_template(context, "minimal", context->init_minimal_dir);
+  test_init_template(context, "delos", context->init_delos_dir);
+  test_init_template(context, "parus", context->init_parus_dir);
+
+  test_check_project_profile(context, context->init_minimal_dir, "default");
+  test_check_project_profile(context, context->init_delos_dir, "default");
+  test_check_project_profile(context, context->init_parus_dir, "default");
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  dry_run_argv[0] = context->confit_bin;
+  dry_run_argv[3] = context->init_dry_run_dir;
+  test_run(context, dry_run_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "init dry-run ok:");
+  test_join3(dry_run_project_toml, sizeof(dry_run_project_toml),
+             context->init_dry_run_dir, "config", "project.toml");
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(dry_run_project_toml));
+  confit_test_process_result_clear(&result);
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  refuse_argv[0] = context->confit_bin;
+  refuse_argv[3] = context->init_delos_dir;
+  test_run(context, refuse_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(1, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "init refuses to overwrite existing file");
+  confit_test_process_result_clear(&result);
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  force_argv[0] = context->confit_bin;
+  force_argv[3] = context->init_delos_dir;
+  test_run(context, force_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "overwrite file:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "init ok:");
   confit_test_process_result_clear(&result);
 }
 
@@ -320,6 +419,7 @@ int main(int argc, char **argv) {
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(context.work_dir));
   CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(context.work_dir));
 
+  test_init_templates(&context);
   test_doctor(&context);
   test_check(&context);
   test_list(&context);
