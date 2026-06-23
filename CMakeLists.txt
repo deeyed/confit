@@ -111,6 +111,21 @@ else()
   target_compile_options(confit_graph PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
+add_library(confit_resolver STATIC
+  src/resolver/resolver.c
+)
+
+target_link_libraries(confit_resolver PUBLIC confit_core)
+target_compile_features(confit_resolver PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_resolver PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_resolver PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -252,6 +267,31 @@ endif()
 add_test(
   NAME confit.unit.graph_builder
   COMMAND confit_test_graph_builder
+)
+
+add_executable(confit_test_resolver
+  tests/unit/test_resolver.c
+)
+
+target_link_libraries(confit_test_resolver PRIVATE
+  confit_resolver
+  confit_schema
+)
+target_compile_definitions(confit_test_resolver PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_resolver PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_resolver PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.resolver
+  COMMAND confit_test_resolver
 )
 
 add_test(
