@@ -90,6 +90,30 @@ ConfitStatus confit_resolved_config_to_json(const ConfitResolvedConfig *config,
                                             char **out_json);
 
 /**
+ * @brief resolved config를 deterministic text table로 직렬화한다.
+ *
+ * 반환된 문자열은 caller가 소유하며 `confit_resolver_string_free`로 해제한다.
+ *
+ * @param config 직렬화할 resolved config.
+ * @param out_text 성공 시 NUL 종료 text 문자열을 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_resolved_config_to_text(const ConfitResolvedConfig *config,
+                                            char **out_text);
+
+/**
+ * @brief resolved config를 deterministic TOML 문자열로 직렬화한다.
+ *
+ * 반환된 문자열은 caller가 소유하며 `confit_resolver_string_free`로 해제한다.
+ *
+ * @param config 직렬화할 resolved config.
+ * @param out_toml 성공 시 NUL 종료 TOML 문자열을 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_resolved_config_to_toml(const ConfitResolvedConfig *config,
+                                            char **out_toml);
+
+/**
  * @brief resolved config JSON의 deterministic FNV-1a hash를 계산한다.
  *
  * @param config hash할 resolved config.

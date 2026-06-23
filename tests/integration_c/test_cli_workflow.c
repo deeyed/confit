@@ -218,6 +218,71 @@ static void test_check(ConfitCliWorkflowContext *context) {
   test_check_project_profile(context, context->project_dir, "sim-dsh");
 }
 
+static void test_resolve(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  ConfitTestProcessResult result_again;
+  const char *text_argv[] = {0, "resolve", "--project", 0, "--profile",
+                             "sim-dsh", 0};
+  const char *json_argv[] = {0, "resolve", "--project", 0, "--profile",
+                             "sim-dsh", "--format", "json", 0};
+  const char *toml_set_argv[] = {0, "resolve", "--project", 0, "--profile",
+                                 "sim-dsh", "--set",
+                                 "delos.output.name=manual", "--format",
+                                 "toml", 0};
+  const char *explain_set_argv[] = {0, "explain", "--project", 0, "--profile",
+                                    "sim-dsh", "--set",
+                                    "delos.output.name=manual",
+                                    "delos.output.name", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  result_again.exit_code = -1;
+  result_again.stdout_text = 0;
+  result_again.stderr_text = 0;
+
+  text_argv[0] = context->confit_bin;
+  text_argv[3] = context->project_dir;
+  test_run(context, text_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "delos.debug.ddc = true");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "source: profiles/debug.toml");
+  confit_test_process_result_clear(&result);
+
+  json_argv[0] = context->confit_bin;
+  json_argv[3] = context->project_dir;
+  test_run(context, json_argv, &result);
+  test_run(context, json_argv, &result_again);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result_again.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"schema\": \"confit-resolved-v1\"");
+  CONFIT_TEST_ASSERT(strcmp(result.stdout_text, result_again.stdout_text) == 0);
+  confit_test_process_result_clear(&result);
+  confit_test_process_result_clear(&result_again);
+
+  toml_set_argv[0] = context->confit_bin;
+  toml_set_argv[3] = context->project_dir;
+  test_run(context, toml_set_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"delos.output.name\" = \"manual\"");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"delos.output.name\" = \"cli --set\"");
+  confit_test_process_result_clear(&result);
+
+  explain_set_argv[0] = context->confit_bin;
+  explain_set_argv[3] = context->project_dir;
+  test_run(context, explain_set_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "set by: cli --set");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "value comes from cli --set");
+  confit_test_process_result_clear(&result);
+}
+
 static void test_check_strict(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "check", "--project", 0, "--profile",
@@ -440,6 +505,7 @@ int main(int argc, char **argv) {
   test_init_templates(&context);
   test_doctor(&context);
   test_check(&context);
+  test_resolve(&context);
   test_check_strict(&context);
   test_list(&context);
   test_graph_json(&context);

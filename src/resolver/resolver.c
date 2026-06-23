@@ -867,6 +867,126 @@ ConfitStatus confit_resolved_config_to_json(const ConfitResolvedConfig *config,
   return CONFIT_OK;
 }
 
+ConfitStatus confit_resolved_config_to_text(const ConfitResolvedConfig *config,
+                                            char **out_text) {
+  ConfitResolverJsonBuilder builder;
+  ConfitStatus status;
+  size_t index;
+
+  if (config == 0 || out_text == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  *out_text = 0;
+  confit_resolver_json_builder_init(&builder);
+
+#define CONFIT_TEXT_APPEND(fragment)                                           \
+  do {                                                                         \
+    status = confit_resolver_json_append(&builder, (fragment));                \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+#define CONFIT_TEXT_APPEND_VALUE(value)                                        \
+  do {                                                                         \
+    status = confit_resolver_json_append_value(&builder, (value));             \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+  for (index = 0U; index < config->value_count; ++index) {
+    const ConfitResolvedValue *value = &config->values[index];
+
+    CONFIT_TEXT_APPEND(value->option_id);
+    CONFIT_TEXT_APPEND(" = ");
+    CONFIT_TEXT_APPEND_VALUE(&value->value);
+    CONFIT_TEXT_APPEND(" (source: ");
+    CONFIT_TEXT_APPEND(value->source != 0 ? value->source : "");
+    CONFIT_TEXT_APPEND(")\n");
+  }
+  if (builder.text == 0) {
+    CONFIT_TEXT_APPEND("");
+  }
+
+#undef CONFIT_TEXT_APPEND
+#undef CONFIT_TEXT_APPEND_VALUE
+
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_resolved_config_to_toml(const ConfitResolvedConfig *config,
+                                            char **out_toml) {
+  ConfitResolverJsonBuilder builder;
+  ConfitStatus status;
+  size_t index;
+
+  if (config == 0 || out_toml == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  *out_toml = 0;
+  confit_resolver_json_builder_init(&builder);
+
+#define CONFIT_TOML_APPEND(fragment)                                           \
+  do {                                                                         \
+    status = confit_resolver_json_append(&builder, (fragment));                \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+#define CONFIT_TOML_APPEND_ESCAPED(fragment)                                   \
+  do {                                                                         \
+    status = confit_resolver_json_append_escaped(&builder, (fragment));        \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+#define CONFIT_TOML_APPEND_VALUE(value)                                        \
+  do {                                                                         \
+    status = confit_resolver_json_append_value(&builder, (value));             \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+  CONFIT_TOML_APPEND("[values]\n");
+  for (index = 0U; index < config->value_count; ++index) {
+    const ConfitResolvedValue *value = &config->values[index];
+
+    CONFIT_TOML_APPEND_ESCAPED(value->option_id);
+    CONFIT_TOML_APPEND(" = ");
+    CONFIT_TOML_APPEND_VALUE(&value->value);
+    CONFIT_TOML_APPEND("\n");
+  }
+
+  CONFIT_TOML_APPEND("\n[sources]\n");
+  for (index = 0U; index < config->value_count; ++index) {
+    const ConfitResolvedValue *value = &config->values[index];
+
+    CONFIT_TOML_APPEND_ESCAPED(value->option_id);
+    CONFIT_TOML_APPEND(" = ");
+    CONFIT_TOML_APPEND_ESCAPED(value->source != 0 ? value->source : "");
+    CONFIT_TOML_APPEND("\n");
+  }
+
+#undef CONFIT_TOML_APPEND
+#undef CONFIT_TOML_APPEND_ESCAPED
+#undef CONFIT_TOML_APPEND_VALUE
+
+  *out_toml = builder.text;
+  return CONFIT_OK;
+}
+
 ConfitStatus confit_resolved_config_hash(const ConfitResolvedConfig *config,
                                          uint64_t *out_hash) {
   static const uint64_t offset_basis = UINT64_C(14695981039346656037);

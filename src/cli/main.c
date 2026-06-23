@@ -1,4 +1,8 @@
+#include <ctype.h>
+#include <errno.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "confit/compat.h"
@@ -24,6 +28,13 @@ typedef struct ConfitCliCheckArgs {
   int strict;
 } ConfitCliCheckArgs;
 
+typedef struct ConfitCliResolveArgs {
+  ConfitCliProjectArgs project;
+  const char **sets;
+  size_t set_count;
+  const char *format;
+} ConfitCliResolveArgs;
+
 typedef struct ConfitCliGenArgs {
   ConfitCliProjectArgs project;
   const char *out_dir;
@@ -31,6 +42,8 @@ typedef struct ConfitCliGenArgs {
 
 typedef struct ConfitCliExplainArgs {
   ConfitCliProjectArgs project;
+  const char **sets;
+  size_t set_count;
   const char *option_id;
 } ConfitCliExplainArgs;
 
@@ -95,6 +108,7 @@ typedef struct ConfitCliCommandSpec {
 static int confit_cli_run_doctor(int argc, char **argv);
 static int confit_cli_run_init(int argc, char **argv);
 static int confit_cli_run_check(int argc, char **argv);
+static int confit_cli_run_resolve(int argc, char **argv);
 static int confit_cli_run_gen(int argc, char **argv);
 static int confit_cli_run_explain(int argc, char **argv);
 static int confit_cli_run_compat(int argc, char **argv);
@@ -129,7 +143,7 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "[--set <id=value>] [--format text|json|toml]",
      "--project <path>\n  --profile <name>\n  --target <name>\n  "
      "--set <id=value>\n  --format text|json|toml",
-     0},
+     confit_cli_run_resolve},
     {"gen", "Generate deterministic configuration artifacts.",
      "confit gen --project <path> --profile <name> [--target <name>] --out "
      "<path> [--artifact header|reports|cmake|qstar|all] [--force] "
@@ -138,8 +152,9 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      confit_cli_run_gen},
     {"explain", "Explain one resolved option value.",
      "confit explain --project <path> --profile <name> [--target <name>] "
-     "<option-id>",
-     "--project <path>\n  --profile <name>\n  --target <name>",
+     "[--set <id=value>] <option-id>",
+     "--project <path>\n  --profile <name>\n  --target <name>\n  "
+     "--set <id=value>",
      confit_cli_run_explain},
     {"list", "List schema entities.",
      "confit list --project <path> [--kind options|profiles|targets|"
@@ -1131,6 +1146,503 @@ static void confit_cli_project_args_init(ConfitCliProjectArgs *args) {
   args->target_name = 0;
 }
 
+static char *confit_cli_copy_bytes(const char *text, size_t size) {
+  char *copy;
+
+  copy = (char *)malloc(size + 1U);
+  if (copy == 0) {
+    return 0;
+  }
+  if (size > 0U) {
+    memcpy(copy, text, size);
+  }
+  copy[size] = '\0';
+  return copy;
+}
+
+static char *confit_cli_copy_string(const char *text) {
+  return text != 0 ? confit_cli_copy_bytes(text, strlen(text)) : 0;
+}
+
+static size_t confit_cli_trim_left(const char *text, size_t begin,
+                                   size_t end) {
+  while (begin < end && isspace((unsigned char)text[begin])) {
+    begin += 1U;
+  }
+  return begin;
+}
+
+static size_t confit_cli_trim_right(const char *text, size_t begin,
+                                    size_t end) {
+  while (end > begin && isspace((unsigned char)text[end - 1U])) {
+    end -= 1U;
+  }
+  return end;
+}
+
+static int confit_cli_slice_equals_case(const char *text, size_t begin,
+                                        size_t end, const char *word) {
+  size_t index;
+  size_t word_size;
+
+  word_size = strlen(word);
+  if (end - begin != word_size) {
+    return 0;
+  }
+  for (index = 0U; index < word_size; ++index) {
+    if (tolower((unsigned char)text[begin + index]) !=
+        tolower((unsigned char)word[index])) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static ConfitStatus confit_cli_add_raw_set(const char ***sets,
+                                           size_t *set_count,
+                                           const char *value) {
+  const char **new_sets;
+
+  new_sets =
+      (const char **)realloc(*sets, (*set_count + 1U) * sizeof((*sets)[0]));
+  if (new_sets == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  *sets = new_sets;
+  (*sets)[*set_count] = value;
+  *set_count += 1U;
+  return CONFIT_OK;
+}
+
+static void confit_cli_clear_raw_sets(const char ***sets, size_t *set_count) {
+  if (sets == 0 || set_count == 0) {
+    return;
+  }
+
+  free((void *)*sets);
+  *sets = 0;
+  *set_count = 0U;
+}
+
+static void confit_cli_named_value_init(ConfitNamedValue *value) {
+  if (value == 0) {
+    return;
+  }
+
+  value->option_id = 0;
+  confit_value_init(&value->value);
+  value->source = 0;
+}
+
+static void confit_cli_named_value_clear(ConfitNamedValue *value) {
+  if (value == 0) {
+    return;
+  }
+
+  free(value->option_id);
+  confit_value_clear(&value->value);
+  free(value->source);
+  confit_cli_named_value_init(value);
+}
+
+static void confit_cli_named_values_clear(ConfitNamedValue *values,
+                                          size_t value_count) {
+  size_t index;
+
+  for (index = 0U; index < value_count; ++index) {
+    confit_cli_named_value_clear(&values[index]);
+  }
+  free(values);
+}
+
+static ConfitStatus confit_cli_append_override(ConfitNamedValue **values,
+                                               size_t *value_count,
+                                               const char *option_id,
+                                               const ConfitValue *value,
+                                               const char *source) {
+  ConfitNamedValue *new_values;
+  ConfitStatus status;
+
+  new_values =
+      (ConfitNamedValue *)realloc(*values,
+                                  (*value_count + 1U) * sizeof((*values)[0]));
+  if (new_values == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  *values = new_values;
+  confit_cli_named_value_init(&(*values)[*value_count]);
+  (*values)[*value_count].option_id = confit_cli_copy_string(option_id);
+  (*values)[*value_count].source = confit_cli_copy_string(source);
+  if ((*values)[*value_count].option_id == 0 ||
+      (*values)[*value_count].source == 0) {
+    confit_cli_named_value_clear(&(*values)[*value_count]);
+    return CONFIT_ERR_INTERNAL;
+  }
+  status = confit_value_copy(&(*values)[*value_count].value, value);
+  if (status != CONFIT_OK) {
+    confit_cli_named_value_clear(&(*values)[*value_count]);
+    return status;
+  }
+
+  *value_count += 1U;
+  return CONFIT_OK;
+}
+
+static ConfitOption *confit_cli_find_option_by_id_or_alias(
+    ConfitProject *project, const char *id, int *out_alias_used,
+    int *out_ambiguous) {
+  ConfitOption *match;
+  size_t option_index;
+
+  *out_alias_used = 0;
+  *out_ambiguous = 0;
+  match = confit_project_find_option(project, id);
+  if (match != 0) {
+    return match;
+  }
+
+  for (option_index = 0U; option_index < project->option_count;
+       ++option_index) {
+    ConfitOption *option = &project->options[option_index];
+    size_t alias_index;
+
+    for (alias_index = 0U; alias_index < option->deprecated_alias_count;
+         ++alias_index) {
+      if (strcmp(option->deprecated_aliases[alias_index], id) != 0) {
+        continue;
+      }
+      if (match != 0) {
+        *out_ambiguous = 1;
+        return match;
+      }
+      match = option;
+      *out_alias_used = 1;
+    }
+  }
+  return match;
+}
+
+static int confit_cli_parse_bool_value(const char *text, size_t begin,
+                                       size_t end, int *out_value) {
+  if (confit_cli_slice_equals_case(text, begin, end, "true") ||
+      confit_cli_slice_equals_case(text, begin, end, "1")) {
+    *out_value = 1;
+    return 1;
+  }
+  if (confit_cli_slice_equals_case(text, begin, end, "false") ||
+      confit_cli_slice_equals_case(text, begin, end, "0")) {
+    *out_value = 0;
+    return 1;
+  }
+  return 0;
+}
+
+static int confit_cli_parse_int_value(const char *text, size_t begin,
+                                      size_t end, int64_t *out_value) {
+  char *copy;
+  char *tail;
+  long long value;
+
+  copy = confit_cli_copy_bytes(text + begin, end - begin);
+  if (copy == 0) {
+    return 0;
+  }
+  errno = 0;
+  tail = 0;
+  value = strtoll(copy, &tail, 0);
+  if (errno != 0 || tail == copy || *tail != '\0') {
+    free(copy);
+    return 0;
+  }
+  free(copy);
+  *out_value = (int64_t)value;
+  return 1;
+}
+
+static int confit_cli_parse_uint_value(const char *text, size_t begin,
+                                       size_t end, uint64_t *out_value) {
+  char *copy;
+  char *tail;
+  unsigned long long value;
+
+  if (begin < end && text[begin] == '-') {
+    return 0;
+  }
+  copy = confit_cli_copy_bytes(text + begin, end - begin);
+  if (copy == 0) {
+    return 0;
+  }
+  errno = 0;
+  tail = 0;
+  value = strtoull(copy, &tail, 0);
+  if (errno != 0 || tail == copy || *tail != '\0') {
+    free(copy);
+    return 0;
+  }
+  free(copy);
+  *out_value = (uint64_t)value;
+  return 1;
+}
+
+static int confit_cli_parse_float_value(const char *text, size_t begin,
+                                        size_t end, double *out_value) {
+  char *copy;
+  char *tail;
+  double value;
+
+  copy = confit_cli_copy_bytes(text + begin, end - begin);
+  if (copy == 0) {
+    return 0;
+  }
+  errno = 0;
+  tail = 0;
+  value = strtod(copy, &tail);
+  if (errno != 0 || tail == copy || *tail != '\0' || !isfinite(value)) {
+    free(copy);
+    return 0;
+  }
+  free(copy);
+  *out_value = value;
+  return 1;
+}
+
+static char *confit_cli_parse_string_slice(const char *text, size_t begin,
+                                           size_t end) {
+  char quote;
+  char *copy;
+  size_t index;
+  size_t out_index;
+
+  if (end > begin + 1U &&
+      (text[begin] == '"' || text[begin] == '\'') &&
+      text[end - 1U] == text[begin]) {
+    quote = text[begin];
+    copy = (char *)malloc(end - begin - 1U);
+    if (copy == 0) {
+      return 0;
+    }
+    out_index = 0U;
+    for (index = begin + 1U; index + 1U < end; ++index) {
+      if (quote == '"' && text[index] == '\\' && index + 2U < end) {
+        index += 1U;
+        switch (text[index]) {
+        case 'n':
+          copy[out_index] = '\n';
+          break;
+        case 'r':
+          copy[out_index] = '\r';
+          break;
+        case 't':
+          copy[out_index] = '\t';
+          break;
+        default:
+          copy[out_index] = text[index];
+          break;
+        }
+      } else {
+        copy[out_index] = text[index];
+      }
+      out_index += 1U;
+    }
+    copy[out_index] = '\0';
+    return copy;
+  }
+
+  return confit_cli_copy_bytes(text + begin, end - begin);
+}
+
+static ConfitStatus confit_cli_parse_override_typed_value(
+    const ConfitOption *option, const char *text, size_t begin, size_t end,
+    ConfitValue *out_value, ConfitDiagnostic *diagnostic) {
+  int bool_value;
+  int64_t int_value;
+  uint64_t uint_value;
+  double float_value;
+  char *string_value;
+  ConfitStatus status;
+
+  confit_value_init(out_value);
+  switch (option->type) {
+  case CONFIT_OPTION_TYPE_BOOL:
+    if (!confit_cli_parse_bool_value(text, begin, end, &bool_value)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                            "invalid --set bool value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_bool(out_value, bool_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_INT:
+    if (!confit_cli_parse_int_value(text, begin, end, &int_value)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                            "invalid --set int value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_int(out_value, int_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_UINT:
+  case CONFIT_OPTION_TYPE_HEX:
+    if (!confit_cli_parse_uint_value(text, begin, end, &uint_value)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                            "invalid --set unsigned value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_uint(out_value, uint_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_FLOAT:
+    if (!confit_cli_parse_float_value(text, begin, end, &float_value)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                            "invalid --set float value");
+      return CONFIT_ERR_SCHEMA;
+    }
+    confit_value_set_float(out_value, float_value);
+    return CONFIT_OK;
+  case CONFIT_OPTION_TYPE_STRING:
+  case CONFIT_OPTION_TYPE_ENUM:
+  case CONFIT_OPTION_TYPE_PATH:
+    string_value = confit_cli_parse_string_slice(text, begin, end);
+    if (string_value == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, option->id, 0, 0,
+                            "failed to allocate --set value");
+      return CONFIT_ERR_INTERNAL;
+    }
+    if (option->type == CONFIT_OPTION_TYPE_STRING) {
+      status = confit_value_set_string(out_value, string_value);
+    } else if (option->type == CONFIT_OPTION_TYPE_ENUM) {
+      status = confit_value_set_enum(out_value, string_value);
+    } else {
+      status = confit_value_set_path(out_value, string_value);
+    }
+    free(string_value);
+    if (status != CONFIT_OK) {
+      confit_diagnostic_set(diagnostic, status, option->id, 0, 0,
+                            "failed to copy --set value");
+    }
+    return status;
+  case CONFIT_OPTION_TYPE_INVALID:
+  default:
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                          "invalid --set option type");
+    return CONFIT_ERR_SCHEMA;
+  }
+}
+
+static ConfitStatus confit_cli_parse_override(
+    ConfitProject *project, const char *assignment, ConfitNamedValue **values,
+    size_t *value_count, ConfitDiagnostic *diagnostic) {
+  size_t equals_index;
+  size_t key_begin;
+  size_t key_end;
+  size_t value_begin;
+  size_t value_end;
+  char *option_id;
+  ConfitOption *option;
+  ConfitValue value;
+  ConfitOption validation_option;
+  int alias_used;
+  int ambiguous;
+  ConfitStatus status;
+
+  equals_index = 0U;
+  while (assignment[equals_index] != '\0' && assignment[equals_index] != '=') {
+    equals_index += 1U;
+  }
+  if (assignment[equals_index] != '=') {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, assignment,
+                          0, 0, "--set must be option-id=value");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  key_begin = confit_cli_trim_left(assignment, 0U, equals_index);
+  key_end = confit_cli_trim_right(assignment, key_begin, equals_index);
+  value_begin = confit_cli_trim_left(assignment, equals_index + 1U,
+                                     strlen(assignment));
+  value_end = confit_cli_trim_right(assignment, value_begin,
+                                    strlen(assignment));
+  if (key_begin == key_end) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, assignment,
+                          0, 0, "--set option id is empty");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  option_id = confit_cli_copy_bytes(assignment + key_begin,
+                                    key_end - key_begin);
+  if (option_id == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, assignment, 0, 0,
+                          "failed to allocate --set option id");
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  alias_used = 0;
+  ambiguous = 0;
+  option = confit_cli_find_option_by_id_or_alias(project, option_id,
+                                                 &alias_used, &ambiguous);
+  if (ambiguous) {
+    free(option_id);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, assignment, 0, 0,
+                          "ambiguous --set deprecated alias");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (option == 0) {
+    free(option_id);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, assignment, 0, 0,
+                          "unknown --set option");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_cli_parse_override_typed_value(option, assignment,
+                                                value_begin, value_end, &value,
+                                                diagnostic);
+  if (status != CONFIT_OK) {
+    free(option_id);
+    return status;
+  }
+
+  validation_option = *option;
+  validation_option.default_value = value;
+  if (confit_option_validate_default(&validation_option) != CONFIT_OK) {
+    confit_value_clear(&value);
+    free(option_id);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                          "invalid --set value");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_cli_append_override(values, value_count, option->id, &value,
+                                      "cli --set");
+  confit_value_clear(&value);
+  free(option_id);
+  if (status != CONFIT_OK) {
+    confit_diagnostic_set(diagnostic, status, assignment, 0, 0,
+                          "failed to record --set override");
+  }
+  (void)alias_used;
+  return status;
+}
+
+static ConfitStatus confit_cli_parse_overrides(
+    ConfitProject *project, const char *const *sets, size_t set_count,
+    ConfitNamedValue **out_values, size_t *out_value_count,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+  ConfitStatus status;
+
+  *out_values = 0;
+  *out_value_count = 0U;
+  for (index = 0U; index < set_count; ++index) {
+    status = confit_cli_parse_override(project, sets[index], out_values,
+                                       out_value_count, diagnostic);
+    if (status != CONFIT_OK) {
+      confit_cli_named_values_clear(*out_values, *out_value_count);
+      *out_values = 0;
+      *out_value_count = 0U;
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_cli_join3(char *out, size_t out_size,
                                      const char *first, const char *second,
                                      const char *third,
@@ -1145,6 +1657,54 @@ static ConfitStatus confit_cli_join3(char *out, size_t out_size,
     return status;
   }
   return confit_host_path_join(out, out_size, scratch, third, diagnostic);
+}
+
+static ConfitStatus confit_cli_load_project_graph(
+    const char *project_root, ConfitProject **out_project,
+    ConfitGraph **out_graph, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
+  ConfitProject *project;
+  ConfitGraph *graph;
+  ConfitStatus status;
+
+  if (out_project == 0 || out_graph == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT,
+                          project_root, 0, 0,
+                          "missing checked project output");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  *out_project = 0;
+  *out_graph = 0;
+  project = 0;
+  graph = 0;
+
+  if (audit != 0) {
+    status = confit_schema_load_project_with_audit(project_root, &project,
+                                                   audit, diagnostic);
+  } else {
+    status = confit_schema_load_project(project_root, &project, diagnostic);
+  }
+  if (status != CONFIT_OK) {
+    goto fail;
+  }
+  status = confit_graph_build(project, &graph, diagnostic);
+  if (status != CONFIT_OK) {
+    goto fail;
+  }
+  status = confit_graph_validate(graph, diagnostic);
+  if (status != CONFIT_OK) {
+    goto fail;
+  }
+
+  *out_project = project;
+  *out_graph = graph;
+  return CONFIT_OK;
+
+fail:
+  confit_graph_free(graph);
+  confit_project_free(project);
+  return status;
 }
 
 static ConfitStatus confit_cli_load_checked_project(
@@ -1170,20 +1730,8 @@ static ConfitStatus confit_cli_load_checked_project(
   graph = 0;
   config = 0;
 
-  if (audit != 0) {
-    status = confit_schema_load_project_with_audit(project_root, &project,
-                                                   audit, diagnostic);
-  } else {
-    status = confit_schema_load_project(project_root, &project, diagnostic);
-  }
-  if (status != CONFIT_OK) {
-    goto fail;
-  }
-  status = confit_graph_build(project, &graph, diagnostic);
-  if (status != CONFIT_OK) {
-    goto fail;
-  }
-  status = confit_graph_validate(graph, diagnostic);
+  status = confit_cli_load_project_graph(project_root, &project, &graph, audit,
+                                         diagnostic);
   if (status != CONFIT_OK) {
     goto fail;
   }
@@ -1381,6 +1929,177 @@ static int confit_cli_run_check(int argc, char **argv) {
 
   status = confit_host_stdout_write_line("check ok");
   return confit_status_exit_code(status);
+}
+
+static void confit_cli_resolve_args_init(ConfitCliResolveArgs *args) {
+  confit_cli_project_args_init(&args->project);
+  args->sets = 0;
+  args->set_count = 0U;
+  args->format = "text";
+}
+
+static void confit_cli_resolve_args_clear(ConfitCliResolveArgs *args) {
+  confit_cli_clear_raw_sets(&args->sets, &args->set_count);
+}
+
+static ConfitStatus confit_cli_parse_resolve_args(int argc, char **argv,
+                                                  ConfitCliResolveArgs *args) {
+  int index;
+
+  confit_cli_resolve_args_init(args);
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        confit_cli_resolve_args_clear(args);
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      args->project.project_root = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--profile") == 0) {
+      if (index + 1 >= argc) {
+        confit_cli_resolve_args_clear(args);
+        return confit_cli_write_error("missing value for --profile");
+      }
+      index += 1;
+      args->project.profile_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--target") == 0) {
+      if (index + 1 >= argc) {
+        confit_cli_resolve_args_clear(args);
+        return confit_cli_write_error("missing value for --target");
+      }
+      index += 1;
+      args->project.target_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--set") == 0) {
+      ConfitStatus status;
+
+      if (index + 1 >= argc) {
+        confit_cli_resolve_args_clear(args);
+        return confit_cli_write_error("missing value for --set");
+      }
+      index += 1;
+      status = confit_cli_add_raw_set(&args->sets, &args->set_count,
+                                      argv[index]);
+      if (status != CONFIT_OK) {
+        confit_cli_resolve_args_clear(args);
+        return status;
+      }
+      continue;
+    }
+    if (strcmp(arg, "--format") == 0) {
+      if (index + 1 >= argc) {
+        confit_cli_resolve_args_clear(args);
+        return confit_cli_write_error("missing value for --format");
+      }
+      index += 1;
+      args->format = argv[index];
+      continue;
+    }
+    if (arg[0] == '-') {
+      confit_cli_resolve_args_clear(args);
+      return confit_cli_write_error("unknown resolve option");
+    }
+    confit_cli_resolve_args_clear(args);
+    return confit_cli_write_error("resolve does not accept positional arguments");
+  }
+
+  if (args->project.project_root == 0) {
+    confit_cli_resolve_args_clear(args);
+    return confit_cli_write_error("resolve requires --project");
+  }
+  if (args->project.profile_name == 0) {
+    confit_cli_resolve_args_clear(args);
+    return confit_cli_write_error("resolve requires --profile");
+  }
+  if (strcmp(args->format, "text") != 0 && strcmp(args->format, "json") != 0 &&
+      strcmp(args->format, "toml") != 0) {
+    confit_cli_resolve_args_clear(args);
+    return confit_cli_write_error("resolve --format must be text, json, or toml");
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_resolved_config_to_format(
+    const ConfitResolvedConfig *config, const char *format, char **out_text,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+
+  if (strcmp(format, "json") == 0) {
+    status = confit_resolved_config_to_json(config, out_text);
+  } else if (strcmp(format, "toml") == 0) {
+    status = confit_resolved_config_to_toml(config, out_text);
+  } else {
+    status = confit_resolved_config_to_text(config, out_text);
+  }
+  if (status != CONFIT_OK) {
+    confit_diagnostic_set(diagnostic, status, 0, 0, 0,
+                          "failed to serialize resolved config");
+  }
+  return status;
+}
+
+static int confit_cli_run_resolve(int argc, char **argv) {
+  ConfitCliResolveArgs args;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitGraph *graph;
+  ConfitResolvedConfig *config;
+  ConfitNamedValue *overrides;
+  size_t override_count;
+  char *output;
+  ConfitStatus status;
+
+  status = confit_cli_parse_resolve_args(argc, argv, &args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  graph = 0;
+  config = 0;
+  overrides = 0;
+  override_count = 0U;
+  output = 0;
+
+  status = confit_cli_load_project_graph(args.project.project_root, &project,
+                                         &graph, 0, &diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_cli_parse_overrides(project, args.sets, args.set_count,
+                                        &overrides, &override_count,
+                                        &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_resolver_resolve(
+        project, args.project.profile_name, args.project.target_name,
+        overrides, override_count, &config, &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_resolved_config_to_format(config, args.format,
+                                                  &output, &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(output);
+  }
+
+  confit_resolver_string_free(output);
+  confit_resolved_config_free(config);
+  confit_cli_named_values_clear(overrides, override_count);
+  confit_graph_free(graph);
+  confit_project_free(project);
+  confit_cli_resolve_args_clear(&args);
+
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+  return confit_status_exit_code(CONFIT_OK);
 }
 
 static ConfitStatus confit_cli_write_artifact(const char *out_dir,
@@ -1583,12 +2302,15 @@ static ConfitStatus confit_cli_parse_explain_args(int argc, char **argv,
   int index;
 
   confit_cli_project_args_init(&args->project);
+  args->sets = 0;
+  args->set_count = 0U;
   args->option_id = 0;
   for (index = 2; index < argc; ++index) {
     const char *arg = argv[index];
 
     if (strcmp(arg, "--project") == 0) {
       if (index + 1 >= argc) {
+        confit_cli_clear_raw_sets(&args->sets, &args->set_count);
         return confit_cli_write_error("missing value for --project");
       }
       index += 1;
@@ -1597,6 +2319,7 @@ static ConfitStatus confit_cli_parse_explain_args(int argc, char **argv,
     }
     if (strcmp(arg, "--profile") == 0) {
       if (index + 1 >= argc) {
+        confit_cli_clear_raw_sets(&args->sets, &args->set_count);
         return confit_cli_write_error("missing value for --profile");
       }
       index += 1;
@@ -1605,28 +2328,50 @@ static ConfitStatus confit_cli_parse_explain_args(int argc, char **argv,
     }
     if (strcmp(arg, "--target") == 0) {
       if (index + 1 >= argc) {
+        confit_cli_clear_raw_sets(&args->sets, &args->set_count);
         return confit_cli_write_error("missing value for --target");
       }
       index += 1;
       args->project.target_name = argv[index];
       continue;
     }
+    if (strcmp(arg, "--set") == 0) {
+      ConfitStatus status;
+
+      if (index + 1 >= argc) {
+        confit_cli_clear_raw_sets(&args->sets, &args->set_count);
+        return confit_cli_write_error("missing value for --set");
+      }
+      index += 1;
+      status = confit_cli_add_raw_set(&args->sets, &args->set_count,
+                                      argv[index]);
+      if (status != CONFIT_OK) {
+        confit_cli_clear_raw_sets(&args->sets, &args->set_count);
+        return status;
+      }
+      continue;
+    }
     if (arg[0] == '-') {
+      confit_cli_clear_raw_sets(&args->sets, &args->set_count);
       return confit_cli_write_error("unknown explain option");
     }
     if (args->option_id != 0) {
+      confit_cli_clear_raw_sets(&args->sets, &args->set_count);
       return confit_cli_write_error("too many explain option ids");
     }
     args->option_id = arg;
   }
 
   if (args->project.project_root == 0) {
+    confit_cli_clear_raw_sets(&args->sets, &args->set_count);
     return confit_cli_write_error("explain requires --project");
   }
   if (args->project.profile_name == 0) {
+    confit_cli_clear_raw_sets(&args->sets, &args->set_count);
     return confit_cli_write_error("explain requires --profile");
   }
   if (args->option_id == 0) {
+    confit_cli_clear_raw_sets(&args->sets, &args->set_count);
     return confit_cli_write_error("explain requires an option id");
   }
   return CONFIT_OK;
@@ -1638,6 +2383,8 @@ static int confit_cli_run_explain(int argc, char **argv) {
   ConfitProject *project;
   ConfitGraph *graph;
   ConfitResolvedConfig *config;
+  ConfitNamedValue *overrides;
+  size_t override_count;
   char *explanation;
   ConfitStatus status;
 
@@ -1650,11 +2397,21 @@ static int confit_cli_run_explain(int argc, char **argv) {
   project = 0;
   graph = 0;
   config = 0;
+  overrides = 0;
+  override_count = 0U;
   explanation = 0;
-  status = confit_cli_load_checked_project(
-      args.project.project_root, args.project.profile_name,
-      args.project.target_name, 1, &project, &graph, &config, 0,
-      &diagnostic);
+  status = confit_cli_load_project_graph(args.project.project_root, &project,
+                                         &graph, 0, &diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_cli_parse_overrides(project, args.sets, args.set_count,
+                                        &overrides, &override_count,
+                                        &diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_resolver_resolve(
+        project, args.project.profile_name, args.project.target_name,
+        overrides, override_count, &config, &diagnostic);
+  }
   if (status == CONFIT_OK) {
     status = confit_explain_option(project, config, args.option_id,
                                    &explanation, &diagnostic);
@@ -1665,8 +2422,10 @@ static int confit_cli_run_explain(int argc, char **argv) {
 
   confit_explain_string_free(explanation);
   confit_resolved_config_free(config);
+  confit_cli_named_values_clear(overrides, override_count);
   confit_graph_free(graph);
   confit_project_free(project);
+  confit_cli_clear_raw_sets(&args.sets, &args.set_count);
 
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);

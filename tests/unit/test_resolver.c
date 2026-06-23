@@ -219,6 +219,10 @@ int main(void) {
   ConfitNamedValue override_value;
   char *json;
   char *golden_json;
+  char *text;
+  char *golden_text;
+  char *toml;
+  char *golden_toml;
   uint64_t hash;
   uint64_t hash_again;
 
@@ -308,6 +312,44 @@ int main(void) {
   confit_resolver_string_free(json);
   free(golden_json);
 
+  text = 0;
+  if (confit_resolved_config_to_text(config, &text) != CONFIT_OK ||
+      !read_fixture_text("tests/golden/resolver/sim-dsh.txt",
+                         &golden_text)) {
+    confit_resolver_string_free(text);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 14;
+  }
+  if (strcmp(text, golden_text) != 0) {
+    confit_resolver_string_free(text);
+    free(golden_text);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 15;
+  }
+  confit_resolver_string_free(text);
+  free(golden_text);
+
+  toml = 0;
+  if (confit_resolved_config_to_toml(config, &toml) != CONFIT_OK ||
+      !read_fixture_text("tests/golden/resolver/sim-dsh.toml",
+                         &golden_toml)) {
+    confit_resolver_string_free(toml);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 16;
+  }
+  if (strcmp(toml, golden_toml) != 0) {
+    confit_resolver_string_free(toml);
+    free(golden_toml);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 17;
+  }
+  confit_resolver_string_free(toml);
+  free(golden_toml);
+
   hash = 0U;
   hash_again = 0U;
   config_again = 0;
@@ -319,7 +361,7 @@ int main(void) {
     confit_resolved_config_free(config_again);
     confit_resolved_config_free(config);
     confit_project_free(project);
-    return 14;
+    return 18;
   }
   confit_resolved_config_free(config_again);
   confit_resolved_config_free(config);
@@ -328,7 +370,7 @@ int main(void) {
   if (confit_resolver_resolve(project, "sim-dsh", "qemu-mps2-an500", 0, 0U,
                               &config, &diagnostic) != CONFIT_OK) {
     confit_project_free(project);
-    return 15;
+    return 19;
   }
   if (!expect_uint_value(config, "delos.scheduler.task_slots", 32U,
                          "profiles/sim-dsh.toml") ||
@@ -338,7 +380,7 @@ int main(void) {
                            "delos-debug", "profiles/debug.toml")) {
     confit_resolved_config_free(config);
     confit_project_free(project);
-    return 16;
+    return 20;
   }
   confit_resolved_config_free(config);
 
@@ -346,7 +388,7 @@ int main(void) {
   if (!set_override_string(&override_value, "delos.output.name", "manual")) {
     override_clear(&override_value);
     confit_project_free(project);
-    return 17;
+    return 21;
   }
   config = 0;
   if (confit_resolver_resolve(project, "sim-dsh", 0, &override_value, 1U,
@@ -356,7 +398,7 @@ int main(void) {
     confit_resolved_config_free(config);
     override_clear(&override_value);
     confit_project_free(project);
-    return 18;
+    return 22;
   }
   confit_resolved_config_free(config);
   override_clear(&override_value);
@@ -368,7 +410,7 @@ int main(void) {
                             "dependency not satisfied")) {
     override_clear(&override_value);
     confit_project_free(project);
-    return 19;
+    return 23;
   }
   override_clear(&override_value);
 
@@ -378,7 +420,7 @@ int main(void) {
                             "conflict active")) {
     override_clear(&override_value);
     confit_project_free(project);
-    return 20;
+    return 24;
   }
   override_clear(&override_value);
 

@@ -21,6 +21,15 @@ grep -F "options:" "$WORK_DIR/doctor.txt" >/dev/null
   >"$WORK_DIR/check.txt"
 grep -Fx "check ok" "$WORK_DIR/check.txt" >/dev/null
 
+"$CONFIT_BIN" resolve --project "$PROJECT_DIR" --profile sim-dsh \
+  --format json >"$WORK_DIR/resolve.json"
+grep -F '"schema": "confit-resolved-v1"' "$WORK_DIR/resolve.json" >/dev/null
+
+"$CONFIT_BIN" resolve --project "$PROJECT_DIR" --profile sim-dsh \
+  --set delos.output.name=manual --format toml >"$WORK_DIR/resolve.toml"
+grep -F '"delos.output.name" = "manual"' "$WORK_DIR/resolve.toml" >/dev/null
+grep -F '"delos.output.name" = "cli --set"' "$WORK_DIR/resolve.toml" >/dev/null
+
 "$CONFIT_BIN" list --project "$PROJECT_DIR" --category debug \
   >"$WORK_DIR/list.txt"
 grep -F "delos.debug.ddc" "$WORK_DIR/list.txt" >/dev/null

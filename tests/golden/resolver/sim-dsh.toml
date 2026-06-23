@@ -1,0 +1,19 @@
+[values]
+"delos.debug.ddc" = true
+"delos.internal.debug_gate" = false
+"delos.memory.flash_base" = 134217728
+"delos.output.name" = "delos-host-sim"
+"delos.paths.config_root" = "build/generated/config/delos/sim-dsh"
+"delos.scheduler.task_slots" = 32
+"delos.sim.default_gain" = 0.25
+"delos.target.board" = "host-sim"
+
+[sources]
+"delos.debug.ddc" = "profiles/debug.toml"
+"delos.internal.debug_gate" = "default"
+"delos.memory.flash_base" = "default"
+"delos.output.name" = "targets/host-sim.toml"
+"delos.paths.config_root" = "profiles/sim-dsh.toml"
+"delos.scheduler.task_slots" = "profiles/sim-dsh.toml"
+"delos.sim.default_gain" = "profiles/sim-dsh.toml"
+"delos.target.board" = "profiles/sim-dsh.toml"
