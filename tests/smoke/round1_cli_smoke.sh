@@ -10,6 +10,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT_DIR/include" \
   "$ROOT_DIR/src/core/status.c" \
   "$ROOT_DIR/src/core/diagnostic.c" \
+  "$ROOT_DIR/src/core/model.c" \
   "$ROOT_DIR/src/core/version.c" \
   "$ROOT_DIR/tests/unit/test_status_diagnostic.c" \
   -o "$BUILD_DIR/test_status_diagnostic"
@@ -20,6 +21,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   -I"$ROOT_DIR/include" \
   "$ROOT_DIR/src/core/status.c" \
   "$ROOT_DIR/src/core/diagnostic.c" \
+  "$ROOT_DIR/src/core/model.c" \
   "$ROOT_DIR/src/core/version.c" \
   "$ROOT_DIR/src/host/host_file.c" \
   "$ROOT_DIR/src/host/host_io.c" \

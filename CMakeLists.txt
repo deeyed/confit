@@ -13,6 +13,7 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 add_library(confit_core STATIC
   src/core/diagnostic.c
+  src/core/model.c
   src/core/status.c
   src/core/version.c
 )
@@ -114,6 +115,25 @@ endif()
 add_test(
   NAME confit.unit.status_diagnostic
   COMMAND confit_test_status_diagnostic
+)
+
+add_executable(confit_test_model
+  tests/unit/test_model.c
+)
+
+target_link_libraries(confit_test_model PRIVATE confit_core)
+
+if(MSVC)
+  target_compile_options(confit_test_model PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_model PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.model
+  COMMAND confit_test_model
 )
 
 add_executable(confit_test_host_boundary
