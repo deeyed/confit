@@ -45,6 +45,7 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 - [generators.md](docs/generators.md): generated `config.h`, report, graph, input manifest 산출물.
 - [cli-tui.md](docs/cli-tui.md): CLI, TUI, profile/schema editing workflow 전략.
 - [coding-and-doc-rules.md](docs/coding-and-doc-rules.md): 구현팀이 따라야 할 C/Doxygen/문서 규칙.
+- [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
 - [implementation-rounds.md](docs/implementation-rounds.md): 임시 20라운드 구현 자동화 계획과 라운드별 검증/커밋 계약.
 
 ## Recommended Repository Placement
