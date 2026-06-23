@@ -141,6 +141,21 @@ else()
   )
 endif()
 
+add_library(confit_generator STATIC
+  src/generator/config_header.c
+)
+
+target_link_libraries(confit_generator PUBLIC confit_resolver)
+target_compile_features(confit_generator PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_generator PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_generator PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -336,6 +351,31 @@ endif()
 add_test(
   NAME confit.unit.explain
   COMMAND confit_test_explain
+)
+
+add_executable(confit_test_generator
+  tests/unit/test_generator.c
+)
+
+target_link_libraries(confit_test_generator PRIVATE
+  confit_generator
+  confit_schema
+)
+target_compile_definitions(confit_test_generator PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_generator PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_generator PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.generator
+  COMMAND confit_test_generator
 )
 
 add_test(
