@@ -69,6 +69,19 @@ const char *
 confit_parser_document_source_name(const ConfitParserDocument *document);
 
 /**
+ * @brief parser document가 보존하는 source text를 반환한다.
+ *
+ * 반환 pointer는 document가 소유한다. Caller는 이 문자열을 수정하거나 해제하면
+ * 안 된다. Schema loader는 이 text를 읽어 TOML table/value를 typed model로
+ * 변환한다.
+ *
+ * @param document 조회할 document.
+ * @return NUL 종료 source text. 없으면 `NULL`.
+ */
+const char *
+confit_parser_document_source_text(const ConfitParserDocument *document);
+
+/**
  * @brief parser document의 source byte 길이를 반환한다.
  *
  * @param document 조회할 document.

@@ -1,0 +1,16 @@
+[option."delos.scheduler.task_slots"]
+type = "uint"
+default = 16
+prompt = "Task Slots"
+category = "scheduler"
+tags = ["scheduler"]
+help = "Number of static task slots."
+
+[option."delos.target.board"]
+type = "enum"
+default = "host-sim"
+prompt = "Target Board"
+category = "target"
+tags = ["target"]
+help = "Selected target board."
+requires = ["delos.debug.ddc"]

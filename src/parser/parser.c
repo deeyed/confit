@@ -180,6 +180,11 @@ confit_parser_document_source_name(const ConfitParserDocument *document) {
   return document != 0 ? document->source_name : 0;
 }
 
+const char *
+confit_parser_document_source_text(const ConfitParserDocument *document) {
+  return document != 0 ? document->source_text : 0;
+}
+
 size_t
 confit_parser_document_source_size(const ConfitParserDocument *document) {
   return document != 0 ? document->source_size : 0U;

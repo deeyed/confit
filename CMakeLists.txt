@@ -84,6 +84,19 @@ else()
   target_compile_options(confit_parser PRIVATE -Wall -Wextra -Werror -pedantic)
 endif()
 
+add_library(confit_schema STATIC
+  src/schema/schema.c
+)
+
+target_link_libraries(confit_schema PUBLIC confit_parser)
+target_compile_features(confit_schema PUBLIC c_std_17)
+
+if(MSVC)
+  target_compile_options(confit_schema PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_schema PRIVATE -Wall -Wextra -Werror -pedantic)
+endif()
+
 add_executable(confit
   src/cli/main.c
 )
@@ -178,6 +191,28 @@ endif()
 add_test(
   NAME confit.unit.parser_adapter
   COMMAND confit_test_parser_adapter
+)
+
+add_executable(confit_test_schema_loader
+  tests/unit/test_schema_loader.c
+)
+
+target_link_libraries(confit_test_schema_loader PRIVATE confit_schema)
+target_compile_definitions(confit_test_schema_loader PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(confit_test_schema_loader PRIVATE /W4 /WX)
+else()
+  target_compile_options(confit_test_schema_loader PRIVATE
+    -Wall -Wextra -Werror -pedantic
+  )
+endif()
+
+add_test(
+  NAME confit.unit.schema_loader
+  COMMAND confit_test_schema_loader
 )
 
 add_test(

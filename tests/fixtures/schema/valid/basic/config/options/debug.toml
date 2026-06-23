@@ -1,0 +1,8 @@
+[option."delos.debug.ddc"]
+type = "bool"
+default = false
+prompt = "Enable DDC"
+category = "debug"
+tags = ["debug", "host-tooling"]
+help = "Include the development DDC command parser."
+x_ui_group = "debug"
