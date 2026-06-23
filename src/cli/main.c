@@ -71,6 +71,10 @@ typedef struct ConfitCliGraphArgs {
   const char *format;
 } ConfitCliGraphArgs;
 
+typedef struct ConfitCliCompletionArgs {
+  const char *shell;
+} ConfitCliCompletionArgs;
+
 typedef enum ConfitCliProfileCommand {
   CONFIT_CLI_PROFILE_INVALID = 0,
   CONFIT_CLI_PROFILE_LIST = 1,
@@ -159,11 +163,13 @@ static int confit_cli_run_compat(int argc, char **argv);
 static int confit_cli_run_list(int argc, char **argv);
 static int confit_cli_run_graph(int argc, char **argv);
 static int confit_cli_run_profile(int argc, char **argv);
+static int confit_cli_run_completion(int argc, char **argv);
 static int confit_cli_run_tui(int argc, char **argv);
 
 static ConfitStatus confit_cli_find_config_root(const char *project_root,
                                                 char *out, size_t out_size,
                                                 ConfitDiagnostic *diagnostic);
+static char *confit_cli_copy_bytes(const char *text, size_t size);
 
 #define CONFIT_CLI_ARTIFACT_HEADER 0x01U
 #define CONFIT_CLI_ARTIFACT_REPORTS 0x02U
@@ -256,13 +262,14 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      confit_cli_run_tui},
     {"completion", "Emit shell completion text.",
      "confit completion --shell bash|zsh|fish",
-     "--shell bash|zsh|fish", 0},
+     "--shell bash|zsh|fish", confit_cli_run_completion},
 };
 
 static const size_t confit_cli_command_count =
     sizeof(confit_cli_commands) / sizeof(confit_cli_commands[0]);
 
 static const char *confit_cli_executable_path = "confit";
+static ConfitCliGlobalArgs confit_cli_global_args = {"auto", 0, 0, 1};
 
 static const ConfitCliTemplateFile confit_cli_template_minimal_files[] = {
     {"config/project.toml",
@@ -514,6 +521,41 @@ static int confit_cli_is_help_arg(const char *arg) {
          strcmp(arg, "help") == 0;
 }
 
+static ConfitStatus confit_cli_print_indented_lines(const char *text,
+                                                    const char *indent) {
+  ConfitStatus status;
+  size_t begin;
+  size_t index;
+
+  if (text == 0) {
+    return CONFIT_OK;
+  }
+
+  begin = 0U;
+  status = CONFIT_OK;
+  while (status == CONFIT_OK) {
+    index = begin;
+    while (text[index] != '\0' && text[index] != '\n') {
+      index += 1U;
+    }
+    status = confit_host_stdout_write(
+        index > begin && isspace((unsigned char)text[begin]) ? "" : indent);
+    if (status == CONFIT_OK) {
+      char *line = confit_cli_copy_bytes(text + begin, index - begin);
+      if (line == 0) {
+        return CONFIT_ERR_INTERNAL;
+      }
+      status = confit_host_stdout_write_line(line);
+      free(line);
+    }
+    if (text[index] == '\0') {
+      break;
+    }
+    begin = index + 1U;
+  }
+  return status;
+}
+
 static ConfitStatus confit_cli_print_command_help(
     const ConfitCliCommandSpec *command) {
   ConfitStatus status;
@@ -533,16 +575,29 @@ static ConfitStatus confit_cli_print_command_help(
     status = confit_host_stdout_write_line(command->summary);
   }
   if (status == CONFIT_OK) {
-    status = confit_host_stdout_write("\nUsage:\n  ");
+    status = confit_host_stdout_write("\nUsage:\n");
   }
   if (status == CONFIT_OK) {
-    status = confit_host_stdout_write_line(command->usage);
+    status = confit_cli_print_indented_lines(command->usage, "  ");
   }
   if (status == CONFIT_OK && command->options != 0) {
-    status = confit_host_stdout_write("\nOptions:\n  ");
+    status = confit_host_stdout_write("\nOptions:\n");
   }
   if (status == CONFIT_OK && command->options != 0) {
-    status = confit_host_stdout_write_line(command->options);
+    status = confit_cli_print_indented_lines(command->options, "  ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write("\nGlobal options:\n");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line(
+        "  --color auto|always|never");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --quiet");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write_line("  --verbose");
   }
   if (status == CONFIT_OK && command->handler == 0) {
     status = confit_host_stdout_write("\nStatus:\n  ");
@@ -686,6 +741,143 @@ static ConfitStatus confit_cli_parse_global_args(int argc, char **argv,
     return confit_cli_write_error("--quiet and --verbose cannot be combined");
   }
   return CONFIT_OK;
+}
+
+static void confit_cli_global_args_init(ConfitCliGlobalArgs *args) {
+  args->color = "auto";
+  args->quiet = 0;
+  args->verbose = 0;
+  args->command_index = 1;
+}
+
+static ConfitStatus confit_cli_parse_global_option(
+    int argc, char **argv, int *index, ConfitCliGlobalArgs *args,
+    int *out_consumed) {
+  const char *arg;
+
+  *out_consumed = 0;
+  arg = argv[*index];
+  if (strcmp(arg, "--color") == 0) {
+    if (*index + 1 >= argc) {
+      return confit_cli_write_error("missing value for --color");
+    }
+    *index += 1;
+    if (strcmp(argv[*index], "auto") != 0 &&
+        strcmp(argv[*index], "always") != 0 &&
+        strcmp(argv[*index], "never") != 0) {
+      return confit_cli_write_error("--color must be auto, always, or never");
+    }
+    args->color = argv[*index];
+    *out_consumed = 1;
+    return CONFIT_OK;
+  }
+  if (strcmp(arg, "--quiet") == 0) {
+    args->quiet = 1;
+    *out_consumed = 1;
+    return CONFIT_OK;
+  }
+  if (strcmp(arg, "--verbose") == 0) {
+    args->verbose = 1;
+    *out_consumed = 1;
+    return CONFIT_OK;
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_normalize_args(int argc, char **argv,
+                                              ConfitCliGlobalArgs *args,
+                                              int *out_argc,
+                                              char ***out_argv) {
+  char **normalized;
+  int normalized_argc;
+  int index;
+  ConfitStatus status;
+
+  status = confit_cli_parse_global_args(argc, argv, args);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  confit_cli_global_args_init(args);
+  normalized = (char **)malloc(((size_t)argc + 1U) * sizeof(normalized[0]));
+  if (normalized == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  normalized_argc = 0;
+  if (argc > 0) {
+    normalized[normalized_argc] = argv[0];
+    normalized_argc += 1;
+  }
+  for (index = 1; index < argc; ++index) {
+    int consumed;
+
+    consumed = 0;
+    status =
+        confit_cli_parse_global_option(argc, argv, &index, args, &consumed);
+    if (status != CONFIT_OK) {
+      free(normalized);
+      return status;
+    }
+    if (consumed) {
+      continue;
+    }
+    normalized[normalized_argc] = argv[index];
+    normalized_argc += 1;
+  }
+
+  if (args->quiet && args->verbose) {
+    free(normalized);
+    return confit_cli_write_error("--quiet and --verbose cannot be combined");
+  }
+
+  normalized[normalized_argc] = 0;
+  args->command_index = 1;
+  *out_argc = normalized_argc;
+  *out_argv = normalized;
+  return CONFIT_OK;
+}
+
+static int confit_cli_is_quiet(void) { return confit_cli_global_args.quiet; }
+
+static int confit_cli_is_verbose(void) {
+  return confit_cli_global_args.verbose;
+}
+
+static ConfitStatus confit_cli_print_verbose_project(
+    const char *command, const ConfitCliProjectArgs *project) {
+  ConfitStatus status;
+
+  if (!confit_cli_is_verbose()) {
+    return CONFIT_OK;
+  }
+
+  status = confit_host_stderr_write("confit: verbose: command=");
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write(command);
+  }
+  if (status == CONFIT_OK && project != 0 && project->project_root != 0) {
+    status = confit_host_stderr_write(" project=");
+    if (status == CONFIT_OK) {
+      status = confit_host_stderr_write(project->project_root);
+    }
+  }
+  if (status == CONFIT_OK && project != 0 && project->profile_name != 0) {
+    status = confit_host_stderr_write(" profile=");
+    if (status == CONFIT_OK) {
+      status = confit_host_stderr_write(project->profile_name);
+    }
+  }
+  if (status == CONFIT_OK && project != 0 && project->target_name != 0) {
+    status = confit_host_stderr_write(" target=");
+    if (status == CONFIT_OK) {
+      status = confit_host_stderr_write(project->target_name);
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stderr_write("\n");
+  }
+  return status;
 }
 
 static int confit_cli_run_help(int argc, char **argv) {
@@ -2471,6 +2663,10 @@ static int confit_cli_run_check(int argc, char **argv) {
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
   }
+  status = confit_cli_print_verbose_project("check", &args.project);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
 
   confit_diagnostic_init(&diagnostic);
   confit_schema_audit_init(&audit);
@@ -2497,6 +2693,9 @@ static int confit_cli_run_check(int argc, char **argv) {
   confit_schema_audit_clear(&audit);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
+  }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
   }
 
   status = confit_host_stdout_write_line("check ok");
@@ -3086,6 +3285,10 @@ static int confit_cli_run_gen(int argc, char **argv) {
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
   }
+  status = confit_cli_print_verbose_project("gen", &args.project);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
 
   confit_diagnostic_init(&diagnostic);
   project = 0;
@@ -3106,6 +3309,9 @@ static int confit_cli_run_gen(int argc, char **argv) {
 
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
+  }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
   }
   status = confit_host_stdout_write("gen ok: ");
   if (status == CONFIT_OK) {
@@ -3392,6 +3598,9 @@ static int confit_cli_run_compat(int argc, char **argv) {
   confit_cli_free_project_bundle(delos, delos_graph, delos_config);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
+  }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
   }
   status = confit_host_stdout_write_line("compat ok");
   return confit_status_exit_code(status);
@@ -4258,6 +4467,9 @@ static int confit_cli_run_profile_new(const ConfitCliProfileArgs *args) {
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
   }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
+  }
   status = confit_host_stdout_write("profile new ok: ");
   if (status == CONFIT_OK) {
     status = confit_host_stdout_write_line(args->profile_name);
@@ -4323,6 +4535,9 @@ static int confit_cli_run_profile_set(const ConfitCliProfileArgs *args) {
   confit_project_free(project);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
+  }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
   }
   status = confit_host_stdout_write("profile set ok: ");
   if (status == CONFIT_OK) {
@@ -4399,6 +4614,9 @@ static int confit_cli_run_profile_unset(const ConfitCliProfileArgs *args) {
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
   }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
+  }
   status = confit_host_stdout_write("profile unset ok: ");
   if (status == CONFIT_OK) {
     status = confit_host_stdout_write_line(args->profile_name);
@@ -4433,6 +4651,9 @@ static int confit_cli_run_profile_validate(const ConfitCliProfileArgs *args) {
   confit_project_free(project);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
+  }
+  if (confit_cli_is_quiet()) {
+    return confit_status_exit_code(CONFIT_OK);
   }
   status = confit_host_stdout_write("profile ok: ");
   if (status == CONFIT_OK) {
@@ -4635,6 +4856,265 @@ static int confit_cli_run_graph(int argc, char **argv) {
   return confit_status_exit_code(CONFIT_OK);
 }
 
+static ConfitStatus confit_cli_completion_append_command_words(
+    ConfitCliTextBuilder *builder) {
+  ConfitStatus status;
+  size_t index;
+
+  status = confit_cli_text_append(builder, "help");
+  for (index = 0U; status == CONFIT_OK && index < confit_cli_command_count;
+       ++index) {
+    status = confit_cli_text_append(builder, " ");
+    if (status == CONFIT_OK) {
+      status = confit_cli_text_append(builder, confit_cli_commands[index].name);
+    }
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_completion_bash(char **out_text) {
+  ConfitCliTextBuilder builder;
+  ConfitStatus status;
+
+  *out_text = 0;
+  confit_cli_text_builder_init(&builder);
+
+#define CONFIT_COMPLETION_APPEND(fragment)                                      \
+  do {                                                                          \
+    status = confit_cli_text_append(&builder, (fragment));                      \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+#define CONFIT_COMPLETION_SECTION(call_expr)                                    \
+  do {                                                                          \
+    status = (call_expr);                                                       \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+  CONFIT_COMPLETION_APPEND("# confit bash completion\n");
+  CONFIT_COMPLETION_APPEND("_confit()\n{\n");
+  CONFIT_COMPLETION_APPEND(
+      "  local cur prev commands globals artifacts formats shells templates\n");
+  CONFIT_COMPLETION_APPEND("  COMPREPLY=()\n");
+  CONFIT_COMPLETION_APPEND("  cur=\"${COMP_WORDS[COMP_CWORD]}\"\n");
+  CONFIT_COMPLETION_APPEND("  prev=\"${COMP_WORDS[COMP_CWORD-1]}\"\n");
+  CONFIT_COMPLETION_APPEND("  commands=\"");
+  CONFIT_COMPLETION_SECTION(
+      confit_cli_completion_append_command_words(&builder));
+  CONFIT_COMPLETION_APPEND("\"\n");
+  CONFIT_COMPLETION_APPEND(
+      "  globals=\"--help --version --color --quiet --verbose\"\n");
+  CONFIT_COMPLETION_APPEND(
+      "  artifacts=\"header reports cmake qstar all\"\n");
+  CONFIT_COMPLETION_APPEND("  formats=\"text json toml dot\"\n");
+  CONFIT_COMPLETION_APPEND("  shells=\"bash zsh fish\"\n");
+  CONFIT_COMPLETION_APPEND("  templates=\"minimal delos parus\"\n");
+  CONFIT_COMPLETION_APPEND("  case \"$prev\" in\n");
+  CONFIT_COMPLETION_APPEND(
+      "    --artifact) COMPREPLY=( $(compgen -W \"$artifacts\" -- \"$cur\") ); return 0 ;;\n");
+  CONFIT_COMPLETION_APPEND(
+      "    --color) COMPREPLY=( $(compgen -W \"auto always never\" -- \"$cur\") ); return 0 ;;\n");
+  CONFIT_COMPLETION_APPEND(
+      "    --format) COMPREPLY=( $(compgen -W \"$formats\" -- \"$cur\") ); return 0 ;;\n");
+  CONFIT_COMPLETION_APPEND(
+      "    --shell) COMPREPLY=( $(compgen -W \"$shells\" -- \"$cur\") ); return 0 ;;\n");
+  CONFIT_COMPLETION_APPEND(
+      "    --template) COMPREPLY=( $(compgen -W \"$templates\" -- \"$cur\") ); return 0 ;;\n");
+  CONFIT_COMPLETION_APPEND("  esac\n");
+  CONFIT_COMPLETION_APPEND("  if [ \"$COMP_CWORD\" -eq 1 ]; then\n");
+  CONFIT_COMPLETION_APPEND(
+      "    COMPREPLY=( $(compgen -W \"$commands $globals\" -- \"$cur\") )\n");
+  CONFIT_COMPLETION_APPEND("    return 0\n");
+  CONFIT_COMPLETION_APPEND("  fi\n");
+  CONFIT_COMPLETION_APPEND(
+      "  COMPREPLY=( $(compgen -W \"$globals --project --profile --target --out --set --format --strict --dry-run --force --artifact --category --tag --parus --delos --compat --base --schema-edit --template --shell\" -- \"$cur\") )\n");
+  CONFIT_COMPLETION_APPEND("}\n");
+  CONFIT_COMPLETION_APPEND("complete -F _confit confit\n");
+
+#undef CONFIT_COMPLETION_APPEND
+#undef CONFIT_COMPLETION_SECTION
+
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_completion_zsh(char **out_text) {
+  ConfitCliTextBuilder builder;
+  ConfitStatus status;
+
+  *out_text = 0;
+  confit_cli_text_builder_init(&builder);
+
+#define CONFIT_ZSH_APPEND(fragment)                                             \
+  do {                                                                          \
+    status = confit_cli_text_append(&builder, (fragment));                      \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+#define CONFIT_ZSH_SECTION(call_expr)                                           \
+  do {                                                                          \
+    status = (call_expr);                                                       \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+  CONFIT_ZSH_APPEND("#compdef confit\n");
+  CONFIT_ZSH_APPEND("# confit zsh completion\n\n");
+  CONFIT_ZSH_APPEND("_confit() {\n");
+  CONFIT_ZSH_APPEND("  local -a commands\n");
+  CONFIT_ZSH_APPEND("  commands=(");
+  CONFIT_ZSH_SECTION(confit_cli_completion_append_command_words(&builder));
+  CONFIT_ZSH_APPEND(")\n");
+  CONFIT_ZSH_APPEND("  _arguments -C \\\n");
+  CONFIT_ZSH_APPEND(
+      "    '--help[show help]' '--version[show version]' \\\n");
+  CONFIT_ZSH_APPEND(
+      "    '--color[control diagnostic color]:color:(auto always never)' \\\n");
+  CONFIT_ZSH_APPEND(
+      "    '--quiet[suppress non-essential output]' '--verbose[print diagnostic context]' \\\n");
+  CONFIT_ZSH_APPEND("    '1:command:($commands)' \\\n");
+  CONFIT_ZSH_APPEND("    '*::arg:->args'\n");
+  CONFIT_ZSH_APPEND("  case $words[2] in\n");
+  CONFIT_ZSH_APPEND(
+      "    completion) _arguments '--shell:shell:(bash zsh fish)' ;;\n");
+  CONFIT_ZSH_APPEND(
+      "    gen) _arguments '--artifact:artifact:(header reports cmake qstar all)' '--format:format:(text json toml dot)' ;;\n");
+  CONFIT_ZSH_APPEND(
+      "    init) _arguments '--template:template:(minimal delos parus)' ;;\n");
+  CONFIT_ZSH_APPEND("  esac\n");
+  CONFIT_ZSH_APPEND("}\n");
+  CONFIT_ZSH_APPEND("_confit \"$@\"\n");
+
+#undef CONFIT_ZSH_APPEND
+#undef CONFIT_ZSH_SECTION
+
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_completion_fish(char **out_text) {
+  ConfitCliTextBuilder builder;
+  ConfitStatus status;
+  size_t index;
+
+  *out_text = 0;
+  confit_cli_text_builder_init(&builder);
+
+#define CONFIT_FISH_APPEND(fragment)                                            \
+  do {                                                                          \
+    status = confit_cli_text_append(&builder, (fragment));                      \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+  CONFIT_FISH_APPEND("# confit fish completion\n");
+  CONFIT_FISH_APPEND("complete -c confit -f\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -n '__fish_use_subcommand' -a 'help doctor init check resolve gen explain list graph diff compat profile tui completion'\n");
+  CONFIT_FISH_APPEND("complete -c confit -l help -d 'Show help'\n");
+  CONFIT_FISH_APPEND("complete -c confit -l version -d 'Show version'\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -l color -xa 'auto always never' -d 'Control diagnostic color'\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -l quiet -d 'Suppress non-essential output'\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -l verbose -d 'Print diagnostic context'\n");
+  for (index = 0U; status == CONFIT_OK && index < confit_cli_command_count;
+       ++index) {
+    CONFIT_FISH_APPEND("complete -c confit -n '__fish_use_subcommand' -a '");
+    CONFIT_FISH_APPEND(confit_cli_commands[index].name);
+    CONFIT_FISH_APPEND("' -d ");
+    status =
+        confit_cli_text_append_quoted(&builder, confit_cli_commands[index].summary);
+    if (status != CONFIT_OK) {
+      free(builder.text);
+      return status;
+    }
+    CONFIT_FISH_APPEND("\n");
+  }
+  CONFIT_FISH_APPEND(
+      "complete -c confit -n '__fish_seen_subcommand_from completion' -l shell -xa 'bash zsh fish'\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -n '__fish_seen_subcommand_from gen' -l artifact -xa 'header reports cmake qstar all'\n");
+  CONFIT_FISH_APPEND(
+      "complete -c confit -n '__fish_seen_subcommand_from init' -l template -xa 'minimal delos parus'\n");
+
+#undef CONFIT_FISH_APPEND
+
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_cli_parse_completion_args(
+    int argc, char **argv, ConfitCliCompletionArgs *args) {
+  int index;
+
+  args->shell = 0;
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--shell") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --shell");
+      }
+      index += 1;
+      args->shell = argv[index];
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown completion option");
+    }
+    return confit_cli_write_error(
+        "completion does not accept positional arguments");
+  }
+  if (args->shell == 0) {
+    return confit_cli_write_error("completion requires --shell");
+  }
+  if (strcmp(args->shell, "bash") != 0 && strcmp(args->shell, "zsh") != 0 &&
+      strcmp(args->shell, "fish") != 0) {
+    return confit_cli_write_error("completion --shell must be bash, zsh, or fish");
+  }
+  return CONFIT_OK;
+}
+
+static int confit_cli_run_completion(int argc, char **argv) {
+  ConfitCliCompletionArgs args;
+  ConfitStatus status;
+  char *text;
+
+  status = confit_cli_parse_completion_args(argc, argv, &args);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  text = 0;
+  if (strcmp(args.shell, "bash") == 0) {
+    status = confit_cli_completion_bash(&text);
+  } else if (strcmp(args.shell, "zsh") == 0) {
+    status = confit_cli_completion_zsh(&text);
+  } else {
+    status = confit_cli_completion_fish(&text);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_stdout_write(text);
+  }
+  free(text);
+  return confit_status_exit_code(status);
+}
+
 static ConfitStatus confit_cli_parse_tui_args(int argc, char **argv,
                                               ConfitTuiOptions *options) {
   int index;
@@ -4713,47 +5193,59 @@ int main(int argc, char **argv) {
   ConfitStatus status;
   int normalized_argc;
   char **normalized_argv;
+  int exit_code;
 
   if (argc > 0 && argv[0] != 0) {
     confit_cli_executable_path = argv[0];
   }
 
-  status = confit_cli_parse_global_args(argc, argv, &global_args);
+  normalized_argc = 0;
+  normalized_argv = 0;
+  exit_code = 0;
+  status =
+      confit_cli_normalize_args(argc, argv, &global_args, &normalized_argc,
+                                &normalized_argv);
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
   }
+  confit_cli_global_args = global_args;
 
-  if (global_args.command_index >= argc) {
-    return confit_status_exit_code(confit_cli_print_help());
+  if (normalized_argc <= 1) {
+    exit_code = confit_status_exit_code(confit_cli_print_help());
+    goto cleanup;
   }
-
-  normalized_argc = argc - global_args.command_index + 1;
-  normalized_argv = argv + global_args.command_index - 1;
 
   if (strcmp(normalized_argv[1], "--version") == 0 ||
       strcmp(normalized_argv[1], "version") == 0) {
-    return confit_status_exit_code(
+    exit_code = confit_status_exit_code(
         confit_host_stdout_write_line(confit_version_string()));
+    goto cleanup;
   }
 
   if (strcmp(normalized_argv[1], "--help") == 0 ||
       strcmp(normalized_argv[1], "-h") == 0) {
-    return confit_status_exit_code(confit_cli_print_help());
+    exit_code = confit_status_exit_code(confit_cli_print_help());
+    goto cleanup;
   }
 
   if (strcmp(normalized_argv[1], "help") == 0) {
-    return confit_cli_run_help(normalized_argc, normalized_argv);
+    exit_code = confit_cli_run_help(normalized_argc, normalized_argv);
+    goto cleanup;
   }
 
   command = confit_cli_find_command(normalized_argv[1]);
   if (command != 0) {
     if (normalized_argc == 3 && confit_cli_is_help_arg(normalized_argv[2])) {
-      return confit_status_exit_code(confit_cli_print_command_help(command));
+      exit_code =
+          confit_status_exit_code(confit_cli_print_command_help(command));
+      goto cleanup;
     }
     if (command->handler == 0) {
-      return confit_cli_run_unsupported_command(command);
+      exit_code = confit_cli_run_unsupported_command(command);
+      goto cleanup;
     }
-    return command->handler(normalized_argc, normalized_argv);
+    exit_code = command->handler(normalized_argc, normalized_argv);
+    goto cleanup;
   }
 
   status = confit_host_stderr_write("confit: unknown command or option: ");
@@ -4767,8 +5259,13 @@ int main(int argc, char **argv) {
     status = confit_host_stderr_write_line("try 'confit help'");
   }
   if (status != CONFIT_OK) {
-    return confit_status_exit_code(status);
+    exit_code = confit_status_exit_code(status);
+    goto cleanup;
   }
 
-  return confit_status_exit_code(CONFIT_ERR_INVALID_ARGUMENT);
+  exit_code = confit_status_exit_code(CONFIT_ERR_INVALID_ARGUMENT);
+
+cleanup:
+  free(normalized_argv);
+  return exit_code;
 }

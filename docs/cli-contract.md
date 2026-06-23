@@ -46,6 +46,11 @@ Confit has thirteen operational top-level commands plus the `help` command.
 | `--quiet` | Suppress non-essential informational output. |
 | `--verbose` | Print additional diagnostic context. |
 
+Global options may appear before or after the command name. `--quiet` must not
+hide command payloads, validation errors, or generated completion text; it only
+suppresses non-essential success banners such as `check ok`. `--verbose` writes
+additional execution context to stderr and must not alter stdout payloads.
+
 ## Project Options
 
 | Option | Contract |
@@ -225,6 +230,9 @@ Optional install artifacts are allowed, but Confit must run without them:
 <prefix>/share/bash-completion/completions/confit
 <prefix>/share/fish/vendor_completions.d/confit.fish
 ```
+
+Completion installers must use `confit completion --shell bash|zsh|fish` as the
+source of truth instead of maintaining separate handwritten shell scripts.
 
 Installation must not modify any project `config/` tree. Project creation and
 project edits belong to explicit Confit commands, not to installation.

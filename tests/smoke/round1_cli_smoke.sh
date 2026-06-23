@@ -60,6 +60,11 @@ done
 "$BUILD_DIR/confit" resolve --help | grep -F "confit resolve --project" >/dev/null
 "$BUILD_DIR/confit" --verbose help completion | \
   grep -F "confit completion --shell" >/dev/null
+"$BUILD_DIR/confit" completion --shell bash | grep -F "_confit()" >/dev/null
+"$BUILD_DIR/confit" completion --shell zsh | grep -F "#compdef confit" \
+  >/dev/null
+"$BUILD_DIR/confit" completion --shell fish | grep -F "complete -c confit" \
+  >/dev/null
 
 "$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out"
 grep -F "Confit doctor" "$BUILD_DIR/doctor.out" >/dev/null

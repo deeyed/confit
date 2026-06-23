@@ -673,6 +673,73 @@ static void test_compat(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_completion_and_globals(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  const char *bash_argv[] = {0, "completion", "--shell", "bash", 0};
+  const char *zsh_argv[] = {0, "completion", "--shell", "zsh", 0};
+  const char *fish_argv[] = {0, "completion", "--shell", "fish", 0};
+  const char *bad_argv[] = {0, "completion", "--shell", "powershell", 0};
+  const char *help_profile_argv[] = {0, "help", "profile", 0};
+  const char *quiet_check_argv[] = {0, "check", "--project", 0, "--profile",
+                                    "sim-dsh", "--quiet", 0};
+  const char *verbose_check_argv[] = {0, "check", "--project", 0, "--profile",
+                                      "sim-dsh", "--verbose", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+
+  bash_argv[0] = context->confit_bin;
+  test_run(context, bash_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "_confit()");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "--artifact");
+  confit_test_process_result_clear(&result);
+
+  zsh_argv[0] = context->confit_bin;
+  test_run(context, zsh_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "#compdef confit");
+  confit_test_process_result_clear(&result);
+
+  fish_argv[0] = context->confit_bin;
+  test_run(context, fish_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "complete -c confit");
+  confit_test_process_result_clear(&result);
+
+  bad_argv[0] = context->confit_bin;
+  test_run(context, bad_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(1, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(
+      result.stderr_text, "completion --shell must be bash, zsh, or fish");
+  confit_test_process_result_clear(&result);
+
+  help_profile_argv[0] = context->confit_bin;
+  test_run(context, help_profile_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "Confit command: profile");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "Global options:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "profile validate");
+  confit_test_process_result_clear(&result);
+
+  quiet_check_argv[0] = context->confit_bin;
+  quiet_check_argv[3] = context->project_dir;
+  test_run(context, quiet_check_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_NOT_CONTAINS(result.stdout_text, "check ok");
+  confit_test_process_result_clear(&result);
+
+  verbose_check_argv[0] = context->confit_bin;
+  verbose_check_argv[3] = context->project_dir;
+  test_run(context, verbose_check_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "confit: verbose: command=check");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "check ok");
+  confit_test_process_result_clear(&result);
+}
+
 static void test_unknown_command(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "unknown-command", 0};
@@ -711,6 +778,7 @@ int main(int argc, char **argv) {
   test_explain(&context);
   test_gen(&context);
   test_compat(&context);
+  test_completion_and_globals(&context);
   test_unknown_command(&context);
 
   return 0;

@@ -53,6 +53,34 @@ grep -F "\"delos.scheduler.task_slots\" = 32" "$WORK_DIR/profile-show.toml" \
   >"$WORK_DIR/profile-validate.txt"
 grep -Fx "profile ok: sim-dsh" "$WORK_DIR/profile-validate.txt" >/dev/null
 
+"$CONFIT_BIN" completion --shell bash >"$WORK_DIR/completion.bash"
+grep -F "_confit()" "$WORK_DIR/completion.bash" >/dev/null
+grep -F -- "--artifact" "$WORK_DIR/completion.bash" >/dev/null
+
+"$CONFIT_BIN" completion --shell zsh >"$WORK_DIR/completion.zsh"
+grep -F "#compdef confit" "$WORK_DIR/completion.zsh" >/dev/null
+
+"$CONFIT_BIN" completion --shell fish >"$WORK_DIR/completion.fish"
+grep -F "complete -c confit" "$WORK_DIR/completion.fish" >/dev/null
+
+"$CONFIT_BIN" help profile >"$WORK_DIR/help-profile.txt"
+grep -F "Confit command: profile" "$WORK_DIR/help-profile.txt" >/dev/null
+grep -F "Global options:" "$WORK_DIR/help-profile.txt" >/dev/null
+grep -F "profile validate" "$WORK_DIR/help-profile.txt" >/dev/null
+
+"$CONFIT_BIN" check --project "$PROJECT_DIR" --profile sim-dsh --quiet \
+  >"$WORK_DIR/check-quiet.txt"
+if grep -F "check ok" "$WORK_DIR/check-quiet.txt" >/dev/null; then
+  echo "quiet check printed non-essential success text" >&2
+  exit 1
+fi
+
+"$CONFIT_BIN" check --project "$PROJECT_DIR" --profile sim-dsh --verbose \
+  >"$WORK_DIR/check-verbose.out" 2>"$WORK_DIR/check-verbose.err"
+grep -F "confit: verbose: command=check" \
+  "$WORK_DIR/check-verbose.err" >/dev/null
+grep -Fx "check ok" "$WORK_DIR/check-verbose.out" >/dev/null
+
 "$CONFIT_BIN" graph --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/graph.json"
 grep -F '"nodes":' "$WORK_DIR/graph.json" >/dev/null
