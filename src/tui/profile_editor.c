@@ -944,6 +944,8 @@ static ConfitStatus confit_tui_prompt_edit(ConfitTuiState *state,
                    "enum value for %s (empty = next): ", option->id);
     prompt[sizeof(prompt) - 1U] = '\0';
     if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
       return CONFIT_OK;
     }
     if (input[0] == '\0') {
@@ -956,6 +958,8 @@ static ConfitStatus confit_tui_prompt_edit(ConfitTuiState *state,
     prompt[sizeof(prompt) - 1U] = '\0';
     if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0 ||
         input[0] == '\0') {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
       return CONFIT_OK;
     }
   }
@@ -1183,9 +1187,15 @@ static ConfitStatus confit_tui_set_filter(char *slot, size_t slot_size,
                                           ConfitTuiState *state,
                                           ConfitDiagnostic *diagnostic) {
   char input[128];
+  int input_status;
   ConfitStatus status;
 
-  if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0) {
+  input_status = confit_tui_curses_read_line(prompt, input, sizeof(input));
+  if (input_status != 0) {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
     return CONFIT_OK;
   }
   (void)snprintf(slot, slot_size, "%s", input);
@@ -1242,8 +1252,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                  state->dirty ? "yes" : "no");
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(key_legend, sizeof(key_legend),
-                 "enter open e edit / search c category t tag x clear s save "
-                 "q quit");
+                 "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / "
+                 "search ? help Esc cancel q quit");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "row %lu/%lu | %s",
                  state->view_count == 0U
@@ -1268,19 +1278,95 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   return CONFIT_OK;
 }
 
+static int confit_tui_profile_move_selection(ConfitTuiState *state,
+                                             ConfitTuiKey key) {
+  size_t step;
+
+  switch (key) {
+  case CONFIT_TUI_KEY_DOWN:
+    if (state->view_count == 0U) {
+      state->selected_view_index = 0U;
+      return 1;
+    }
+    if (state->selected_view_index + 1U < state->view_count) {
+      state->selected_view_index += 1U;
+    }
+    return 1;
+  case CONFIT_TUI_KEY_UP:
+    if (state->view_count == 0U) {
+      state->selected_view_index = 0U;
+      return 1;
+    }
+    if (state->selected_view_index > 0U) {
+      state->selected_view_index -= 1U;
+    }
+    return 1;
+  case CONFIT_TUI_KEY_PAGE_DOWN:
+    if (state->view_count == 0U) {
+      state->selected_view_index = 0U;
+      return 1;
+    }
+    step = confit_tui_curses_page_step();
+    if (state->selected_view_index + step < state->view_count) {
+      state->selected_view_index += step;
+    } else {
+      state->selected_view_index = state->view_count - 1U;
+    }
+    (void)snprintf(state->status, sizeof(state->status), "moved PageDown");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_PAGE_UP:
+    if (state->view_count == 0U) {
+      state->selected_view_index = 0U;
+      return 1;
+    }
+    step = confit_tui_curses_page_step();
+    if (state->selected_view_index > step) {
+      state->selected_view_index -= step;
+    } else {
+      state->selected_view_index = 0U;
+    }
+    (void)snprintf(state->status, sizeof(state->status), "moved PageUp");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_HOME:
+    state->selected_view_index = 0U;
+    (void)snprintf(state->status, sizeof(state->status), "moved Home");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_END:
+    if (state->view_count == 0U) {
+      state->selected_view_index = 0U;
+      return 1;
+    }
+    state->selected_view_index = state->view_count - 1U;
+    (void)snprintf(state->status, sizeof(state->status), "moved End");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  default:
+    break;
+  }
+  return 0;
+}
+
+static void confit_tui_profile_show_keymap(ConfitTuiState *state) {
+  (void)snprintf(state->status, sizeof(state->status),
+                 "keys: arrows/jk PgUp/PgDn Home/End Enter/Space ? help Esc "
+                 "cancel q quit");
+  state->status[sizeof(state->status) - 1U] = '\0';
+}
+
 static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
                                           ConfitTuiKey key,
                                           ConfitDiagnostic *diagnostic) {
   const ConfitOption *option;
   ConfitTuiRow *row;
 
-  if (key == CONFIT_TUI_KEY_DOWN &&
-      state->selected_view_index + 1U < state->view_count) {
-    state->selected_view_index += 1U;
+  if (confit_tui_profile_move_selection(state, key)) {
     return CONFIT_OK;
   }
-  if (key == CONFIT_TUI_KEY_UP && state->selected_view_index > 0U) {
-    state->selected_view_index -= 1U;
+  if (key == CONFIT_TUI_KEY_KEYMAP_HELP) {
+    confit_tui_profile_show_keymap(state);
     return CONFIT_OK;
   }
   if (key == CONFIT_TUI_KEY_SEARCH) {
@@ -1298,6 +1384,16 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
   if (key == CONFIT_TUI_KEY_CLEAR_FILTER) {
     confit_tui_clear_filters(state);
     return confit_tui_rebuild_view(state, diagnostic);
+  }
+  if (key == CONFIT_TUI_KEY_CANCEL) {
+    if (state->search[0] != '\0' || state->category[0] != '\0' ||
+        state->tag[0] != '\0') {
+      confit_tui_clear_filters(state);
+      return confit_tui_rebuild_view(state, diagnostic);
+    }
+    (void)snprintf(state->status, sizeof(state->status), "cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
   }
   if (key == CONFIT_TUI_KEY_SAVE) {
     return confit_tui_save_profile(state, diagnostic);

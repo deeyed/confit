@@ -1,5 +1,6 @@
 #include "tui_internal.h"
 
+#include <ctype.h>
 #include <curses.h>
 #include <locale.h>
 #include <stdio.h>
@@ -403,11 +404,26 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == ERR || ch == 'q' || ch == 'Q') {
     return CONFIT_TUI_KEY_QUIT;
   }
+  if (ch == 27) {
+    return CONFIT_TUI_KEY_CANCEL;
+  }
   if (ch == KEY_UP || ch == 'k' || ch == 'K') {
     return CONFIT_TUI_KEY_UP;
   }
   if (ch == KEY_DOWN || ch == 'j' || ch == 'J') {
     return CONFIT_TUI_KEY_DOWN;
+  }
+  if (ch == KEY_PPAGE) {
+    return CONFIT_TUI_KEY_PAGE_UP;
+  }
+  if (ch == KEY_NPAGE) {
+    return CONFIT_TUI_KEY_PAGE_DOWN;
+  }
+  if (ch == KEY_HOME) {
+    return CONFIT_TUI_KEY_HOME;
+  }
+  if (ch == KEY_END) {
+    return CONFIT_TUI_KEY_END;
   }
   if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
     return CONFIT_TUI_KEY_ENTER;
@@ -448,11 +464,25 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == 'o' || ch == 'O') {
     return CONFIT_TUI_KEY_CHOICES;
   }
+  if (ch == '?') {
+    return CONFIT_TUI_KEY_KEYMAP_HELP;
+  }
   return CONFIT_TUI_KEY_NONE;
+}
+
+size_t confit_tui_curses_page_step(void) {
+  if (!confit_tui_curses_started) {
+    return 10U;
+  }
+  if (LINES > 8) {
+    return (size_t)(LINES - 8);
+  }
+  return 1U;
 }
 
 int confit_tui_curses_read_line(const char *prompt, char *out,
                                 size_t out_size) {
+  size_t input_size;
   int row;
 
   if (out == 0 || out_size == 0U || confit_tui_curses_start() != 0) {
@@ -474,16 +504,54 @@ int confit_tui_curses_read_line(const char *prompt, char *out,
   } else {
     attroff(A_REVERSE);
   }
-  echo();
   (void)curs_set(1);
+  input_size = 0U;
+  out[0] = '\0';
   move(row, 2 + (int)strlen(confit_tui_curses_text(prompt)));
-  if (getnstr(out, (int)out_size - 1) == ERR) {
-    noecho();
-    (void)curs_set(0);
-    out[0] = '\0';
-    return -1;
-  }
-  noecho();
+  do {
+    const int ch = getch();
+
+    if (ch == ERR) {
+      (void)curs_set(0);
+      out[0] = '\0';
+      return -1;
+    }
+    if (ch == 27) {
+      (void)curs_set(0);
+      out[0] = '\0';
+      return 1;
+    }
+    if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
+      break;
+    }
+    if (ch == KEY_BACKSPACE || ch == 127 || ch == '\b') {
+      if (input_size > 0U) {
+        input_size -= 1U;
+        out[input_size] = '\0';
+        move(row,
+             2 + (int)strlen(confit_tui_curses_text(prompt)) + (int)input_size);
+        delch();
+      }
+      continue;
+    }
+    if (ch == 21) {
+      input_size = 0U;
+      out[0] = '\0';
+      confit_tui_curses_add_clipped(row, 2, confit_tui_curses_text(prompt),
+                                    COLS > 4 ? COLS - 4 : 76);
+      move(row, 2 + (int)strlen(confit_tui_curses_text(prompt)));
+      clrtoeol();
+      continue;
+    }
+    if (ch >= 0 && ch <= 255 && isprint((unsigned char)ch) &&
+        input_size + 1U < out_size) {
+      out[input_size] = (char)ch;
+      input_size += 1U;
+      out[input_size] = '\0';
+      addch(ch);
+    }
+  } while (1);
+
   (void)curs_set(0);
   out[out_size - 1U] = '\0';
   return 0;

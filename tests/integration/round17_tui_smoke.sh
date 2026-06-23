@@ -12,6 +12,9 @@ mkdir -p "$WORK_DIR"
 
 TERM=xterm
 export TERM
+PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
+HOME_KEY=$(tput khome 2>/dev/null || printf '\033[H')
+END_KEY=$(tput kend 2>/dev/null || printf '\033[F')
 
 printf 'jq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui.txt"
@@ -23,13 +26,42 @@ grep -aF "Menu" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "enter open e edit / search c category t tag x clear s save q quit" \
+grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search" \
   "$WORK_DIR/tui.txt" >/dev/null
 
 printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-collapse.txt"
 
 grep -aF "collapsed menu debug" "$WORK_DIR/tui-collapse.txt" >/dev/null
+
+printf '%sq' "$PAGE_DOWN_KEY" |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-page-down.txt"
+
+grep -aF "moved PageDown" "$WORK_DIR/tui-page-down.txt" >/dev/null
+
+printf 'j%sq' "$HOME_KEY" |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-home.txt"
+
+grep -aF "moved Home" "$WORK_DIR/tui-home.txt" >/dev/null
+
+printf '%sq' "$END_KEY" |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-end.txt"
+
+grep -aF "moved End" "$WORK_DIR/tui-end.txt" >/dev/null
+
+printf '?q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-help.txt"
+
+grep -aF "keys: arrows/jk PgUp/PgDn Home/End" "$WORK_DIR/tui-help.txt" \
+  >/dev/null
+
+printf '/\033q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-cancel.txt"
+
+grep -aF "cancelled" "$WORK_DIR/tui-cancel.txt" >/dev/null
 
 printf 'q' | env TERM=xterm LINES=8 COLUMNS=35 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \

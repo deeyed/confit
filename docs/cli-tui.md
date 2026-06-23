@@ -93,6 +93,50 @@ TUI는 다음 panel을 가져야 한다.
 - profile override 표시
 - save 전에 full validation
 
+## Fixed TUI Keymap
+
+Confit TUI keymap은 kconfiglib/menuconfig 계열 조작감을 기준으로 고정한다. Profile editor와 schema editor는
+동일한 navigation key를 공유하고, mode별 edit command만 다르게 해석한다.
+
+공통 navigation:
+
+| Key | 동작 |
+|---|---|
+| `Up`, `k` | 한 row 위로 이동한다. |
+| `Down`, `j` | 한 row 아래로 이동한다. |
+| `PageUp` | 현재 화면 높이 기준으로 한 page 위로 이동한다. |
+| `PageDown` | 현재 화면 높이 기준으로 한 page 아래로 이동한다. |
+| `Home` | 첫 row로 이동한다. |
+| `End` | 마지막 row로 이동한다. |
+| `Enter`, `Space` | 현재 row의 기본 동작을 실행한다. Profile mode에서는 category를 펼치거나 접고, option은 값을 edit/toggle한다. |
+| `?` | 현재 mode의 key help를 status line에 표시한다. |
+| `Esc` | 열린 prompt를 취소한다. 기본 화면에서는 현재 filter를 취소하거나 cancel 상태를 표시한다. |
+| `q` | TUI를 종료한다. |
+
+Profile editor:
+
+| Key | 동작 |
+|---|---|
+| `/` | option id, prompt, help, category, tag 검색어를 입력한다. |
+| `c` | category filter를 입력한다. |
+| `t` | tag filter를 입력한다. |
+| `x` | search/category/tag filter를 모두 지운다. |
+| `e` | 현재 option 값을 edit한다. 현재 row가 category heading이면 Enter/Space와 같이 펼치거나 접는다. |
+| `s` | profile TOML을 저장한다. |
+
+Schema editor:
+
+| Key | 동작 |
+|---|---|
+| `n` | 새 schema option draft를 만든다. |
+| `p` | 현재 option prompt를 수정한다. |
+| `h` | 현재 option help text를 수정한다. `?` help와 구분한다. |
+| `c` | 현재 option category를 수정한다. |
+| `t` | 현재 option tag comma-list를 수정한다. |
+| `r` | 현재 option range를 수정한다. |
+| `o` | 현재 enum option choices comma-list를 수정한다. |
+| `s` | schema TOML을 저장하기 전에 full validation을 수행하고 저장한다. |
+
 ## TUI Data Source
 
 TUI는 core evaluator의 structured model과 report를 사용한다. TUI 안에 별도 dependency evaluator를

@@ -27,7 +27,7 @@ grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Menu" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "enter open e edit / search c category t tag x clear s save q quit" \
+grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
 
 diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/fresh.toml"

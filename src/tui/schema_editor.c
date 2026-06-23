@@ -121,9 +121,14 @@ static ConfitStatus confit_tui_schema_add_option(ConfitTuiSchemaState *state,
   ConfitTuiSchemaOption *new_options;
   ConfitTuiSchemaOption *option;
   size_t index;
+  int input_status;
 
-  if (confit_tui_curses_read_line("option id: ", id, sizeof(id)) != 0 ||
-      id[0] == '\0') {
+  input_status = confit_tui_curses_read_line("option id: ", id, sizeof(id));
+  if (input_status != 0 || id[0] == '\0') {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
     return CONFIT_OK;
   }
   if (!confit_tui_schema_valid_option_id(id)) {
@@ -143,8 +148,12 @@ static ConfitStatus confit_tui_schema_add_option(ConfitTuiSchemaState *state,
       return CONFIT_ERR_SCHEMA;
     }
   }
-  if (confit_tui_curses_read_line("type: ", type, sizeof(type)) != 0 ||
-      type[0] == '\0') {
+  input_status = confit_tui_curses_read_line("type: ", type, sizeof(type));
+  if (input_status != 0 || type[0] == '\0') {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
     return CONFIT_OK;
   }
   if (!confit_tui_schema_type_is_valid(type)) {
@@ -152,7 +161,14 @@ static ConfitStatus confit_tui_schema_add_option(ConfitTuiSchemaState *state,
                           "invalid schema option type");
     return CONFIT_ERR_SCHEMA;
   }
-  if (confit_tui_curses_read_line("prompt: ", prompt, sizeof(prompt)) != 0) {
+  input_status =
+      confit_tui_curses_read_line("prompt: ", prompt, sizeof(prompt));
+  if (input_status != 0) {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+      return CONFIT_OK;
+    }
     prompt[0] = '\0';
   }
 
@@ -183,8 +199,14 @@ static ConfitStatus confit_tui_schema_set_string(char *slot, size_t slot_size,
                                                  const char *prompt,
                                                  ConfitTuiSchemaState *state) {
   char input[256];
+  int input_status;
 
-  if (confit_tui_curses_read_line(prompt, input, sizeof(input)) != 0) {
+  input_status = confit_tui_curses_read_line(prompt, input, sizeof(input));
+  if (input_status != 0) {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status), "cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
     return CONFIT_OK;
   }
   (void)snprintf(slot, slot_size, "%s", input);
@@ -561,8 +583,8 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
       state->dirty ? "yes" : "no");
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(key_legend, sizeof(key_legend),
-                 "n new p prompt h help c category t tag r range o choices "
-                 "s save q quit");
+                 "arrows/jk PgUp/PgDn Home/End n new p prompt h help ? keys "
+                 "Esc cancel s save q quit");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "schema %lu/%lu | %s",
                  state->option_count == 0U
@@ -590,18 +612,99 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   return CONFIT_OK;
 }
 
+static int confit_tui_schema_move_selection(ConfitTuiSchemaState *state,
+                                            ConfitTuiKey key) {
+  size_t step;
+
+  switch (key) {
+  case CONFIT_TUI_KEY_DOWN:
+    if (state->option_count == 0U) {
+      state->selected_index = 0U;
+      return 1;
+    }
+    if (state->selected_index + 1U < state->option_count) {
+      state->selected_index += 1U;
+    }
+    return 1;
+  case CONFIT_TUI_KEY_UP:
+    if (state->option_count == 0U) {
+      state->selected_index = 0U;
+      return 1;
+    }
+    if (state->selected_index > 0U) {
+      state->selected_index -= 1U;
+    }
+    return 1;
+  case CONFIT_TUI_KEY_PAGE_DOWN:
+    if (state->option_count == 0U) {
+      state->selected_index = 0U;
+      return 1;
+    }
+    step = confit_tui_curses_page_step();
+    if (state->selected_index + step < state->option_count) {
+      state->selected_index += step;
+    } else {
+      state->selected_index = state->option_count - 1U;
+    }
+    (void)snprintf(state->status, sizeof(state->status), "moved PageDown");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_PAGE_UP:
+    if (state->option_count == 0U) {
+      state->selected_index = 0U;
+      return 1;
+    }
+    step = confit_tui_curses_page_step();
+    if (state->selected_index > step) {
+      state->selected_index -= step;
+    } else {
+      state->selected_index = 0U;
+    }
+    (void)snprintf(state->status, sizeof(state->status), "moved PageUp");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_HOME:
+    state->selected_index = 0U;
+    (void)snprintf(state->status, sizeof(state->status), "moved Home");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  case CONFIT_TUI_KEY_END:
+    if (state->option_count == 0U) {
+      state->selected_index = 0U;
+      return 1;
+    }
+    state->selected_index = state->option_count - 1U;
+    (void)snprintf(state->status, sizeof(state->status), "moved End");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return 1;
+  default:
+    break;
+  }
+  return 0;
+}
+
+static void confit_tui_schema_show_keymap(ConfitTuiSchemaState *state) {
+  (void)snprintf(state->status, sizeof(state->status),
+                 "keys: arrows/jk PgUp/PgDn Home/End n new h field-help ? "
+                 "keys Esc cancel q quit");
+  state->status[sizeof(state->status) - 1U] = '\0';
+}
+
 static ConfitStatus confit_tui_schema_handle_key(ConfitTuiSchemaState *state,
                                                  ConfitTuiKey key,
                                                  ConfitDiagnostic *diagnostic) {
   ConfitTuiSchemaOption *option;
 
-  if (key == CONFIT_TUI_KEY_DOWN &&
-      state->selected_index + 1U < state->option_count) {
-    state->selected_index += 1U;
+  if (confit_tui_schema_move_selection(state, key)) {
     return CONFIT_OK;
   }
-  if (key == CONFIT_TUI_KEY_UP && state->selected_index > 0U) {
-    state->selected_index -= 1U;
+  if (key == CONFIT_TUI_KEY_KEYMAP_HELP) {
+    confit_tui_schema_show_keymap(state);
+    return CONFIT_OK;
+  }
+  if (key == CONFIT_TUI_KEY_CANCEL) {
+    (void)snprintf(state->status, sizeof(state->status), "cancelled");
+    state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;
   }
   if (key == CONFIT_TUI_KEY_NEW) {

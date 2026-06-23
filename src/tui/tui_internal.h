@@ -26,6 +26,12 @@ typedef enum ConfitTuiKey {
   CONFIT_TUI_KEY_HELP = 13,
   CONFIT_TUI_KEY_RANGE = 14,
   CONFIT_TUI_KEY_CHOICES = 15,
+  CONFIT_TUI_KEY_PAGE_UP = 16,
+  CONFIT_TUI_KEY_PAGE_DOWN = 17,
+  CONFIT_TUI_KEY_HOME = 18,
+  CONFIT_TUI_KEY_END = 19,
+  CONFIT_TUI_KEY_CANCEL = 20,
+  CONFIT_TUI_KEY_KEYMAP_HELP = 21,
 } ConfitTuiKey;
 
 typedef struct ConfitTuiListItem {
@@ -72,6 +78,7 @@ ConfitStatus confit_tui_text_append_value(ConfitTuiTextBuilder *builder,
 
 int confit_tui_curses_render(const ConfitTuiScreen *screen);
 ConfitTuiKey confit_tui_curses_read_key(void);
+size_t confit_tui_curses_page_step(void);
 int confit_tui_curses_read_line(const char *prompt, char *out, size_t out_size);
 void confit_tui_curses_stop(void);
 
