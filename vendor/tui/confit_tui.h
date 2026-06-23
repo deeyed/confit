@@ -19,6 +19,11 @@ typedef enum CftuiKey {
   CFTUI_KEY_CATEGORY = 8,
   CFTUI_KEY_TAG = 9,
   CFTUI_KEY_CLEAR_FILTER = 10,
+  CFTUI_KEY_NEW = 11,
+  CFTUI_KEY_PROMPT = 12,
+  CFTUI_KEY_HELP = 13,
+  CFTUI_KEY_RANGE = 14,
+  CFTUI_KEY_CHOICES = 15,
 } CftuiKey;
 
 typedef struct CftuiListItem {

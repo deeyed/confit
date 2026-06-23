@@ -1,0 +1,17 @@
+[option."delos.schema.mode"]
+type = "enum"
+choices = ["red", "blue"]
+default = "red"
+prompt = "Created Prompt"
+category = "schema"
+tags = ["schema", "created"]
+help = "Created help"
+
+[option."delos.schema.limit"]
+type = "int"
+default = 0
+prompt = "Limit Prompt"
+category = "schema"
+tags = ["schema", "limit"]
+help = "Limit help"
+range = [0,16]

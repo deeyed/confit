@@ -18,14 +18,16 @@ typedef struct ConfitTuiOptions {
   const char *profile_name;
   /** target name. 없으면 profile target을 사용한다. */
   const char *target_name;
+  /** 0이면 profile editor, 0이 아니면 guarded schema editor. */
+  int schema_edit;
 } ConfitTuiOptions;
 
 /**
  * @brief TUI profile editor를 실행한다.
  *
- * TUI는 project schema를 로드하고 resolved option list, search/filter,
- * type-aware editing, profile TOML 저장을 제공한다. 저장 전에는 resolver를
- * 통해 full validation을 다시 수행한다.
+ * TUI는 profile mode에서 resolved option list, search/filter, type-aware
+ * editing, profile TOML 저장을 제공한다. Schema edit mode는 경고를 표시한 뒤
+ * option 생성과 metadata/range/choice 편집을 TOML schema file로 저장한다.
  *
  * @param options TUI startup options.
  * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.

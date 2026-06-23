@@ -91,6 +91,21 @@ CftuiKey cftui_read_key(void) {
   if (ch == 'x' || ch == 'X') {
     return CFTUI_KEY_CLEAR_FILTER;
   }
+  if (ch == 'n' || ch == 'N') {
+    return CFTUI_KEY_NEW;
+  }
+  if (ch == 'p' || ch == 'P') {
+    return CFTUI_KEY_PROMPT;
+  }
+  if (ch == 'h' || ch == 'H') {
+    return CFTUI_KEY_HELP;
+  }
+  if (ch == 'r' || ch == 'R') {
+    return CFTUI_KEY_RANGE;
+  }
+  if (ch == 'o' || ch == 'O') {
+    return CFTUI_KEY_CHOICES;
+  }
   if (ch == 27) {
     const int bracket = getchar();
     const int arrow = bracket == '[' ? getchar() : EOF;

@@ -153,6 +153,11 @@ static ConfitStatus confit_cli_print_help(void) {
   if (status != CONFIT_OK) {
     return status;
   }
+  status = confit_host_stdout_write(
+      "  confit tui --project <path> --schema-edit\n");
+  if (status != CONFIT_OK) {
+    return status;
+  }
   status = confit_host_stdout_write("\nCommands:\n");
   if (status != CONFIT_OK) {
     return status;
@@ -1102,22 +1107,70 @@ static int confit_cli_run_graph(int argc, char **argv) {
   return confit_status_exit_code(CONFIT_OK);
 }
 
+static ConfitStatus confit_cli_parse_tui_args(int argc, char **argv,
+                                              ConfitTuiOptions *options) {
+  int index;
+
+  options->project_root = 0;
+  options->profile_name = 0;
+  options->target_name = 0;
+  options->schema_edit = 0;
+
+  for (index = 2; index < argc; ++index) {
+    const char *arg = argv[index];
+
+    if (strcmp(arg, "--project") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --project");
+      }
+      index += 1;
+      options->project_root = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--profile") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --profile");
+      }
+      index += 1;
+      options->profile_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--target") == 0) {
+      if (index + 1 >= argc) {
+        return confit_cli_write_error("missing value for --target");
+      }
+      index += 1;
+      options->target_name = argv[index];
+      continue;
+    }
+    if (strcmp(arg, "--schema-edit") == 0) {
+      options->schema_edit = 1;
+      continue;
+    }
+    if (arg[0] == '-') {
+      return confit_cli_write_error("unknown tui option");
+    }
+    return confit_cli_write_error("tui does not accept positional arguments");
+  }
+
+  if (options->project_root == 0) {
+    return confit_cli_write_error("tui requires --project");
+  }
+  if (!options->schema_edit && options->profile_name == 0) {
+    return confit_cli_write_error("tui requires --profile");
+  }
+  return CONFIT_OK;
+}
+
 static int confit_cli_run_tui(int argc, char **argv) {
-  ConfitCliProjectArgs args;
   ConfitTuiOptions options;
   ConfitDiagnostic diagnostic;
   ConfitStatus status;
 
-  status = confit_cli_parse_project_args(
-      argc, argv, 2, &args, 1, "unknown tui option",
-      "tui does not accept positional arguments");
+  status = confit_cli_parse_tui_args(argc, argv, &options);
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
   }
-
-  options.project_root = args.project_root;
-  options.profile_name = args.profile_name;
-  options.target_name = args.target_name;
   confit_diagnostic_init(&diagnostic);
   status = confit_tui_run(&options, &diagnostic);
   if (status != CONFIT_OK) {
