@@ -556,10 +556,24 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
   confit_tui_curses_add_centered(0, confit_tui_curses_text(screen->title));
   confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
   if (LINES > 1) {
+    char compact_header[256];
     char compact_status[384];
+    const char *header_text;
+    size_t header_size;
+
+    compact_header[0] = '\0';
+    header_text = confit_tui_curses_text(screen->header);
+    header_size = 0U;
+    while (header_text[header_size] != '\0' &&
+           header_text[header_size] != '\n' &&
+           header_size + 1U < sizeof(compact_header)) {
+      compact_header[header_size] = header_text[header_size];
+      header_size += 1U;
+    }
+    compact_header[header_size] = '\0';
 
     (void)snprintf(compact_status, sizeof(compact_status),
-                   "compact terminal fallback; %s",
+                   "compact terminal fallback; %s | %s", compact_header,
                    confit_tui_curses_text(screen->status));
     compact_status[sizeof(compact_status) - 1U] = '\0';
     confit_tui_curses_style_on(confit_tui_curses_status_style(screen->status));
@@ -665,7 +679,8 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
   first = 0U;
   last_visible = 0U;
   range[0] = '\0';
-  confit_tui_curses_draw_separator(footer_separator_row, width, "", "");
+  confit_tui_curses_draw_separator(footer_separator_row, width, "Keys",
+                                   "Status");
 
   if (screen->item_count == 0U || max_visible <= 0) {
     (void)snprintf(range, sizeof(range), "0/0");

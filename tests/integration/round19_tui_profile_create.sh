@@ -27,8 +27,11 @@ grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
+grep -aF "mode=profile project=delos profile=fresh" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "keys: move jk/arrows Pg/Home/End | enter collapse" \
+  "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "s save" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "created new profile fresh" "$WORK_DIR/tui-profile-create.txt" \
   >/dev/null
 grep -aF "saved and reloaded" "$WORK_DIR/tui-profile-create.txt" >/dev/null

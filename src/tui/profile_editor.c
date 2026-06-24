@@ -1743,8 +1743,7 @@ static ConfitStatus confit_tui_search_jump(ConfitTuiState *state, int direction,
   if (match_count == 0U) {
     state->search_count = 0U;
     state->search_position = 0U;
-    (void)snprintf(state->status, sizeof(state->status),
-                   "search 0/0: %s | fields id,prompt,help,category,tags",
+    (void)snprintf(state->status, sizeof(state->status), "search 0/0: %s",
                    state->search);
     state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;
@@ -1773,15 +1772,6 @@ static ConfitStatus confit_tui_search_jump(ConfitTuiState *state, int direction,
                  (unsigned long)state->search_count,
                  confit_tui_text_or_dash(state->rows[best_match].option->id));
   state->status[sizeof(state->status) - 1U] = '\0';
-  {
-    const size_t used = strlen(state->status);
-
-    if (used + 1U < sizeof(state->status)) {
-      (void)snprintf(state->status + used, sizeof(state->status) - used,
-                     " | fields id,prompt,help,category,tags");
-      state->status[sizeof(state->status) - 1U] = '\0';
-    }
-  }
   return CONFIT_OK;
 }
 
@@ -2685,6 +2675,44 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
   return CONFIT_OK;
 }
 
+static void confit_tui_profile_format_key_legend(
+    const ConfitTuiState *state, const ConfitTuiRow *selected, char *out,
+    size_t out_size) {
+  const int has_filter =
+      state != 0 && (state->search[0] != '\0' || state->category[0] != '\0' ||
+                     state->tag[0] != '\0');
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  if (selected != 0 && selected->kind == CONFIT_TUI_ROW_CATEGORY) {
+    if (state != 0 && state->dirty) {
+      (void)snprintf(out, out_size,
+                     "keys: move jk/arrows Pg/Home/End | enter collapse | s "
+                     "save | / search | c/t filter%s | ? help | q quit",
+                     has_filter ? " x clear" : "");
+    } else {
+      (void)snprintf(out, out_size,
+                     "keys: move jk/arrows Pg/Home/End | enter collapse | / "
+                     "search | c/t filter%s | ? help | q quit",
+                     has_filter ? " x clear" : "");
+    }
+  } else {
+    if (state != 0 && state->dirty) {
+      (void)snprintf(out, out_size,
+                     "keys: move jk/arrows Pg/Home/End | enter/e edit | s "
+                     "save | / search n/N | c/t filter%s | ? help | q quit",
+                     has_filter ? " x clear" : "");
+    } else {
+      (void)snprintf(out, out_size,
+                     "keys: move jk/arrows Pg/Home/End | enter/e edit | / "
+                     "search n/N | c/t filter%s | ? help | q quit",
+                     has_filter ? " x clear" : "");
+    }
+  }
+  out[out_size - 1U] = '\0';
+}
+
 static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                                              const char *target_name) {
   ConfitTuiListItem *items;
@@ -2692,6 +2720,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   char header[320];
   char key_legend[128];
   char status_line[384];
+  const ConfitTuiRow *selected;
   size_t index;
 
   items = 0;
@@ -2704,33 +2733,31 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
       items[index] = state->rows[state->view_indices[index]].item;
     }
   }
+  selected = state->view_count > 0U &&
+                     state->selected_view_index < state->view_count
+                 ? &state->rows[state->view_indices[state->selected_view_index]]
+                 : 0;
 
   (void)snprintf(
       header, sizeof(header),
-      "project=%s profile=%s target=%s search=%s result=%lu/%lu "
-      "filter.category=%s filter.tag=%s menus=%lu dirty=%s\n"
-      "search fields=id,prompt,help,category,tags display=dim-blocked",
+      "mode=profile project=%s profile=%s target=%s dirty=%s | row %lu/%lu | "
+      "search=%s %lu/%lu | filter=%s/%s",
       confit_tui_text_or_dash(state->project->name),
       confit_tui_text_or_dash(state->options->profile_name),
-      confit_tui_text_or_dash(target_name),
-      confit_tui_text_or_dash(state->search),
-      (unsigned long)state->search_position, (unsigned long)state->search_count,
-      confit_tui_text_or_dash(state->category),
-      confit_tui_text_or_dash(state->tag), (unsigned long)state->category_count,
-      state->dirty ? "yes" : "no");
-  header[sizeof(header) - 1U] = '\0';
-  (void)snprintf(key_legend, sizeof(key_legend),
-                 "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / "
-                 "search n/N result s save c/t filter ?/h detail q quit");
-  key_legend[sizeof(key_legend) - 1U] = '\0';
-  (void)snprintf(
-      status_line, sizeof(status_line), "row %lu/%lu search %lu/%lu | %s",
+      confit_tui_text_or_dash(target_name), state->dirty ? "yes" : "no",
       state->view_count == 0U
           ? 0UL
           : (unsigned long)(state->selected_view_index + 1U),
-      (unsigned long)state->view_count, (unsigned long)state->search_position,
-      (unsigned long)state->search_count,
-      state->status[0] != '\0' ? state->status : "ready");
+      (unsigned long)state->view_count,
+      confit_tui_text_or_dash(state->search),
+      (unsigned long)state->search_position, (unsigned long)state->search_count,
+      confit_tui_text_or_dash(state->category),
+      confit_tui_text_or_dash(state->tag));
+  header[sizeof(header) - 1U] = '\0';
+  confit_tui_profile_format_key_legend(state, selected, key_legend,
+                                       sizeof(key_legend));
+  (void)snprintf(status_line, sizeof(status_line), "%s",
+                 state->status[0] != '\0' ? state->status : "ready");
   status_line[sizeof(status_line) - 1U] = '\0';
 
   screen.title = "Confit TUI - menuconfig profile";

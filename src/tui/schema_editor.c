@@ -1333,22 +1333,21 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
 
   (void)snprintf(
       header, sizeof(header),
-      "SCHEMA EDIT MODE - guarded. Changes project configuration semantics.\n"
-      "Danger: edits are schema authority, not profile values.\n"
-      "project=%s dirty=%s",
+      "SCHEMA EDIT MODE - guarded | project=%s dirty=%s | option %lu/%lu",
       confit_tui_text_or_dash(state->project != 0 ? state->project->name : 0),
-      state->dirty ? "yes" : "no");
-  header[sizeof(header) - 1U] = '\0';
-  (void)snprintf(key_legend, sizeof(key_legend),
-                 "arrows/jk PgUp/PgDn Home/End n new y type d/e default p "
-                 "prompt h help c/t/r/o fields ? keys s save q quit");
-  key_legend[sizeof(key_legend) - 1U] = '\0';
-  (void)snprintf(
-      status_line, sizeof(status_line), "schema %lu/%lu | SCHEMA EDIT | %s",
+      state->dirty ? "yes" : "no",
       state->option_count == 0U ? 0UL
                                 : (unsigned long)(state->selected_index + 1U),
-      (unsigned long)state->option_count,
-      state->status[0] != '\0' ? state->status : "guarded");
+      (unsigned long)state->option_count);
+  header[sizeof(header) - 1U] = '\0';
+  (void)snprintf(
+      key_legend, sizeof(key_legend),
+      "keys: move jk/arrows Pg/Home/End | n new | edit y/d/p/h/c/t/r/o | "
+      "? keys%s | q quit",
+      state->dirty ? " | s save" : "");
+  key_legend[sizeof(key_legend) - 1U] = '\0';
+  (void)snprintf(status_line, sizeof(status_line), "%s",
+                 state->status[0] != '\0' ? state->status : "guarded");
   status_line[sizeof(status_line) - 1U] = '\0';
   screen.title = "Confit Schema Editor - menuconfig guarded schema";
   screen.header = header;
@@ -1442,9 +1441,8 @@ static int confit_tui_schema_move_selection(ConfitTuiSchemaState *state,
 
 static void confit_tui_schema_show_keymap(ConfitTuiSchemaState *state) {
   (void)snprintf(state->status, sizeof(state->status),
-                 "keys: arrows/jk PgUp/PgDn Home/End n new y type d/e "
-                 "default p prompt h help c/t/r/o fields ? keys Esc cancel q "
-                 "quit");
+                 "keys: move jk/arrows Pg/Home/End | n new | edit "
+                 "y/d/p/h/c/t/r/o | s save | Esc cancel | q quit");
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 

@@ -25,14 +25,14 @@ grep -aF "SCHEMA EDIT MODE is a guarded workflow." \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Generated outputs are not written here" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "schema 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "SCHEMA EDIT MODE - guarded" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "option 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Editor - menuconfig guarded schema" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Field" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "arrows/jk PgUp/PgDn Home/End n new y type d/e default p prompt h help" \
+grep -aF "keys: move jk/arrows Pg/Home/End | n new | edit y/d/p/h/c/t/r/o" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "reloaded graph" "$WORK_DIR/tui-schema.txt" >/dev/null
@@ -42,9 +42,9 @@ printf '\nn\033?q' |
     >"$WORK_DIR/tui-schema-cancel-help.txt"
 
 grep -aF "cancelled" "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
-grep -aF "keys: arrows/jk PgUp/PgDn Home/End" \
+grep -aF "keys: move jk/arrows Pg/Home/End" \
   "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
-grep -aF "y type d/e default" "$WORK_DIR/tui-schema-cancel-help.txt" \
+grep -aF "edit y/d/p/h/c/t/r/o" "$WORK_DIR/tui-schema-cancel-help.txt" \
   >/dev/null
 
 printf '\nninvalid\n\033q' |

@@ -28,8 +28,12 @@ grep -aF "Options" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
+grep -aF "mode=profile project=delos profile=sim-dsh target=host-sim" \
   "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "keys: move jk/arrows Pg/Home/End | enter collapse" \
+  "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "Keys" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "Status" "$WORK_DIR/tui.txt" >/dev/null
 
 printf 'q' | env TERM=xterm-256color "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
@@ -77,9 +81,6 @@ printf '/board\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
 
 grep -aF "search 1/1: delos.target.board" "$WORK_DIR/tui-search-single.txt" \
   >/dev/null
-grep -aF "search fields=id,prompt,help,category,tags" \
-  "$WORK_DIR/tui-search-single.txt" >/dev/null
-grep -aF "result=1/1" "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
 
 for cols in 80 100 120 160; do
@@ -230,5 +231,4 @@ printf 'q' | env TERM=xterm LINES=8 COLUMNS=35 \
 
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-small.txt" \
   >/dev/null
-grep -aF "row 1/" "$WORK_DIR/tui-small.txt" >/dev/null
 grep -aF "compact terminal fallback" "$WORK_DIR/tui-small.txt" >/dev/null
