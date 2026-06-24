@@ -2192,6 +2192,7 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   char inspector[512];
   char key_legend[192];
   char breadcrumb[256];
+  char number[32];
   const ConfitTuiSchemaRow *selected;
   size_t index;
 
@@ -2212,18 +2213,36 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   }
 
   confit_tui_schema_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(
+  header[0] = '\0';
+  confit_tui_schema_append_text(
       header, sizeof(header),
-      "SCHEMA EDIT MODE - guarded | schema edits change all profiles\n"
-      "project=%s dirty=%s | breadcrumb=%s | row %lu/%lu | view=%s | "
-      "filter=%s",
-      confit_tui_text_or_dash(state->project != 0 ? state->project->name : 0),
-      state->dirty ? "yes" : "no", breadcrumb,
-      state->view_count == 0U ? 0UL
-                              : (unsigned long)(state->selected_view_index + 1U),
-      (unsigned long)state->view_count, state->flat_view ? "flat" : "tree",
+      "SCHEMA EDIT MODE - guarded | schema edits change all profiles\n");
+  confit_tui_schema_append_text(header, sizeof(header), "project=");
+  confit_tui_schema_append_text(
+      header, sizeof(header),
+      confit_tui_text_or_dash(state->project != 0 ? state->project->name : 0));
+  confit_tui_schema_append_text(header, sizeof(header), " dirty=");
+  confit_tui_schema_append_text(header, sizeof(header),
+                                state->dirty ? "yes" : "no");
+  confit_tui_schema_append_text(header, sizeof(header), " | breadcrumb=");
+  confit_tui_schema_append_text(header, sizeof(header), breadcrumb);
+  confit_tui_schema_append_text(header, sizeof(header), " | row ");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 state->view_count == 0U
+                     ? 0UL
+                     : (unsigned long)(state->selected_view_index + 1U));
+  confit_tui_schema_append_text(header, sizeof(header), number);
+  confit_tui_schema_append_text(header, sizeof(header), "/");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 (unsigned long)state->view_count);
+  confit_tui_schema_append_text(header, sizeof(header), number);
+  confit_tui_schema_append_text(header, sizeof(header), " | view=");
+  confit_tui_schema_append_text(header, sizeof(header),
+                                state->flat_view ? "flat" : "tree");
+  confit_tui_schema_append_text(header, sizeof(header), " | filter=");
+  confit_tui_schema_append_text(
+      header, sizeof(header),
       state->text_filter[0] != '\0' ? state->text_filter : "-");
-  header[sizeof(header) - 1U] = '\0';
   selected = confit_tui_schema_selected_const_row(state);
   if (selected != 0 && selected->kind == CONFIT_TUI_SCHEMA_ROW_MENU) {
     (void)snprintf(
@@ -2432,9 +2451,11 @@ confit_tui_schema_enter_menu(ConfitTuiSchemaState *state, size_t menu_index,
     return status;
   }
   confit_tui_schema_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(state->status, sizeof(state->status), "entered menu %s",
-                 breadcrumb);
-  state->status[sizeof(state->status) - 1U] = '\0';
+  state->status[0] = '\0';
+  confit_tui_schema_append_text(state->status, sizeof(state->status),
+                                "entered menu ");
+  confit_tui_schema_append_text(state->status, sizeof(state->status),
+                                breadcrumb);
   return CONFIT_OK;
 }
 
@@ -2463,9 +2484,11 @@ confit_tui_schema_go_parent_menu(ConfitTuiSchemaState *state,
     return status;
   }
   confit_tui_schema_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(state->status, sizeof(state->status), "back to %s",
-                 breadcrumb);
-  state->status[sizeof(state->status) - 1U] = '\0';
+  state->status[0] = '\0';
+  confit_tui_schema_append_text(state->status, sizeof(state->status),
+                                "back to ");
+  confit_tui_schema_append_text(state->status, sizeof(state->status),
+                                breadcrumb);
   return CONFIT_OK;
 }
 

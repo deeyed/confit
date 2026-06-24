@@ -3294,6 +3294,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   char inspector[512];
   char key_legend[192];
   char status_line[384];
+  char number[32];
   const ConfitTuiRow *selected;
   size_t index;
 
@@ -3313,25 +3314,53 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                  : 0;
 
   confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(
+  header[0] = '\0';
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 "mode=profile project=");
+  confit_tui_append_summary_text(
+      header, sizeof(header), confit_tui_text_or_dash(state->project->name));
+  confit_tui_append_summary_text(header, sizeof(header), " profile=");
+  confit_tui_append_summary_text(
       header, sizeof(header),
-      "mode=profile project=%s profile=%s target=%s dirty=%s\n"
-      "breadcrumb=%s | row %lu/%lu | search=%s %lu/%lu | filter=%s/%s | "
-      "text=%s",
-      confit_tui_text_or_dash(state->project->name),
-      confit_tui_text_or_dash(state->options->profile_name),
-      confit_tui_text_or_dash(target_name), state->dirty ? "yes" : "no",
-      breadcrumb,
-      state->view_count == 0U
-          ? 0UL
-          : (unsigned long)(state->selected_view_index + 1U),
-      (unsigned long)state->view_count,
-      confit_tui_text_or_dash(state->search),
-      (unsigned long)state->search_position, (unsigned long)state->search_count,
-      confit_tui_text_or_dash(state->category),
-      confit_tui_text_or_dash(state->tag),
-      confit_tui_text_or_dash(state->text_filter));
-  header[sizeof(header) - 1U] = '\0';
+      confit_tui_text_or_dash(state->options->profile_name));
+  confit_tui_append_summary_text(header, sizeof(header), " target=");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 confit_tui_text_or_dash(target_name));
+  confit_tui_append_summary_text(header, sizeof(header), " dirty=");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 state->dirty ? "yes" : "no");
+  confit_tui_append_summary_text(header, sizeof(header), "\nbreadcrumb=");
+  confit_tui_append_summary_text(header, sizeof(header), breadcrumb);
+  confit_tui_append_summary_text(header, sizeof(header), " | row ");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 state->view_count == 0U
+                     ? 0UL
+                     : (unsigned long)(state->selected_view_index + 1U));
+  confit_tui_append_summary_text(header, sizeof(header), number);
+  confit_tui_append_summary_text(header, sizeof(header), "/");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 (unsigned long)state->view_count);
+  confit_tui_append_summary_text(header, sizeof(header), number);
+  confit_tui_append_summary_text(header, sizeof(header), " | search=");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 confit_tui_text_or_dash(state->search));
+  confit_tui_append_summary_text(header, sizeof(header), " ");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 (unsigned long)state->search_position);
+  confit_tui_append_summary_text(header, sizeof(header), number);
+  confit_tui_append_summary_text(header, sizeof(header), "/");
+  (void)snprintf(number, sizeof(number), "%lu",
+                 (unsigned long)state->search_count);
+  confit_tui_append_summary_text(header, sizeof(header), number);
+  confit_tui_append_summary_text(header, sizeof(header), " | filter=");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 confit_tui_text_or_dash(state->category));
+  confit_tui_append_summary_text(header, sizeof(header), "/");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 confit_tui_text_or_dash(state->tag));
+  confit_tui_append_summary_text(header, sizeof(header), " | text=");
+  confit_tui_append_summary_text(header, sizeof(header),
+                                 confit_tui_text_or_dash(state->text_filter));
   confit_tui_profile_format_inspector(state, selected, inspector,
                                       sizeof(inspector));
   confit_tui_profile_format_key_legend(state, selected, key_legend,
@@ -3497,9 +3526,11 @@ static ConfitStatus confit_tui_enter_menu(ConfitTuiState *state,
     return status;
   }
   confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(state->status, sizeof(state->status), "entered menu %s",
-                 breadcrumb);
-  state->status[sizeof(state->status) - 1U] = '\0';
+  state->status[0] = '\0';
+  confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                 "entered menu ");
+  confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                 breadcrumb);
   return CONFIT_OK;
 }
 
@@ -3524,9 +3555,11 @@ static ConfitStatus confit_tui_go_parent_menu(ConfitTuiState *state,
     return status;
   }
   confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
-  (void)snprintf(state->status, sizeof(state->status), "back to menu %s",
-                 breadcrumb);
-  state->status[sizeof(state->status) - 1U] = '\0';
+  state->status[0] = '\0';
+  confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                 "back to menu ");
+  confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                 breadcrumb);
   return CONFIT_OK;
 }
 
