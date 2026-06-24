@@ -160,6 +160,7 @@ rollback_note: $run_dir/ROLLBACK.md
 generated files:
   config.h
   config.cmake
+  config/config.qsm
   config.qst
   config.report.json
   config.explain.txt
@@ -174,6 +175,7 @@ verify_artifact_set() {
   for artifact in \
     config.h \
     config.cmake \
+    config/config.qsm \
     config.qst \
     config.report.json \
     config.explain.txt \
@@ -195,6 +197,7 @@ compare_golden_artifacts() {
   for artifact in \
     config.h \
     config.cmake \
+    config/config.qsm \
     config.qst \
     config.report.json \
     config.explain.txt \
@@ -204,9 +207,11 @@ compare_golden_artifacts() {
     if cmp -s "$golden_dir/$artifact" "$generated_dir/$artifact"; then
       echo "$artifact: ok" >>"$diff_log"
     else
+      diff_path="$run_dir/diff/$artifact.diff"
+      mkdir -p "$(dirname -- "$diff_path")"
       echo "$artifact: changed" >>"$diff_log"
       diff -u "$golden_dir/$artifact" "$generated_dir/$artifact" \
-        >"$run_dir/diff/$artifact.diff" || true
+        >"$diff_path" || true
       die "generated artifact differs from golden: $artifact"
     fi
   done

@@ -35,6 +35,7 @@ grep -F "gen ok:" "$WORK_DIR/gen.txt" >/dev/null
 for artifact in \
   config.h \
   config.cmake \
+  config/config.qsm \
   config.qst \
   config.report.json \
   config.explain.txt \
@@ -47,5 +48,6 @@ done
 grep -F "PARUS_CONFIG_BOARD_QEMU_VIRT_AARCH64 1" "$OUT_DIR/config.h" \
   >/dev/null
 grep -F "PARUS_CONFIG_BOOT_DIRECT_DTB 1" "$OUT_DIR/config.h" >/dev/null
+grep -F "confit-config-manifest-v1" "$OUT_DIR/config/config.qsm" >/dev/null
 grep -F '"parus.target.board", "type": "enum", "value": "qemu-virt-aarch64"' \
   "$OUT_DIR/config.report.json" >/dev/null

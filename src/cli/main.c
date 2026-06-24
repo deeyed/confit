@@ -2905,6 +2905,30 @@ static ConfitStatus confit_cli_write_artifact(const char *out_dir,
   return confit_host_write_text_file(path, text, diagnostic);
 }
 
+static ConfitStatus confit_cli_write_child_artifact(
+    const char *out_dir, const char *child_dir, const char *name,
+    const char *text, ConfitDiagnostic *diagnostic) {
+  char directory[1024];
+  char path[1024];
+  ConfitStatus status;
+
+  status = confit_host_path_join(directory, sizeof(directory), out_dir,
+                                 child_dir, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_make_directories(directory, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_path_join(path, sizeof(path), directory, name,
+                                 diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  return confit_host_write_text_file(path, text, diagnostic);
+}
+
 static int confit_cli_gen_wants(const ConfitCliGenArgs *args,
                                 unsigned artifact) {
   return (args->artifact_mask & artifact) != 0U;
@@ -2993,6 +3017,11 @@ static ConfitStatus confit_cli_gen_preflight(
   }
   if (status == CONFIT_OK && confit_cli_gen_wants(args,
                                                    CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_gen_check_output(args, "config/config.qsm",
+                                         diagnostic);
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_cli_gen_check_output(args, "config.qst", diagnostic);
   }
   return status;
@@ -3049,6 +3078,10 @@ static ConfitStatus confit_cli_gen_print_dry_run(
   }
   if (status == CONFIT_OK && confit_cli_gen_wants(args,
                                                    CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_gen_print_dry_run_line(args, "config/config.qsm");
+  }
+  if (status == CONFIT_OK && confit_cli_gen_wants(args,
+                                                   CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_cli_gen_print_dry_run_line(args, "config.qst");
   }
   return status;
@@ -3069,6 +3102,7 @@ static ConfitStatus confit_cli_generate_artifacts(
   char *graph_json;
   char *inputs_json;
   char *cmake_fragment;
+  char *qstar_config_module;
   char *qstar_manifest;
   ConfitStatus status;
 
@@ -3093,6 +3127,7 @@ static ConfitStatus confit_cli_generate_artifacts(
   graph_json = 0;
   inputs_json = 0;
   cmake_fragment = 0;
+  qstar_config_module = 0;
   qstar_manifest = 0;
   confit_cli_input_files_init(&input_files);
 
@@ -3140,6 +3175,11 @@ static ConfitStatus confit_cli_generate_artifacts(
   }
   if (status == CONFIT_OK &&
       confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_generate_qstar_config_module(
+        project, config, &build_options, &qstar_config_module, diagnostic);
+  }
+  if (status == CONFIT_OK &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_generate_qstar_manifest(project, config, &build_options,
                                             &qstar_manifest, diagnostic);
   }
@@ -3182,6 +3222,12 @@ static ConfitStatus confit_cli_generate_artifacts(
   }
   if (status == CONFIT_OK && !args->dry_run &&
       confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_write_child_artifact(
+        args->out_dir, "config", "config.qsm", qstar_config_module,
+        diagnostic);
+  }
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_cli_write_artifact(args->out_dir, "config.qst",
                                        qstar_manifest, diagnostic);
   }
@@ -3192,6 +3238,7 @@ static ConfitStatus confit_cli_generate_artifacts(
   confit_graph_string_free(graph_json);
   confit_generator_string_free(inputs_json);
   confit_generator_string_free(cmake_fragment);
+  confit_generator_string_free(qstar_config_module);
   confit_generator_string_free(qstar_manifest);
   confit_cli_input_files_clear(&input_files);
   return status;

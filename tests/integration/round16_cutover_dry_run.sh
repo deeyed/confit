@@ -27,6 +27,8 @@ grep -F '"schema": "confit-inputs-v1"' \
   "$OUT_DIR/delos-realish/generated/config.inputs.json" >/dev/null
 grep -F "config.h: ok" "$OUT_DIR/delos-realish/artifact-diff.txt" \
   >/dev/null
+grep -F "config/config.qsm: ok" \
+  "$OUT_DIR/delos-realish/artifact-diff.txt" >/dev/null
 
 "$SCRIPT" --project parus-realish --out "$OUT_DIR" \
   --confit-bin "$CONFIT_BIN" >"$WORK_DIR/parus.txt"
@@ -36,6 +38,8 @@ grep -F "artifact verify: ok" "$WORK_DIR/parus.txt" >/dev/null
 grep -F "project: parus-realish" \
   "$OUT_DIR/parus-realish/CUTOVER_SUMMARY.txt" >/dev/null
 grep -F "config.report.json: ok" \
+  "$OUT_DIR/parus-realish/artifact-diff.txt" >/dev/null
+grep -F "config/config.qsm: ok" \
   "$OUT_DIR/parus-realish/artifact-diff.txt" >/dev/null
 grep -F '"status": "ok"' "$OUT_DIR/parus-realish/compat.json" >/dev/null
 

@@ -225,6 +225,31 @@ static const char *confit_integration_inputs_json_path(
              : "config.inputs.json";
 }
 
+static const char *confit_integration_cmake_path(void) {
+  return "config.cmake";
+}
+
+static const char *confit_integration_legacy_qst_path(void) {
+  return "config.qst";
+}
+
+static const ConfitOption *confit_integration_find_option(
+    const ConfitProject *project, const char *option_id) {
+  size_t index;
+
+  if (project == 0 || option_id == 0) {
+    return 0;
+  }
+
+  for (index = 0U; index < project->option_count; ++index) {
+    if (project->options[index].id != 0 &&
+        strcmp(project->options[index].id, option_id) == 0) {
+      return &project->options[index];
+    }
+  }
+  return 0;
+}
+
 static ConfitStatus confit_integration_source_hash(
     const ConfitResolvedConfig *config, uint64_t *out_hash,
     ConfitDiagnostic *diagnostic) {
@@ -402,6 +427,27 @@ static ConfitStatus confit_qstar_append_key_value(
   return status;
 }
 
+static ConfitStatus confit_qstar_append_key_raw(
+    ConfitIntegrationBuilder *builder, const char *key, const char *value,
+    int comma) {
+  ConfitStatus status;
+
+  status = confit_integration_append(builder, "  ");
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, key);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, " = ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, value);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, comma ? ",\n" : "\n");
+  }
+  return status;
+}
+
 static ConfitStatus confit_qstar_append_artifact(
     ConfitIntegrationBuilder *builder, const char *key, const char *value,
     int comma) {
@@ -421,6 +467,148 @@ static ConfitStatus confit_qstar_append_artifact(
     status = confit_integration_append(builder, comma ? ",\n" : "\n");
   }
   return status;
+}
+
+static ConfitStatus confit_qstar_append_value_entry(
+    ConfitIntegrationBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedValue *resolved_value, int comma,
+    ConfitDiagnostic *diagnostic) {
+  const ConfitOption *option;
+  char *entry_text;
+  ConfitStatus status;
+
+  option = confit_integration_find_option(project, resolved_value->option_id);
+  if (option == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                          resolved_value->option_id, 0, 0,
+                          "resolved option is missing from project schema");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  entry_text = 0;
+  status = confit_generator_serialize_resolved_value(
+      resolved_value, option->type, CONFIT_GENERATOR_VALUE_LUA, &entry_text,
+      diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  status = confit_integration_append(builder, "    [");
+  if (status == CONFIT_OK) {
+    status = confit_integration_append_escaped(builder,
+                                               resolved_value->option_id);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, "] = ");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, entry_text);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, comma ? ",\n" : "\n");
+  }
+
+  confit_generator_string_free(entry_text);
+  return status;
+}
+
+ConfitStatus confit_generate_qstar_config_module(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    const ConfitBuildIntegrationOptions *options, char **out_text,
+    ConfitDiagnostic *diagnostic) {
+  ConfitIntegrationBuilder builder;
+  uint64_t source_hash;
+  char source_hash_text[32];
+  char option_count_text[32];
+  ConfitStatus status;
+  size_t index;
+
+  if (out_text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "missing qstar config module output pointer");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_text = 0;
+  if (project == 0 || project->name == 0 || config == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "invalid qstar config module generator argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_integration_source_hash(config, &source_hash, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  (void)snprintf(source_hash_text, sizeof(source_hash_text), "0x%llX",
+                 (unsigned long long)source_hash);
+  (void)snprintf(option_count_text, sizeof(option_count_text), "%lu",
+                 (unsigned long)config->value_count);
+
+  confit_integration_builder_init(&builder);
+
+#define CONFIT_QSM_SECTION(call_expr)                                           \
+  do {                                                                          \
+    status = (call_expr);                                                       \
+    if (status != CONFIT_OK) {                                                  \
+      free(builder.text);                                                       \
+      return status;                                                            \
+    }                                                                           \
+  } while (0)
+
+  CONFIT_QSM_SECTION(
+      confit_integration_append(&builder,
+                                "-- Generated by Confit. Do not edit.\n"));
+  CONFIT_QSM_SECTION(confit_integration_append(
+      &builder,
+      "-- Pure module for qstar.import_module(\".../config\").\n\n"));
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "return {\n"));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "schema", "confit-config-manifest-v1", 1));
+  CONFIT_QSM_SECTION(
+      confit_qstar_append_key_value(&builder, "project", project->name, 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "profile", confit_integration_profile_name(options), 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "target", confit_integration_target_name(options), 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "confit_version", confit_version_string(), 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "source_hash", source_hash_text, 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_key_raw(
+      &builder, "option_count", option_count_text, 1));
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "  artifacts = {\n"));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "header", confit_integration_header_path(options), 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "report_json", confit_integration_report_json_path(options),
+      1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "explain_text", confit_integration_explain_text_path(options),
+      1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "graph_json", confit_integration_graph_json_path(options),
+      1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "inputs_json", confit_integration_inputs_json_path(options),
+      1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "cmake", confit_integration_cmake_path(), 1));
+  CONFIT_QSM_SECTION(confit_qstar_append_artifact(
+      &builder, "legacy_qst", confit_integration_legacy_qst_path(), 0));
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "  },\n"));
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "  values = {\n"));
+  for (index = 0U; index < config->value_count; ++index) {
+    CONFIT_QSM_SECTION(confit_qstar_append_value_entry(
+        &builder, project, &config->values[index],
+        index + 1U < config->value_count, diagnostic));
+  }
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "  }\n"));
+  CONFIT_QSM_SECTION(confit_integration_append(&builder, "}\n"));
+
+#undef CONFIT_QSM_SECTION
+
+  *out_text = builder.text;
+  return CONFIT_OK;
 }
 
 ConfitStatus confit_generate_qstar_manifest(

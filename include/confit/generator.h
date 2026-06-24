@@ -219,6 +219,25 @@ ConfitStatus confit_generate_cmake_fragment(
     ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief `config/config.qsm` QStar import module을 생성한다.
+ *
+ * 반환된 문자열은 caller가 소유하며 `confit_generator_string_free`로 해제한다.
+ * Module은 `qstar.import_module(".../config")`로 읽을 수 있는 pure Lua table
+ * helper이며 QStar graph declaration을 포함하지 않는다.
+ *
+ * @param project source project model.
+ * @param config resolver가 만든 resolved config.
+ * @param options optional build integration generator options.
+ * @param out_text 성공 시 NUL 종료 QStar module text를 받는다.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_generate_qstar_config_module(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    const ConfitBuildIntegrationOptions *options, char **out_text,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief `config.qst` QStar manifest fragment를 생성한다.
  *
  * 반환된 문자열은 caller가 소유하며 `confit_generator_string_free`로 해제한다.

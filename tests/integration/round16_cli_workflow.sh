@@ -113,9 +113,12 @@ test -s "$GEN_DIR/config.explain.txt"
 test -s "$GEN_DIR/config.graph.json"
 test -s "$GEN_DIR/config.inputs.json"
 test -s "$GEN_DIR/config.cmake"
+test -s "$GEN_DIR/config/config.qsm"
 test -s "$GEN_DIR/config.qst"
 grep -F "DELOS_CONFIG_DEBUG_DDC" "$GEN_DIR/config.h" >/dev/null
 grep -F "CONFIT_CONFIG_HEADER" "$GEN_DIR/config.cmake" >/dev/null
+grep -F "confit-config-manifest-v1" "$GEN_DIR/config/config.qsm" >/dev/null
+grep -F "[\"delos.target.board\"]" "$GEN_DIR/config/config.qsm" >/dev/null
 grep -F "confit-qstar-manifest-v1" "$GEN_DIR/config.qst" >/dev/null
 grep -F '"confit_version": "confit 0.1.0-round1"' \
   "$GEN_DIR/config.inputs.json" >/dev/null

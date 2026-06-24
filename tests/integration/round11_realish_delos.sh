@@ -35,6 +35,7 @@ grep -F "gen ok:" "$WORK_DIR/gen.txt" >/dev/null
 for artifact in \
   config.h \
   config.cmake \
+  config/config.qsm \
   config.qst \
   config.report.json \
   config.explain.txt \
@@ -46,5 +47,6 @@ done
 
 grep -F "DELOS_CONFIG_DEBUG_DSH 1" "$OUT_DIR/config.h" >/dev/null
 grep -F "DELOS_CONFIG_SIM_HOSTED_STDIO 1" "$OUT_DIR/config.h" >/dev/null
+grep -F "confit-config-manifest-v1" "$OUT_DIR/config/config.qsm" >/dev/null
 grep -F '"delos.target.kind", "type": "enum", "value": "sim:dsh"' \
   "$OUT_DIR/config.report.json" >/dev/null

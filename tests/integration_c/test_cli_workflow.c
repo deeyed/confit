@@ -648,6 +648,7 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   char graph_json[4096];
   char inputs_json[4096];
   char cmake_file[4096];
+  char qstar_module[4096];
   char qstar_file[4096];
   char header_only_dir[4096];
   char header_only_config_h[4096];
@@ -665,7 +666,7 @@ static void test_gen(ConfitCliWorkflowContext *context) {
                                "header", 0};
   const char *dry_run_argv[] = {0, "gen", "--project", 0, "--profile",
                                 "sim-dsh", "--out", 0, "--artifact",
-                                "cmake", "--dry-run", 0};
+                                "qstar", "--dry-run", 0};
 
   result.exit_code = -1;
   result.stdout_text = 0;
@@ -693,6 +694,8 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   test_join(inputs_json, sizeof(inputs_json), context->gen_dir,
             "config.inputs.json");
   test_join(cmake_file, sizeof(cmake_file), context->gen_dir, "config.cmake");
+  test_join3(qstar_module, sizeof(qstar_module), context->gen_dir, "config",
+             "config.qsm");
   test_join(qstar_file, sizeof(qstar_file), context->gen_dir, "config.qst");
 
   test_expect_file_contains(config_h, "DELOS_CONFIG_DEBUG_DDC");
@@ -701,6 +704,8 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(graph_json));
   test_expect_file_contains(inputs_json, "\"config/targets/host-sim.toml\"");
   test_expect_file_contains(cmake_file, "CONFIT_CONFIG_HEADER");
+  test_expect_file_contains(qstar_module, "confit-config-manifest-v1");
+  test_expect_file_contains(qstar_module, "[\"delos.target.board\"]");
   test_expect_file_contains(qstar_file, "confit-qstar-manifest-v1");
 
   overwrite_argv[0] = context->confit_bin;
@@ -739,7 +744,8 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   test_run(context, dry_run_argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "gen dry-run:");
-  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "config.cmake");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "config/config.qsm");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "config.qst");
   test_join(dry_run_config_h, sizeof(dry_run_config_h), dry_run_dir,
             "config.h");
   CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(dry_run_config_h));

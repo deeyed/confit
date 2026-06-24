@@ -229,9 +229,11 @@ int main(void) {
   char *header;
   char *header_again;
   char *cmake_fragment;
+  char *qstar_config_module;
   char *qstar_manifest;
   char *golden;
   char *cmake_golden;
+  char *qstar_config_golden;
   char *qstar_golden;
   int ok;
 
@@ -259,9 +261,11 @@ int main(void) {
   header = 0;
   header_again = 0;
   cmake_fragment = 0;
+  qstar_config_module = 0;
   qstar_manifest = 0;
   golden = 0;
   cmake_golden = 0;
+  qstar_config_golden = 0;
   qstar_golden = 0;
   if (confit_generate_config_header(project, config, &options, &header,
                                     &diagnostic) != CONFIT_OK ||
@@ -270,20 +274,27 @@ int main(void) {
       confit_generate_cmake_fragment(project, config, &build_options,
                                      &cmake_fragment, &diagnostic) !=
           CONFIT_OK ||
+      confit_generate_qstar_config_module(project, config, &build_options,
+                                          &qstar_config_module,
+                                          &diagnostic) != CONFIT_OK ||
       confit_generate_qstar_manifest(project, config, &build_options,
                                      &qstar_manifest, &diagnostic) !=
           CONFIT_OK ||
       !read_fixture_text("tests/golden/generator/sim-dsh-config.h", &golden) ||
       !read_fixture_text("tests/golden/generator/sim-dsh-config.cmake",
                          &cmake_golden) ||
+      !read_fixture_text("tests/golden/generator/sim-dsh-config.qsm",
+                         &qstar_config_golden) ||
       !read_fixture_text("tests/golden/generator/sim-dsh-config.qst",
                          &qstar_golden)) {
     confit_generator_string_free(header);
     confit_generator_string_free(header_again);
     confit_generator_string_free(cmake_fragment);
+    confit_generator_string_free(qstar_config_module);
     confit_generator_string_free(qstar_manifest);
     free(golden);
     free(cmake_golden);
+    free(qstar_config_golden);
     free(qstar_golden);
     confit_resolved_config_free(config);
     confit_project_free(project);
@@ -293,18 +304,22 @@ int main(void) {
   ok = check_value_serialization_helpers() &&
        strcmp(header, golden) == 0 && strcmp(header, header_again) == 0 &&
        strcmp(cmake_fragment, cmake_golden) == 0 &&
+       strcmp(qstar_config_module, qstar_config_golden) == 0 &&
        strcmp(qstar_manifest, qstar_golden) == 0 &&
        strstr(header, "timestamp") == 0 &&
        strstr(header, "/Users/") == 0 &&
        strstr(cmake_fragment, "timestamp") == 0 &&
+       strstr(qstar_config_module, "/Users/") == 0 &&
        strstr(qstar_manifest, "/Users/") == 0;
 
   confit_generator_string_free(header);
   confit_generator_string_free(header_again);
   confit_generator_string_free(cmake_fragment);
+  confit_generator_string_free(qstar_config_module);
   confit_generator_string_free(qstar_manifest);
   free(golden);
   free(cmake_golden);
+  free(qstar_config_golden);
   free(qstar_golden);
   confit_resolved_config_free(config);
   confit_project_free(project);

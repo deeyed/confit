@@ -30,6 +30,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   "$ROOT_DIR/src/generator/build_integration.c" \
   "$ROOT_DIR/src/generator/config_header.c" \
   "$ROOT_DIR/src/generator/reports.c" \
+  "$ROOT_DIR/src/generator/value_serialization.c" \
   "$ROOT_DIR/src/graph/graph.c" \
   "$ROOT_DIR/src/parser/parser.c" \
   "$ROOT_DIR/src/parser/toml_scan.c" \
