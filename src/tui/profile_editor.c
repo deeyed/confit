@@ -11,22 +11,25 @@
 #include "confit/schema.h"
 
 typedef enum ConfitTuiRowKind {
-  CONFIT_TUI_ROW_CATEGORY = 1,
+  CONFIT_TUI_ROW_MENU = 1,
   CONFIT_TUI_ROW_OPTION = 2,
 } ConfitTuiRowKind;
 
-typedef struct ConfitTuiCategoryState {
+typedef struct ConfitTuiMenuNode {
   char *name;
-  int collapsed;
+  char *path;
+  size_t parent_index;
+  size_t depth;
+  size_t child_count;
   size_t option_count;
   size_t visible_count;
-} ConfitTuiCategoryState;
+} ConfitTuiMenuNode;
 
 typedef struct ConfitTuiRow {
   ConfitTuiListItem item;
   const ConfitOption *option;
   ConfitTuiRowKind kind;
-  size_t category_index;
+  size_t menu_index;
   char label[160];
   char detail[384];
   char value[128];
@@ -41,8 +44,9 @@ typedef struct ConfitTuiState {
   ConfitResolvedConfig *config;
   ConfitNamedValue *edits;
   size_t edit_count;
-  ConfitTuiCategoryState *categories;
-  size_t category_count;
+  ConfitTuiMenuNode *menus;
+  size_t menu_count;
+  size_t current_menu_index;
   ConfitTuiRow *rows;
   size_t row_count;
   size_t *view_indices;
@@ -104,6 +108,8 @@ static char *confit_tui_copy_string(const char *text) {
   return copy;
 }
 
+#define CONFIT_TUI_INDEX_NONE ((size_t)-1)
+
 static const char *confit_tui_option_category_name(const ConfitOption *option) {
   if (option != 0 && option->category != 0 && option->category[0] != '\0') {
     return option->category;
@@ -111,103 +117,208 @@ static const char *confit_tui_option_category_name(const ConfitOption *option) {
   return "(uncategorized)";
 }
 
-static void confit_tui_categories_clear(ConfitTuiState *state) {
+static const char *confit_tui_option_category_path(const ConfitOption *option) {
+  if (option != 0 && option->category != 0 && option->category[0] != '\0') {
+    return option->category;
+  }
+  return "(uncategorized)";
+}
+
+static void confit_tui_menu_nodes_free(ConfitTuiMenuNode *menus,
+                                       size_t menu_count) {
   size_t index;
 
+  for (index = 0U; index < menu_count; ++index) {
+    free(menus[index].name);
+    free(menus[index].path);
+  }
+  free(menus);
+}
+
+static void confit_tui_menus_clear(ConfitTuiState *state) {
   if (state == 0) {
     return;
   }
-  for (index = 0U; index < state->category_count; ++index) {
-    free(state->categories[index].name);
-  }
-  free(state->categories);
-  state->categories = 0;
-  state->category_count = 0U;
+  confit_tui_menu_nodes_free(state->menus, state->menu_count);
+  state->menus = 0;
+  state->menu_count = 0U;
+  state->current_menu_index = 0U;
 }
 
-static int
-confit_tui_old_category_collapsed(const ConfitTuiCategoryState *categories,
-                                  size_t category_count, const char *name) {
+static size_t confit_tui_find_menu_index(const ConfitTuiMenuNode *menus,
+                                         size_t menu_count, const char *path) {
   size_t index;
 
-  for (index = 0U; index < category_count; ++index) {
-    if (categories[index].name != 0 &&
-        strcmp(categories[index].name, name) == 0) {
-      return categories[index].collapsed;
-    }
-  }
-  return 0;
-}
-
-static size_t
-confit_tui_find_category_index(const ConfitTuiCategoryState *categories,
-                               size_t category_count, const char *name) {
-  size_t index;
-
-  for (index = 0U; index < category_count; ++index) {
-    if (categories[index].name != 0 &&
-        strcmp(categories[index].name, name) == 0) {
+  for (index = 0U; index < menu_count; ++index) {
+    if (menus[index].path != 0 && strcmp(menus[index].path, path) == 0) {
       return index;
     }
   }
-  return (size_t)-1;
+  return CONFIT_TUI_INDEX_NONE;
 }
 
-static ConfitStatus
-confit_tui_rebuild_categories(ConfitTuiState *state,
-                              ConfitDiagnostic *diagnostic) {
-  ConfitTuiCategoryState *old_categories;
-  size_t old_category_count;
-  size_t index;
+static ConfitStatus confit_tui_add_menu_node(
+    ConfitTuiState *state, const char *name, const char *path,
+    size_t parent_index, size_t depth, size_t *out_index,
+    ConfitDiagnostic *diagnostic) {
+  ConfitTuiMenuNode *new_menus;
+  ConfitTuiMenuNode *menu;
 
-  old_categories = state->categories;
-  old_category_count = state->category_count;
-  state->categories = 0;
-  state->category_count = 0U;
+  new_menus = (ConfitTuiMenuNode *)realloc(
+      state->menus, (state->menu_count + 1U) * sizeof(state->menus[0]));
+  if (new_menus == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to allocate tui menu tree");
+    return CONFIT_ERR_INTERNAL;
+  }
+  state->menus = new_menus;
+  menu = &state->menus[state->menu_count];
+  memset(menu, 0, sizeof(*menu));
+  menu->name = confit_tui_copy_string(name);
+  menu->path = confit_tui_copy_string(path);
+  if (menu->name == 0 || menu->path == 0) {
+    free(menu->name);
+    free(menu->path);
+    memset(menu, 0, sizeof(*menu));
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to copy tui menu path");
+    return CONFIT_ERR_INTERNAL;
+  }
+  menu->parent_index = parent_index;
+  menu->depth = depth;
+  *out_index = state->menu_count;
+  state->menu_count += 1U;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_ensure_menu_path(
+    ConfitTuiState *state, const char *path, size_t *out_menu_index,
+    ConfitDiagnostic *diagnostic) {
+  ConfitCategoryPathInfo info;
+  char prefix[CONFIT_CATEGORY_PATH_MAX_LENGTH + 1U];
+  size_t parent_index;
+  size_t prefix_size;
+  size_t index;
+  ConfitStatus status;
+
+  if (out_menu_index == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  status = confit_category_path_analyze(path, &info);
+  if (status != CONFIT_OK) {
+    confit_diagnostic_set(diagnostic, status, path, 0, 0,
+                          "invalid tui category path");
+    return status;
+  }
+
+  parent_index = 0U;
+  prefix_size = 0U;
+  prefix[0] = '\0';
+  for (index = 0U; index < info.depth; ++index) {
+    const char *segment_begin;
+    char segment[CONFIT_CATEGORY_PATH_MAX_LENGTH + 1U];
+    size_t segment_size;
+    size_t menu_index;
+
+    status = confit_category_path_segment_at(path, index, &segment_begin,
+                                             &segment_size);
+    if (status != CONFIT_OK ||
+        segment_size >= sizeof(segment) ||
+        prefix_size + segment_size + (index > 0U ? 1U : 0U) >=
+            sizeof(prefix)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path, 0, 0,
+                            "invalid tui category segment");
+      return CONFIT_ERR_SCHEMA;
+    }
+    memcpy(segment, segment_begin, segment_size);
+    segment[segment_size] = '\0';
+    if (index > 0U) {
+      prefix[prefix_size] = '/';
+      prefix_size += 1U;
+    }
+    memcpy(prefix + prefix_size, segment_begin, segment_size);
+    prefix_size += segment_size;
+    prefix[prefix_size] = '\0';
+
+    menu_index =
+        confit_tui_find_menu_index(state->menus, state->menu_count, prefix);
+    if (menu_index == CONFIT_TUI_INDEX_NONE) {
+      status = confit_tui_add_menu_node(state, segment, prefix, parent_index,
+                                        index + 1U, &menu_index, diagnostic);
+      if (status != CONFIT_OK) {
+        return status;
+      }
+    }
+    parent_index = menu_index;
+  }
+  *out_menu_index = parent_index;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_rebuild_menus(ConfitTuiState *state,
+                                             ConfitDiagnostic *diagnostic) {
+  ConfitTuiMenuNode *old_menus;
+  size_t old_menu_count;
+  size_t old_current_menu_index;
+  char old_path[CONFIT_CATEGORY_PATH_MAX_LENGTH + 1U];
+  size_t root_index;
+  size_t index;
+  ConfitStatus status;
+
+  old_menus = state->menus;
+  old_menu_count = state->menu_count;
+  old_current_menu_index = state->current_menu_index;
+  old_path[0] = '\0';
+  if (old_current_menu_index < old_menu_count &&
+      old_menus[old_current_menu_index].path != 0) {
+    (void)snprintf(old_path, sizeof(old_path), "%s",
+                   old_menus[old_current_menu_index].path);
+    old_path[sizeof(old_path) - 1U] = '\0';
+  }
+
+  state->menus = 0;
+  state->menu_count = 0U;
+  state->current_menu_index = 0U;
+  status = confit_tui_add_menu_node(state, "Main Menu", "", CONFIT_TUI_INDEX_NONE,
+                                    0U, &root_index, diagnostic);
+  (void)root_index;
+  if (status != CONFIT_OK) {
+    free(state->menus);
+    state->menus = old_menus;
+    state->menu_count = old_menu_count;
+    state->current_menu_index = old_current_menu_index;
+    return status;
+  }
 
   for (index = 0U; index < state->project->option_count; ++index) {
-    const char *name =
-        confit_tui_option_category_name(&state->project->options[index]);
-    size_t category_index = confit_tui_find_category_index(
-        state->categories, state->category_count, name);
+    size_t menu_index;
+    const char *path =
+        confit_tui_option_category_path(&state->project->options[index]);
 
-    if (category_index == (size_t)-1) {
-      ConfitTuiCategoryState *new_categories =
-          (ConfitTuiCategoryState *)realloc(state->categories,
-                                            (state->category_count + 1U) *
-                                                sizeof(state->categories[0]));
-      if (new_categories == 0) {
-        state->categories = old_categories;
-        state->category_count = old_category_count;
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
-                              "failed to allocate tui categories");
-        return CONFIT_ERR_INTERNAL;
-      }
-      state->categories = new_categories;
-      category_index = state->category_count;
-      state->categories[category_index].name = confit_tui_copy_string(name);
-      state->categories[category_index].collapsed =
-          confit_tui_old_category_collapsed(old_categories, old_category_count,
-                                            name);
-      state->categories[category_index].option_count = 0U;
-      state->categories[category_index].visible_count = 0U;
-      if (state->categories[category_index].name == 0) {
-        confit_tui_categories_clear(state);
-        state->categories = old_categories;
-        state->category_count = old_category_count;
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, name, 0, 0,
-                              "failed to copy tui category");
-        return CONFIT_ERR_INTERNAL;
-      }
-      state->category_count += 1U;
+    status = confit_tui_ensure_menu_path(state, path, &menu_index, diagnostic);
+    if (status != CONFIT_OK) {
+      confit_tui_menu_nodes_free(state->menus, state->menu_count);
+      state->menus = old_menus;
+      state->menu_count = old_menu_count;
+      state->current_menu_index = old_current_menu_index;
+      return status;
     }
-    state->categories[category_index].option_count += 1U;
+    state->menus[menu_index].option_count += 1U;
   }
 
-  for (index = 0U; index < old_category_count; ++index) {
-    free(old_categories[index].name);
+  for (index = 1U; index < state->menu_count; ++index) {
+    if (state->menus[index].parent_index < state->menu_count) {
+      state->menus[state->menus[index].parent_index].child_count += 1U;
+    }
   }
-  free(old_categories);
+
+  confit_tui_menu_nodes_free(old_menus, old_menu_count);
+  if (old_path[0] != '\0') {
+    size_t restored =
+        confit_tui_find_menu_index(state->menus, state->menu_count, old_path);
+    state->current_menu_index =
+        restored == CONFIT_TUI_INDEX_NONE ? 0U : restored;
+  }
   return CONFIT_OK;
 }
 
@@ -687,6 +798,43 @@ static int confit_tui_option_visible(const ConfitTuiState *state,
   return 1;
 }
 
+static int confit_tui_category_path_in_menu(const char *category_path,
+                                            const char *menu_path) {
+  size_t menu_size;
+
+  if (menu_path == 0 || menu_path[0] == '\0') {
+    return 1;
+  }
+  if (category_path == 0) {
+    return 0;
+  }
+  menu_size = strlen(menu_path);
+  return strcmp(category_path, menu_path) == 0 ||
+         (strncmp(category_path, menu_path, menu_size) == 0 &&
+          category_path[menu_size] == '/');
+}
+
+static int confit_tui_menu_has_visible_descendant(const ConfitTuiState *state,
+                                                  size_t menu_index) {
+  const char *menu_path;
+  size_t index;
+
+  if (menu_index >= state->menu_count) {
+    return 0;
+  }
+  menu_path = state->menus[menu_index].path;
+  for (index = 0U; index < state->project->option_count; ++index) {
+    const ConfitOption *option = &state->project->options[index];
+
+    if (confit_tui_category_path_in_menu(confit_tui_option_category_path(option),
+                                         menu_path) &&
+        confit_tui_option_visible(state, option)) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static ConfitStatus confit_tui_rebuild_view(ConfitTuiState *state,
                                             ConfitDiagnostic *diagnostic) {
   size_t index;
@@ -694,14 +842,14 @@ static ConfitStatus confit_tui_rebuild_view(ConfitTuiState *state,
   free(state->view_indices);
   state->view_indices = 0;
   state->view_count = 0U;
-  for (index = 0U; index < state->category_count; ++index) {
-    state->categories[index].visible_count = 0U;
+  for (index = 0U; index < state->menu_count; ++index) {
+    state->menus[index].visible_count = 0U;
   }
   for (index = 0U; index < state->row_count; ++index) {
     if (state->rows[index].kind == CONFIT_TUI_ROW_OPTION &&
-        confit_tui_option_visible(state, state->rows[index].option) &&
-        state->rows[index].category_index < state->category_count) {
-      state->categories[state->rows[index].category_index].visible_count += 1U;
+        state->rows[index].menu_index < state->menu_count &&
+        confit_tui_option_visible(state, state->rows[index].option)) {
+      state->menus[state->rows[index].menu_index].visible_count += 1U;
     }
   }
   if (state->row_count > 0U) {
@@ -717,9 +865,11 @@ static ConfitStatus confit_tui_rebuild_view(ConfitTuiState *state,
   for (index = 0U; index < state->row_count; ++index) {
     const ConfitTuiRow *row = &state->rows[index];
 
-    if (row->kind == CONFIT_TUI_ROW_CATEGORY) {
-      if (row->category_index < state->category_count &&
-          state->categories[row->category_index].visible_count > 0U) {
+    if (row->kind == CONFIT_TUI_ROW_MENU) {
+      if (row->menu_index < state->menu_count &&
+          state->menus[row->menu_index].parent_index ==
+              state->current_menu_index &&
+          confit_tui_menu_has_visible_descendant(state, row->menu_index)) {
         state->view_indices[state->view_count] = index;
         state->view_count += 1U;
       }
@@ -727,8 +877,7 @@ static ConfitStatus confit_tui_rebuild_view(ConfitTuiState *state,
     }
 
     if (row->kind == CONFIT_TUI_ROW_OPTION &&
-        row->category_index < state->category_count &&
-        !state->categories[row->category_index].collapsed &&
+        row->menu_index == state->current_menu_index &&
         confit_tui_option_visible(state, row->option)) {
       state->view_indices[state->view_count] = index;
       state->view_count += 1U;
@@ -853,18 +1002,19 @@ static void confit_tui_format_tag_summary(const ConfitOption *option, char *out,
   out[out_size - 1U] = '\0';
 }
 
-static void confit_tui_format_category_detail(const ConfitTuiState *state,
-                                              size_t category_index, char *out,
-                                              size_t out_size) {
+static void confit_tui_format_menu_detail(const ConfitTuiState *state,
+                                          size_t menu_index, char *out,
+                                          size_t out_size) {
   char tags[96];
   size_t requires_count;
   size_t conflicts_count;
   size_t recommends_count;
   size_t forces_count;
   size_t visible_count;
+  size_t descendant_count;
   size_t index;
 
-  if (out == 0 || out_size == 0U || category_index >= state->category_count) {
+  if (out == 0 || out_size == 0U || menu_index >= state->menu_count) {
     return;
   }
 
@@ -874,14 +1024,16 @@ static void confit_tui_format_category_detail(const ConfitTuiState *state,
   recommends_count = 0U;
   forces_count = 0U;
   visible_count = 0U;
+  descendant_count = 0U;
   for (index = 0U; index < state->project->option_count; ++index) {
     const ConfitOption *option = &state->project->options[index];
     size_t tag_index;
 
-    if (strcmp(confit_tui_option_category_name(option),
-               state->categories[category_index].name) != 0) {
+    if (!confit_tui_category_path_in_menu(confit_tui_option_category_path(option),
+                                          state->menus[menu_index].path)) {
       continue;
     }
+    descendant_count += 1U;
     for (tag_index = 0U; tag_index < option->tag_count; ++tag_index) {
       confit_tui_append_unique_tag(tags, sizeof(tags), option->tags[tag_index]);
     }
@@ -893,21 +1045,23 @@ static void confit_tui_format_category_detail(const ConfitTuiState *state,
     (void)snprintf(tags, sizeof(tags), "-");
   }
   tags[sizeof(tags) - 1U] = '\0';
-  (void)snprintf(out, out_size,
-                 "deps r%lu c%lu v%lu f%lu rec%lu | tags: %s | %s | %lu "
-                 "options",
-                 (unsigned long)requires_count, (unsigned long)conflicts_count,
-                 (unsigned long)visible_count, (unsigned long)forces_count,
-                 (unsigned long)recommends_count, tags,
-                 state->categories[category_index].collapsed ? "collapsed"
-                                                             : "expanded",
-                 (unsigned long)state->categories[category_index].option_count);
+  (void)snprintf(
+      out, out_size,
+      "path: %s | menus: %lu | options: %lu direct/%lu total | deps r%lu c%lu "
+      "v%lu f%lu rec%lu | tags: %s",
+      state->menus[menu_index].path[0] != '\0' ? state->menus[menu_index].path
+                                               : "Main Menu",
+      (unsigned long)state->menus[menu_index].child_count,
+      (unsigned long)state->menus[menu_index].option_count,
+      (unsigned long)descendant_count, (unsigned long)requires_count,
+      (unsigned long)conflicts_count, (unsigned long)visible_count,
+      (unsigned long)forces_count, (unsigned long)recommends_count, tags);
   out[out_size - 1U] = '\0';
 }
 
 static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
                                             ConfitDiagnostic *diagnostic) {
-  size_t category_index;
+  size_t menu_index;
   size_t option_index;
   size_t row_capacity;
   ConfitStatus status;
@@ -915,12 +1069,13 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
   free(state->rows);
   state->rows = 0;
   state->row_count = 0U;
-  status = confit_tui_rebuild_categories(state, diagnostic);
+  status = confit_tui_rebuild_menus(state, diagnostic);
   if (status != CONFIT_OK) {
     return status;
   }
 
-  row_capacity = state->project->option_count + state->category_count;
+  row_capacity = state->project->option_count +
+                 (state->menu_count > 0U ? state->menu_count - 1U : 0U);
   if (row_capacity > 0U) {
     state->rows = (ConfitTuiRow *)calloc(row_capacity, sizeof(state->rows[0]));
     if (state->rows == 0) {
@@ -930,96 +1085,93 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
     }
   }
 
-  for (category_index = 0U; category_index < state->category_count;
-       ++category_index) {
+  for (menu_index = 1U; menu_index < state->menu_count; ++menu_index) {
     ConfitTuiRow *heading = &state->rows[state->row_count];
 
-    heading->kind = CONFIT_TUI_ROW_CATEGORY;
-    heading->category_index = category_index;
+    heading->kind = CONFIT_TUI_ROW_MENU;
+    heading->menu_index = menu_index;
     (void)snprintf(heading->label, sizeof(heading->label), "%s",
-                   state->categories[category_index].name);
+                   state->menus[menu_index].name);
     heading->label[sizeof(heading->label) - 1U] = '\0';
-    confit_tui_format_category_detail(state, category_index, heading->detail,
-                                      sizeof(heading->detail));
+    confit_tui_format_menu_detail(state, menu_index, heading->detail,
+                                  sizeof(heading->detail));
     heading->value[0] = '\0';
     heading->item.label = heading->label;
     heading->item.detail = heading->detail;
     heading->item.value = heading->value;
     heading->item.depth = 0U;
     heading->item.is_heading = 1;
-    heading->item.expanded = !state->categories[category_index].collapsed;
+    heading->item.expanded = 0;
     state->row_count += 1U;
+  }
 
-    for (option_index = 0U; option_index < state->project->option_count;
-         ++option_index) {
-      const ConfitOption *option = &state->project->options[option_index];
-      const ConfitResolvedValue *resolved;
-      const ConfitNamedValue *edit;
-      const ConfitValue *resolved_value;
-      char tags[96];
-      char deps[96];
-      ConfitTuiRow *row;
+  for (option_index = 0U; option_index < state->project->option_count;
+       ++option_index) {
+    const ConfitOption *option = &state->project->options[option_index];
+    const ConfitResolvedValue *resolved;
+    const ConfitNamedValue *edit;
+    const ConfitValue *resolved_value;
+    char tags[96];
+    char deps[96];
+    ConfitTuiRow *row;
+    size_t option_menu_index;
 
-      if (strcmp(confit_tui_option_category_name(option),
-                 state->categories[category_index].name) != 0) {
-        continue;
-      }
-
-      resolved = confit_resolved_config_find(state->config, option->id);
-      resolved_value =
-          resolved != 0 ? &resolved->value : &option->default_value;
-      edit = confit_tui_find_const_edit(state, option->id);
-      confit_tui_format_tag_summary(option, tags, sizeof(tags));
-      confit_tui_format_dependency_summary(option, deps, sizeof(deps));
-
-      row = &state->rows[state->row_count];
-      row->kind = CONFIT_TUI_ROW_OPTION;
-      row->category_index = category_index;
-      row->option = option;
-      (void)snprintf(row->label, sizeof(row->label), "%s",
-                     option->prompt != 0 && option->prompt[0] != '\0'
-                         ? option->prompt
-                         : option->id);
-      row->label[sizeof(row->label) - 1U] = '\0';
-      confit_tui_format_dependency_state(
-          state, option, resolved_value, row->dependency_state,
-          sizeof(row->dependency_state), &row->is_disabled);
-      row->detail[0] = '\0';
-      if (edit != 0) {
-        confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                       "dirty | ");
-      }
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), "id=");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     option->id);
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     "type=");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     confit_option_type_name(option->type));
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), deps);
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     " | tags: ");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), tags);
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     "state=");
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     confit_tui_text_or_dash(
-                                         row->dependency_state));
-
-      confit_tui_format_value(option, resolved_value, row->value,
-                              sizeof(row->value));
-      row->item.label = row->label;
-      row->item.detail = row->detail;
-      row->item.value = row->value;
-      row->item.depth = 1U;
-      row->item.is_heading = 0;
-      row->item.expanded = 0;
-      row->item.is_disabled = row->is_disabled;
-      state->row_count += 1U;
+    option_menu_index = confit_tui_find_menu_index(
+        state->menus, state->menu_count, confit_tui_option_category_path(option));
+    if (option_menu_index == CONFIT_TUI_INDEX_NONE) {
+      continue;
     }
+
+    resolved = confit_resolved_config_find(state->config, option->id);
+    resolved_value = resolved != 0 ? &resolved->value : &option->default_value;
+    edit = confit_tui_find_const_edit(state, option->id);
+    confit_tui_format_tag_summary(option, tags, sizeof(tags));
+    confit_tui_format_dependency_summary(option, deps, sizeof(deps));
+
+    row = &state->rows[state->row_count];
+    row->kind = CONFIT_TUI_ROW_OPTION;
+    row->menu_index = option_menu_index;
+    row->option = option;
+    (void)snprintf(row->label, sizeof(row->label), "%s",
+                   option->prompt != 0 && option->prompt[0] != '\0'
+                       ? option->prompt
+                       : option->id);
+    row->label[sizeof(row->label) - 1U] = '\0';
+    confit_tui_format_dependency_state(
+        state, option, resolved_value, row->dependency_state,
+        sizeof(row->dependency_state), &row->is_disabled);
+    row->detail[0] = '\0';
+    if (edit != 0) {
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     "dirty | ");
+    }
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), "id=");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), option->id);
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), "type=");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                   confit_option_type_name(option->type));
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), deps);
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                   " | tags: ");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), tags);
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+    confit_tui_append_summary_text(row->detail, sizeof(row->detail), "state=");
+    confit_tui_append_summary_text(
+        row->detail, sizeof(row->detail),
+        confit_tui_text_or_dash(row->dependency_state));
+
+    confit_tui_format_value(option, resolved_value, row->value,
+                            sizeof(row->value));
+    row->item.label = row->label;
+    row->item.detail = row->detail;
+    row->item.value = row->value;
+    row->item.depth = 0U;
+    row->item.is_heading = 0;
+    row->item.expanded = 0;
+    row->item.is_disabled = row->is_disabled;
+    state->row_count += 1U;
   }
   return confit_tui_rebuild_view(state, diagnostic);
 }
@@ -1827,7 +1979,7 @@ static void confit_tui_select_first_option(ConfitTuiState *state) {
 static int confit_tui_row_matches_search(const ConfitTuiState *state,
                                          const ConfitTuiRow *row) {
   return row != 0 && row->kind == CONFIT_TUI_ROW_OPTION &&
-         row->category_index < state->category_count &&
+         row->menu_index < state->menu_count &&
          confit_tui_option_visible(state, row->option) &&
          confit_tui_option_matches_search(row->option, state->search);
 }
@@ -1870,9 +2022,9 @@ static ConfitStatus confit_tui_select_row_index(ConfitTuiState *state,
     return CONFIT_OK;
   }
   if (state->rows[row_index].kind == CONFIT_TUI_ROW_OPTION &&
-      state->rows[row_index].category_index < state->category_count &&
-      state->categories[state->rows[row_index].category_index].collapsed) {
-    state->categories[state->rows[row_index].category_index].collapsed = 0;
+      state->rows[row_index].menu_index < state->menu_count &&
+      state->rows[row_index].menu_index != state->current_menu_index) {
+    state->current_menu_index = state->rows[row_index].menu_index;
     status = confit_tui_refresh_rows(state, diagnostic);
     if (status != CONFIT_OK) {
       return status;
@@ -2730,27 +2882,68 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
   return CONFIT_OK;
 }
 
+static void confit_tui_format_breadcrumb(const ConfitTuiState *state, char *out,
+                                         size_t out_size) {
+  size_t stack[16];
+  size_t stack_count;
+  size_t index;
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  out[0] = '\0';
+  if (state == 0 || state->menu_count == 0U ||
+      state->current_menu_index >= state->menu_count) {
+    (void)snprintf(out, out_size, "Main Menu");
+    out[out_size - 1U] = '\0';
+    return;
+  }
+  stack_count = 0U;
+  index = state->current_menu_index;
+  while (index < state->menu_count && stack_count < 16U) {
+    stack[stack_count] = index;
+    stack_count += 1U;
+    if (state->menus[index].parent_index == CONFIT_TUI_INDEX_NONE) {
+      break;
+    }
+    index = state->menus[index].parent_index;
+  }
+  while (stack_count > 0U) {
+    stack_count -= 1U;
+    if (out[0] != '\0') {
+      confit_tui_append_summary_text(out, out_size, " > ");
+    }
+    confit_tui_append_summary_text(out, out_size,
+                                   state->menus[stack[stack_count]].name);
+  }
+  if (out[0] == '\0') {
+    (void)snprintf(out, out_size, "Main Menu");
+  }
+  out[out_size - 1U] = '\0';
+}
+
 static ConfitStatus
-confit_tui_build_category_detail(const ConfitTuiState *state,
-                                 const ConfitTuiRow *row, char **out_text,
-                                 ConfitDiagnostic *diagnostic) {
+confit_tui_build_menu_detail(const ConfitTuiState *state, const ConfitTuiRow *row,
+                             char **out_text, ConfitDiagnostic *diagnostic) {
   ConfitTuiTextBuilder builder;
   ConfitStatus status;
   char count_line[128];
+  char breadcrumb[256];
   const char *name;
 
   *out_text = 0;
-  if (row == 0 || row->category_index >= state->category_count) {
+  if (row == 0 || row->menu_index >= state->menu_count) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
-                          "missing detail category");
+                          "missing detail menu");
     return CONFIT_ERR_INTERNAL;
   }
-  name = state->categories[row->category_index].name;
+  name = state->menus[row->menu_index].name;
   (void)snprintf(
-      count_line, sizeof(count_line), "%lu visible, %lu total",
-      (unsigned long)state->categories[row->category_index].visible_count,
-      (unsigned long)state->categories[row->category_index].option_count);
+      count_line, sizeof(count_line), "%lu visible direct, %lu direct total",
+      (unsigned long)state->menus[row->menu_index].visible_count,
+      (unsigned long)state->menus[row->menu_index].option_count);
   count_line[sizeof(count_line) - 1U] = '\0';
+  confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
 
   confit_tui_text_builder_init(&builder);
   status = confit_tui_detail_append_section(&builder, "Menu");
@@ -2758,13 +2951,16 @@ confit_tui_build_category_detail(const ConfitTuiState *state,
     status = confit_tui_detail_append_line(&builder, "menu: ", name);
   }
   if (status == CONFIT_OK) {
-    status = confit_tui_detail_append_line(
-        &builder, "state: ",
-        state->categories[row->category_index].collapsed ? "collapsed"
-                                                         : "expanded");
+    status = confit_tui_detail_append_line(&builder, "path: ",
+                                           state->menus[row->menu_index].path);
   }
   if (status == CONFIT_OK) {
-    status = confit_tui_detail_append_line(&builder, "options: ", count_line);
+    status = confit_tui_detail_append_line(&builder, "current view: ",
+                                           breadcrumb);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(&builder, "direct options: ",
+                                           count_line);
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_section(&builder, "Summary");
@@ -2777,14 +2973,14 @@ confit_tui_build_category_detail(const ConfitTuiState *state,
   }
   if (status == CONFIT_OK) {
     status = confit_tui_text_append(&builder,
-                                    "Select an option inside this menu to "
-                                    "inspect current value, default, "
-                                    "source, dependencies, and help text.\n");
+                                    "Enter opens this menu. Left or Esc returns "
+                                    "to the parent menu. Root Esc follows the "
+                                    "normal exit flow.\n");
   }
   if (status != CONFIT_OK) {
     free(builder.text);
     confit_diagnostic_set(diagnostic, status, name, 0, 0,
-                          "failed to build tui category detail");
+                          "failed to build tui menu detail");
     return status;
   }
   *out_text = builder.text;
@@ -2854,7 +3050,7 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
                                            ConfitDiagnostic *diagnostic) {
   ConfitTuiRow *row;
   char *body;
-  char header[320];
+  char header[512];
   char status_line[256];
   size_t first_line;
   size_t line_count;
@@ -2868,8 +3064,8 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
   }
 
   body = 0;
-  if (row->kind == CONFIT_TUI_ROW_CATEGORY) {
-    status = confit_tui_build_category_detail(state, row, &body, diagnostic);
+  if (row->kind == CONFIT_TUI_ROW_MENU) {
+    status = confit_tui_build_menu_detail(state, row, &body, diagnostic);
   } else {
     status =
         confit_tui_build_option_detail(state, row->option, &body, diagnostic);
@@ -2928,16 +3124,18 @@ static void confit_tui_profile_format_key_legend(
   if (out == 0 || out_size == 0U) {
     return;
   }
-  if (selected != 0 && selected->kind == CONFIT_TUI_ROW_CATEGORY) {
+  if (selected != 0 && selected->kind == CONFIT_TUI_ROW_MENU) {
     if (state != 0 && state->dirty) {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter collapse | s "
-                     "save | / search | c/t filter%s | ? help | q quit",
+                     "keys: move jk/arrows Pg/Home/End | enter menu | "
+                     "Left/Esc back | s save | / search | c/t filter%s | ? "
+                     "help | q quit",
                      has_filter ? " x clear" : "");
     } else {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter collapse | / "
-                     "search | c/t filter%s | ? help | q quit",
+                     "keys: move jk/arrows Pg/Home/End | enter menu | "
+                     "Left/Esc back | / search | c/t filter%s | ? help | q "
+                     "quit",
                      has_filter ? " x clear" : "");
     }
   } else {
@@ -2960,8 +3158,9 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                                              const char *target_name) {
   ConfitTuiListItem *items;
   ConfitTuiScreen screen;
+  char breadcrumb[256];
   char header[320];
-  char key_legend[128];
+  char key_legend[192];
   char status_line[384];
   const ConfitTuiRow *selected;
   size_t index;
@@ -2981,13 +3180,15 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                  ? &state->rows[state->view_indices[state->selected_view_index]]
                  : 0;
 
+  confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
   (void)snprintf(
       header, sizeof(header),
-      "mode=profile project=%s profile=%s target=%s dirty=%s | row %lu/%lu | "
-      "search=%s %lu/%lu | filter=%s/%s",
+      "mode=profile project=%s profile=%s target=%s dirty=%s\n"
+      "breadcrumb=%s | row %lu/%lu | search=%s %lu/%lu | filter=%s/%s",
       confit_tui_text_or_dash(state->project->name),
       confit_tui_text_or_dash(state->options->profile_name),
       confit_tui_text_or_dash(target_name), state->dirty ? "yes" : "no",
+      breadcrumb,
       state->view_count == 0U
           ? 0UL
           : (unsigned long)(state->selected_view_index + 1U),
@@ -3135,6 +3336,57 @@ confit_tui_confirm_dirty_quit(ConfitTuiState *state, int *out_quit,
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_tui_enter_menu(ConfitTuiState *state,
+                                          size_t menu_index,
+                                          ConfitDiagnostic *diagnostic) {
+  char breadcrumb[256];
+  ConfitStatus status;
+
+  if (menu_index >= state->menu_count) {
+    (void)snprintf(state->status, sizeof(state->status), "missing menu");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  state->current_menu_index = menu_index;
+  state->selected_view_index = 0U;
+  status = confit_tui_rebuild_view(state, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
+  (void)snprintf(state->status, sizeof(state->status), "entered menu %s",
+                 breadcrumb);
+  state->status[sizeof(state->status) - 1U] = '\0';
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_go_parent_menu(ConfitTuiState *state,
+                                              ConfitDiagnostic *diagnostic) {
+  size_t parent_index;
+  char breadcrumb[256];
+  ConfitStatus status;
+
+  if (state->current_menu_index >= state->menu_count ||
+      state->current_menu_index == 0U) {
+    (void)snprintf(state->status, sizeof(state->status), "at Main Menu");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  parent_index = state->menus[state->current_menu_index].parent_index;
+  state->current_menu_index =
+      parent_index < state->menu_count ? parent_index : 0U;
+  state->selected_view_index = 0U;
+  status = confit_tui_rebuild_view(state, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  confit_tui_format_breadcrumb(state, breadcrumb, sizeof(breadcrumb));
+  (void)snprintf(state->status, sizeof(state->status), "back to menu %s",
+                 breadcrumb);
+  state->status[sizeof(state->status) - 1U] = '\0';
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
                                           ConfitTuiKey key,
                                           const char *target_name,
@@ -3170,7 +3422,13 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
     confit_tui_clear_filters(state);
     return confit_tui_rebuild_view(state, diagnostic);
   }
+  if (key == CONFIT_TUI_KEY_LEFT) {
+    return confit_tui_go_parent_menu(state, diagnostic);
+  }
   if (key == CONFIT_TUI_KEY_CANCEL) {
+    if (state->current_menu_index != 0U) {
+      return confit_tui_go_parent_menu(state, diagnostic);
+    }
     if (state->search[0] != '\0' || state->category[0] != '\0' ||
         state->tag[0] != '\0') {
       confit_tui_clear_filters(state);
@@ -3185,24 +3443,13 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
   }
   if (key == CONFIT_TUI_KEY_EDIT || key == CONFIT_TUI_KEY_ENTER) {
     row = confit_tui_selected_row(state);
-    if (row != 0 && row->kind == CONFIT_TUI_ROW_CATEGORY &&
-        row->category_index < state->category_count) {
-      const char *category_name = state->categories[row->category_index].name;
-
-      state->categories[row->category_index].collapsed =
-          !state->categories[row->category_index].collapsed;
-      (void)snprintf(state->status, sizeof(state->status), "%s menu %s",
-                     state->categories[row->category_index].collapsed
-                         ? "collapsed"
-                         : "expanded",
-                     confit_tui_text_or_dash(category_name));
-      state->status[sizeof(state->status) - 1U] = '\0';
-      return confit_tui_refresh_rows(state, diagnostic);
+    if (row != 0 && row->kind == CONFIT_TUI_ROW_MENU) {
+      return confit_tui_enter_menu(state, row->menu_index, diagnostic);
     }
     option = confit_tui_selected_option(state);
     if (option == 0) {
       (void)snprintf(state->status, sizeof(state->status),
-                     "select an option or category");
+                     "select an option or menu");
       state->status[sizeof(state->status) - 1U] = '\0';
       return CONFIT_OK;
     }
@@ -3231,7 +3478,8 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
       return status;
     }
     key = confit_tui_curses_read_key();
-    if (key == CONFIT_TUI_KEY_QUIT) {
+    if (key == CONFIT_TUI_KEY_QUIT ||
+        (key == CONFIT_TUI_KEY_CANCEL && state->current_menu_index == 0U)) {
       int should_quit;
 
       confit_diagnostic_init(&diagnostic);
@@ -3263,7 +3511,7 @@ static void confit_tui_state_clear(ConfitTuiState *state) {
     return;
   }
   confit_tui_edits_clear(state);
-  confit_tui_categories_clear(state);
+  confit_tui_menus_clear(state);
   free(state->rows);
   free(state->view_indices);
   confit_resolved_config_free(state->config);

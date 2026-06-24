@@ -23,14 +23,14 @@ printf 'jq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
 grep -aF "row 1/" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu | row 1/7" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui.txt" >/dev/null
 ! grep -aF " Menu " "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "[+]  debug" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "path: debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "mode=profile project=delos profile=sim-dsh target=host-sim" \
   "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | enter collapse" \
+grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
   "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Keys" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Status" "$WORK_DIR/tui.txt" >/dev/null
@@ -54,9 +54,12 @@ grep -aF "Options" "$WORK_DIR/tui-no-color.txt" >/dev/null
 grep -aF "row 1/" "$WORK_DIR/tui-no-color.txt" >/dev/null
 
 printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
-  >"$WORK_DIR/tui-collapse.txt"
+  >"$WORK_DIR/tui-enter-menu.txt"
 
-grep -aF "collapsed menu debug" "$WORK_DIR/tui-collapse.txt" >/dev/null
+grep -aF "entered menu Main Menu > debug" "$WORK_DIR/tui-enter-menu.txt" \
+  >/dev/null
+grep -aF "Enable DDC <delos.debug.ddc>" "$WORK_DIR/tui-enter-menu.txt" \
+  >/dev/null
 
 printf '%sq' "$PAGE_DOWN_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
@@ -89,10 +92,16 @@ for cols in 80 100 120 160; do
     >"$WORK_DIR/tui-row-$cols.txt"
   grep -aF "Target Board <delos.target.board>" \
     "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+  printf '/ddc\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+    "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-row-debug-$cols.txt"
   grep -aF "Enable DDC <delos.debug.ddc> [blocked]" \
-    "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+    "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
+  printf '/debug_gate\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+    "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-row-gate-$cols.txt"
   grep -aF "delos.internal.debug_gate> [forced]" \
-    "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+    "$WORK_DIR/tui-row-gate-$cols.txt" >/dev/null
 done
 
 grep -aF "id=delos.target.board | type=enum | state=deps ok" \
@@ -107,7 +116,7 @@ printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-dirty-row.txt"
 
-grep -aF "*   Default Gain <delos.sim.default_gain>" \
+grep -aF "* Default Gain <delos.sim.default_gain>" \
   "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 grep -aF "Discard changes" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 
@@ -118,7 +127,7 @@ grep -aF "search 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "next result 2/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "previous result 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 
-printf 'j?%s%s%sqq' "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" |
+printf '/ddc\n?%s%s%sqq' "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" |
   "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-detail-question.txt"
@@ -179,7 +188,7 @@ printf '/debug_gate\neq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
 grep -aF "blocked: forced by delos.debug.ddc" \
   "$WORK_DIR/tui-forced-block.txt" >/dev/null
 
-printf 'q' | "$CONFIT_BIN" tui --project "$DEPENDENCY_PROJECT_DIR" \
+printf '\nq' | "$CONFIT_BIN" tui --project "$DEPENDENCY_PROJECT_DIR" \
   --profile deps >"$WORK_DIR/tui-dependency-ux.txt"
 
 grep -aF "confit.dep.hidden" "$WORK_DIR/tui-dependency-ux.txt" >/dev/null

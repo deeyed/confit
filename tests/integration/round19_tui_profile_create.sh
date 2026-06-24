@@ -21,15 +21,16 @@ printf 'sq' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile fresh \
     >"$WORK_DIR/tui-profile-create.txt"
 
-grep -aF "row 1/9" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu | row 1/1" "$WORK_DIR/tui-profile-create.txt" \
+  >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
   >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "[+]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "mode=profile project=delos profile=fresh" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | enter collapse" \
+grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "s save" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "created new profile fresh" "$WORK_DIR/tui-profile-create.txt" \

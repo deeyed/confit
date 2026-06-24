@@ -967,6 +967,9 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == KEY_DOWN || ch == 'j' || ch == 'J') {
     return CONFIT_TUI_KEY_DOWN;
   }
+  if (ch == KEY_LEFT) {
+    return CONFIT_TUI_KEY_LEFT;
+  }
   if (ch == KEY_PPAGE) {
     return CONFIT_TUI_KEY_PAGE_UP;
   }

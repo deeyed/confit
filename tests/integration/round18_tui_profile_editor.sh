@@ -60,11 +60,11 @@ PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
 "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
   <"$WORK_DIR/tui-edit.keys" >"$WORK_DIR/tui-edit.txt"
 
-grep -aF "row 1/9" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu | row 1/1" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-edit.txt" >/dev/null
-grep -aF "[-]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "[+]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "toggled delos.edit.bool = true" "$WORK_DIR/tui-edit.txt" \
@@ -121,6 +121,23 @@ diff -u "$GOLDEN" "$PROJECT_DIR/config/profiles/edit.toml"
 "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile edit \
   >"$WORK_DIR/check.txt"
 grep -Fx "check ok" "$WORK_DIR/check.txt" >/dev/null
+
+STACK_DIR="$WORK_DIR/profile-menu-stack"
+cp -R "$PROJECT_SRC" "$STACK_DIR"
+
+printf '\n\n\033jq' |
+  "$CONFIT_BIN" tui --project "$STACK_DIR" --profile edit \
+    >"$WORK_DIR/tui-menu-stack.txt"
+
+grep -aF "entered menu Main Menu > edit" "$WORK_DIR/tui-menu-stack.txt" \
+  >/dev/null
+grep -aF "Edit Bool <delos.edit.bool>" "$WORK_DIR/tui-menu-stack.txt" \
+  >/dev/null
+bool_option_pos=$(grep -aboF "Edit Bool <delos.edit.bool>" \
+  "$WORK_DIR/tui-menu-stack.txt" | tail -n 1 | cut -d: -f1)
+bool_menu_pos=$(grep -aboF "[+]  bool" "$WORK_DIR/tui-menu-stack.txt" |
+  tail -n 1 | cut -d: -f1)
+test "$bool_menu_pos" -gt "$bool_option_pos"
 
 DISCARD_DIR="$WORK_DIR/profile-discard"
 cp -R "$PROJECT_SRC" "$DISCARD_DIR"
