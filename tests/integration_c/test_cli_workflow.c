@@ -26,6 +26,8 @@ typedef struct ConfitCliWorkflowContext {
   char init_parus_dir[4096];
   char init_dry_run_dir[4096];
   char category_path_dir[4096];
+  char portable_path_dir[4096];
+  char portable_gen_dir[4096];
   unsigned int run_index;
 } ConfitCliWorkflowContext;
 
@@ -127,6 +129,11 @@ static void test_context_init(ConfitCliWorkflowContext *context,
   test_join5(context->category_path_dir, sizeof(context->category_path_dir),
              context->source_dir, "tests", "fixtures", "schema/valid",
              "category-path-depth");
+  test_join5(context->portable_path_dir, sizeof(context->portable_path_dir),
+             context->source_dir, "tests", "fixtures", "schema/valid",
+             "portable-paths");
+  test_join(context->portable_gen_dir, sizeof(context->portable_gen_dir),
+            context->work_dir, "portable-generated");
   context->run_index = 0U;
 }
 
@@ -778,6 +785,72 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_portable_path_cli(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  char config_h[4096];
+  char report_json[4096];
+  char cmake_file[4096];
+  char qstar_module[4096];
+  const char *check_argv[] = {0, "check", "--project", 0, "--profile",
+                              "windows", 0};
+  const char *resolve_argv[] = {0, "resolve", "--project", 0, "--profile",
+                                "windows", "--format", "json", 0};
+  const char *gen_argv[] = {0, "gen", "--project", 0, "--profile",
+                            "windows", "--out", 0, "--force", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+
+  check_argv[0] = context->confit_bin;
+  check_argv[3] = context->portable_path_dir;
+  test_run(context, check_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "check ok");
+  confit_test_process_result_clear(&result);
+
+  resolve_argv[0] = context->confit_bin;
+  resolve_argv[3] = context->portable_path_dir;
+  test_run(context, resolve_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "\"id\": \"delos.windows.sdk_root\"");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "C:\\\\Delos SDK\\\\toolchain");
+  confit_test_process_result_clear(&result);
+
+  gen_argv[0] = context->confit_bin;
+  gen_argv[3] = context->portable_path_dir;
+  gen_argv[7] = context->portable_gen_dir;
+  test_run(context, gen_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "gen ok:");
+  confit_test_process_result_clear(&result);
+
+  test_join(config_h, sizeof(config_h), context->portable_gen_dir,
+            "config.h");
+  test_join(report_json, sizeof(report_json), context->portable_gen_dir,
+            "config.report.json");
+  test_join(cmake_file, sizeof(cmake_file), context->portable_gen_dir,
+            "config.cmake");
+  test_join3(qstar_module, sizeof(qstar_module), context->portable_gen_dir,
+             "config", "config.qsm");
+
+  test_expect_file_contains(config_h, "DELOS_CONFIG_WINDOWS_SDK_ROOT");
+  test_expect_file_contains(report_json,
+                            "C:\\\\Users\\\\delos\\\\generated\\\\config");
+  test_expect_file_contains(cmake_file,
+                            "DELOS_CONFIG_WINDOWS_SDK_ROOT "
+                            "\"C:\\\\Delos SDK\\\\toolchain\"");
+  test_expect_file_contains(cmake_file,
+                            "DELOS_CONFIG_WINDOWS_COMPILER_ARGS "
+                            "\"-DROOT=\\\"C:\\\\Delos SDK\\\"\\;\\$ENV");
+  test_expect_file_contains(qstar_module,
+                            "value = \"C:\\\\Delos SDK\\\\toolchain\"");
+  test_expect_file_contains(qstar_module,
+                            "value = \"-DROOT=\\\"C:\\\\Delos SDK\\\";");
+}
+
 static void test_compat(ConfitCliWorkflowContext *context) {
   ConfitTestProcessResult result;
   const char *argv[] = {0, "compat", "--parus", 0, "--delos", 0,
@@ -924,6 +997,7 @@ int main(int argc, char **argv) {
   test_diff(&context);
   test_explain(&context);
   test_gen(&context);
+  test_portable_path_cli(&context);
   test_compat(&context);
   test_completion_and_globals(&context);
   test_unknown_command(&context);

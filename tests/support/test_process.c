@@ -27,34 +27,73 @@ void confit_test_process_result_clear(ConfitTestProcessResult *result) {
 }
 
 #if defined(_WIN32)
-static int confit_test_process_append_arg(char *out, size_t out_size,
-                                          size_t *offset, const char *arg) {
-  size_t index;
-
-  if (*offset + 3U >= out_size) {
+static int confit_test_process_append_char(char *out, size_t out_size,
+                                           size_t *offset, char value) {
+  if (*offset + 1U >= out_size) {
     return 0;
   }
-  if (*offset > 0U) {
-    out[*offset] = ' ';
-    *offset += 1U;
-  }
-  out[*offset] = '"';
-  *offset += 1U;
-  for (index = 0U; arg[index] != '\0'; ++index) {
-    if (*offset + 3U >= out_size) {
-      return 0;
-    }
-    if (arg[index] == '"' || arg[index] == '\\') {
-      out[*offset] = '\\';
-      *offset += 1U;
-    }
-    out[*offset] = arg[index];
-    *offset += 1U;
-  }
-  out[*offset] = '"';
+  out[*offset] = value;
   *offset += 1U;
   out[*offset] = '\0';
   return 1;
+}
+
+static int confit_test_process_append_backslashes(char *out, size_t out_size,
+                                                  size_t *offset,
+                                                  size_t count) {
+  size_t index;
+
+  for (index = 0U; index < count; ++index) {
+    if (!confit_test_process_append_char(out, out_size, offset, '\\')) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int confit_test_process_append_arg(char *out, size_t out_size,
+                                          size_t *offset, const char *arg) {
+  size_t index;
+  size_t backslash_count;
+
+  if (*offset > 0U) {
+    if (!confit_test_process_append_char(out, out_size, offset, ' ')) {
+      return 0;
+    }
+  }
+
+  if (!confit_test_process_append_char(out, out_size, offset, '"')) {
+    return 0;
+  }
+
+  backslash_count = 0U;
+  for (index = 0U; arg[index] != '\0'; ++index) {
+    if (arg[index] == '\\') {
+      backslash_count += 1U;
+      continue;
+    }
+
+    if (arg[index] == '"') {
+      if (!confit_test_process_append_backslashes(
+              out, out_size, offset, backslash_count * 2U + 1U) ||
+          !confit_test_process_append_char(out, out_size, offset, '"')) {
+        return 0;
+      }
+      backslash_count = 0U;
+      continue;
+    }
+
+    if (!confit_test_process_append_backslashes(
+            out, out_size, offset, backslash_count) ||
+        !confit_test_process_append_char(out, out_size, offset, arg[index])) {
+      return 0;
+    }
+    backslash_count = 0U;
+  }
+
+  return confit_test_process_append_backslashes(
+             out, out_size, offset, backslash_count * 2U) &&
+         confit_test_process_append_char(out, out_size, offset, '"');
 }
 
 static int confit_test_process_make_command_line(const char *const *argv,

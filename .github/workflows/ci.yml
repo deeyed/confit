@@ -11,15 +11,19 @@ permissions:
 
 jobs:
   test:
-    name: ${{ matrix.os }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
+        include:
+          - name: ubuntu-latest
+            os: ubuntu-latest
+          - name: macos-latest
+            os: macos-latest
+          - name: windows-clang-cli
+            os: windows-latest
 
     steps:
       - name: Check out repository
@@ -31,12 +35,48 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake libncurses-dev
 
+      - name: Set up Windows clang toolchain
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+
       - name: Configure, build, and test
+        if: runner.os != 'Windows'
         run: ./tests/run_tests.sh
 
+      - name: Configure, build, and test Windows CLI
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build-windows-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang \
+            -DCONFIT_ENABLE_TUI=OFF
+          cmake --build build-windows-ci
+          ctest --test-dir build-windows-ci --output-on-failure
+
       - name: Install smoke
+        if: runner.os != 'Windows'
         run: |
           cmake -S . -B "${RUNNER_TEMP}/confit-install-build" -DCMAKE_BUILD_TYPE=Release
           cmake --build "${RUNNER_TEMP}/confit-install-build" --target confit
           cmake --install "${RUNNER_TEMP}/confit-install-build" --prefix "${RUNNER_TEMP}/confit-prefix"
           "${RUNNER_TEMP}/confit-prefix/bin/confit" doctor
+
+      - name: Install smoke Windows CLI
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build-windows-install -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang \
+            -DCONFIT_ENABLE_TUI=OFF
+          cmake --build build-windows-install --target confit
+          cmake --install build-windows-install --prefix install-windows-ci
+          install-windows-ci/bin/confit.exe doctor

@@ -479,7 +479,7 @@ set_tests_properties(confit.cli.explain
   PROPERTIES PASS_REGULAR_EXPRESSION "forced by:"
 )
 
-if(UNIX)
+if(UNIX AND NOT WIN32)
   add_test(
     NAME confit.cli.workflow
     COMMAND /bin/sh
@@ -555,10 +555,10 @@ add_test(
   COMMAND confit_test_cli_workflow
           $<TARGET_FILE:confit>
           ${CMAKE_CURRENT_SOURCE_DIR}
-          ${CMAKE_CURRENT_BINARY_DIR}/round3-cli-c
+          ${CMAKE_CURRENT_BINARY_DIR}/round4-cli-c
 )
 
-if(UNIX AND CONFIT_ENABLE_TUI)
+if(UNIX AND NOT WIN32 AND CONFIT_ENABLE_TUI)
   add_test(
     NAME confit.cli.tui
     COMMAND /bin/sh
@@ -596,7 +596,7 @@ if(UNIX AND CONFIT_ENABLE_TUI)
   )
 endif()
 
-if(UNIX)
+if(UNIX AND NOT WIN32)
   add_test(
     NAME confit.cli.cli_only_lane
     COMMAND /bin/sh
