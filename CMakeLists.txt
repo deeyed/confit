@@ -498,6 +498,18 @@ if(UNIX)
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/round13-realish-compat
   )
+
+  add_test(
+    NAME confit.cli.qstar_module_artifacts
+    COMMAND /bin/sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round8_qstar_module_artifacts.sh
+            $<TARGET_FILE:confit>
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/round8-qstar-module-artifacts
+  )
+  set_tests_properties(confit.cli.qstar_module_artifacts
+    PROPERTIES SKIP_RETURN_CODE 77
+  )
 endif()
 
 add_executable(confit_test_cli_workflow
