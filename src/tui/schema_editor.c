@@ -522,6 +522,21 @@ static void confit_tui_schema_set_status_from_diagnostic(
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 
+static void confit_tui_schema_set_input_cancelled(ConfitTuiSchemaState *state,
+                                                  ConfitTuiInputMode mode) {
+  if (state == 0) {
+    return;
+  }
+  if (mode == CONFIT_TUI_INPUT_DIALOG) {
+    (void)snprintf(state->status, sizeof(state->status),
+                   "schema field cancelled");
+  } else {
+    (void)snprintf(state->status, sizeof(state->status), "%s cancelled",
+                   confit_tui_input_mode_name(mode));
+  }
+  state->status[sizeof(state->status) - 1U] = '\0';
+}
+
 static int confit_tui_schema_valid_id_char(char value) {
   return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') ||
          (value >= '0' && value <= '9') || value == '_' || value == '-';
@@ -1094,30 +1109,27 @@ static ConfitStatus confit_tui_schema_add_option(ConfitTuiSchemaState *state,
 
   input_status = confit_tui_schema_read_field(
       state, 0, CONFIT_TUI_SCHEMA_FIELD_ID, "option id", "-", id, sizeof(id));
-  if (input_status != 0 || id[0] == '\0') {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED || id[0] == '\0') {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
     }
     return CONFIT_OK;
   }
   input_status = confit_tui_schema_read_field(
       state, 0, CONFIT_TUI_SCHEMA_FIELD_TYPE, "type",
       "bool|int|uint|hex|string|enum|float|path", type, sizeof(type));
-  if (input_status != 0 || type[0] == '\0') {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED || type[0] == '\0') {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
     }
     return CONFIT_OK;
   }
   input_status =
       confit_tui_schema_read_field(state, 0, CONFIT_TUI_SCHEMA_FIELD_PROMPT,
                                    "prompt", "-", prompt, sizeof(prompt));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
       return CONFIT_OK;
     }
     prompt[0] = '\0';
@@ -1166,10 +1178,9 @@ static ConfitStatus confit_tui_schema_set_string(char *slot, size_t slot_size,
   input_status = confit_tui_schema_read_field(state, option, field, field_name,
                                               slot != 0 ? slot : "-", input,
                                               sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
     }
     return CONFIT_OK;
   }
@@ -1224,10 +1235,9 @@ static ConfitStatus confit_tui_schema_set_type(ConfitTuiSchemaState *state,
   input_status = confit_tui_schema_read_field(
       state, option, CONFIT_TUI_SCHEMA_FIELD_TYPE, "type",
       "bool|int|uint|hex|string|enum|float|path", input, sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
     }
     return CONFIT_OK;
   }
@@ -2532,8 +2542,12 @@ static void confit_tui_schema_clear_filter(ConfitTuiSchemaState *state) {
 static ConfitStatus
 confit_tui_schema_dispatch_command(ConfitTuiSchemaState *state, char *command,
                                    ConfitDiagnostic *diagnostic) {
-  if (command == 0 || command[0] == '\0' ||
-      confit_tui_schema_command_starts_with(command, "help")) {
+  if (command == 0 || command[0] == '\0') {
+    (void)snprintf(state->status, sizeof(state->status), "empty command");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (confit_tui_schema_command_starts_with(command, "help")) {
     (void)snprintf(
         state->status, sizeof(state->status),
         "commands: verbose noverbose tree flat filter <text> clear help quit");
@@ -2571,6 +2585,12 @@ confit_tui_schema_dispatch_command(ConfitTuiSchemaState *state, char *command,
     char *value = command + strlen("filter");
 
     value = confit_tui_schema_command_trim(value);
+    if (value[0] == '\0') {
+      (void)snprintf(state->status, sizeof(state->status),
+                     "usage: :filter <text>");
+      state->status[sizeof(state->status) - 1U] = '\0';
+      return CONFIT_OK;
+    }
     (void)snprintf(state->text_filter, sizeof(state->text_filter), "%s",
                    value);
     state->text_filter[sizeof(state->text_filter) - 1U] = '\0';
@@ -2603,12 +2623,11 @@ static ConfitStatus confit_tui_schema_run_command(
   char *command;
   int input_status;
 
-  input_status = confit_tui_curses_read_command(":", input, sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status),
-                     "command cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  input_status = confit_tui_curses_read_mode_line(CONFIT_TUI_INPUT_COMMAND, ":",
+                                                  input, sizeof(input));
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_schema_set_input_cancelled(state, CONFIT_TUI_INPUT_COMMAND);
     }
     return CONFIT_OK;
   }
@@ -2752,7 +2771,7 @@ static int confit_tui_schema_confirm_entry(const ConfitTuiSchemaState *state) {
   select_status =
       confit_tui_curses_select_dialog("Schema Edit Warning", header, items, 2U,
                                       selected_index, &selected_index);
-  return select_status == 0 && selected_index == 0U;
+  return select_status == CONFIT_TUI_INPUT_ACCEPTED && selected_index == 0U;
 }
 
 static ConfitStatus
@@ -2778,14 +2797,7 @@ confit_tui_schema_request_exit(ConfitTuiSchemaState *state, int *should_quit,
       "SCHEMA EDIT MODE - guarded\nSchema drafts are dirty. Save validates "
       "schema and graph before leaving.",
       items, 3U, selected_index, &selected_index);
-  if (select_status < 0) {
-    (void)snprintf(state->status, sizeof(state->status),
-                   "discarded unsaved schema changes");
-    state->status[sizeof(state->status) - 1U] = '\0';
-    *should_quit = 1;
-    return CONFIT_OK;
-  }
-  if (select_status != 0 || selected_index == 2U) {
+  if (select_status != CONFIT_TUI_INPUT_ACCEPTED || selected_index == 2U) {
     (void)snprintf(state->status, sizeof(state->status), "exit cancelled");
     state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;

@@ -9,6 +9,31 @@ const char *confit_tui_text_or_dash(const char *text) {
   return text != 0 && text[0] != '\0' ? text : "-";
 }
 
+const char *confit_tui_input_mode_name(ConfitTuiInputMode mode) {
+  switch (mode) {
+  case CONFIT_TUI_INPUT_NORMAL:
+    return "normal";
+  case CONFIT_TUI_INPUT_COMMAND:
+    return "command";
+  case CONFIT_TUI_INPUT_SEARCH:
+    return "search";
+  case CONFIT_TUI_INPUT_FILTER:
+    return "filter";
+  case CONFIT_TUI_INPUT_DIALOG:
+    return "dialog";
+  default:
+    return "input";
+  }
+}
+
+int confit_tui_input_cancelled(int result) {
+  return result == CONFIT_TUI_INPUT_CANCELLED;
+}
+
+int confit_tui_input_error(int result) {
+  return result == CONFIT_TUI_INPUT_ERROR;
+}
+
 ConfitStatus confit_tui_parse_int64(const char *text, int64_t *out) {
   char *end;
   long long value;

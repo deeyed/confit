@@ -207,6 +207,12 @@ printf ':%s%s' "$ESC_KEY" "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
 
 grep -aF "command cancelled" "$WORK_DIR/tui-command-cancel.txt" >/dev/null
 
+printf ':\n%s' "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-empty.txt"
+
+grep -aF "empty command" "$WORK_DIR/tui-command-empty.txt" >/dev/null
+
 printf '/board\n:verbose\n:noverbose\n%s' "$ESC2" |
   env TERM=xterm COLUMNS=220 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
@@ -384,7 +390,13 @@ grep -aF "closed detail" "$WORK_DIR/tui-detail-h.txt" >/dev/null
 printf '/%s%s' "$ESC_KEY" "$ESC_KEY" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-cancel.txt"
 
-grep -aF "cancelled" "$WORK_DIR/tui-cancel.txt" >/dev/null
+grep -aF "search cancelled" "$WORK_DIR/tui-cancel.txt" >/dev/null
+
+printf 'c%s%s' "$ESC_KEY" "$ESC_KEY" | "$CONFIT_BIN" tui \
+  --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-filter-cancel.txt"
+
+grep -aF "filter cancelled" "$WORK_DIR/tui-filter-cancel.txt" >/dev/null
 
 printf '%s' "$ESC_KEY" | env TERM=xterm LINES=8 COLUMNS=35 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \

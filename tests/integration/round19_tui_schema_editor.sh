@@ -90,6 +90,20 @@ grep -aF "compact" "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema-navigation.txt" \
   >/dev/null
 
+COMMAND_PROJECT_DIR="$WORK_DIR/schema-command-mode"
+cp -R "$PROJECT_SRC" "$COMMAND_PROJECT_DIR"
+printf '\n:\n:%s:filter\n:bogus\n%s' "$ESC_KEY" "$ESC_KEY" |
+  "$CONFIT_BIN" tui --project "$COMMAND_PROJECT_DIR" --schema-edit \
+    >"$WORK_DIR/tui-schema-command-mode.txt"
+
+grep -aF "empty command" "$WORK_DIR/tui-schema-command-mode.txt" >/dev/null
+grep -aF "command cancelled" "$WORK_DIR/tui-schema-command-mode.txt" \
+  >/dev/null
+grep -aF "usage: :filter <text>" "$WORK_DIR/tui-schema-command-mode.txt" \
+  >/dev/null
+grep -aF "known command: bogus" "$WORK_DIR/tui-schema-command-mode.txt" \
+  >/dev/null
+
 DEPTH_PROJECT_DIR="$WORK_DIR/schema-depth"
 cp -R "$PROJECT_SRC" "$DEPTH_PROJECT_DIR"
 printf '\nndelos.schema.deep\nbool\nDeep Prompt\ncschema/deep/extra/too\ns%s' \
@@ -114,7 +128,8 @@ printf '\nn%s?%s' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-cancel-help.txt"
 
-grep -aF "cancelled" "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
+grep -aF "schema field cancelled" "$WORK_DIR/tui-schema-cancel-help.txt" \
+  >/dev/null
 grep -aF "keys: move jk/arrows Pg/Home/End" \
   "$WORK_DIR/tui-schema-cancel-help.txt" >/dev/null
 grep -aF "edit y/d/p/h/c/t/r/o" "$WORK_DIR/tui-schema-cancel-help.txt" \
@@ -130,7 +145,7 @@ grep -aF "invalid schema option id" "$WORK_DIR/tui-schema-invalid-id.txt" \
 grep -aF "required: dotted option id; letters, numbers, _, - allowed" \
   "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
 
-printf '\nndelos.schema.bad\nint\nBad\nr10,1\n%s%s' "$ESC_KEY" "$ESC_KEY" |
+printf '\nndelos.schema.bad\nint\nBad\nr10,1\n%s%sj\n' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-invalid-range.txt"
 

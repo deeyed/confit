@@ -67,10 +67,27 @@ typedef struct ConfitTuiTextBuilder {
   size_t capacity;
 } ConfitTuiTextBuilder;
 
+typedef enum ConfitTuiInputMode {
+  CONFIT_TUI_INPUT_NORMAL = 0,
+  CONFIT_TUI_INPUT_COMMAND = 1,
+  CONFIT_TUI_INPUT_SEARCH = 2,
+  CONFIT_TUI_INPUT_FILTER = 3,
+  CONFIT_TUI_INPUT_DIALOG = 4,
+} ConfitTuiInputMode;
+
+typedef enum ConfitTuiInputResult {
+  CONFIT_TUI_INPUT_ERROR = -1,
+  CONFIT_TUI_INPUT_ACCEPTED = 0,
+  CONFIT_TUI_INPUT_CANCELLED = 1,
+} ConfitTuiInputResult;
+
 typedef int (*ConfitTuiInputValidator)(const char *text, char *message,
                                        size_t message_size, void *user);
 
 const char *confit_tui_text_or_dash(const char *text);
+const char *confit_tui_input_mode_name(ConfitTuiInputMode mode);
+int confit_tui_input_cancelled(int result);
+int confit_tui_input_error(int result);
 
 ConfitStatus confit_tui_parse_int64(const char *text, int64_t *out);
 ConfitStatus confit_tui_parse_uint64(const char *text, uint64_t *out);
@@ -93,6 +110,9 @@ int confit_tui_curses_render_text(const char *title, const char *header,
                                   const char *status, size_t first_line);
 ConfitTuiKey confit_tui_curses_read_key(void);
 size_t confit_tui_curses_page_step(void);
+int confit_tui_curses_read_mode_line(ConfitTuiInputMode mode,
+                                     const char *prompt, char *out,
+                                     size_t out_size);
 int confit_tui_curses_read_line(const char *prompt, char *out, size_t out_size);
 int confit_tui_curses_read_command(const char *prompt, char *out,
                                    size_t out_size);

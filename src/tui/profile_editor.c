@@ -96,6 +96,16 @@ confit_tui_set_status_from_diagnostic(ConfitTuiState *state, const char *prefix,
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 
+static void confit_tui_set_input_cancelled(ConfitTuiState *state,
+                                           ConfitTuiInputMode mode) {
+  if (state == 0) {
+    return;
+  }
+  (void)snprintf(state->status, sizeof(state->status), "%s cancelled",
+                 confit_tui_input_mode_name(mode));
+  state->status[sizeof(state->status) - 1U] = '\0';
+}
+
 static char *confit_tui_copy_string(const char *text) {
   char *copy;
   size_t size;
@@ -1842,9 +1852,10 @@ static ConfitStatus confit_tui_prompt_enum(ConfitTuiState *state,
       "Confit Choice", header, choices, option->enum_value_count,
       selected_index, &selected_index);
   free(choices);
-  if (select_status != 0) {
-    (void)snprintf(state->status, sizeof(state->status), "cancelled");
-    state->status[sizeof(state->status) - 1U] = '\0';
+  if (select_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(select_status)) {
+      confit_tui_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
+    }
     return CONFIT_OK;
   }
 
@@ -1915,9 +1926,10 @@ confit_tui_prompt_typed_value(ConfitTuiState *state, const ConfitOption *option,
   input_status = confit_tui_curses_read_value_dialog(
       "Confit Value", header, prompt, initial_status,
       confit_tui_value_dialog_validator, &validator, input, sizeof(input));
-  if (input_status != 0) {
-    (void)snprintf(state->status, sizeof(state->status), "cancelled");
-    state->status[sizeof(state->status) - 1U] = '\0';
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_set_input_cancelled(state, CONFIT_TUI_INPUT_DIALOG);
+    }
     return CONFIT_OK;
   }
 
@@ -2322,7 +2334,7 @@ static int confit_tui_confirm_overwrite_profile(ConfitTuiState *state,
   selected_index = 0U;
   select_status = confit_tui_curses_select_dialog(
       "Overwrite Profile", header, items, 2U, selected_index, &selected_index);
-  if (select_status != 0 || selected_index != 0U) {
+  if (select_status != CONFIT_TUI_INPUT_ACCEPTED || selected_index != 0U) {
     (void)snprintf(state->status, sizeof(state->status), "save cancelled");
     state->status[sizeof(state->status) - 1U] = '\0';
     return 0;
@@ -2443,11 +2455,11 @@ static ConfitStatus confit_tui_set_filter(char *slot, size_t slot_size,
   int input_status;
   ConfitStatus status;
 
-  input_status = confit_tui_curses_read_line(prompt, input, sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  input_status = confit_tui_curses_read_mode_line(CONFIT_TUI_INPUT_FILTER,
+                                                  prompt, input, sizeof(input));
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_set_input_cancelled(state, CONFIT_TUI_INPUT_FILTER);
     }
     return CONFIT_OK;
   }
@@ -2469,11 +2481,11 @@ static ConfitStatus confit_tui_set_search(ConfitTuiState *state,
   char input[128];
   int input_status;
 
-  input_status = confit_tui_curses_read_line("search: ", input, sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status), "cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  input_status = confit_tui_curses_read_mode_line(
+      CONFIT_TUI_INPUT_SEARCH, "search: ", input, sizeof(input));
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_set_input_cancelled(state, CONFIT_TUI_INPUT_SEARCH);
     }
     return CONFIT_OK;
   }
@@ -3481,7 +3493,7 @@ confit_tui_confirm_dirty_quit(ConfitTuiState *state, int *out_quit,
   select_status =
       confit_tui_curses_select_dialog("Unsaved Profile Changes", header, items,
                                       3U, selected_index, &selected_index);
-  if (select_status != 0 || selected_index == 2U) {
+  if (select_status != CONFIT_TUI_INPUT_ACCEPTED || selected_index == 2U) {
     (void)snprintf(state->status, sizeof(state->status), "quit cancelled");
     state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;
@@ -3712,12 +3724,11 @@ static ConfitStatus confit_tui_run_command(ConfitTuiState *state,
   char *command;
   int input_status;
 
-  input_status = confit_tui_curses_read_command(":", input, sizeof(input));
-  if (input_status != 0) {
-    if (input_status > 0) {
-      (void)snprintf(state->status, sizeof(state->status),
-                     "command cancelled");
-      state->status[sizeof(state->status) - 1U] = '\0';
+  input_status = confit_tui_curses_read_mode_line(CONFIT_TUI_INPUT_COMMAND, ":",
+                                                  input, sizeof(input));
+  if (input_status != CONFIT_TUI_INPUT_ACCEPTED) {
+    if (confit_tui_input_cancelled(input_status)) {
+      confit_tui_set_input_cancelled(state, CONFIT_TUI_INPUT_COMMAND);
     }
     return CONFIT_OK;
   }

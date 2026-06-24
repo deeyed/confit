@@ -975,13 +975,15 @@ static int confit_tui_curses_command_row(void) {
   return LINES > 0 ? LINES - 1 : 0;
 }
 
-static int confit_tui_curses_read_line_at(int row, const char *prompt,
-                                          char *out, size_t out_size) {
+static int confit_tui_curses_read_line_at(ConfitTuiInputMode mode, int row,
+                                          const char *prompt, char *out,
+                                          size_t out_size) {
   size_t input_size;
   int prompt_size;
 
+  (void)mode;
   if (out == 0 || out_size == 0U || confit_tui_curses_start() != 0) {
-    return -1;
+    return CONFIT_TUI_INPUT_ERROR;
   }
   out[0] = '\0';
   if (row < 0) {
@@ -1007,12 +1009,12 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
     if (ch == ERR) {
       (void)curs_set(0);
       out[0] = '\0';
-      return -1;
+      return CONFIT_TUI_INPUT_ERROR;
     }
     if (ch == 27) {
       (void)curs_set(0);
       out[0] = '\0';
-      return 1;
+      return CONFIT_TUI_INPUT_CANCELLED;
     }
     if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
       break;
@@ -1050,19 +1052,26 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
 
   (void)curs_set(0);
   out[out_size - 1U] = '\0';
-  return 0;
+  return CONFIT_TUI_INPUT_ACCEPTED;
+}
+
+int confit_tui_curses_read_mode_line(ConfitTuiInputMode mode,
+                                     const char *prompt, char *out,
+                                     size_t out_size) {
+  return confit_tui_curses_read_line_at(mode, confit_tui_curses_command_row(),
+                                        prompt, out, out_size);
 }
 
 int confit_tui_curses_read_line(const char *prompt, char *out,
                                 size_t out_size) {
-  return confit_tui_curses_read_line_at(confit_tui_curses_command_row(), prompt,
-                                        out, out_size);
+  return confit_tui_curses_read_mode_line(CONFIT_TUI_INPUT_SEARCH, prompt, out,
+                                          out_size);
 }
 
 int confit_tui_curses_read_command(const char *prompt, char *out,
                                    size_t out_size) {
-  return confit_tui_curses_read_line_at(confit_tui_curses_command_row(), prompt,
-                                        out, out_size);
+  return confit_tui_curses_read_mode_line(CONFIT_TUI_INPUT_COMMAND, prompt, out,
+                                          out_size);
 }
 
 static void confit_tui_curses_dialog_rect(int *top, int *left, int *height,
@@ -1172,12 +1181,12 @@ int confit_tui_curses_read_value_dialog(const char *title, const char *header,
     if (ch == ERR) {
       (void)curs_set(0);
       out[0] = '\0';
-      return -1;
+      return CONFIT_TUI_INPUT_ERROR;
     }
     if (ch == 27) {
       (void)curs_set(0);
       out[0] = '\0';
-      return 1;
+      return CONFIT_TUI_INPUT_CANCELLED;
     }
     if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
       char message[160];
@@ -1187,7 +1196,7 @@ int confit_tui_curses_read_value_dialog(const char *title, const char *header,
           validator(out, message, sizeof(message), validator_user) == 0) {
         (void)curs_set(0);
         out[out_size - 1U] = '\0';
-        return 0;
+        return CONFIT_TUI_INPUT_ACCEPTED;
       }
       (void)snprintf(status, sizeof(status), "%s",
                      message[0] != '\0' ? message : "invalid value");
@@ -1325,10 +1334,10 @@ int confit_tui_curses_select_dialog(const char *title, const char *header,
                                            selected_index, status);
     ch = getch();
     if (ch == ERR) {
-      return -1;
+      return CONFIT_TUI_INPUT_ERROR;
     }
     if (ch == 27 || ch == 'q' || ch == 'Q') {
-      return 1;
+      return CONFIT_TUI_INPUT_CANCELLED;
     }
     if ((ch == KEY_UP || ch == 'k' || ch == 'K') && selected_index > 0U) {
       selected_index -= 1U;
@@ -1363,7 +1372,7 @@ int confit_tui_curses_select_dialog(const char *title, const char *header,
     }
     if (ch == '\n' || ch == '\r' || ch == KEY_ENTER || ch == ' ') {
       *out_selected_index = selected_index;
-      return 0;
+      return CONFIT_TUI_INPUT_ACCEPTED;
     }
   } while (1);
 }
