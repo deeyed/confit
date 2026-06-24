@@ -704,6 +704,11 @@ static void test_gen(ConfitCliWorkflowContext *context) {
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(graph_json));
   test_expect_file_contains(inputs_json, "\"config/targets/host-sim.toml\"");
   test_expect_file_contains(cmake_file, "CONFIT_CONFIG_HEADER");
+  test_expect_file_contains(cmake_file,
+                            "DELOS_CONFIG_TARGET_BOARD \"host-sim\"");
+  test_expect_file_contains(
+      cmake_file,
+      "DELOS_CONFIG_TARGET_BOARD_SOURCE \"profiles/sim-dsh.toml\"");
   test_expect_file_contains(qstar_module, "confit-config-manifest-v1");
   test_expect_file_contains(qstar_module, "[\"delos.target.board\"]");
   test_expect_file_contains(qstar_file, "confit-qstar-manifest-v1");

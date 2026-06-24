@@ -155,16 +155,31 @@ jq '.inputs[].path' /tmp/confit-generated/delos/sim-dsh/config.inputs.json
 ## config.cmake
 
 CMake가 명시적으로 include할 수 있는 generated fragment다. Confit이 CMake graph를 자동으로 수정하지는
-않는다.
+않는다. Fragment에는 artifact path와 resolved option 값이 함께 들어간다.
 
 예상 사용 방식:
 
 ```cmake
 include("${CMAKE_BINARY_DIR}/generated/config/delos/sim-dsh/config.cmake")
-target_include_directories(delos_runtime PRIVATE "${CONFIT_CONFIG_INCLUDE_DIR}")
+get_filename_component(DELOS_CONFIG_INCLUDE_DIR "${CONFIT_CONFIG_HEADER}" DIRECTORY)
+target_include_directories(delos_runtime PRIVATE "${DELOS_CONFIG_INCLUDE_DIR}")
+
+if(DELOS_CONFIG_TARGET_BOARD STREQUAL "host-sim")
+  target_sources(delos_runtime PRIVATE src/board/sim/board.c)
+endif()
 ```
 
-실제 build graph wiring은 별도 integration round에서 review한다.
+주요 변수 예:
+
+```cmake
+set(DELOS_CONFIG_TARGET_BOARD "host-sim")
+set(DELOS_CONFIG_TARGET_BOARD_TYPE "enum")
+set(DELOS_CONFIG_TARGET_BOARD_VALUE "host-sim")
+set(DELOS_CONFIG_TARGET_BOARD_TEXT "host-sim")
+set(DELOS_CONFIG_TARGET_BOARD_SOURCE "profiles/sim-dsh.toml")
+```
+
+실제 build graph wiring은 별도 integration review에서 한다.
 
 ## config/config.qsm
 

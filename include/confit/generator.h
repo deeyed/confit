@@ -118,8 +118,9 @@ ConfitStatus confit_generator_serialize_value(
  * Lua format은 QSM value table entry로 사용할 수 있는
  * `{ type = ..., value = ..., text = ..., source = ... }` fragment를 만든다.
  * CMake format은 option id에서 만든 stable variable prefix로
- * `set(<ID>_TYPE ...)`, `set(<ID>_VALUE ...)`, `set(<ID>_TEXT ...)`,
- * `set(<ID>_SOURCE ...)` lines를 만든다. Text format은 한 줄 summary다.
+ * `set(<ID> ...)`, `set(<ID>_TYPE ...)`, `set(<ID>_VALUE ...)`,
+ * `set(<ID>_TEXT ...)`, `set(<ID>_SOURCE ...)` lines를 만든다.
+ * Text format은 한 줄 summary다.
  *
  * @param value resolved value record. `option_id`는 CMake/text format에서
  *              필요하다.

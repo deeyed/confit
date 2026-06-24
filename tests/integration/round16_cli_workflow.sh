@@ -117,6 +117,10 @@ test -s "$GEN_DIR/config/config.qsm"
 test -s "$GEN_DIR/config.qst"
 grep -F "DELOS_CONFIG_DEBUG_DDC" "$GEN_DIR/config.h" >/dev/null
 grep -F "CONFIT_CONFIG_HEADER" "$GEN_DIR/config.cmake" >/dev/null
+grep -F "DELOS_CONFIG_TARGET_BOARD \"host-sim\"" \
+  "$GEN_DIR/config.cmake" >/dev/null
+grep -F "DELOS_CONFIG_TARGET_BOARD_SOURCE \"profiles/sim-dsh.toml\"" \
+  "$GEN_DIR/config.cmake" >/dev/null
 grep -F "confit-config-manifest-v1" "$GEN_DIR/config/config.qsm" >/dev/null
 grep -F "[\"delos.target.board\"]" "$GEN_DIR/config/config.qsm" >/dev/null
 grep -F "confit-qstar-manifest-v1" "$GEN_DIR/config.qst" >/dev/null

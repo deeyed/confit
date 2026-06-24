@@ -193,6 +193,7 @@ static int check_value_serialization_helpers(void) {
   ok = ok && expect_serialized_record(
                  &resolved, CONFIT_OPTION_TYPE_UINT,
                  CONFIT_GENERATOR_VALUE_CMAKE,
+                 "set(DELOS_CONFIG_TRACE_CAPACITY \"4096\")\n"
                  "set(DELOS_CONFIG_TRACE_CAPACITY_TYPE \"uint\")\n"
                  "set(DELOS_CONFIG_TRACE_CAPACITY_VALUE \"4096\")\n"
                  "set(DELOS_CONFIG_TRACE_CAPACITY_TEXT \"4096\")\n"

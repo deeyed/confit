@@ -194,13 +194,16 @@ target의 `objects = { ... }` 또는 target-local field에서 소비한다.
 ## CMake Parity
 
 QStar module과 CMake fragment는 같은 resolved config에서 생성되어야 한다.
-따라서 이후 `config.cmake`도 resolved value와 build selection을 같은 prefix로
+`config.cmake`는 resolved value와 build selection을 같은 project prefix로
 노출한다.
 
 ```cmake
 set(DELOS_CONFIG_TARGET_ARCH "armv7m")
 set(DELOS_CONFIG_TARGET_BOARD "nucleo-h753zi")
 set(DELOS_CONFIG_TARGET_CPU "cortex-m7")
+set(DELOS_CONFIG_TARGET_ARCH_TYPE "enum")
+set(DELOS_CONFIG_TARGET_ARCH_VALUE "armv7m")
+set(DELOS_CONFIG_TARGET_ARCH_TEXT "armv7m")
 set(DELOS_CONFIG_TARGET_ARCH_SOURCE "targets/renode-nucleo-h753zi.toml")
 ```
 

@@ -307,6 +307,32 @@ static ConfitStatus confit_cmake_append_artifact_set(
   return status;
 }
 
+static ConfitStatus confit_cmake_append_resolved_value_record(
+    ConfitIntegrationBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedValue *resolved_value, ConfitDiagnostic *diagnostic) {
+  const ConfitOption *option;
+  char *record_text;
+  ConfitStatus status;
+
+  option = confit_integration_find_option(project, resolved_value->option_id);
+  if (option == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                          resolved_value->option_id, 0, 0,
+                          "resolved option is missing from project schema");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  record_text = 0;
+  status = confit_generator_serialize_resolved_value(
+      resolved_value, option->type, CONFIT_GENERATOR_VALUE_CMAKE, &record_text,
+      diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, record_text);
+  }
+  confit_generator_string_free(record_text);
+  return status;
+}
+
 ConfitStatus confit_generate_cmake_fragment(
     const ConfitProject *project, const ConfitResolvedConfig *config,
     const ConfitBuildIntegrationOptions *options, char **out_text,
@@ -316,6 +342,7 @@ ConfitStatus confit_generate_cmake_fragment(
   char source_hash_text[32];
   char option_count_text[32];
   ConfitStatus status;
+  size_t index;
 
   if (out_text == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
@@ -398,6 +425,11 @@ ConfitStatus confit_generate_cmake_fragment(
   CONFIT_CMAKE_SECTION(confit_integration_append_macro_fragment(
       &builder, project->name));
   CONFIT_CMAKE_APPEND("_CONFIG_SOURCE_HASH \"${CONFIT_SOURCE_HASH}\")\n");
+  CONFIT_CMAKE_APPEND("\n# Resolved option values.\n");
+  for (index = 0U; index < config->value_count; ++index) {
+    CONFIT_CMAKE_SECTION(confit_cmake_append_resolved_value_record(
+        &builder, project, &config->values[index], diagnostic));
+  }
 
 #undef CONFIT_CMAKE_APPEND
 #undef CONFIT_CMAKE_SECTION

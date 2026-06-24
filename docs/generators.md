@@ -60,9 +60,10 @@ Header generator 규칙:
 
 ## CMake Artifact
 
-`config.cmake`는 CMake build graph가 generated config bundle 위치와
-provenance를 읽는 include-only fragment다. 실제 Delos/Parus root CMake를
-수정하지 않고, 명시적 `--out` 아래에만 생성한다.
+`config.cmake`는 CMake build graph가 generated config bundle 위치,
+source provenance, resolved option 값을 읽는 include-only fragment다.
+실제 Delos/Parus root CMake를 수정하지 않고, 명시적 `--out` 아래에만
+생성한다.
 
 ```cmake
 set(CONFIT_PROJECT "delos")
@@ -71,6 +72,9 @@ set(CONFIT_TARGET "host-sim")
 set(CONFIT_SOURCE_HASH "0x9C11AEAD955DCA37")
 set(CONFIT_CONFIG_HEADER "${CMAKE_CURRENT_LIST_DIR}/config.h")
 set(DELOS_CONFIG_HEADER "${CONFIT_CONFIG_HEADER}")
+set(DELOS_CONFIG_TARGET_BOARD "host-sim")
+set(DELOS_CONFIG_TARGET_BOARD_TYPE "enum")
+set(DELOS_CONFIG_TARGET_BOARD_SOURCE "profiles/sim-dsh.toml")
 ```
 
 CMake generator 규칙:
@@ -80,6 +84,14 @@ CMake generator 규칙:
 - Fragment 안에서 source list를 직접 선언하지 않는다.
 - Fragment 안에 timestamp와 host-local absolute path를 넣지 않는다.
 - Project-specific alias variable은 generated artifact path를 가리킨다.
+- 모든 resolved option은 option id의 첫 segment를 project prefix로 바꾼
+  stable variable로 노출한다. 예를 들어 `delos.trace.capacity`는
+  `DELOS_CONFIG_TRACE_CAPACITY`가 된다.
+- 각 option에는 direct value 변수와 함께 `_TYPE`, `_VALUE`, `_TEXT`,
+  `_SOURCE` provenance 변수를 출력한다. CMake selector는 direct value
+  변수를 쓰고, debug/reporting layer는 metadata 변수를 쓴다.
+- QStar `config/config.qsm`과 `config.cmake`는 같은 resolved config에서
+  생성되어야 하며, 두 selector를 사람이 따로 유지하지 않는다.
 
 ## QStar Artifacts
 

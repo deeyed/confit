@@ -105,7 +105,12 @@ C source는 generated include directory를 통해 `config.h`를 include한다.
 
 ```cmake
 include("${CMAKE_BINARY_DIR}/generated/config/delos/sim-dsh/config.cmake")
-target_include_directories(delos_runtime PRIVATE "${CONFIT_CONFIG_INCLUDE_DIR}")
+get_filename_component(DELOS_CONFIG_INCLUDE_DIR "${CONFIT_CONFIG_HEADER}" DIRECTORY)
+target_include_directories(delos_runtime PRIVATE "${DELOS_CONFIG_INCLUDE_DIR}")
+
+if(DELOS_CONFIG_TARGET_BOARD STREQUAL "host-sim")
+  target_sources(delos_runtime PRIVATE src/board/sim/board.c)
+endif()
 ```
 
 C code:

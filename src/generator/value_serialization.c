@@ -585,6 +585,11 @@ static ConfitStatus confit_value_serializer_append_cmake_record(
   }
   if (status == CONFIT_OK) {
     status = confit_value_serializer_append_cmake_set(
+        serializer, prefix_serializer.text, "",
+        text_serializer.text != 0 ? text_serializer.text : "");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_value_serializer_append_cmake_set(
         serializer, prefix_serializer.text, "_TYPE",
         confit_option_type_name(option_type));
   }
