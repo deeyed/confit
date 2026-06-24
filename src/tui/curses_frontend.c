@@ -315,30 +315,202 @@ static const char *confit_tui_curses_marker(const ConfitTuiListItem *item,
   return buffer;
 }
 
+static void confit_tui_curses_copy_clipped(char *out, size_t out_size,
+                                           const char *text,
+                                           size_t max_chars) {
+  size_t length;
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  out[0] = '\0';
+  if (text == 0 || max_chars == 0U) {
+    return;
+  }
+  length = strlen(text);
+  if (length > max_chars) {
+    length = max_chars;
+  }
+  if (length + 1U > out_size) {
+    length = out_size - 1U;
+  }
+  if (length > 0U) {
+    memcpy(out, text, length);
+  }
+  out[length] = '\0';
+  if (text[length] != '\0' && length > 1U) {
+    out[length - 1U] = '~';
+  }
+}
+
+static int confit_tui_curses_detail_field(const char *detail,
+                                          const char *name, char *out,
+                                          size_t out_size) {
+  const char *begin;
+  const char *end;
+  size_t name_size;
+  size_t size;
+
+  if (out == 0 || out_size == 0U) {
+    return 0;
+  }
+  out[0] = '\0';
+  detail = confit_tui_curses_text(detail);
+  name = confit_tui_curses_text(name);
+  name_size = strlen(name);
+  if (name_size == 0U) {
+    return 0;
+  }
+  begin = strstr(detail, name);
+  if (begin == 0) {
+    return 0;
+  }
+  begin += name_size;
+  end = strstr(begin, " | ");
+  if (end == 0) {
+    end = begin + strlen(begin);
+  }
+  size = (size_t)(end - begin);
+  if (size >= out_size) {
+    size = out_size - 1U;
+  }
+  memcpy(out, begin, size);
+  out[size] = '\0';
+  return out[0] != '\0';
+}
+
+static int confit_tui_curses_row_has_detail(const ConfitTuiListItem *item,
+                                            int selected, int width) {
+  return selected && item != 0 && !item->is_heading && width >= 96 &&
+         confit_tui_curses_text(item->detail)[0] != '\0';
+}
+
+static int confit_tui_curses_row_height(const ConfitTuiListItem *item,
+                                        int selected, int width) {
+  return confit_tui_curses_row_has_detail(item, selected, width) ? 2 : 1;
+}
+
+static void confit_tui_curses_render_detail_row(int row, int col, int width,
+                                                const ConfitTuiListItem *item) {
+  char id[128];
+  char type[32];
+  char deps[96];
+  char tags[96];
+  char state[128];
+  char line[512];
+  int indent;
+
+  if (item == 0 || width <= 0) {
+    return;
+  }
+  (void)confit_tui_curses_detail_field(item->detail, "id=", id, sizeof(id));
+  (void)confit_tui_curses_detail_field(item->detail, "type=", type,
+                                       sizeof(type));
+  (void)confit_tui_curses_detail_field(item->detail, "deps: ", deps,
+                                       sizeof(deps));
+  (void)confit_tui_curses_detail_field(item->detail, "tags: ", tags,
+                                       sizeof(tags));
+  (void)confit_tui_curses_detail_field(item->detail, "state=", state,
+                                       sizeof(state));
+  indent = width >= 120 ? 6 : 4;
+  if (width >= 140) {
+    (void)snprintf(line, sizeof(line),
+                   "%*sid=%s | type=%s | deps: %s | tags: %s | state=%s",
+                   indent, "", confit_tui_curses_text(id),
+                   confit_tui_curses_text(type), confit_tui_curses_text(deps),
+                   confit_tui_curses_text(tags), confit_tui_curses_text(state));
+  } else if (width >= 120) {
+    (void)snprintf(line, sizeof(line),
+                   "%*sid=%s | type=%s | deps: %s | state=%s", indent, "",
+                   confit_tui_curses_text(id), confit_tui_curses_text(type),
+                   confit_tui_curses_text(deps), confit_tui_curses_text(state));
+  } else {
+    (void)snprintf(line, sizeof(line), "%*sid=%s | type=%s | state=%s", indent,
+                   "", confit_tui_curses_text(id),
+                   confit_tui_curses_text(type), confit_tui_curses_text(state));
+  }
+  line[sizeof(line) - 1U] = '\0';
+  confit_tui_curses_style_on(item->is_disabled ? CONFIT_TUI_STYLE_DISABLED
+                                               : CONFIT_TUI_STYLE_HELP);
+  confit_tui_curses_add_clipped(row, col, line, width);
+  confit_tui_curses_style_off(item->is_disabled ? CONFIT_TUI_STYLE_DISABLED
+                                                : CONFIT_TUI_STYLE_HELP);
+}
+
 static void confit_tui_curses_render_row(int row, int col, int width,
                                          const ConfitTuiListItem *item,
-                                         int selected) {
+                                         int selected, int show_detail) {
   char marker_buffer[80];
+  char marker_text[32];
   char label_buffer[192];
+  char label_text[224];
+  char id[128];
+  char badge[32];
+  char suffix[192];
   char line[512];
   ConfitTuiCursesStyle style;
   int selected_disabled;
+  int marker_width;
+  int fixed_width;
+  int suffix_width;
+  int label_width;
+  int dirty;
+  int blocked;
+  int forced;
   const char *marker =
       confit_tui_curses_marker(item, marker_buffer, sizeof(marker_buffer));
   const unsigned depth = item != 0 ? item->depth : 0U;
   const int indent = depth > 8U ? 16 : (int)(depth * 2U);
 
-  (void)snprintf(label_buffer, sizeof(label_buffer), "%*s%s", indent, "",
-                 confit_tui_curses_text(item != 0 ? item->label : 0));
-  label_buffer[sizeof(label_buffer) - 1U] = '\0';
-
   if (item != 0 && item->is_heading) {
+    (void)snprintf(label_buffer, sizeof(label_buffer), "%*s%s", indent, "",
+                   confit_tui_curses_text(item->label));
+    label_buffer[sizeof(label_buffer) - 1U] = '\0';
     (void)snprintf(line, sizeof(line), "%c %-4s %-28s %s", selected ? '>' : ' ',
                    marker, label_buffer, confit_tui_curses_text(item->detail));
   } else {
-    (void)snprintf(line, sizeof(line), "%c %-10s %-38s %s",
-                   selected ? '>' : ' ', marker, label_buffer,
-                   confit_tui_curses_text(item != 0 ? item->detail : 0));
+    dirty = item != 0 && confit_tui_curses_contains(item->detail, "dirty");
+    blocked = item != 0 && (item->is_disabled ||
+                            confit_tui_curses_contains(item->detail,
+                                                       "blocked:"));
+    forced = item != 0 && confit_tui_curses_contains(item->detail, "forced");
+    (void)confit_tui_curses_detail_field(item != 0 ? item->detail : 0, "id=",
+                                         id, sizeof(id));
+    badge[0] = '\0';
+    if (forced) {
+      (void)snprintf(badge, sizeof(badge), " [forced]");
+    } else if (blocked) {
+      (void)snprintf(badge, sizeof(badge), " [blocked]");
+    }
+    suffix[0] = '\0';
+    if (width >= 72 && id[0] != '\0') {
+      (void)snprintf(suffix, sizeof(suffix), " <%s>%s", id, badge);
+    } else if (badge[0] != '\0') {
+      (void)snprintf(suffix, sizeof(suffix), "%s", badge);
+    }
+    suffix[sizeof(suffix) - 1U] = '\0';
+    marker_width = width >= 100 ? 12 : 8;
+    fixed_width = 2 + marker_width + 3;
+    suffix_width = (int)strlen(suffix);
+    label_width = width - fixed_width - suffix_width;
+    if (label_width < 8) {
+      label_width = width - fixed_width;
+      suffix[0] = '\0';
+      suffix_width = 0;
+    }
+    if (label_width < 1) {
+      label_width = 1;
+    }
+    confit_tui_curses_copy_clipped(marker_text, sizeof(marker_text), marker,
+                                   (size_t)marker_width);
+    (void)snprintf(label_buffer, sizeof(label_buffer), "%*s%s", indent, "",
+                   confit_tui_curses_text(item != 0 ? item->label : 0));
+    label_buffer[sizeof(label_buffer) - 1U] = '\0';
+    confit_tui_curses_copy_clipped(label_text, sizeof(label_text), label_buffer,
+                                   (size_t)label_width);
+    (void)snprintf(line, sizeof(line), "%c %-*s %c %s%s", selected ? '>' : ' ',
+                   marker_width, marker_text, dirty ? '*' : ' ', label_text,
+                   suffix);
   }
   line[sizeof(line) - 1U] = '\0';
   if (selected) {
@@ -366,6 +538,9 @@ static void confit_tui_curses_render_row(int row, int col, int width,
     attroff(A_DIM);
   }
   confit_tui_curses_style_off(style);
+  if (show_detail && confit_tui_curses_row_has_detail(item, selected, width)) {
+    confit_tui_curses_render_detail_row(row + 1, col, width, item);
+  }
 }
 
 static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
@@ -408,7 +583,7 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
     const size_t item_index = first + index;
 
     confit_tui_curses_render_row(row, 0, width, &screen->items[item_index],
-                                 item_index == screen->selected_index);
+                                 item_index == screen->selected_index, 0);
   }
   if (screen->item_count == 0U && LINES > 2) {
     confit_tui_curses_add_clipped(2, 0, "(no options)", width);
@@ -437,6 +612,8 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
   int list_height;
   int footer_separator_row;
   int max_visible;
+  int render_row;
+  int selected_extra_lines;
   int width;
   char range[64];
 
@@ -471,11 +648,19 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
     return refresh() == OK ? 0 : -1;
   }
 
-  max_visible = list_height > 0 ? list_height : 0;
   selected_index = screen->selected_index;
   if (screen->item_count > 0U && selected_index >= screen->item_count) {
     selected_index = screen->item_count - 1U;
   }
+  selected_extra_lines = 0;
+  if (screen->item_count > 0U && list_height >= 2 &&
+      confit_tui_curses_row_height(&screen->items[selected_index], 1,
+                                   list_width) > 1) {
+    selected_extra_lines = 1;
+  }
+  max_visible = list_height > selected_extra_lines
+                    ? list_height - selected_extra_lines
+                    : 1;
   visible_count = 0U;
   first = 0U;
   last_visible = 0U;
@@ -506,13 +691,16 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
     range[sizeof(range) - 1U] = '\0';
     confit_tui_curses_draw_separator(separator_row, width, "Options", range);
 
+    render_row = list_top;
     for (index = 0U; index < visible_count; ++index) {
       const size_t item_index = first + index;
       const ConfitTuiListItem *item = &screen->items[item_index];
       const int selected = item_index == selected_index;
+      const int show_detail = selected && selected_extra_lines > 0;
 
-      confit_tui_curses_render_row(list_top + (int)index, list_left, list_width,
-                                   item, selected);
+      confit_tui_curses_render_row(render_row, list_left, list_width, item,
+                                   selected, show_detail);
+      render_row += show_detail ? 2 : 1;
     }
 
     if (first > 0U) {

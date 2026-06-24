@@ -28,7 +28,7 @@ typedef struct ConfitTuiRow {
   ConfitTuiRowKind kind;
   size_t category_index;
   char label[160];
-  char detail[224];
+  char detail[384];
   char value[128];
   char dependency_state[160];
   int is_disabled;
@@ -955,7 +955,6 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       const ConfitOption *option = &state->project->options[option_index];
       const ConfitResolvedValue *resolved;
       const ConfitNamedValue *edit;
-      const char *mark;
       const ConfitValue *resolved_value;
       char tags[96];
       char deps[96];
@@ -970,7 +969,6 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       resolved_value =
           resolved != 0 ? &resolved->value : &option->default_value;
       edit = confit_tui_find_const_edit(state, option->id);
-      mark = edit != 0 ? "*" : " ";
       confit_tui_format_tag_summary(option, tags, sizeof(tags));
       confit_tui_format_dependency_summary(option, deps, sizeof(deps));
 
@@ -978,13 +976,25 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       row->kind = CONFIT_TUI_ROW_OPTION;
       row->category_index = category_index;
       row->option = option;
-      (void)snprintf(row->label, sizeof(row->label), "%s", option->id);
+      (void)snprintf(row->label, sizeof(row->label), "%s",
+                     option->prompt != 0 && option->prompt[0] != '\0'
+                         ? option->prompt
+                         : option->id);
       row->label[sizeof(row->label) - 1U] = '\0';
       confit_tui_format_dependency_state(
           state, option, resolved_value, row->dependency_state,
           sizeof(row->dependency_state), &row->is_disabled);
       row->detail[0] = '\0';
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), mark);
+      if (edit != 0) {
+        confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                       "dirty | ");
+      }
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), "id=");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     option->id);
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     "type=");
       confit_tui_append_summary_text(row->detail, sizeof(row->detail),
                                      confit_option_type_name(option->type));
       confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
@@ -994,10 +1004,10 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       confit_tui_append_summary_text(row->detail, sizeof(row->detail), tags);
       confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
       confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     confit_tui_text_or_dash(option->prompt));
-      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+                                     "state=");
       confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                     row->dependency_state);
+                                     confit_tui_text_or_dash(
+                                         row->dependency_state));
 
       confit_tui_format_value(option, resolved_value, row->value,
                               sizeof(row->value));

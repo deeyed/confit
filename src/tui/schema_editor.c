@@ -1290,7 +1290,7 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   char status_line[384];
   char header[256];
   char key_legend[128];
-  char (*details)[224];
+  char (*details)[512];
   char (*values)[64];
   size_t index;
 
@@ -1299,7 +1299,7 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   values = 0;
   if (state->option_count > 0U) {
     items = (ConfitTuiListItem *)calloc(state->option_count, sizeof(items[0]));
-    details = (char (*)[224])calloc(state->option_count, sizeof(details[0]));
+    details = (char (*)[512])calloc(state->option_count, sizeof(details[0]));
     values = (char (*)[64])calloc(state->option_count, sizeof(values[0]));
     if (items == 0 || details == 0 || values == 0) {
       free(items);
@@ -1312,19 +1312,21 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
     const ConfitTuiSchemaOption *option = &state->options_list[index];
 
     (void)snprintf(details[index], sizeof(details[index]),
-                   "schema-edit | default=%s | prompt=%s | help=%s | "
-                   "category=%s tags=%s range=%s choices=%s",
+                   "schema-edit | id=%s | type=%s | default=%s | "
+                   "category=%s | tags: %s | range=%s | choices=%s | help=%s",
+                   confit_tui_text_or_dash(option->id),
+                   confit_tui_text_or_dash(option->type),
                    confit_tui_text_or_dash(option->default_value),
-                   confit_tui_text_or_dash(option->prompt),
-                   confit_tui_text_or_dash(option->help),
                    confit_tui_text_or_dash(option->category),
                    confit_tui_text_or_dash(option->tags),
                    confit_tui_text_or_dash(option->range),
-                   confit_tui_text_or_dash(option->choices));
+                   confit_tui_text_or_dash(option->choices),
+                   confit_tui_text_or_dash(option->help));
     details[index][sizeof(details[index]) - 1U] = '\0';
     (void)snprintf(values[index], sizeof(values[index]), "%s", option->type);
     values[index][sizeof(values[index]) - 1U] = '\0';
-    items[index].label = option->id;
+    items[index].label =
+        option->prompt[0] != '\0' ? option->prompt : option->id;
     items[index].detail = details[index];
     items[index].value = values[index];
   }

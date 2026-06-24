@@ -82,6 +82,34 @@ grep -aF "search fields=id,prompt,help,category,tags" \
 grep -aF "result=1/1" "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
 
+for cols in 80 100 120 160; do
+  printf '/board\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+    "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+    >"$WORK_DIR/tui-row-$cols.txt"
+  grep -aF "Target Board <delos.target.board>" \
+    "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+  grep -aF "Enable DDC <delos.debug.ddc> [blocked]" \
+    "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+  grep -aF "delos.internal.debug_gate> [forced]" \
+    "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+done
+
+grep -aF "id=delos.target.board | type=enum | state=deps ok" \
+  "$WORK_DIR/tui-row-100.txt" >/dev/null
+grep -aF "id=delos.target.board | type=enum | state=deps ok" \
+  "$WORK_DIR/tui-row-120.txt" >/dev/null
+grep -aF \
+  "id=delos.target.board | type=enum | deps: r1 c0 v1 f0 rec0 | tags: target | state=deps ok" \
+  "$WORK_DIR/tui-row-160.txt" >/dev/null
+
+printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-dirty-row.txt"
+
+grep -aF "*   Default Gain <delos.sim.default_gain>" \
+  "$WORK_DIR/tui-dirty-row.txt" >/dev/null
+grep -aF "Discard changes" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
+
 printf '/delos\nnNq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-search-next-prev.txt"
 
