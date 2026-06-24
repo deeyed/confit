@@ -1,3 +1,5 @@
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -48,6 +50,174 @@ static int load_project(ConfitProject **out_project) {
   *out_project = 0;
   return confit_schema_load_project(path, out_project, &diagnostic) ==
          CONFIT_OK;
+}
+
+static int expect_serialized_value(const ConfitValue *value,
+                                   ConfitOptionType option_type,
+                                   ConfitGeneratorValueFormat format,
+                                   const char *expected) {
+  ConfitDiagnostic diagnostic;
+  char *text;
+  int ok;
+
+  confit_diagnostic_init(&diagnostic);
+  text = 0;
+  if (confit_generator_serialize_value(value, option_type, format, &text,
+                                       &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+
+  ok = text != 0 && strcmp(text, expected) == 0;
+  if (!ok) {
+    fprintf(stderr, "serialized value mismatch\nexpected: %s\nactual:   %s\n",
+            expected, text != 0 ? text : "(null)");
+  }
+  confit_generator_string_free(text);
+  return ok;
+}
+
+static int expect_serialized_record(const ConfitResolvedValue *value,
+                                    ConfitOptionType option_type,
+                                    ConfitGeneratorValueFormat format,
+                                    const char *expected) {
+  ConfitDiagnostic diagnostic;
+  char *text;
+  int ok;
+
+  confit_diagnostic_init(&diagnostic);
+  text = 0;
+  if (confit_generator_serialize_resolved_value(value, option_type, format,
+                                                &text,
+                                                &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+
+  ok = text != 0 && strcmp(text, expected) == 0;
+  if (!ok) {
+    fprintf(stderr, "serialized record mismatch\nexpected: %s\nactual:   %s\n",
+            expected, text != 0 ? text : "(null)");
+  }
+  confit_generator_string_free(text);
+  return ok;
+}
+
+static int check_value_serialization_helpers(void) {
+  ConfitValue value;
+  ConfitResolvedValue resolved;
+  int ok;
+
+  ok = 1;
+  confit_value_init(&value);
+
+  confit_value_set_bool(&value, 1);
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_BOOL,
+                                     CONFIT_GENERATOR_VALUE_TEXT, "true");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_BOOL,
+                                     CONFIT_GENERATOR_VALUE_LUA, "true");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_BOOL,
+                                     CONFIT_GENERATOR_VALUE_CMAKE, "\"true\"");
+  confit_value_clear(&value);
+
+  confit_value_set_int(&value, -42);
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_INT,
+                                     CONFIT_GENERATOR_VALUE_TEXT, "-42");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_INT,
+                                     CONFIT_GENERATOR_VALUE_LUA, "-42");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_INT,
+                                     CONFIT_GENERATOR_VALUE_CMAKE, "\"-42\"");
+  confit_value_clear(&value);
+
+  confit_value_set_uint(&value, UINT64_C(255));
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_UINT,
+                                     CONFIT_GENERATOR_VALUE_TEXT, "255");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_HEX,
+                                     CONFIT_GENERATOR_VALUE_TEXT,
+                                     "0x000000FF");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_HEX,
+                                     CONFIT_GENERATOR_VALUE_LUA, "255");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_HEX,
+                                     CONFIT_GENERATOR_VALUE_CMAKE,
+                                     "\"0x000000FF\"");
+  confit_value_clear(&value);
+
+  confit_value_set_float(&value, 3.125);
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_FLOAT,
+                                     CONFIT_GENERATOR_VALUE_TEXT, "3.125");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_FLOAT,
+                                     CONFIT_GENERATOR_VALUE_LUA, "3.125");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_FLOAT,
+                                     CONFIT_GENERATOR_VALUE_CMAKE, "\"3.125\"");
+  confit_value_clear(&value);
+
+  ok = ok && confit_value_set_string(&value, "hello\nquote\"slash\\semi;$") ==
+                 CONFIT_OK;
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_STRING,
+                 CONFIT_GENERATOR_VALUE_TEXT,
+                 "hello\\nquote\\\"slash\\\\semi;$");
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_STRING,
+                 CONFIT_GENERATOR_VALUE_LUA,
+                 "\"hello\\nquote\\\"slash\\\\semi;$\"");
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_STRING,
+                 CONFIT_GENERATOR_VALUE_CMAKE,
+                 "\"hello\\nquote\\\"slash\\\\semi\\;\\$\"");
+  confit_value_clear(&value);
+
+  ok = ok && confit_value_set_enum(&value, "fast") == CONFIT_OK;
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_ENUM,
+                                     CONFIT_GENERATOR_VALUE_TEXT, "fast");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_ENUM,
+                                     CONFIT_GENERATOR_VALUE_LUA, "\"fast\"");
+  confit_value_clear(&value);
+
+  ok = ok && confit_value_set_path(&value, "drivers/uart") == CONFIT_OK;
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_PATH,
+                                     CONFIT_GENERATOR_VALUE_TEXT,
+                                     "drivers/uart");
+  ok = ok && expect_serialized_value(&value, CONFIT_OPTION_TYPE_PATH,
+                                     CONFIT_GENERATOR_VALUE_CMAKE,
+                                     "\"drivers/uart\"");
+  confit_value_clear(&value);
+
+  confit_value_set_uint(&value, 4096U);
+  resolved.option_id = "delos.trace.capacity";
+  resolved.value = value;
+  resolved.source = "profiles/release.toml";
+  ok = ok && expect_serialized_record(
+                 &resolved, CONFIT_OPTION_TYPE_UINT,
+                 CONFIT_GENERATOR_VALUE_LUA,
+                 "{ type = \"uint\", value = 4096, text = \"4096\", "
+                 "source = \"profiles/release.toml\" }");
+  ok = ok && expect_serialized_record(
+                 &resolved, CONFIT_OPTION_TYPE_UINT,
+                 CONFIT_GENERATOR_VALUE_CMAKE,
+                 "set(DELOS_CONFIG_TRACE_CAPACITY_TYPE \"uint\")\n"
+                 "set(DELOS_CONFIG_TRACE_CAPACITY_VALUE \"4096\")\n"
+                 "set(DELOS_CONFIG_TRACE_CAPACITY_TEXT \"4096\")\n"
+                 "set(DELOS_CONFIG_TRACE_CAPACITY_SOURCE "
+                 "\"profiles/release.toml\")\n");
+  ok = ok && expect_serialized_record(
+                 &resolved, CONFIT_OPTION_TYPE_UINT,
+                 CONFIT_GENERATOR_VALUE_TEXT,
+                 "delos.trace.capacity type=uint value=4096 text=4096 "
+                 "source=profiles/release.toml");
+  confit_value_clear(&value);
+
+  confit_value_set_uint(&value, UINT64_C(0x08000000));
+  resolved.option_id = "delos.memory.flash_origin";
+  resolved.value = value;
+  resolved.source = "targets/renode-nucleo-h753zi.toml";
+  ok = ok && expect_serialized_record(
+                 &resolved, CONFIT_OPTION_TYPE_HEX,
+                 CONFIT_GENERATOR_VALUE_LUA,
+                 "{ type = \"hex\", value = 134217728, text = "
+                 "\"0x08000000\", source = "
+                 "\"targets/renode-nucleo-h753zi.toml\" }");
+  confit_value_clear(&value);
+
+  return ok;
 }
 
 int main(void) {
@@ -120,7 +290,8 @@ int main(void) {
     return 3;
   }
 
-  ok = strcmp(header, golden) == 0 && strcmp(header, header_again) == 0 &&
+  ok = check_value_serialization_helpers() &&
+       strcmp(header, golden) == 0 && strcmp(header, header_again) == 0 &&
        strcmp(cmake_fragment, cmake_golden) == 0 &&
        strcmp(qstar_manifest, qstar_golden) == 0 &&
        strstr(header, "timestamp") == 0 &&

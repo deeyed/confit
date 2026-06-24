@@ -135,6 +135,7 @@ add_library(confit_generator STATIC
   src/generator/build_integration.c
   src/generator/config_header.c
   src/generator/reports.c
+  src/generator/value_serialization.c
 )
 
 target_link_libraries(confit_generator PUBLIC confit_resolver)

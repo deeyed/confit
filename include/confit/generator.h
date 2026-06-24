@@ -79,6 +79,62 @@ typedef struct ConfitBuildIntegrationOptions {
 } ConfitBuildIntegrationOptions;
 
 /**
+ * @brief generator value serialization target이다.
+ *
+ * 같은 resolved value를 QStar Lua table, CMake variable, 사람이 읽는 text
+ * literal로 일관되게 출력하기 위한 공통 format이다.
+ */
+typedef enum ConfitGeneratorValueFormat {
+  /** Deterministic unquoted text payload. */
+  CONFIT_GENERATOR_VALUE_TEXT = 1,
+  /** QStar/Lua literal 또는 table field payload. */
+  CONFIT_GENERATOR_VALUE_LUA = 2,
+  /** CMake quoted argument 또는 `set(...)` fragment payload. */
+  CONFIT_GENERATOR_VALUE_CMAKE = 3,
+} ConfitGeneratorValueFormat;
+
+/**
+ * @brief resolved value payload를 deterministic literal로 직렬화한다.
+ *
+ * `option_type`은 `CONFIT_OPTION_TYPE_HEX`처럼 payload kind만으로 알 수 없는
+ * 표시 정책을 결정한다. 반환된 문자열은 caller가 소유하며
+ * `confit_generator_string_free`로 해제한다.
+ *
+ * @param value 직렬화할 value payload.
+ * @param option_type value가 속한 option type.
+ * @param format 출력 format.
+ * @param out_text 성공 시 NUL 종료 literal text를 받는다.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_generator_serialize_value(
+    const ConfitValue *value, ConfitOptionType option_type,
+    ConfitGeneratorValueFormat format, char **out_text,
+    ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief resolved value record를 deterministic fragment로 직렬화한다.
+ *
+ * Lua format은 QSM value table entry로 사용할 수 있는
+ * `{ type = ..., value = ..., text = ..., source = ... }` fragment를 만든다.
+ * CMake format은 option id에서 만든 stable variable prefix로
+ * `set(<ID>_TYPE ...)`, `set(<ID>_VALUE ...)`, `set(<ID>_TEXT ...)`,
+ * `set(<ID>_SOURCE ...)` lines를 만든다. Text format은 한 줄 summary다.
+ *
+ * @param value resolved value record. `option_id`는 CMake/text format에서
+ *              필요하다.
+ * @param option_type value가 속한 option type.
+ * @param format 출력 format.
+ * @param out_text 성공 시 NUL 종료 fragment를 받는다.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_generator_serialize_resolved_value(
+    const ConfitResolvedValue *value, ConfitOptionType option_type,
+    ConfitGeneratorValueFormat format, char **out_text,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief resolved config에서 deterministic C `config.h` 문자열을 생성한다.
  *
  * Header는 project include guard, `#define`, resolved source hash를 포함한다.
