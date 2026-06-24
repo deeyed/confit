@@ -173,6 +173,7 @@ find "$OUT" -maxdepth 2 -type f | sort
 ```text
 config.cmake
 config/config.qsm
+delos_build_selection/delos_build_selection.qsm
 config.explain.txt
 config.graph.json
 config.h
@@ -182,7 +183,9 @@ config.report.json
 ```
 
 QStar에서 새 integration이 import할 정본은 `config/config.qsm`이다.
-`config.qst`는 기존 호환성을 위한 deprecated artifact로만 본다.
+Build target 선택값이 필요하면 `delos_build_selection/delos_build_selection.qsm`
+같은 project-specific module을 추가로 import한다. `config.qst`는 기존
+호환성을 위한 deprecated artifact로만 본다.
 
 ## 9. Parus/Delos compatibility 검사
 

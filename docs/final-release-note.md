@@ -111,6 +111,7 @@ config.inputs.json
 config.cmake
 config/config.qsm
 config.qst  # deprecated compatibility artifact
+<selection-output>/<selection-output>.qsm  # if selection/*.toml declares one
 ```
 
 ## Safety Rules

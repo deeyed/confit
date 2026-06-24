@@ -56,12 +56,15 @@ grep -Fx "profile ok: sim-dsh" "$WORK_DIR/profile-validate.txt" >/dev/null
 "$CONFIT_BIN" completion --shell bash >"$WORK_DIR/completion.bash"
 grep -F "_confit()" "$WORK_DIR/completion.bash" >/dev/null
 grep -F -- "--artifact" "$WORK_DIR/completion.bash" >/dev/null
+grep -F "build-selection" "$WORK_DIR/completion.bash" >/dev/null
 
 "$CONFIT_BIN" completion --shell zsh >"$WORK_DIR/completion.zsh"
 grep -F "#compdef confit" "$WORK_DIR/completion.zsh" >/dev/null
+grep -F "build-selection" "$WORK_DIR/completion.zsh" >/dev/null
 
 "$CONFIT_BIN" completion --shell fish >"$WORK_DIR/completion.fish"
 grep -F "complete -c confit" "$WORK_DIR/completion.fish" >/dev/null
+grep -F "build-selection" "$WORK_DIR/completion.fish" >/dev/null
 
 "$CONFIT_BIN" help profile >"$WORK_DIR/help-profile.txt"
 grep -F "Confit command: profile" "$WORK_DIR/help-profile.txt" >/dev/null

@@ -37,6 +37,7 @@ config.inputs.json
 config.cmake
 config/config.qsm
 config.qst  # deprecated compatibility artifact
+<selection-output>/<selection-output>.qsm  # selection/*.toml이 선언한 경우
 ```
 
 ## 왜 kconfig를 그대로 쓰지 않는가

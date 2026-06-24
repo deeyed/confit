@@ -185,9 +185,11 @@ static char *confit_cli_copy_bytes(const char *text, size_t size);
 #define CONFIT_CLI_ARTIFACT_REPORTS 0x02U
 #define CONFIT_CLI_ARTIFACT_CMAKE 0x04U
 #define CONFIT_CLI_ARTIFACT_QSTAR 0x08U
+#define CONFIT_CLI_ARTIFACT_BUILD_SELECTION 0x10U
 #define CONFIT_CLI_ARTIFACT_ALL                                                \
   (CONFIT_CLI_ARTIFACT_HEADER | CONFIT_CLI_ARTIFACT_REPORTS |                 \
-   CONFIT_CLI_ARTIFACT_CMAKE | CONFIT_CLI_ARTIFACT_QSTAR)
+   CONFIT_CLI_ARTIFACT_CMAKE | CONFIT_CLI_ARTIFACT_QSTAR |                    \
+   CONFIT_CLI_ARTIFACT_BUILD_SELECTION)
 
 static const ConfitCliCommandSpec confit_cli_help_spec = {
     "help", "Show global help or command-specific help.",
@@ -219,10 +221,11 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      confit_cli_run_resolve},
     {"gen", "Generate deterministic configuration artifacts.",
      "confit gen --project <path> --profile <name> [--target <name>] --out "
-     "<path> [--artifact header|reports|cmake|qstar|all] [--force] "
-     "[--dry-run]",
+     "<path> [--artifact header|reports|cmake|qstar|build-selection|all] "
+     "[--force] [--dry-run]",
      "--project <path>\n  --profile <name>\n  --target <name>\n  --out <path>"
-     "\n  --artifact header|reports|cmake|qstar|all\n  --force\n  --dry-run",
+     "\n  --artifact header|reports|cmake|qstar|build-selection|all\n  "
+     "--force\n  --dry-run",
      confit_cli_run_gen},
     {"explain", "Explain one resolved option value.",
      "confit explain --project <path> --profile <name> [--target <name>] "
@@ -1077,7 +1080,7 @@ static int confit_cli_run_doctor(int argc, char **argv) {
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
-        "generators", "header, reports, cmake, qstar manifest");
+        "generators", "header, reports, cmake, qstar, build-selection");
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
@@ -2952,12 +2955,17 @@ static ConfitStatus confit_cli_gen_artifact_mask(const char *text,
     *out_mask = CONFIT_CLI_ARTIFACT_QSTAR;
     return CONFIT_OK;
   }
+  if (strcmp(text, "build-selection") == 0) {
+    *out_mask = CONFIT_CLI_ARTIFACT_BUILD_SELECTION;
+    return CONFIT_OK;
+  }
   if (strcmp(text, "all") == 0) {
     *out_mask = CONFIT_CLI_ARTIFACT_ALL;
     return CONFIT_OK;
   }
   return confit_cli_write_error(
-      "gen --artifact must be header, reports, cmake, qstar, or all");
+      "gen --artifact must be header, reports, cmake, qstar, "
+      "build-selection, or all");
 }
 
 static ConfitStatus confit_cli_gen_check_output(
@@ -3053,7 +3061,7 @@ static ConfitStatus confit_cli_gen_preflight(
        ++index) {
     char artifact_name[512];
 
-    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_BUILD_SELECTION)) {
       break;
     }
     status = confit_cli_build_selection_artifact_name(
@@ -3130,7 +3138,7 @@ static ConfitStatus confit_cli_gen_print_dry_run(
     char artifact_name[512];
     ConfitDiagnostic diagnostic;
 
-    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_BUILD_SELECTION)) {
       break;
     }
     confit_diagnostic_init(&diagnostic);
@@ -3323,7 +3331,7 @@ static ConfitStatus confit_cli_generate_artifacts(
         diagnostic);
   }
   if (status == CONFIT_OK && !args->dry_run &&
-      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_BUILD_SELECTION)) {
     status = confit_cli_write_build_selection_modules(project, config,
                                                       &build_options, args,
                                                       diagnostic);
@@ -5597,7 +5605,7 @@ static ConfitStatus confit_cli_completion_bash(char **out_text) {
   CONFIT_COMPLETION_APPEND(
       "  globals=\"--help --version --color --quiet --verbose\"\n");
   CONFIT_COMPLETION_APPEND(
-      "  artifacts=\"header reports cmake qstar all\"\n");
+      "  artifacts=\"header reports cmake qstar build-selection all\"\n");
   CONFIT_COMPLETION_APPEND("  formats=\"text json toml dot\"\n");
   CONFIT_COMPLETION_APPEND("  shells=\"bash zsh fish\"\n");
   CONFIT_COMPLETION_APPEND("  templates=\"minimal delos parus\"\n");
@@ -5675,7 +5683,7 @@ static ConfitStatus confit_cli_completion_zsh(char **out_text) {
   CONFIT_ZSH_APPEND(
       "    completion) _arguments '--shell:shell:(bash zsh fish)' ;;\n");
   CONFIT_ZSH_APPEND(
-      "    gen) _arguments '--artifact:artifact:(header reports cmake qstar all)' '--format:format:(text json toml dot)' ;;\n");
+      "    gen) _arguments '--artifact:artifact:(header reports cmake qstar build-selection all)' '--format:format:(text json toml dot)' ;;\n");
   CONFIT_ZSH_APPEND(
       "    init) _arguments '--template:template:(minimal delos parus)' ;;\n");
   CONFIT_ZSH_APPEND("  esac\n");
@@ -5734,7 +5742,7 @@ static ConfitStatus confit_cli_completion_fish(char **out_text) {
   CONFIT_FISH_APPEND(
       "complete -c confit -n '__fish_seen_subcommand_from completion' -l shell -xa 'bash zsh fish'\n");
   CONFIT_FISH_APPEND(
-      "complete -c confit -n '__fish_seen_subcommand_from gen' -l artifact -xa 'header reports cmake qstar all'\n");
+      "complete -c confit -n '__fish_seen_subcommand_from gen' -l artifact -xa 'header reports cmake qstar build-selection all'\n");
   CONFIT_FISH_APPEND(
       "complete -c confit -n '__fish_seen_subcommand_from init' -l template -xa 'minimal delos parus'\n");
 

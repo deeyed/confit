@@ -141,6 +141,10 @@ Project-specific build selection은 Confit core에 Delos/Parus board logic을
 <out>/delos_build_selection/delos_build_selection.qsm
 ```
 
+이 module은 `confit gen --artifact build-selection` 또는 `--artifact all`로
+생성한다. `--artifact qstar`는 canonical `config/config.qsm`과 compatibility
+`config.qst`만 생성한다.
+
 QStar import 예:
 
 ```lua

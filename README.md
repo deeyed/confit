@@ -14,8 +14,9 @@ host-side configuration tool을 제공하는 것이다.
 Confit은 Delos runtime 기능이 아니다. Parus kernel, Delos runtime, MCU image 안에는 TOML parser,
 TUI, constraint solver, config service가 들어가지 않는다. Confit은 build 전에 실행되는 host
 tool이며, 초기 결과는 `config.h`, machine-readable report, explanation report 같은 정적 산출물로만
-전달된다. `config.cmake`와 `config.qst`도 명시적인 `--out` directory 아래에 생성되는 보조 build
-integration artifact로만 다룬다.
+전달된다. `config.cmake`, QStar용 `config/config.qsm`, project-specific build selection module, 기존
+호환용 `config.qst`도 명시적인 `--out` directory 아래에 생성되는 보조 build integration artifact로만
+다룬다.
 
 ## Goals
 
@@ -85,7 +86,11 @@ build/generated/config/<project>/<profile>/
   config.graph.json
   config.inputs.json
   config.cmake
+  config/
+    config.qsm
   config.qst
+  delos_build_selection/
+    delos_build_selection.qsm  # selection/*.toml이 선언한 경우
 ```
 
 `config/` 아래에는 사람이 관리하는 source config만 둔다. Generated 파일을 `config/`에 쓰는 것은

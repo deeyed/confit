@@ -86,7 +86,7 @@ return {
 }
 ```
 
-`confit gen --artifact qstar`는 template마다
+`confit gen --artifact build-selection` 또는 `--artifact all`은 template마다
 `<output>/<output>.qsm` pure Lua module을 생성한다. 위 예시라면
 `delos_build_selection/delos_build_selection.qsm`이 생성된다.
 

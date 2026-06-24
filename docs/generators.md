@@ -135,12 +135,35 @@ return {
 QStar generator 규칙:
 
 - `config/config.qsm`은 resolved value table과 artifact manifest를 포함한다.
-- `selection/*.toml` build selection template이 있으면
-  `<output>/<output>.qsm` project-specific selection module도 생성한다.
+- `--artifact qstar`는 `config/config.qsm`과 compatibility `config.qst`를
+  생성한다.
 - `.qsm` 안에서 project, toolset, target, stage, run target을 선언하지 않는다.
 - `qstar.import_module(...)`에는 `.qsm` file path를 직접 넘기지 않는다.
 - QStar root or target layer가 명시적으로 import한다.
 - 기존 `config.qst`는 deprecated compatibility artifact다.
+
+## Build Selection Artifacts
+
+`--artifact build-selection`은 `selection/*.toml` build selection template마다
+`<output>/<output>.qsm` project-specific selection module을 생성한다. Delos
+예시는 다음과 같다.
+
+```text
+delos_build_selection/
+  delos_build_selection.qsm
+```
+
+QStar graph에서는 canonical config module과 selection module을 분리해서
+import한다.
+
+```lua
+local config = qstar.import_module("build/generated/config/delos/sim-dsh/config")
+local selection = qstar.import_module(
+  "build/generated/config/delos/sim-dsh/delos_build_selection"
+)
+```
+
+`--artifact all`은 `qstar`와 `build-selection`을 모두 포함한다.
 
 `.qst`는 QStar graph declaration fragment이고, `.qsm`은 pure table-return
 helper module이다. 자세한 계약은

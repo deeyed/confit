@@ -8,6 +8,8 @@ WORK_DIR=$3
 PROJECT_DIR="$SOURCE_DIR/tests/fixtures/realish/delos"
 GOLDEN_DIR="$SOURCE_DIR/tests/golden/realish/delos/sim-dsh"
 OUT_DIR="$WORK_DIR/generated"
+QSTAR_ONLY_DIR="$WORK_DIR/qstar-only"
+BUILD_SELECTION_ONLY_DIR="$WORK_DIR/build-selection-only"
 
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
@@ -55,3 +57,19 @@ grep -F "//src/board/host/sim:board_objects" \
   "$OUT_DIR/delos_build_selection/delos_build_selection.qsm" >/dev/null
 grep -F '"delos.target.kind", "type": "enum", "value": "sim:dsh"' \
   "$OUT_DIR/config.report.json" >/dev/null
+
+"$CONFIT_BIN" gen --project "$PROJECT_DIR" --profile sim-dsh \
+  --out "$QSTAR_ONLY_DIR" --artifact qstar >"$WORK_DIR/gen-qstar.txt"
+test -s "$QSTAR_ONLY_DIR/config/config.qsm"
+test -s "$QSTAR_ONLY_DIR/config.qst"
+test ! -e "$QSTAR_ONLY_DIR/delos_build_selection/delos_build_selection.qsm"
+
+"$CONFIT_BIN" gen --project "$PROJECT_DIR" --profile sim-dsh \
+  --out "$BUILD_SELECTION_ONLY_DIR" --artifact build-selection \
+  >"$WORK_DIR/gen-build-selection.txt"
+test -s "$BUILD_SELECTION_ONLY_DIR/delos_build_selection/delos_build_selection.qsm"
+test ! -e "$BUILD_SELECTION_ONLY_DIR/config/config.qsm"
+test ! -e "$BUILD_SELECTION_ONLY_DIR/config.qst"
+grep -F "delos-build-selection-v1" \
+  "$BUILD_SELECTION_ONLY_DIR/delos_build_selection/delos_build_selection.qsm" \
+  >/dev/null

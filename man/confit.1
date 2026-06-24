@@ -38,6 +38,7 @@ config.inputs.json
 config.cmake
 config/config.qsm
 config.qst  (deprecated compatibility artifact)
+<output>/<output>.qsm  (if selection/*.toml declares one)
 .EE
 .SH 명령
 .TP
@@ -65,7 +66,7 @@ selected profile resolve를 수행한다.
 .B --set
 은 일회성 override이며 profile TOML을 수정하지 않는다.
 .TP
-.B gen --project path --profile name [--target name] --out path [--artifact header|reports|cmake|qstar|all] [--force] [--dry-run]
+.B gen --project path --profile name [--target name] --out path [--artifact header|reports|cmake|qstar|build-selection|all] [--force] [--dry-run]
 generated artifact를 만든다.
 기본적으로 기존 file overwrite를 거부하며,
 .B --force
@@ -235,6 +236,15 @@ QStar가
 .TP
 .I config.qst
 기존 호환성을 위한 deprecated QStar artifact.
+.TP
+.I <output>/<output>.qsm
+프로젝트가
+.I selection/*.toml
+로 선언한 build selection pure table module.
+.B --artifact build-selection
+또는
+.B --artifact all
+에서 생성된다.
 .SH 종료 코드
 .EX
 0  success

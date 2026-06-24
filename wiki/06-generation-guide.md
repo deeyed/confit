@@ -25,6 +25,8 @@ config.cmake
 config/
   config.qsm
 config.qst
+delos_build_selection/
+  delos_build_selection.qsm
 ```
 
 ## artifact 선택
@@ -53,10 +55,16 @@ CMake fragment만 생성:
 confit gen --project <project> --profile <profile> --out <out> --artifact cmake
 ```
 
-QStar manifest만 생성:
+QStar core module과 compatibility artifact만 생성:
 
 ```sh
 confit gen --project <project> --profile <profile> --out <out> --artifact qstar
+```
+
+Build selection module만 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact build-selection
 ```
 
 ## `--dry-run`
@@ -199,8 +207,10 @@ local config = qstar.import_module(
 `build/generated/config/delos/sim-dsh/config/config.qsm`을 읽는다.
 
 `config/config.qsm`은 resolved value table과 generated artifact path를 함께
-담는다. Delos/Parus QStar graph는 이 table을 읽어서 board, CPU, driver,
-linker script 같은 build-time selection을 선택할 수 있다.
+담는다. Delos/Parus QStar graph는 이 table을 읽어서 모든 resolved option을
+조회할 수 있다. Board object label, include directory, linker script처럼
+build graph 선택에 바로 쓰는 project-specific table은
+`--artifact build-selection`이 생성하는 별도 module을 import한다.
 
 기존 `config.qst`는 compatibility artifact로 남긴다. 새 integration에서
 정본 import 대상으로 삼지 않는다.
