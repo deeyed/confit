@@ -125,6 +125,14 @@ static void confit_tui_curses_init_styles(void) {
   (void)confit_tui_curses_init_pair_safe(11, COLOR_BLACK, COLOR_WHITE);
 }
 
+static void confit_tui_curses_configure_escape_delay(void) {
+#if defined(NCURSES_VERSION)
+  (void)set_escdelay(atoi(CONFIT_TUI_ESCAPE_DELAY_MS));
+#elif defined(ESCDELAY)
+  ESCDELAY = atoi(CONFIT_TUI_ESCAPE_DELAY_MS);
+#endif
+}
+
 static int confit_tui_curses_style_attr(ConfitTuiCursesStyle style) {
   const ConfitTuiCursesStyleDef *def;
 
@@ -159,10 +167,10 @@ static int confit_tui_curses_start(void) {
     return 0;
   }
   (void)setlocale(LC_ALL, "");
-  (void)setenv("ESCDELAY", CONFIT_TUI_ESCAPE_DELAY_MS, 1);
   if (initscr() == 0) {
     return -1;
   }
+  confit_tui_curses_configure_escape_delay();
   cbreak();
   noecho();
   keypad(stdscr, TRUE);
