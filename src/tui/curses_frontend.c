@@ -11,6 +11,8 @@ static int confit_tui_curses_started = 0;
 static int confit_tui_curses_colors_enabled = 0;
 static short confit_tui_curses_default_bg = COLOR_BLACK;
 
+#define CONFIT_TUI_ESCAPE_DELAY_MS "25"
+
 typedef enum ConfitTuiCursesStyle {
   CONFIT_TUI_STYLE_TITLE = 0,
   CONFIT_TUI_STYLE_PATH = 1,
@@ -157,6 +159,7 @@ static int confit_tui_curses_start(void) {
     return 0;
   }
   (void)setlocale(LC_ALL, "");
+  (void)setenv("ESCDELAY", CONFIT_TUI_ESCAPE_DELAY_MS, 1);
   if (initscr() == 0) {
     return -1;
   }
@@ -421,8 +424,12 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
   size_t visible_count;
   int row;
   int list_height;
+  int key_row;
+  int command_row;
 
   erase();
+  key_row = LINES > 2 ? LINES - 2 : LINES - 1;
+  command_row = LINES > 1 ? LINES - 1 : 0;
   confit_tui_curses_style_on(CONFIT_TUI_STYLE_TITLE);
   confit_tui_curses_add_centered(0, confit_tui_curses_text(screen->title));
   confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
@@ -452,7 +459,7 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
     confit_tui_curses_style_off(confit_tui_curses_status_style(screen->status));
   }
 
-  list_height = LINES > 4 ? LINES - 4 : 0;
+  list_height = LINES > 5 ? LINES - 5 : 0;
   first = 0U;
   visible_count = list_height > 0 ? (size_t)list_height : 0U;
   if (visible_count > screen->item_count) {
@@ -473,13 +480,17 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
   if (screen->item_count == 0U && LINES > 2) {
     confit_tui_curses_add_clipped(2, 0, "(no options)", width);
   }
-  if (LINES > 1) {
+  if (LINES > 2) {
     confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
-    move(LINES - 1, 0);
+    move(key_row, 0);
     clrtoeol();
     confit_tui_curses_add_clipped(
-        LINES - 1, 0, confit_tui_curses_text(screen->key_legend), width);
+        key_row, 0, confit_tui_curses_text(screen->key_legend), width);
     confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
+  }
+  if (LINES > 1) {
+    move(command_row, 0);
+    clrtoeol();
   }
 }
 
@@ -499,6 +510,7 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
   int inspector_row;
   int key_row;
   int status_row;
+  int command_row;
   int max_visible;
   int render_row;
   int width;
@@ -510,7 +522,7 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
 
   erase();
   width = COLS > 0 ? COLS : 80;
-  if (LINES < 10 || width < 40) {
+  if (LINES < 11 || width < 40) {
     confit_tui_curses_render_compact(screen, width);
     return refresh() == OK ? 0 : -1;
   }
@@ -526,10 +538,11 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
 
   separator_row = header_row;
   list_top = separator_row + 1;
-  footer_separator_row = LINES - 4;
-  inspector_row = LINES - 3;
-  key_row = LINES - 2;
-  status_row = LINES - 1;
+  footer_separator_row = LINES - 5;
+  inspector_row = LINES - 4;
+  key_row = LINES - 3;
+  status_row = LINES - 2;
+  command_row = LINES - 1;
   list_left = 1;
   list_width = width > 2 ? width - 2 : width;
   list_height = footer_separator_row - list_top;
@@ -629,6 +642,10 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
         status_row, 1, confit_tui_curses_text(screen->status), width - 2);
     confit_tui_curses_style_off(status_style);
   }
+  if (LINES > 0) {
+    move(command_row, 0);
+    clrtoeol();
+  }
 
   return refresh() == OK ? 0 : -1;
 }
@@ -705,6 +722,7 @@ static void confit_tui_curses_render_text_body(const char *body, int top,
       cursor += 1;
     }
     line_size = (size_t)(cursor - line_begin);
+    confit_tui_curses_fill_span(top + row, left, width);
     confit_tui_curses_style_on(
         confit_tui_curses_text_line_is_section(line_begin, line_size)
             ? CONFIT_TUI_STYLE_CATEGORY
@@ -734,6 +752,9 @@ int confit_tui_curses_render_text(const char *title, const char *header,
   int body_top;
   int body_height;
   int width;
+  int key_row;
+  int status_row;
+  int command_row;
 
   if (confit_tui_curses_start() != 0) {
     return -1;
@@ -741,6 +762,9 @@ int confit_tui_curses_render_text(const char *title, const char *header,
 
   erase();
   width = COLS > 0 ? COLS : 80;
+  key_row = LINES > 3 ? LINES - 3 : LINES - 1;
+  status_row = LINES > 2 ? LINES - 2 : LINES - 1;
+  command_row = LINES > 1 ? LINES - 1 : 0;
   confit_tui_curses_style_on(CONFIT_TUI_STYLE_TITLE);
   confit_tui_curses_add_centered(0, confit_tui_curses_text(title));
   confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
@@ -750,15 +774,19 @@ int confit_tui_curses_render_text(const char *title, const char *header,
       confit_tui_curses_add_clipped(1, 0, confit_tui_curses_text(status),
                                     width);
     }
-    confit_tui_curses_render_text_body(body, 2, 0, LINES > 4 ? LINES - 4 : 0,
+    confit_tui_curses_render_text_body(body, 2, 0, LINES > 5 ? LINES - 5 : 0,
                                        width, first_line);
-    if (LINES > 1) {
+    if (LINES > 3) {
       confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
-      move(LINES - 1, 0);
+      move(key_row, 0);
       clrtoeol();
-      confit_tui_curses_add_clipped(LINES - 1, 0,
+      confit_tui_curses_add_clipped(key_row, 0,
                                     confit_tui_curses_text(key_legend), width);
       confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
+    }
+    if (LINES > 1) {
+      move(command_row, 0);
+      clrtoeol();
     }
     return refresh() == OK ? 0 : -1;
   }
@@ -770,10 +798,10 @@ int confit_tui_curses_render_text(const char *title, const char *header,
   box_top = header_row + 1;
   box_left = 1;
   box_width = width > 2 ? width - 2 : width;
-  box_height = LINES - box_top - 3;
+  box_height = LINES - box_top - 4;
   if (box_height < 3) {
     confit_tui_curses_render_text_body(
-        body, header_row + 1, 1, LINES - header_row - 3, width - 2, first_line);
+        body, header_row + 1, 1, LINES - header_row - 4, width - 2, first_line);
     return refresh() == OK ? 0 : -1;
   }
 
@@ -810,23 +838,27 @@ int confit_tui_curses_render_text(const char *title, const char *header,
   }
 
   if (LINES > 3) {
-    move(LINES - 2, 0);
+    move(key_row, 0);
     clrtoeol();
     confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
     confit_tui_curses_add_clipped(
-        LINES - 2, 1, confit_tui_curses_text(key_legend), width - 2);
+        key_row, 1, confit_tui_curses_text(key_legend), width - 2);
     confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
   }
   if (LINES > 2) {
     const ConfitTuiCursesStyle status_style =
         confit_tui_curses_status_style(status);
 
-    move(LINES - 1, 0);
+    move(status_row, 0);
     clrtoeol();
     confit_tui_curses_style_on(status_style);
-    confit_tui_curses_add_clipped(LINES - 1, 1, confit_tui_curses_text(status),
+    confit_tui_curses_add_clipped(status_row, 1, confit_tui_curses_text(status),
                                   width - 2);
     confit_tui_curses_style_off(status_style);
+  }
+  if (LINES > 1) {
+    move(command_row, 0);
+    clrtoeol();
   }
   return refresh() == OK ? 0 : -1;
 }
@@ -925,15 +957,20 @@ size_t confit_tui_curses_page_step(void) {
   if (!confit_tui_curses_started) {
     return 10U;
   }
-  if (LINES > 8) {
-    return (size_t)(LINES - 8);
+  if (LINES > 9) {
+    return (size_t)(LINES - 9);
   }
   return 1U;
+}
+
+static int confit_tui_curses_command_row(void) {
+  return LINES > 0 ? LINES - 1 : 0;
 }
 
 static int confit_tui_curses_read_line_at(int row, const char *prompt,
                                           char *out, size_t out_size) {
   size_t input_size;
+  int prompt_size;
 
   if (out == 0 || out_size == 0U || confit_tui_curses_start() != 0) {
     return -1;
@@ -945,16 +982,17 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
   if (row >= LINES) {
     row = LINES > 0 ? LINES - 1 : 0;
   }
-  move(row, 1);
+  prompt_size = (int)strlen(confit_tui_curses_text(prompt));
+  move(row, 0);
   clrtoeol();
   confit_tui_curses_style_on(CONFIT_TUI_STYLE_EDIT);
-  confit_tui_curses_add_clipped(row, 2, confit_tui_curses_text(prompt),
-                                COLS > 4 ? COLS - 4 : 76);
+  confit_tui_curses_add_clipped(row, 0, confit_tui_curses_text(prompt),
+                                COLS > 0 ? COLS : 80);
   confit_tui_curses_style_off(CONFIT_TUI_STYLE_EDIT);
   (void)curs_set(1);
   input_size = 0U;
   out[0] = '\0';
-  move(row, 2 + (int)strlen(confit_tui_curses_text(prompt)));
+  move(row, prompt_size);
   do {
     const int ch = getch();
 
@@ -975,8 +1013,7 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
       if (input_size > 0U) {
         input_size -= 1U;
         out[input_size] = '\0';
-        move(row,
-             2 + (int)strlen(confit_tui_curses_text(prompt)) + (int)input_size);
+        move(row, prompt_size + (int)input_size);
         delch();
       }
       continue;
@@ -984,9 +1021,13 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
     if (ch == 21) {
       input_size = 0U;
       out[0] = '\0';
-      confit_tui_curses_add_clipped(row, 2, confit_tui_curses_text(prompt),
-                                    COLS > 4 ? COLS - 4 : 76);
-      move(row, 2 + (int)strlen(confit_tui_curses_text(prompt)));
+      move(row, 0);
+      clrtoeol();
+      confit_tui_curses_style_on(CONFIT_TUI_STYLE_EDIT);
+      confit_tui_curses_add_clipped(row, 0, confit_tui_curses_text(prompt),
+                                    COLS > 0 ? COLS : 80);
+      confit_tui_curses_style_off(CONFIT_TUI_STYLE_EDIT);
+      move(row, prompt_size);
       clrtoeol();
       continue;
     }
@@ -1006,14 +1047,14 @@ static int confit_tui_curses_read_line_at(int row, const char *prompt,
 
 int confit_tui_curses_read_line(const char *prompt, char *out,
                                 size_t out_size) {
-  return confit_tui_curses_read_line_at(LINES > 2 ? LINES - 1 : 0, prompt, out,
-                                        out_size);
+  return confit_tui_curses_read_line_at(confit_tui_curses_command_row(), prompt,
+                                        out, out_size);
 }
 
 int confit_tui_curses_read_command(const char *prompt, char *out,
                                    size_t out_size) {
-  return confit_tui_curses_read_line_at(LINES > 3 ? LINES - 2 : 0, prompt, out,
-                                        out_size);
+  return confit_tui_curses_read_line_at(confit_tui_curses_command_row(), prompt,
+                                        out, out_size);
 }
 
 static void confit_tui_curses_dialog_rect(int *top, int *left, int *height,
