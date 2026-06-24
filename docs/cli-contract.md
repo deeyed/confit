@@ -223,7 +223,7 @@ cmake --build /tmp/confit-build --target confit
 cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```
 
-The required install artifact is a single executable:
+The required runtime install artifact is a single executable:
 
 ```text
 <prefix>/bin/confit
@@ -235,10 +235,15 @@ On Windows hosts, the executable name is:
 <prefix>/bin/confit.exe
 ```
 
-Optional install artifacts are allowed, but Confit must run without them:
+The local documentation install artifact is:
 
 ```text
 <prefix>/share/man/man1/confit.1
+```
+
+Optional completion artifacts are allowed, but Confit must run without them:
+
+```text
 <prefix>/share/zsh/site-functions/_confit
 <prefix>/share/bash-completion/completions/confit
 <prefix>/share/fish/vendor_completions.d/confit.fish

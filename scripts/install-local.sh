@@ -11,9 +11,10 @@ Usage:
   install-local.sh --prefix <path> [--build-dir <path>]
 
 Builds Confit from the local checkout and installs the single required
-executable artifact:
+executable artifact and the local manual page:
 
   <prefix>/bin/confit
+  <prefix>/share/man/man1/confit.1
 
 This script does not fetch network dependencies and does not edit project
 config trees.
@@ -68,3 +69,6 @@ cmake --install "$BUILD_DIR" --prefix "$PREFIX"
 
 "$PREFIX/bin/confit" --version >/dev/null
 echo "installed $PREFIX/bin/confit"
+if [ -f "$PREFIX/share/man/man1/confit.1" ]; then
+  echo "installed $PREFIX/share/man/man1/confit.1"
+fi

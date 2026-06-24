@@ -1,0 +1,279 @@
+.\" Confit manual page. Install with CMake to share/man/man1.
+.TH CONFIT 1 "2026-06-24" "Confit 0.1.0" "Confit Manual"
+.SH 이름
+confit \- Parus/Delos용 host-side configuration authority tool
+.SH 사용법
+.B confit
+.B --version
+.br
+.B confit
+.B help
+[
+.I command
+]
+.br
+.B confit
+.I command
+[
+.I options
+]
+.SH 설명
+.B confit
+은 build 전에 실행되는 host-side configuration tool이다.
+사람이 관리하는 TOML schema, profile, target, compatibility rule을 읽고,
+선택한 profile을 검증하고 resolve한 뒤 deterministic generated artifact를 만든다.
+.PP
+Confit은 runtime service가 아니다.
+Parus kernel, Delos runtime, MCU image 안에 TOML parser, TUI,
+solver를 넣지 않는다.
+입력은 source TOML이고, 출력은 명시적인 output directory 아래의 generated file이다.
+.PP
+주요 출력 파일은 다음과 같다.
+.EX
+config.h
+config.report.json
+config.explain.txt
+config.graph.json
+config.inputs.json
+config.cmake
+config.qst
+.EE
+.SH 명령
+.TP
+.B help [command]
+전체 도움말 또는 특정 command 도움말을 출력한다.
+.TP
+.B doctor [--project path]
+설치, platform, compiler, curses/TUI, generator,
+project layout 상태를 확인한다.
+.TP
+.B init --project path --template minimal|delos|parus [--force] [--dry-run]
+새 Confit project skeleton을 만든다.
+설치 명령은 project를 만들지 않으며, project 생성은 명시적으로
+.B init
+이 담당한다.
+.TP
+.B check --project path --profile name [--target name] [--strict]
+TOML parse, schema validation, dependency graph validation,
+selected profile resolve를 수행한다.
+.B --strict
+는 warning을 failure로 승격한다.
+.TP
+.B resolve --project path --profile name [--target name] [--set id=value] [--format text|json|toml]
+최종 resolved configuration을 출력한다.
+.B --set
+은 일회성 override이며 profile TOML을 수정하지 않는다.
+.TP
+.B gen --project path --profile name [--target name] --out path [--artifact header|reports|cmake|qstar|all] [--force] [--dry-run]
+generated artifact를 만든다.
+기본적으로 기존 file overwrite를 거부하며,
+.B --force
+를 써야 덮어쓴다.
+.B --dry-run
+은 실제 쓰기 없이 예정된 output을 보고한다.
+.TP
+.B explain --project path --profile name [--target name] [--set id=value] option-id
+특정 option의 현재 값, source, dependency 이유를 설명한다.
+.TP
+.B list --project path [--kind options|profiles|targets|categories|tags] [--category name] [--tag name] [--query text] [--show-hidden]
+schema entity를 조회한다.
+category, tag, query filter로
+큰 project에서도 원하는 option을 찾는다.
+.TP
+.B graph --project path [--profile name] [--target name] [--format json|dot]
+option dependency graph를
+JSON 또는 DOT 형식으로
+출력한다.
+.TP
+.B diff --project path --profile name --base profile [--target name] [--format text|json]
+두 profile의 resolved value 차이를 비교한다.
+profile review에서
+무엇이 바뀌는지 확인할 때 사용한다.
+.TP
+.B compat --parus path --delos path --profile name [--target name] [--compat path] [--format text|json]
+Parus/Delos-style project root 사이의
+compatibility assertion을
+검사한다.
+.TP
+.B profile list --project path
+profile 목록을 출력한다.
+.TP
+.B profile show --project path name
+profile TOML 내용을 출력한다.
+.TP
+.B profile new --project path name [--base profile] [--target target] [--force]
+새 profile TOML을 만든다.
+.TP
+.B profile set --project path name option-id=value
+profile 값 하나를 설정한다.
+type validation과
+resolve 검증 후 저장한다.
+.TP
+.B profile unset --project path name option-id
+profile override 값을 제거한다.
+.TP
+.B profile validate --project path name
+profile을 검증한다.
+.TP
+.B tui --project path --profile name [--target name]
+macOS/Linux curses host에서
+profile editor TUI를 연다.
+.TP
+.B tui --project path --schema-edit
+guarded schema editor TUI를 연다.
+schema edit는 project 의미를
+바꾸므로
+code review 대상이다.
+.TP
+.B completion --shell bash|zsh|fish
+shell completion script를 출력한다.
+.SH 전역 옵션
+.TP
+.B --help
+도움말을 출력한다.
+.TP
+.B --version
+Confit version을 출력한다.
+.TP
+.B --color auto|always|never
+diagnostic color 정책을 선택한다.
+.TP
+.B --quiet
+성공 banner 같은 비필수 output을 줄인다.
+JSON payload나 error는
+숨기지 않는다.
+.TP
+.B --verbose
+추가 실행 context를 stderr에 출력한다.
+.SH 자주 쓰는 흐름
+.SS Project 검사
+.EX
+confit check \\
+  --project tools/confit/tests/fixtures/realish/delos \\
+  --profile sim-dsh
+.EE
+.SS Resolved value 출력
+.EX
+confit resolve \\
+  --project tools/confit/tests/fixtures/realish/delos \\
+  --profile sim-dsh \\
+  --format json
+.EE
+.SS Option 설명
+.EX
+confit explain \\
+  --project tools/confit/tests/fixtures/realish/delos \\
+  --profile sim-dsh \\
+  delos.debug.dsh
+.EE
+.SS Profile 비교
+.EX
+confit diff \\
+  --project tools/confit/tests/fixtures/realish/delos \\
+  --profile sim-dsh \\
+  --base debug
+.EE
+.SS Artifact 생성
+.EX
+confit gen \\
+  --project tools/confit/tests/fixtures/realish/delos \\
+  --profile sim-dsh \\
+  --out /tmp/confit-generated/delos/sim-dsh \\
+  --artifact all
+.EE
+.SS Compatibility 검사
+.EX
+confit compat \\
+  --parus tools/confit/tests/fixtures/realish/parus \\
+  --delos tools/confit/tests/fixtures/realish/delos \\
+  --profile parus-delos-debug \\
+  --compat tools/confit/tests/fixtures/realish/compat
+.EE
+.SS TUI 진입
+.EX
+confit tui \\
+  --project tools/confit/tests/fixtures/tui/profile-editor \\
+  --profile edit
+.EE
+.SS Schema editor 진입
+.EX
+confit tui \\
+  --project tools/confit/tests/fixtures/tui/schema-editor \\
+  --schema-edit
+.EE
+.SH 파일
+.TP
+.I config/project.toml
+project metadata와 schema version.
+.TP
+.I config/options/*.toml
+option schema.
+.TP
+.I config/profiles/*.toml
+profile values.
+.TP
+.I config/targets/*.toml
+target-specific values.
+.TP
+.I config/compat/*.toml
+cross-project compatibility assertions.
+.TP
+.I config.h
+C source가 include하는 generated compile-time define.
+.TP
+.I config.inputs.json
+generated artifact를 만든 input manifest.
+.SH 종료 코드
+.EX
+0  success
+1  invalid command line
+2  parse error
+3  schema error
+4  dependency or conflict error
+5  compatibility error
+6  generation error
+7  internal error
+8  unsupported command or platform
+.EE
+.SH 안전 규칙
+.IP \(bu 2
+Confit은 read-only command가 기본이다.
+.IP \(bu 2
+write command는 명시적인
+project path 또는 output path를
+요구한다.
+.IP \(bu 2
+.B gen
+은 반드시
+.B --out
+아래에만 generated artifact를 쓴다.
+.IP \(bu 2
+설치 과정은 project
+.I config/
+tree를 만들거나
+수정하지 않는다.
+.IP \(bu 2
+runtime source, hidden binary DB, network-fetched configuration은
+Confit의 범위가 아니다.
+.SH TUI 키
+.EX
+방향키 / j k       이동
+PageUp/PageDown   페이지 이동
+Home/End          처음/끝
+Enter/Space       toggle 또는 edit
+e                 edit
+/                 search
+n / N             다음/이전 search result
+? 또는 h          help/detail
+s                 저장
+q                 종료
+Esc               dialog 취소
+.EE
+.SH 함께 볼 문서
+.I tools/confit/wiki/README.md
+.br
+.I tools/confit/docs/cli-contract.md
+.br
+.I tools/confit/docs/toml-schema.md
+.br
+.I tools/confit/docs/final-release-note.md

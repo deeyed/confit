@@ -52,6 +52,8 @@ integration artifact로만 다룬다.
 - [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
 - [release-candidate.md](docs/release-candidate.md): v0 RC 검증 gate, 예제 command, portability review.
 - [final-release-note.md](docs/final-release-note.md): 18라운드 종료 시점 실전 투입 후보 판정과 남은 위험.
+- [wiki/](wiki/README.md): 처음 쓰는 사용자와 AI 자동화를 위한 한국어 실전 사용 설명서.
+- [man/confit.1](man/confit.1): `man confit`으로 읽는 한국어 CLI reference.
 
 ## Recommended Repository Placement
 
@@ -92,6 +94,7 @@ Confit의 필수 설치 산출물은 단일 실행 파일이다.
 ```sh
 tools/confit/scripts/install-local.sh --prefix ~/.local
 ~/.local/bin/confit doctor
+man confit
 ```
 
 수동 설치도 같은 규칙을 따른다.

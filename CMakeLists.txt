@@ -201,6 +201,7 @@ target_compile_definitions(confit PRIVATE
 confit_target_warnings(confit)
 
 install(TARGETS confit RUNTIME DESTINATION bin)
+install(FILES man/confit.1 DESTINATION share/man/man1)
 
 enable_testing()
 

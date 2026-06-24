@@ -1,0 +1,192 @@
+# 06. 생성물 가이드
+
+`confit gen`은 resolved config를 build가 소비할 artifact로 바꾼다. Confit은 source tree를 몰래 수정하지
+않고, 반드시 `--out`으로 지정한 directory에만 생성한다.
+
+## 기본 명령
+
+```sh
+confit gen \
+  --project tools/confit/tests/fixtures/realish/delos \
+  --profile sim-dsh \
+  --out /tmp/confit-generated/delos/sim-dsh \
+  --artifact all
+```
+
+생성 결과:
+
+```text
+config.h
+config.report.json
+config.explain.txt
+config.graph.json
+config.inputs.json
+config.cmake
+config.qst
+```
+
+## artifact 선택
+
+전체 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact all
+```
+
+header만 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact header
+```
+
+reports만 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact reports
+```
+
+CMake fragment만 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact cmake
+```
+
+QStar manifest만 생성:
+
+```sh
+confit gen --project <project> --profile <profile> --out <out> --artifact qstar
+```
+
+## `--dry-run`
+
+실제로 쓰지 않고 무엇을 쓸지 확인한다.
+
+```sh
+confit gen \
+  --project tools/confit/tests/fixtures/realish/delos \
+  --profile sim-dsh \
+  --out /tmp/confit-generated/delos/sim-dsh \
+  --artifact all \
+  --dry-run
+```
+
+source adoption이나 CI 작업 전에는 먼저 `--dry-run`을 돌리는 습관이 좋다.
+
+## `--force`
+
+이미 output file이 있으면 Confit은 기본적으로 덮어쓰기를 거부한다.
+
+```sh
+confit gen \
+  --project <project> \
+  --profile <profile> \
+  --out <out> \
+  --artifact all
+```
+
+덮어쓰려면 명시적으로 `--force`를 쓴다.
+
+```sh
+confit gen \
+  --project <project> \
+  --profile <profile> \
+  --out <out> \
+  --artifact all \
+  --force
+```
+
+## config.h
+
+`config.h`는 C source가 include하는 compile-time define을 담는다.
+
+예시:
+
+```c
+#define DELOS_CONFIG_DEBUG_DSH 1
+#define DELOS_CONFIG_TARGET_BOARD "host-sim"
+#define DELOS_CONFIG_SCHEDULER_TASK_SLOTS 1U
+#define DELOS_CONFIG_SOURCE_HASH 0x8080CE8307BD0C47ULL
+```
+
+특징:
+
+- timestamp를 넣지 않는다.
+- option id 순서를 stable하게 유지한다.
+- project별 define prefix를 사용한다.
+- source hash를 넣어 generated output 추적을 돕는다.
+
+## config.report.json
+
+machine-readable report다. CI, dashboard, review bot이 읽기 좋다.
+
+사용 예:
+
+```sh
+jq '.values[] | select(.id == "delos.debug.dsh")' \
+  /tmp/confit-generated/delos/sim-dsh/config.report.json
+```
+
+## config.explain.txt
+
+사람이 읽는 explanation report다. option별 값과 이유를 훑어볼 때 쓴다.
+
+```sh
+less /tmp/confit-generated/delos/sim-dsh/config.explain.txt
+```
+
+## config.graph.json
+
+dependency graph dump다. option graph를 분석하거나 시각화하기 전단계로 쓴다.
+
+```sh
+jq '.nodes | length' /tmp/confit-generated/delos/sim-dsh/config.graph.json
+```
+
+## config.inputs.json
+
+어떤 input TOML이 artifact 생성에 들어갔는지 기록한다. review와 reproducibility에서 중요하다.
+
+```sh
+jq '.inputs[].path' /tmp/confit-generated/delos/sim-dsh/config.inputs.json
+```
+
+## config.cmake
+
+CMake가 명시적으로 include할 수 있는 generated fragment다. Confit이 CMake graph를 자동으로 수정하지는
+않는다.
+
+예상 사용 방식:
+
+```cmake
+include("${CMAKE_BINARY_DIR}/generated/config/delos/sim-dsh/config.cmake")
+target_include_directories(delos_runtime PRIVATE "${CONFIT_CONFIG_INCLUDE_DIR}")
+```
+
+실제 build graph wiring은 별도 integration round에서 review한다.
+
+## config.qst
+
+QStar graph가 읽을 수 있는 manifest fragment다. Confit이 QStar graph를 자동으로 수정하지는 않는다.
+
+예상 사용 방식:
+
+```text
+generated config manifest를 QStar rule이 명시적으로 입력으로 받는다.
+```
+
+## Generated output review checklist
+
+```sh
+confit check --project <project> --profile <profile> --strict
+confit gen --project <project> --profile <profile> --out <out> --artifact all --dry-run
+confit gen --project <project> --profile <profile> --out <out> --artifact all
+test -s <out>/config.h
+test -s <out>/config.inputs.json
+```
+
+review할 내용:
+
+- `config.h` define prefix가 project에 맞는가.
+- `config.inputs.json`에 예상 input만 들어갔는가.
+- generated path가 source tree가 아니라 build/output tree인가.
+- `config.cmake`와 `config.qst`를 실제 build graph에 연결하는 change가 별도 review 대상인가.

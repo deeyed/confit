@@ -128,6 +128,12 @@ Confit의 필수 설치 산출물은 단일 실행 파일이다.
 <prefix>/bin/confit
 ```
 
+사용자 문서 산출물은 manpage다.
+
+```text
+<prefix>/share/man/man1/confit.1
+```
+
 local checkout에서 설치하려면 다음 명령을 사용한다.
 
 ```sh
@@ -151,6 +157,7 @@ cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```sh
 ~/.local/bin/confit --version
 ~/.local/bin/confit doctor
+man confit
 ```
 
 ## Fixture Convention
