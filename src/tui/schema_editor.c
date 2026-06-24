@@ -55,6 +55,11 @@ static ConfitStatus
 confit_tui_schema_validate_range(const ConfitTuiSchemaOption *option,
                                  ConfitDiagnostic *diagnostic);
 
+static int confit_tui_schema_type_is_numeric(const char *type) {
+  return strcmp(type, "int") == 0 || strcmp(type, "uint") == 0 ||
+         strcmp(type, "hex") == 0 || strcmp(type, "float") == 0;
+}
+
 static void confit_tui_schema_validation_message(char *message,
                                                  size_t message_size,
                                                  const char *text) {
@@ -91,6 +96,109 @@ static void confit_tui_schema_append_text(char *out, size_t out_size,
     return;
   }
   confit_tui_schema_copy_text(out + used, out_size - used, text);
+}
+
+static void confit_tui_schema_format_field_policy(
+    const ConfitTuiSchemaOption *option, ConfitTuiSchemaField field, char *out,
+    size_t out_size) {
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  switch (field) {
+  case CONFIT_TUI_SCHEMA_FIELD_ID:
+    (void)snprintf(out, out_size,
+                   "dotted option id; letters, numbers, _, - allowed");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_TYPE:
+    (void)snprintf(out, out_size,
+                   "one of bool,int,uint,hex,string,enum,float,path");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_DEFAULT:
+    if (option == 0) {
+      (void)snprintf(out, out_size, "valid default for the selected type");
+    } else if (strcmp(option->type, "bool") == 0) {
+      (void)snprintf(out, out_size, "true/false or 1/0");
+    } else if (strcmp(option->type, "int") == 0) {
+      (void)snprintf(out, out_size, "integer default");
+    } else if (strcmp(option->type, "uint") == 0) {
+      (void)snprintf(out, out_size, "unsigned integer default");
+    } else if (strcmp(option->type, "hex") == 0) {
+      (void)snprintf(out, out_size, "unsigned integer or 0x hex default");
+    } else if (strcmp(option->type, "float") == 0) {
+      (void)snprintf(out, out_size, "finite floating point default");
+    } else if (strcmp(option->type, "enum") == 0) {
+      (void)snprintf(out, out_size, "must match one enum choice");
+    } else if (strcmp(option->type, "path") == 0) {
+      (void)snprintf(out, out_size, "relative path default");
+    } else {
+      (void)snprintf(out, out_size, "text default; control chars rejected");
+    }
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_PROMPT:
+    (void)snprintf(out, out_size, "short user-facing prompt text");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_HELP:
+    (void)snprintf(out, out_size, "longer help text; control chars rejected");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_CATEGORY:
+    (void)snprintf(out, out_size, "menu category name; empty allowed");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_TAGS:
+    (void)snprintf(out, out_size,
+                   "comma-list; empty allowed; duplicates rejected");
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_RANGE:
+    if (option != 0 && confit_tui_schema_type_is_numeric(option->type)) {
+      (void)snprintf(out, out_size,
+                     "numeric min,max containing the current default");
+    } else {
+      (void)snprintf(out, out_size,
+                     "only valid for int,uint,hex,float; empty clears");
+    }
+    break;
+  case CONFIT_TUI_SCHEMA_FIELD_CHOICES:
+    if (option != 0 && strcmp(option->type, "enum") == 0) {
+      (void)snprintf(out, out_size,
+                     "enum comma-list; default must remain a choice");
+    } else {
+      (void)snprintf(out, out_size, "only valid for enum options");
+    }
+    break;
+  default:
+    (void)snprintf(out, out_size, "valid schema field value");
+    break;
+  }
+  out[out_size - 1U] = '\0';
+}
+
+static void confit_tui_schema_format_field_status(
+    const ConfitTuiSchemaOption *option, ConfitTuiSchemaField field, char *out,
+    size_t out_size) {
+  char policy[160];
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  confit_tui_schema_format_field_policy(option, field, policy, sizeof(policy));
+  (void)snprintf(out, out_size, "required: %s", policy);
+  out[out_size - 1U] = '\0';
+}
+
+static void confit_tui_schema_format_row_label(
+    const ConfitTuiSchemaOption *option, char *out, size_t out_size) {
+  const char *name;
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  name = 0;
+  if (option != 0) {
+    name = option->prompt[0] != '\0' ? option->prompt : option->id;
+  }
+  (void)snprintf(out, out_size, "%s <%s>",
+                 confit_tui_text_or_dash(name),
+                 confit_tui_text_or_dash(option != 0 ? option->id : 0));
+  out[out_size - 1U] = '\0';
 }
 
 static void confit_tui_schema_set_status_from_diagnostic(
@@ -501,8 +609,10 @@ static int confit_tui_schema_field_validator(const char *text, char *message,
     }
     return 0;
   case CONFIT_TUI_SCHEMA_FIELD_DEFAULT: {
+    ConfitTuiSchemaOption candidate;
     ConfitValue value;
     ConfitStatus status;
+    ConfitDiagnostic range_diagnostic;
 
     if (validator->option == 0) {
       confit_tui_schema_validation_message(message, message_size,
@@ -513,6 +623,23 @@ static int confit_tui_schema_field_validator(const char *text, char *message,
     status = confit_tui_schema_parse_default_value(
         validator->option, text, &value, message, message_size);
     confit_value_clear(&value);
+    if (status != CONFIT_OK) {
+      return 1;
+    }
+    candidate = *validator->option;
+    (void)snprintf(candidate.default_value, sizeof(candidate.default_value),
+                   "%s", text != 0 ? text : "");
+    candidate.default_value[sizeof(candidate.default_value) - 1U] = '\0';
+    confit_diagnostic_init(&range_diagnostic);
+    status = confit_tui_schema_validate_range(&candidate, &range_diagnostic);
+    if (status != CONFIT_OK) {
+      confit_tui_schema_validation_message(
+          message, message_size,
+          range_diagnostic.message != 0
+              ? range_diagnostic.message
+              : "schema range does not contain the default");
+      return 1;
+    }
     return status == CONFIT_OK ? 0 : 1;
   }
   case CONFIT_TUI_SCHEMA_FIELD_PROMPT:
@@ -537,11 +664,17 @@ static int confit_tui_schema_field_validator(const char *text, char *message,
     }
     {
       ConfitTuiSchemaOption candidate = *validator->option;
+      ConfitDiagnostic range_diagnostic;
       (void)snprintf(candidate.range, sizeof(candidate.range), "%s", text);
       candidate.range[sizeof(candidate.range) - 1U] = '\0';
-      if (confit_tui_schema_validate_range(&candidate, 0) != CONFIT_OK) {
+      confit_diagnostic_init(&range_diagnostic);
+      if (confit_tui_schema_validate_range(&candidate, &range_diagnostic) !=
+          CONFIT_OK) {
         confit_tui_schema_validation_message(
-            message, message_size, "schema range does not contain the default");
+            message, message_size,
+            range_diagnostic.message != 0
+                ? range_diagnostic.message
+                : "schema range does not contain the default");
         return 1;
       }
     }
@@ -587,20 +720,33 @@ static int confit_tui_schema_read_field(const ConfitTuiSchemaState *state,
                                         const char *current, char *out,
                                         size_t out_size) {
   ConfitTuiSchemaFieldValidator validator;
-  char header[512];
+  char header[768];
   char prompt[96];
+  char policy[160];
+  char initial_status[192];
 
   if (out == 0 || out_size == 0U) {
     return -1;
   }
   out[0] = '\0';
+  confit_tui_schema_format_field_policy(option, field, policy, sizeof(policy));
+  confit_tui_schema_format_field_status(option, field, initial_status,
+                                        sizeof(initial_status));
   (void)snprintf(
       header, sizeof(header),
-      "SCHEMA EDIT MODE\nfield=%s\noption=%s\ncurrent=%s\nEnter commits a "
-      "valid schema field. Esc cancels.",
+      "SCHEMA EDIT MODE - guarded\nproject=%s\nfield=%s\noption=%s\ntype=%s\n"
+      "current=%s\ndefault=%s\nrange=%s\nchoices=%s\npolicy: %s\nkeys: Enter "
+      "validates, Ctrl-U clears, Esc cancels",
+      confit_tui_text_or_dash(state != 0 && state->project != 0
+                                  ? state->project->name
+                                  : 0),
       confit_tui_text_or_dash(field_name),
       confit_tui_text_or_dash(option != 0 ? option->id : "<new option>"),
-      confit_tui_text_or_dash(current));
+      confit_tui_text_or_dash(option != 0 ? option->type : "-"),
+      confit_tui_text_or_dash(current),
+      confit_tui_text_or_dash(option != 0 ? option->default_value : "-"),
+      confit_tui_text_or_dash(option != 0 ? option->range : "-"),
+      confit_tui_text_or_dash(option != 0 ? option->choices : "-"), policy);
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(prompt, sizeof(prompt),
                  "%s: ", confit_tui_text_or_dash(field_name));
@@ -609,7 +755,7 @@ static int confit_tui_schema_read_field(const ConfitTuiSchemaState *state,
   validator.option = option;
   validator.field = field;
   return confit_tui_curses_read_value_dialog(
-      "Confit Schema Field", header, prompt, "Enter a schema field value",
+      "Confit Schema Field", header, prompt, initial_status,
       confit_tui_schema_field_validator, &validator, out, out_size);
 }
 
@@ -1288,21 +1434,25 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   ConfitTuiListItem *items;
   ConfitTuiScreen screen;
   char status_line[384];
-  char header[256];
-  char key_legend[128];
+  char header[384];
+  char key_legend[192];
+  char (*labels)[192];
   char (*details)[512];
   char (*values)[64];
   size_t index;
 
   items = 0;
+  labels = 0;
   details = 0;
   values = 0;
   if (state->option_count > 0U) {
     items = (ConfitTuiListItem *)calloc(state->option_count, sizeof(items[0]));
+    labels = (char (*)[192])calloc(state->option_count, sizeof(labels[0]));
     details = (char (*)[512])calloc(state->option_count, sizeof(details[0]));
     values = (char (*)[64])calloc(state->option_count, sizeof(values[0]));
-    if (items == 0 || details == 0 || values == 0) {
+    if (items == 0 || labels == 0 || details == 0 || values == 0) {
       free(items);
+      free(labels);
       free(details);
       free(values);
       return CONFIT_ERR_INTERNAL;
@@ -1311,29 +1461,30 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   for (index = 0U; index < state->option_count; ++index) {
     const ConfitTuiSchemaOption *option = &state->options_list[index];
 
+    confit_tui_schema_format_row_label(option, labels[index],
+                                       sizeof(labels[index]));
     (void)snprintf(details[index], sizeof(details[index]),
-                   "schema-edit | id=%s | type=%s | default=%s | "
-                   "category=%s | tags: %s | range=%s | choices=%s | help=%s",
-                   confit_tui_text_or_dash(option->id),
+                   "mode=schema | type=%s | default=%s | category=%s | "
+                   "tags=%s | range=%s | choices=%s",
                    confit_tui_text_or_dash(option->type),
                    confit_tui_text_or_dash(option->default_value),
                    confit_tui_text_or_dash(option->category),
                    confit_tui_text_or_dash(option->tags),
                    confit_tui_text_or_dash(option->range),
-                   confit_tui_text_or_dash(option->choices),
-                   confit_tui_text_or_dash(option->help));
+                   confit_tui_text_or_dash(option->choices));
     details[index][sizeof(details[index]) - 1U] = '\0';
-    (void)snprintf(values[index], sizeof(values[index]), "%s", option->type);
+    (void)snprintf(values[index], sizeof(values[index]), "%s",
+                   confit_tui_text_or_dash(option->type));
     values[index][sizeof(values[index]) - 1U] = '\0';
-    items[index].label =
-        option->prompt[0] != '\0' ? option->prompt : option->id;
+    items[index].label = labels[index];
     items[index].detail = details[index];
     items[index].value = values[index];
   }
 
   (void)snprintf(
       header, sizeof(header),
-      "SCHEMA EDIT MODE - guarded | project=%s dirty=%s | option %lu/%lu",
+      "SCHEMA EDIT MODE - guarded | schema edits change all profiles\n"
+      "project=%s dirty=%s | option %lu/%lu",
       confit_tui_text_or_dash(state->project != 0 ? state->project->name : 0),
       state->dirty ? "yes" : "no",
       state->option_count == 0U ? 0UL
@@ -1342,14 +1493,14 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   header[sizeof(header) - 1U] = '\0';
   (void)snprintf(
       key_legend, sizeof(key_legend),
-      "keys: move jk/arrows Pg/Home/End | n new | edit y/d/p/h/c/t/r/o | "
-      "? keys%s | q quit",
+      "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new | "
+      "p/h/c/t/r/o fields | ? keys%s | q quit",
       state->dirty ? " | s save" : "");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "%s",
                  state->status[0] != '\0' ? state->status : "guarded");
   status_line[sizeof(status_line) - 1U] = '\0';
-  screen.title = "Confit Schema Editor - menuconfig guarded schema";
+  screen.title = "Confit TUI - menuconfig schema";
   screen.header = header;
   screen.key_legend = key_legend;
   screen.items = items;
@@ -1358,11 +1509,13 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   screen.status = status_line;
   if (confit_tui_curses_render(&screen) != 0) {
     free(items);
+    free(labels);
     free(details);
     free(values);
     return CONFIT_ERR_INTERNAL;
   }
   free(items);
+  free(labels);
   free(details);
   free(values);
   return CONFIT_OK;

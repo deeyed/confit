@@ -171,8 +171,11 @@ authority 편집임을 계속 보여준다. Status line은 schema field update, 
 
 Schema field 수정은 profile value editor와 같은 menuconfig-style field dialog를 쓴다. `id`, `type`,
 `default`, `prompt`, `help`, `category`, `tags`, `range`, `choices`는 입력 시점에 검증하고, 실패하면
-dialog를 닫지 않은 채 status row에 원인을 표시한다. `range`는 numeric type에만 허용하고 현재 default를
-포함해야 한다. `choices`는 enum에만 허용하며 comma-list empty item과 duplicate를 거부한다. 저장 경로는
+dialog를 닫지 않은 채 status row에 원인을 표시한다. Schema editor도 profile editor와 같은 full-width
+list viewport, context header, compact key legend, bottom status band를 쓰며, option row는 `Prompt <id>`를
+중심으로 보여준다. Field dialog는 project, field, option id, type, current value, default, range, choices,
+policy, key hint를 함께 표시한다. `range`는 numeric type에만 허용하고 현재 default를 포함해야 한다.
+`choices`는 enum에만 허용하며 comma-list empty item과 duplicate를 거부한다. 저장 경로는
 draft option을 core model로 다시 구성한 뒤 schema validation, graph build, graph validation을 통과해야
 TOML write를 수행한다. Write 후에도 project를 reload하고 graph validation을 다시 실행한다.
 

@@ -27,12 +27,30 @@ grep -aF "Generated outputs are not written here" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "SCHEMA EDIT MODE - guarded" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "option 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "Confit Schema Editor - menuconfig guarded schema" \
+grep -aF "Confit TUI - menuconfig schema" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Field" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | n new | edit y/d/p/h/c/t/r/o" \
+grep -aF "schema edits change all profiles" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Created Prompt <delos.schema.mode>" "$WORK_DIR/tui-schema.txt" \
+  >/dev/null
+grep -aF "Limit Prompt <delos.schema.limit>" "$WORK_DIR/tui-schema.txt" \
+  >/dev/null
+grep -aF "type=enum" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "choices=red,blue" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "policy: dotted option id; letters, numbers, _, - allowed" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "policy: one of bool,int,uint,hex,string,enum,float,path" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "policy: enum comma-list; default must remain a choice" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "policy: numeric min,max containing the current default" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "required: numeric min,max containing the current default" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "reloaded graph" "$WORK_DIR/tui-schema.txt" >/dev/null
@@ -52,12 +70,17 @@ printf '\nninvalid\n\033q' |
     >"$WORK_DIR/tui-schema-invalid-id.txt"
 
 grep -aF "option id:" "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
-grep -aF "invalid" "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
+grep -aF "invalid schema option id" "$WORK_DIR/tui-schema-invalid-id.txt" \
+  >/dev/null
+grep -aF "required: dotted option id; letters, numbers, _, - allowed" \
+  "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
 
 printf '\nndelos.schema.bad\nint\nBad\nr10,1\n\033q' |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-invalid-range.txt"
 
+grep -aF "required: numeric min,max containing the current default" \
+  "$WORK_DIR/tui-schema-invalid-range.txt" >/dev/null
 grep -aF "schema range does not contain the default" \
   "$WORK_DIR/tui-schema-invalid-range.txt" >/dev/null
 
