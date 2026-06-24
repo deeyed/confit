@@ -55,6 +55,17 @@ TUI는 다음 panel을 가져야 한다.
 - profile override 표시
 - save 전에 full validation
 
+## TUI Styling
+
+ncurses frontend는 raw color pair 번호를 화면 코드에서 직접 쓰지 않고 의미 기반 style slot을 사용한다.
+현재 고정된 style slot은 `title`, `path`, `header`, `list`, `selection`, `disabled`, `forced`,
+`warning`, `status`, `key`, `search_match`, `category`, `separator`, `help`, `dialog`, `edit`이다.
+
+macOS/Linux에서 terminal이 color를 지원하면 built-in palette를 사용한다. Terminal이 color를 지원하지
+않거나 `NO_COLOR` 환경변수가 설정되어 있으면 monochrome fallback으로 전환하고, 색상 대신 `bold`, `dim`,
+`reverse`, `underline` 같은 curses attribute만 사용한다. 따라서 TUI는 color가 없어도 선택 row, disabled
+row, warning/status row를 구분할 수 있어야 한다.
+
 ## Fixed TUI Keymap
 
 Confit TUI keymap은 kconfiglib/menuconfig 계열 조작감을 기준으로 고정한다. Profile editor와 schema editor는

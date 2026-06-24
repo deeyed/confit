@@ -4,12 +4,152 @@
 #include <curses.h>
 #include <locale.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int confit_tui_curses_started = 0;
+static int confit_tui_curses_colors_enabled = 0;
+static short confit_tui_curses_default_bg = COLOR_BLACK;
+
+typedef enum ConfitTuiCursesStyle {
+  CONFIT_TUI_STYLE_TITLE = 0,
+  CONFIT_TUI_STYLE_PATH = 1,
+  CONFIT_TUI_STYLE_HEADER = 2,
+  CONFIT_TUI_STYLE_LIST = 3,
+  CONFIT_TUI_STYLE_SELECTION = 4,
+  CONFIT_TUI_STYLE_DISABLED = 5,
+  CONFIT_TUI_STYLE_FORCED = 6,
+  CONFIT_TUI_STYLE_WARNING = 7,
+  CONFIT_TUI_STYLE_STATUS = 8,
+  CONFIT_TUI_STYLE_KEY = 9,
+  CONFIT_TUI_STYLE_SEARCH_MATCH = 10,
+  CONFIT_TUI_STYLE_CATEGORY = 11,
+  CONFIT_TUI_STYLE_SEPARATOR = 12,
+  CONFIT_TUI_STYLE_HELP = 13,
+  CONFIT_TUI_STYLE_DIALOG = 14,
+  CONFIT_TUI_STYLE_EDIT = 15,
+  CONFIT_TUI_STYLE_COUNT = 16
+} ConfitTuiCursesStyle;
+
+typedef struct ConfitTuiCursesStyleDef {
+  short pair;
+  int color_attr;
+  int mono_attr;
+} ConfitTuiCursesStyleDef;
+
+static const ConfitTuiCursesStyleDef
+    confit_tui_curses_style_defs[CONFIT_TUI_STYLE_COUNT] = {
+        {3, A_BOLD, A_BOLD},                 /* title */
+        {2, A_BOLD, A_BOLD},                 /* path */
+        {2, A_BOLD, A_BOLD},                 /* header */
+        {0, A_NORMAL, A_NORMAL},             /* list */
+        {4, A_BOLD, A_REVERSE},              /* selection */
+        {5, A_DIM, A_DIM},                   /* disabled */
+        {8, A_BOLD, A_BOLD},                 /* forced */
+        {6, A_BOLD, A_BOLD},                 /* warning */
+        {1, A_NORMAL, A_REVERSE},            /* status */
+        {1, A_NORMAL, A_REVERSE},            /* key */
+        {9, A_BOLD | A_UNDERLINE, A_BOLD},   /* search match */
+        {7, A_BOLD, A_BOLD},                 /* category */
+        {3, A_BOLD, A_BOLD},                 /* separator */
+        {2, A_NORMAL, A_NORMAL},             /* help */
+        {10, A_BOLD, A_BOLD},                /* dialog */
+        {11, A_NORMAL, A_REVERSE},           /* edit */
+};
 
 static const char *confit_tui_curses_text(const char *text) {
   return text != 0 ? text : "";
+}
+
+static int confit_tui_curses_contains(const char *text, const char *needle) {
+  return strstr(confit_tui_curses_text(text), needle) != 0;
+}
+
+static ConfitTuiCursesStyle confit_tui_curses_status_style(const char *text) {
+  if (confit_tui_curses_contains(text, "invalid") ||
+      confit_tui_curses_contains(text, "error") ||
+      confit_tui_curses_contains(text, "failed") ||
+      confit_tui_curses_contains(text, "SCHEMA EDIT")) {
+    return CONFIT_TUI_STYLE_WARNING;
+  }
+  if (confit_tui_curses_contains(text, "blocked:") ||
+      confit_tui_curses_contains(text, "forced")) {
+    return CONFIT_TUI_STYLE_FORCED;
+  }
+  return CONFIT_TUI_STYLE_STATUS;
+}
+
+static int confit_tui_curses_init_pair_safe(short pair, short fg, short bg) {
+  if (init_pair(pair, fg, bg) == OK) {
+    return 0;
+  }
+  if (bg == -1 && init_pair(pair, fg, COLOR_BLACK) == OK) {
+    return 0;
+  }
+  return -1;
+}
+
+static void confit_tui_curses_init_styles(void) {
+  const int no_color = getenv("NO_COLOR") != 0;
+
+  confit_tui_curses_colors_enabled = 0;
+  confit_tui_curses_default_bg = COLOR_BLACK;
+  if (no_color || !has_colors()) {
+    return;
+  }
+  (void)start_color();
+  if (use_default_colors() == OK) {
+    confit_tui_curses_default_bg = -1;
+  }
+  confit_tui_curses_colors_enabled = 1;
+  (void)confit_tui_curses_init_pair_safe(1, COLOR_BLACK, COLOR_WHITE);
+  (void)confit_tui_curses_init_pair_safe(2, COLOR_CYAN,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(3, COLOR_YELLOW,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(4, COLOR_BLACK, COLOR_CYAN);
+  (void)confit_tui_curses_init_pair_safe(5, COLOR_WHITE,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(6, COLOR_RED,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(7, COLOR_MAGENTA,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(8, COLOR_RED,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(9, COLOR_GREEN,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(10, COLOR_YELLOW,
+                                         confit_tui_curses_default_bg);
+  (void)confit_tui_curses_init_pair_safe(11, COLOR_BLACK, COLOR_WHITE);
+}
+
+static int confit_tui_curses_style_attr(ConfitTuiCursesStyle style) {
+  const ConfitTuiCursesStyleDef *def;
+
+  if ((int)style < 0 || style >= CONFIT_TUI_STYLE_COUNT) {
+    return A_NORMAL;
+  }
+  def = &confit_tui_curses_style_defs[style];
+  if (confit_tui_curses_colors_enabled && def->pair > 0) {
+    return COLOR_PAIR(def->pair) | def->color_attr;
+  }
+  return def->mono_attr;
+}
+
+static void confit_tui_curses_style_on(ConfitTuiCursesStyle style) {
+  const int attr = confit_tui_curses_style_attr(style);
+
+  if (attr != A_NORMAL) {
+    attron(attr);
+  }
+}
+
+static void confit_tui_curses_style_off(ConfitTuiCursesStyle style) {
+  const int attr = confit_tui_curses_style_attr(style);
+
+  if (attr != A_NORMAL) {
+    attroff(attr);
+  }
 }
 
 static int confit_tui_curses_start(void) {
@@ -24,13 +164,7 @@ static int confit_tui_curses_start(void) {
   noecho();
   keypad(stdscr, TRUE);
   (void)curs_set(0);
-  if (has_colors()) {
-    start_color();
-    use_default_colors();
-    init_pair(1, COLOR_BLACK, COLOR_WHITE);
-    init_pair(2, COLOR_CYAN, -1);
-    init_pair(3, COLOR_YELLOW, -1);
-  }
+  confit_tui_curses_init_styles();
   confit_tui_curses_started = 1;
   return 0;
 }
@@ -39,6 +173,7 @@ void confit_tui_curses_stop(void) {
   if (confit_tui_curses_started) {
     endwin();
     confit_tui_curses_started = 0;
+    confit_tui_curses_colors_enabled = 0;
   }
 }
 
@@ -74,7 +209,7 @@ static void confit_tui_curses_add_centered_in_span(int row, int col, int width,
 
 static void confit_tui_curses_render_lines(const char *text, int *row,
                                            int last_row, int col, int width,
-                                           int color_pair, int fallback_attr) {
+                                           ConfitTuiCursesStyle style) {
   const char *cursor;
   const char *line_begin;
 
@@ -87,18 +222,10 @@ static void confit_tui_curses_render_lines(const char *text, int *row,
       cursor += 1;
     }
     line_size = (size_t)(cursor - line_begin);
-    if (has_colors()) {
-      attron(COLOR_PAIR(color_pair));
-    } else if (fallback_attr != 0) {
-      attron(fallback_attr);
-    }
+    confit_tui_curses_style_on(style);
     move(*row, col);
     addnstr(line_begin, line_size < (size_t)width ? (int)line_size : width);
-    if (has_colors()) {
-      attroff(COLOR_PAIR(color_pair));
-    } else if (fallback_attr != 0) {
-      attroff(fallback_attr);
-    }
+    confit_tui_curses_style_off(style);
     *row += 1;
     if (*cursor == '\n') {
       cursor += 1;
@@ -146,11 +273,7 @@ static void confit_tui_curses_draw_separator(int row, int width,
   if (row < 0 || width <= 0) {
     return;
   }
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_SEPARATOR);
   confit_tui_curses_draw_hline(row, 0, width);
   if (label != 0 && label[0] != '\0' && width > 4) {
     char text[128];
@@ -170,11 +293,7 @@ static void confit_tui_curses_draw_separator(int row, int width,
     col = text_size + 1 < width ? width - text_size - 1 : 0;
     confit_tui_curses_add_clipped(row, col, text, width - col);
   }
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_SEPARATOR);
 }
 
 static const char *confit_tui_curses_marker(const ConfitTuiListItem *item,
@@ -202,6 +321,8 @@ static void confit_tui_curses_render_row(int row, int col, int width,
   char marker_buffer[80];
   char label_buffer[192];
   char line[512];
+  ConfitTuiCursesStyle style;
+  int selected_disabled;
   const char *marker =
       confit_tui_curses_marker(item, marker_buffer, sizeof(marker_buffer));
   const unsigned depth = item != 0 ? item->depth : 0U;
@@ -221,27 +342,30 @@ static void confit_tui_curses_render_row(int row, int col, int width,
   }
   line[sizeof(line) - 1U] = '\0';
   if (selected) {
-    attron(A_REVERSE);
+    style = CONFIT_TUI_STYLE_SELECTION;
+  } else if (item != 0 && item->is_heading) {
+    style = CONFIT_TUI_STYLE_CATEGORY;
+  } else if (item != 0 &&
+             confit_tui_curses_contains(item->detail, "forced")) {
+    style = CONFIT_TUI_STYLE_FORCED;
+  } else if (item != 0 && item->is_disabled) {
+    style = CONFIT_TUI_STYLE_DISABLED;
+  } else {
+    style = CONFIT_TUI_STYLE_LIST;
   }
-  if (item != 0 && item->is_disabled) {
+  selected_disabled = selected && item != 0 && item->is_disabled;
+  confit_tui_curses_style_on(style);
+  if (selected_disabled) {
     attron(A_DIM);
-  }
-  if (item != 0 && item->is_heading) {
-    attron(A_BOLD);
   }
   if (selected) {
     confit_tui_curses_fill_span(row, col, width);
   }
   confit_tui_curses_add_clipped(row, col, line, width);
-  if (item != 0 && item->is_heading) {
-    attroff(A_BOLD);
-  }
-  if (item != 0 && item->is_disabled) {
+  if (selected_disabled) {
     attroff(A_DIM);
   }
-  if (selected) {
-    attroff(A_REVERSE);
-  }
+  confit_tui_curses_style_off(style);
 }
 
 static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
@@ -253,17 +377,9 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
   int list_height;
 
   erase();
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_TITLE);
   confit_tui_curses_add_centered(0, confit_tui_curses_text(screen->title));
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
   if (LINES > 1) {
     char compact_status[384];
 
@@ -271,7 +387,9 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
                    "compact terminal fallback; %s",
                    confit_tui_curses_text(screen->status));
     compact_status[sizeof(compact_status) - 1U] = '\0';
+    confit_tui_curses_style_on(confit_tui_curses_status_style(screen->status));
     confit_tui_curses_add_clipped(1, 0, compact_status, width);
+    confit_tui_curses_style_off(confit_tui_curses_status_style(screen->status));
   }
 
   list_height = LINES > 4 ? LINES - 4 : 0;
@@ -296,20 +414,12 @@ static void confit_tui_curses_render_compact(const ConfitTuiScreen *screen,
     confit_tui_curses_add_clipped(2, 0, "(no options)", width);
   }
   if (LINES > 1) {
-    if (has_colors()) {
-      attron(COLOR_PAIR(1));
-    } else {
-      attron(A_REVERSE);
-    }
+    confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
     move(LINES - 1, 0);
     clrtoeol();
     confit_tui_curses_add_clipped(
         LINES - 1, 0, confit_tui_curses_text(screen->key_legend), width);
-    if (has_colors()) {
-      attroff(COLOR_PAIR(1));
-    } else {
-      attroff(A_REVERSE);
-    }
+    confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
   }
 }
 
@@ -341,21 +451,14 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
     return refresh() == OK ? 0 : -1;
   }
 
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_TITLE);
   confit_tui_curses_add_centered(0, confit_tui_curses_text(screen->title));
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
 
   header_row = 1;
   confit_tui_curses_render_lines(screen->header, &header_row, LINES - 7, 2,
-                                 width > 4 ? width - 4 : width, 2, A_BOLD);
+                                 width > 4 ? width - 4 : width,
+                                 CONFIT_TUI_STYLE_HEADER);
 
   separator_row = header_row;
   list_top = separator_row + 1;
@@ -427,25 +530,22 @@ int confit_tui_curses_render(const ConfitTuiScreen *screen) {
   if (LINES > 3) {
     move(LINES - 2, 0);
     clrtoeol();
-    if (has_colors()) {
-      attron(COLOR_PAIR(1));
-    } else {
-      attron(A_REVERSE);
-    }
+    confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
     confit_tui_curses_add_clipped(
         LINES - 2, 1, confit_tui_curses_text(screen->key_legend), width - 2);
-    if (has_colors()) {
-      attroff(COLOR_PAIR(1));
-    } else {
-      attroff(A_REVERSE);
-    }
+    confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
   }
 
   if (LINES > 2) {
+    const ConfitTuiCursesStyle status_style =
+        confit_tui_curses_status_style(screen->status);
+
     move(LINES - 1, 0);
     clrtoeol();
+    confit_tui_curses_style_on(status_style);
     confit_tui_curses_add_clipped(
         LINES - 1, 1, confit_tui_curses_text(screen->status), width - 2);
+    confit_tui_curses_style_off(status_style);
   }
 
   return refresh() == OK ? 0 : -1;
@@ -536,17 +636,9 @@ int confit_tui_curses_render_text(const char *title, const char *header,
 
   erase();
   width = COLS > 0 ? COLS : 80;
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_TITLE);
   confit_tui_curses_add_centered(0, confit_tui_curses_text(title));
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_TITLE);
 
   if (LINES < 9 || width < 40) {
     if (LINES > 1) {
@@ -556,27 +648,20 @@ int confit_tui_curses_render_text(const char *title, const char *header,
     confit_tui_curses_render_text_body(body, 2, 0, LINES > 4 ? LINES - 4 : 0,
                                        width, first_line);
     if (LINES > 1) {
-      if (has_colors()) {
-        attron(COLOR_PAIR(1));
-      } else {
-        attron(A_REVERSE);
-      }
+      confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
       move(LINES - 1, 0);
       clrtoeol();
       confit_tui_curses_add_clipped(LINES - 1, 0,
                                     confit_tui_curses_text(key_legend), width);
-      if (has_colors()) {
-        attroff(COLOR_PAIR(1));
-      } else {
-        attroff(A_REVERSE);
-      }
+      confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
     }
     return refresh() == OK ? 0 : -1;
   }
 
   header_row = 1;
   confit_tui_curses_render_lines(header, &header_row, LINES - 7, 2,
-                                 width > 4 ? width - 4 : width, 2, A_BOLD);
+                                 width > 4 ? width - 4 : width,
+                                 CONFIT_TUI_STYLE_HEADER);
   box_top = header_row + 1;
   box_left = 1;
   box_width = width > 2 ? width - 2 : width;
@@ -587,17 +672,9 @@ int confit_tui_curses_render_text(const char *title, const char *header,
     return refresh() == OK ? 0 : -1;
   }
 
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_DIALOG);
   confit_tui_curses_draw_box(box_top, box_left, box_height, box_width, "Help");
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_DIALOG);
 
   body_top = box_top + 1;
   body_height = box_height - 2;
@@ -630,24 +707,21 @@ int confit_tui_curses_render_text(const char *title, const char *header,
   if (LINES > 3) {
     move(LINES - 2, 0);
     clrtoeol();
-    if (has_colors()) {
-      attron(COLOR_PAIR(1));
-    } else {
-      attron(A_REVERSE);
-    }
+    confit_tui_curses_style_on(CONFIT_TUI_STYLE_KEY);
     confit_tui_curses_add_clipped(
         LINES - 2, 1, confit_tui_curses_text(key_legend), width - 2);
-    if (has_colors()) {
-      attroff(COLOR_PAIR(1));
-    } else {
-      attroff(A_REVERSE);
-    }
+    confit_tui_curses_style_off(CONFIT_TUI_STYLE_KEY);
   }
   if (LINES > 2) {
+    const ConfitTuiCursesStyle status_style =
+        confit_tui_curses_status_style(status);
+
     move(LINES - 1, 0);
     clrtoeol();
+    confit_tui_curses_style_on(status_style);
     confit_tui_curses_add_clipped(LINES - 1, 1, confit_tui_curses_text(status),
                                   width - 2);
+    confit_tui_curses_style_off(status_style);
   }
   return refresh() == OK ? 0 : -1;
 }
@@ -755,18 +829,10 @@ int confit_tui_curses_read_line(const char *prompt, char *out,
   row = LINES > 2 ? LINES - 1 : 0;
   move(row, 1);
   clrtoeol();
-  if (has_colors()) {
-    attron(COLOR_PAIR(1));
-  } else {
-    attron(A_REVERSE);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_EDIT);
   confit_tui_curses_add_clipped(row, 2, confit_tui_curses_text(prompt),
                                 COLS > 4 ? COLS - 4 : 76);
-  if (has_colors()) {
-    attroff(COLOR_PAIR(1));
-  } else {
-    attroff(A_REVERSE);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_EDIT);
   (void)curs_set(1);
   input_size = 0U;
   out[0] = '\0';
@@ -867,33 +933,22 @@ static void confit_tui_curses_render_value_dialog(const char *title,
     return;
   }
 
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_DIALOG);
   confit_tui_curses_draw_box(top, left, height, width, title);
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_DIALOG);
 
   row = top + 2;
   confit_tui_curses_render_lines(header, &row, top + height - 5, left + 2,
-                                 width - 4, 0, A_NORMAL);
-  if (has_colors()) {
-    attron(COLOR_PAIR(1));
-  } else {
-    attron(A_REVERSE);
-  }
-  confit_tui_curses_fill_span(top + height - 3, left + 1, width - 2);
-  confit_tui_curses_add_clipped(top + height - 3, left + 2,
-                                confit_tui_curses_text(status), width - 4);
-  if (has_colors()) {
-    attroff(COLOR_PAIR(1));
-  } else {
-    attroff(A_REVERSE);
+                                 width - 4, CONFIT_TUI_STYLE_HELP);
+  {
+    const ConfitTuiCursesStyle status_style =
+        confit_tui_curses_status_style(status);
+
+    confit_tui_curses_style_on(status_style);
+    confit_tui_curses_fill_span(top + height - 3, left + 1, width - 2);
+    confit_tui_curses_add_clipped(top + height - 3, left + 2,
+                                  confit_tui_curses_text(status), width - 4);
+    confit_tui_curses_style_off(status_style);
   }
   input_col = left + 2 + (int)strlen(confit_tui_curses_text(prompt));
   input_width = width - 4 - (int)strlen(confit_tui_curses_text(prompt));
@@ -902,8 +957,10 @@ static void confit_tui_curses_render_value_dialog(const char *title,
   }
   confit_tui_curses_add_clipped(top + height - 2, left + 2,
                                 confit_tui_curses_text(prompt), width - 4);
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_EDIT);
   confit_tui_curses_add_clipped(top + height - 2, input_col,
                                 confit_tui_curses_text(input), input_width);
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_EDIT);
   move(top + height - 2,
        input_col + (int)strlen(confit_tui_curses_text(input)));
   (void)refresh();
@@ -1009,17 +1066,9 @@ static void confit_tui_curses_render_choice_dialog(
     return;
   }
 
-  if (has_colors()) {
-    attron(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attron(A_BOLD);
-  }
+  confit_tui_curses_style_on(CONFIT_TUI_STYLE_DIALOG);
   confit_tui_curses_draw_box(top, left, height, width, title);
-  if (has_colors()) {
-    attroff(COLOR_PAIR(3) | A_BOLD);
-  } else {
-    attroff(A_BOLD);
-  }
+  confit_tui_curses_style_off(CONFIT_TUI_STYLE_DIALOG);
 
   row = top + 2;
   header_last = top + height - 5 - (int)item_count;
@@ -1030,7 +1079,7 @@ static void confit_tui_curses_render_choice_dialog(
     header_last = top + height - 5;
   }
   confit_tui_curses_render_lines(header, &row, header_last, left + 2,
-                                 width - 4, 0, A_NORMAL);
+                                 width - 4, CONFIT_TUI_STYLE_HELP);
   list_top = row + 1;
   list_height = top + height - 3 - list_top;
   if (list_height < 1) {
@@ -1051,26 +1100,23 @@ static void confit_tui_curses_render_choice_dialog(
                    confit_tui_curses_text(items[item_index]));
     line[sizeof(line) - 1U] = '\0';
     if (item_index == selected_index) {
-      attron(A_REVERSE);
+      confit_tui_curses_style_on(CONFIT_TUI_STYLE_SELECTION);
     }
     confit_tui_curses_add_clipped(list_top + (int)index, left + 2, line,
                                   width - 4);
     if (item_index == selected_index) {
-      attroff(A_REVERSE);
+      confit_tui_curses_style_off(CONFIT_TUI_STYLE_SELECTION);
     }
   }
-  if (has_colors()) {
-    attron(COLOR_PAIR(1));
-  } else {
-    attron(A_REVERSE);
-  }
-  confit_tui_curses_fill_span(top + height - 2, left + 1, width - 2);
-  confit_tui_curses_add_clipped(top + height - 2, left + 2,
-                                confit_tui_curses_text(status), width - 4);
-  if (has_colors()) {
-    attroff(COLOR_PAIR(1));
-  } else {
-    attroff(A_REVERSE);
+  {
+    const ConfitTuiCursesStyle status_style =
+        confit_tui_curses_status_style(status);
+
+    confit_tui_curses_style_on(status_style);
+    confit_tui_curses_fill_span(top + height - 2, left + 1, width - 2);
+    confit_tui_curses_add_clipped(top + height - 2, left + 2,
+                                  confit_tui_curses_text(status), width - 4);
+    confit_tui_curses_style_off(status_style);
   }
   (void)refresh();
 }

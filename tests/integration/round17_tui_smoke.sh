@@ -31,6 +31,24 @@ grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
   "$WORK_DIR/tui.txt" >/dev/null
 
+printf 'q' | env TERM=xterm-256color "$CONFIT_BIN" tui \
+  --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-256color.txt"
+
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-256color.txt" \
+  >/dev/null
+grep -aF "Options" "$WORK_DIR/tui-256color.txt" >/dev/null
+grep -aF "row 1/" "$WORK_DIR/tui-256color.txt" >/dev/null
+
+printf 'q' | env TERM=xterm NO_COLOR=1 "$CONFIT_BIN" tui \
+  --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-no-color.txt"
+
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-no-color.txt" \
+  >/dev/null
+grep -aF "Options" "$WORK_DIR/tui-no-color.txt" >/dev/null
+grep -aF "row 1/" "$WORK_DIR/tui-no-color.txt" >/dev/null
+
 printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-collapse.txt"
 
