@@ -196,7 +196,9 @@ int confit_test_process_run(const char *const *argv,
 
   if (pid == 0) {
     if (working_directory != 0 && working_directory[0] != '\0') {
-      (void)chdir(working_directory);
+      if (chdir(working_directory) != 0) {
+        _exit(126);
+      }
     }
     (void)dup2(stdout_fd, STDOUT_FILENO);
     (void)dup2(stderr_fd, STDERR_FILENO);
