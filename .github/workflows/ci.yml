@@ -37,6 +37,6 @@ jobs:
       - name: Install smoke
         run: |
           cmake -S . -B "${RUNNER_TEMP}/confit-install-build" -DCMAKE_BUILD_TYPE=Release
-          cmake --build "${RUNNER_TEMP}/confit-install-build"
+          cmake --build "${RUNNER_TEMP}/confit-install-build" --target confit
           cmake --install "${RUNNER_TEMP}/confit-install-build" --prefix "${RUNNER_TEMP}/confit-prefix"
           "${RUNNER_TEMP}/confit-prefix/bin/confit" doctor
