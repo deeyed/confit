@@ -44,6 +44,11 @@ function(confit_target_warnings target_name)
   target_compile_options(${target_name} PRIVATE
     -Wall -Wextra -Werror -pedantic
   )
+  if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(${target_name} PRIVATE
+      -Wno-format-truncation
+    )
+  endif()
 endfunction()
 
 add_library(confit_core STATIC
