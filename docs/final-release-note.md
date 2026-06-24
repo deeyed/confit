@@ -2,7 +2,7 @@
 doc_type: release-note
 status: candidate
 authority: operational
-last_verified: 2026-06-24
+last_verified: 2026-06-25
 ---
 
 # Confit Final Release Note
@@ -145,6 +145,19 @@ macOS/Linux TUI 상태:
 - view control을 위한 `:verbose` 및 관련 `:` command
 - 기본 cancel/back/root-exit key로 `Esc` 사용. `q`는 compatibility alias로만
   남길 수 있다.
+- 맨 아래 한 줄은 vim-style command row로 예약한다. normal mode에서는 비워
+  두고, `:`, `/`, filter 입력 중에만 prompt와 cursor를 표시한다.
+- command/search 입력 중 `Esc`는 즉시 cancel한다. submenu에서는 parent menu로
+  돌아가고, root에서는 clean exit 또는 dirty confirmation으로 들어간다.
+
+2026-06-25 추가 수동 검증:
+
+- 로컬 설치 바이너리 `/Users/gungye/.local/bin/confit`를 갱신했다.
+- `script(1)` pseudo-terminal에서 profile editor와 schema editor를 열어
+  `:verbose`, `:noverbose`, `:filter`, `:clear`, `:help`, `:quit`, `/` search,
+  Esc cancel/back/root exit, dirty confirmation, q compatibility alias를 확인했다.
+- 검증 transcript는 `tests/manual/round4-tui-command-workflow-manual-qa.md`에
+  보관한다.
 
 남은 TUI gap:
 
