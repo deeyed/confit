@@ -141,6 +141,78 @@ const char *confit_dependency_kind_name(ConfitDependencyKind kind) {
   }
 }
 
+ConfitStatus confit_category_path_analyze(
+    const char *path, ConfitCategoryPathInfo *out_info) {
+  size_t index;
+  size_t size;
+  size_t depth;
+
+  if (path == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  size = strlen(path);
+  if (size == 0U || size > CONFIT_CATEGORY_PATH_MAX_LENGTH) {
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (path[0] == '/' || path[size - 1U] == '/') {
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  depth = 1U;
+  for (index = 0U; index < size; ++index) {
+    if (path[index] != '/') {
+      continue;
+    }
+    if (index + 1U >= size || path[index + 1U] == '/') {
+      return CONFIT_ERR_SCHEMA;
+    }
+    depth += 1U;
+  }
+
+  if (out_info != 0) {
+    out_info->length = size;
+    out_info->depth = depth;
+  }
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_category_path_segment_at(const char *path, size_t index,
+                                             const char **out_begin,
+                                             size_t *out_size) {
+  ConfitCategoryPathInfo info;
+  size_t segment_index;
+  const char *segment_begin;
+  const char *cursor;
+
+  if (out_begin == 0 || out_size == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  if (confit_category_path_analyze(path, &info) != CONFIT_OK ||
+      index >= info.depth) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  segment_index = 0U;
+  segment_begin = path;
+  cursor = path;
+  while (*cursor != '\0') {
+    if (*cursor == '/') {
+      if (segment_index == index) {
+        *out_begin = segment_begin;
+        *out_size = (size_t)(cursor - segment_begin);
+        return CONFIT_OK;
+      }
+      segment_index += 1U;
+      segment_begin = cursor + 1;
+    }
+    cursor += 1;
+  }
+
+  *out_begin = segment_begin;
+  *out_size = (size_t)(cursor - segment_begin);
+  return CONFIT_OK;
+}
+
 void confit_value_init(ConfitValue *value) {
   if (value == 0) {
     return;
@@ -711,16 +783,22 @@ ConfitStatus confit_option_set_metadata(ConfitOption *option,
                                         const char *category,
                                         const char *help) {
   ConfitStatus status;
+  const char *effective_category;
 
   if (option == 0) {
     return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  effective_category = (category != 0 && category[0] == '\0') ? 0 : category;
+  if (effective_category != 0 &&
+      confit_category_path_analyze(effective_category, 0) != CONFIT_OK) {
+    return CONFIT_ERR_SCHEMA;
   }
 
   status = confit_model_replace_string(&option->prompt, prompt);
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_model_replace_string(&option->category, category);
+  status = confit_model_replace_string(&option->category, effective_category);
   if (status != CONFIT_OK) {
     return status;
   }

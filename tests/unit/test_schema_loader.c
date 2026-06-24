@@ -110,6 +110,57 @@ done:
   return ok;
 }
 
+static int expect_category_path_audit(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitSchemaAudit audit;
+  ConfitCategoryPathInfo info;
+  ConfitProject *project;
+  ConfitOption *option;
+  char path[512];
+  int ok;
+
+  if (!join_fixture(path, sizeof(path),
+                    "tests/fixtures/schema/valid/category-path-depth")) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  confit_schema_audit_init(&audit);
+  project = 0;
+  ok = 0;
+  if (confit_schema_load_project_with_audit(path, &project, &audit,
+                                            &diagnostic) != CONFIT_OK) {
+    goto done;
+  }
+  option = confit_project_find_option(project, "delos.trace.enabled");
+  if (option == 0 || option->category == 0 ||
+      strcmp(option->category, "runtime/trace") != 0 ||
+      confit_category_path_analyze(option->category, &info) != CONFIT_OK ||
+      info.depth != CONFIT_CATEGORY_PATH_RECOMMENDED_DEPTH) {
+    goto done;
+  }
+  option = confit_project_find_option(project, "delos.trace.capacity");
+  if (option == 0 || option->category == 0 ||
+      strcmp(option->category, "runtime/trace/capacity/advanced") != 0 ||
+      confit_category_path_analyze(option->category, &info) != CONFIT_OK ||
+      info.depth != 4U) {
+    goto done;
+  }
+  if (audit.warning_count != 1U || audit.warnings[0].option_id == 0 ||
+      strcmp(audit.warnings[0].option_id, "delos.trace.capacity") != 0 ||
+      audit.warnings[0].message == 0 ||
+      strcmp(audit.warnings[0].message,
+             "category path depth exceeds 3 levels") != 0) {
+    goto done;
+  }
+  ok = 1;
+
+done:
+  confit_project_free(project);
+  confit_schema_audit_clear(&audit);
+  return ok;
+}
+
 int main(void) {
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
@@ -329,6 +380,27 @@ int main(void) {
   if (!expect_schema_error("tests/fixtures/schema/invalid/bad-namespace",
                            "option id must use project namespace")) {
     return 34;
+  }
+  if (!expect_category_path_audit()) {
+    return 35;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/category-leading-slash",
+          "category path must be slash-separated, without empty segments, "
+          "and at most 63 bytes")) {
+    return 36;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/category-empty-segment",
+          "category path must be slash-separated, without empty segments, "
+          "and at most 63 bytes")) {
+    return 37;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/category-too-long",
+          "category path must be slash-separated, without empty segments, "
+          "and at most 63 bytes")) {
+    return 38;
   }
 
   return 0;

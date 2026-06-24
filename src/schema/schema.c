@@ -1617,11 +1617,27 @@ static ConfitStatus confit_schema_parse_option_value(
     if (strcmp(key, "prompt") == 0) {
       prompt = string_value;
     } else if (strcmp(key, "category") == 0) {
-      category = string_value;
+      if (string_value[0] == '\0') {
+        category = 0;
+      } else {
+        if (confit_category_path_analyze(string_value, 0) != CONFIT_OK) {
+          confit_schema_set_error(
+              diagnostic, CONFIT_ERR_SCHEMA, path, line, value_begin + 1U,
+              "category path must be slash-separated, without empty segments, "
+              "and at most 63 bytes");
+          free(string_value);
+          return CONFIT_ERR_SCHEMA;
+        }
+        category = string_value;
+      }
     } else {
       help = string_value;
     }
     status = confit_option_set_metadata(option, prompt, category, help);
+    if (status == CONFIT_ERR_SCHEMA) {
+      confit_schema_set_error(diagnostic, status, path, line, value_begin + 1U,
+                              "invalid category path");
+    }
     free(string_value);
     return status;
   }
@@ -2790,6 +2806,34 @@ static ConfitStatus confit_schema_warn_missing_metadata(
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_schema_validate_category_path(
+    const ConfitOption *option, ConfitSchemaAudit *audit,
+    ConfitDiagnostic *diagnostic) {
+  ConfitCategoryPathInfo info;
+  ConfitStatus status;
+
+  if (option->category == 0) {
+    return CONFIT_OK;
+  }
+  status = confit_category_path_analyze(option->category, &info);
+  if (status != CONFIT_OK) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0, 0,
+                            "invalid category path");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (info.depth > CONFIT_CATEGORY_PATH_MAX_DEPTH) {
+    status = confit_schema_audit_add_warning(
+        audit, option->id, 0, 0, option->id,
+        "category path depth exceeds 3 levels");
+    if (status != CONFIT_OK) {
+      confit_schema_set_error(diagnostic, status, option->id, 0, 0,
+                              "failed to record schema warning");
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_schema_validate_deprecated_aliases(
     ConfitProject *project, ConfitDiagnostic *diagnostic) {
   size_t option_index;
@@ -2884,6 +2928,10 @@ static ConfitStatus confit_schema_validate_option_stability(
       }
     }
 
+    status = confit_schema_validate_category_path(option, audit, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
     status = confit_schema_warn_missing_metadata(option, audit, diagnostic);
     if (status != CONFIT_OK) {
       return status;

@@ -21,6 +21,7 @@ typedef struct ConfitCliWorkflowContext {
   char init_delos_dir[4096];
   char init_parus_dir[4096];
   char init_dry_run_dir[4096];
+  char category_path_dir[4096];
   unsigned int run_index;
 } ConfitCliWorkflowContext;
 
@@ -119,6 +120,9 @@ static void test_context_init(ConfitCliWorkflowContext *context,
             context->work_dir, "init-parus");
   test_join(context->init_dry_run_dir, sizeof(context->init_dry_run_dir),
             context->work_dir, "init-dry-run");
+  test_join5(context->category_path_dir, sizeof(context->category_path_dir),
+             context->source_dir, "tests", "fixtures", "schema/valid",
+             "category-path-depth");
   context->run_index = 0U;
 }
 
@@ -321,6 +325,36 @@ static void test_check_strict(ConfitCliWorkflowContext *context) {
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(3, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "owner metadata missing");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "schema warnings are fatal under --strict");
+  confit_test_process_result_clear(&result);
+}
+
+static void test_check_strict_category_path(ConfitCliWorkflowContext *context) {
+  ConfitTestProcessResult result;
+  const char *check_argv[] = {0, "check", "--project", 0, "--profile",
+                              "default", 0};
+  const char *strict_argv[] = {0, "check", "--project", 0, "--profile",
+                               "default", "--strict", 0};
+
+  result.exit_code = -1;
+  result.stdout_text = 0;
+  result.stderr_text = 0;
+  check_argv[0] = context->confit_bin;
+  check_argv[3] = context->category_path_dir;
+  test_run(context, check_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "check ok");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "category path depth exceeds 3 levels");
+  confit_test_process_result_clear(&result);
+
+  strict_argv[0] = context->confit_bin;
+  strict_argv[3] = context->category_path_dir;
+  test_run(context, strict_argv, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(3, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "category path depth exceeds 3 levels");
   CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
                               "schema warnings are fatal under --strict");
   confit_test_process_result_clear(&result);
@@ -851,6 +885,7 @@ int main(int argc, char **argv) {
   test_check(&context);
   test_resolve(&context);
   test_check_strict(&context);
+  test_check_strict_category_path(&context);
   test_list(&context);
   test_graph_json(&context);
   test_graph_dot(&context);

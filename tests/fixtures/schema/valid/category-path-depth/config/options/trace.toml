@@ -1,0 +1,22 @@
+[option."delos.trace.enabled"]
+type = "bool"
+default = true
+prompt = "Trace Enabled"
+category = "runtime/trace"
+tags = ["runtime", "trace"]
+help = "Enable the trace pipeline."
+owner = "delos"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.trace.capacity"]
+type = "uint"
+default = 4096
+range = [1, 65536]
+prompt = "Trace Ring Capacity"
+category = "runtime/trace/capacity/advanced"
+tags = ["runtime", "trace", "observability"]
+help = "Maximum number of trace entries retained in memory."
+owner = "delos"
+since = "0.1.0"
+stability = "stable"

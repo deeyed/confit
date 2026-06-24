@@ -10,6 +10,20 @@
 extern "C" {
 #endif
 
+#define CONFIT_CATEGORY_PATH_MAX_LENGTH 63U
+#define CONFIT_CATEGORY_PATH_RECOMMENDED_DEPTH 2U
+#define CONFIT_CATEGORY_PATH_MAX_DEPTH 3U
+
+/**
+ * @brief 표시용 TUI category path 분석 결과다.
+ */
+typedef struct ConfitCategoryPathInfo {
+  /** path byte length. */
+  size_t length;
+  /** slash-separated segment 개수. */
+  size_t depth;
+} ConfitCategoryPathInfo;
+
 /**
  * @brief Confit option schema type이다.
  *
@@ -166,7 +180,7 @@ typedef struct ConfitOption {
   size_t enum_value_count;
   /** TUI/display prompt. 없으면 `NULL`. */
   char *prompt;
-  /** category label. 없으면 `NULL`. */
+  /** TUI/display category path. 없으면 `NULL`. */
   char *category;
   /** help text. 없으면 `NULL`. */
   char *help;
@@ -288,6 +302,32 @@ const char *confit_value_kind_name(ConfitValueKind kind);
  * @return 안정적인 ASCII 문자열.
  */
 const char *confit_dependency_kind_name(ConfitDependencyKind kind);
+
+/**
+ * @brief TUI category path를 검증하고 depth 정보를 계산한다.
+ *
+ * Category path는 slash-separated 표시용 path다. 빈 path, leading slash,
+ * trailing slash, empty segment, 너무 긴 path는 schema 오류다.
+ *
+ * @param path 검증할 category path.
+ * @param out_info optional 분석 결과.
+ * @return 유효하면 CONFIT_OK, 아니면 오류 status.
+ */
+ConfitStatus confit_category_path_analyze(
+    const char *path, ConfitCategoryPathInfo *out_info);
+
+/**
+ * @brief category path의 segment 하나를 allocation 없이 가리킨다.
+ *
+ * @param path 유효한 category path.
+ * @param index 0-based segment index.
+ * @param out_begin segment 시작 포인터.
+ * @param out_size segment byte length.
+ * @return segment를 찾으면 CONFIT_OK.
+ */
+ConfitStatus confit_category_path_segment_at(const char *path, size_t index,
+                                             const char **out_begin,
+                                             size_t *out_size);
 
 /**
  * @brief value를 empty 상태로 초기화한다.

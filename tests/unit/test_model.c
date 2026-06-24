@@ -6,6 +6,75 @@
 
 static int expect_status(ConfitStatus status) { return status == CONFIT_OK; }
 
+static int expect_category_path_helpers(void) {
+  ConfitCategoryPathInfo info;
+  ConfitProject *project;
+  ConfitOption *option;
+  const char *segment_begin;
+  char long_path[CONFIT_CATEGORY_PATH_MAX_LENGTH + 2U];
+  size_t segment_size;
+
+  if (confit_category_path_analyze("runtime/trace", &info) != CONFIT_OK) {
+    return 0;
+  }
+  if (info.length != strlen("runtime/trace") || info.depth != 2U) {
+    return 0;
+  }
+  if (confit_category_path_segment_at("runtime/trace", 0U, &segment_begin,
+                                      &segment_size) != CONFIT_OK ||
+      segment_size != strlen("runtime") ||
+      memcmp(segment_begin, "runtime", segment_size) != 0) {
+    return 0;
+  }
+  if (confit_category_path_segment_at("runtime/trace", 1U, &segment_begin,
+                                      &segment_size) != CONFIT_OK ||
+      segment_size != strlen("trace") ||
+      memcmp(segment_begin, "trace", segment_size) != 0) {
+    return 0;
+  }
+  if (confit_category_path_analyze("", 0) != CONFIT_ERR_SCHEMA ||
+      confit_category_path_analyze("/runtime", 0) != CONFIT_ERR_SCHEMA ||
+      confit_category_path_analyze("runtime/", 0) != CONFIT_ERR_SCHEMA ||
+      confit_category_path_analyze("runtime//trace", 0) != CONFIT_ERR_SCHEMA) {
+    return 0;
+  }
+  memset(long_path, 'a', sizeof(long_path) - 1U);
+  long_path[sizeof(long_path) - 1U] = '\0';
+  if (confit_category_path_analyze(long_path, 0) != CONFIT_ERR_SCHEMA) {
+    return 0;
+  }
+
+  project = confit_project_create();
+  if (project == 0) {
+    return 0;
+  }
+  if (!expect_status(confit_project_add_option(project, &option)) ||
+      !expect_status(confit_option_set_identity(option, "delos.debug.ddc",
+                                                CONFIT_OPTION_TYPE_BOOL)) ||
+      !expect_status(confit_option_set_metadata(
+          option, "Enable DDC", "debug/runtime", "Include DDC."))) {
+    confit_project_free(project);
+    return 0;
+  }
+  if (option->category == 0 || strcmp(option->category, "debug/runtime") != 0) {
+    confit_project_free(project);
+    return 0;
+  }
+  if (confit_option_set_metadata(option, "Enable DDC", "debug//runtime",
+                                 "Include DDC.") != CONFIT_ERR_SCHEMA) {
+    confit_project_free(project);
+    return 0;
+  }
+  if (!expect_status(confit_option_set_metadata(
+          option, "Enable DDC", "", "Include DDC.")) ||
+      option->category != 0) {
+    confit_project_free(project);
+    return 0;
+  }
+  confit_project_free(project);
+  return 1;
+}
+
 int main(void) {
   ConfitProject *project;
   ConfitOption *option;
@@ -27,6 +96,9 @@ int main(void) {
   }
   if (strcmp(confit_value_kind_name(CONFIT_VALUE_ENUM), "enum") != 0) {
     return 3;
+  }
+  if (!expect_category_path_helpers()) {
+    return 55;
   }
 
   confit_value_init(&value);
