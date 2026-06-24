@@ -745,6 +745,7 @@ static void confit_tui_append_summary_text(char *out, size_t out_size,
                                            const char *text) {
   size_t used;
   size_t available;
+  size_t length;
 
   if (out == 0 || out_size == 0U || text == 0 || text[0] == '\0') {
     return;
@@ -753,8 +754,13 @@ static void confit_tui_append_summary_text(char *out, size_t out_size,
   if (used + 1U >= out_size) {
     return;
   }
-  available = out_size - used;
-  (void)snprintf(out + used, available, "%s", text);
+  available = out_size - used - 1U;
+  length = strlen(text);
+  if (length > available) {
+    length = available;
+  }
+  memcpy(out + used, text, length);
+  out[used + length] = '\0';
   out[out_size - 1U] = '\0';
 }
 
@@ -977,11 +983,21 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
       confit_tui_format_dependency_state(
           state, option, resolved_value, row->dependency_state,
           sizeof(row->dependency_state), &row->is_disabled);
-      (void)snprintf(
-          row->detail, sizeof(row->detail), "%s%s | %s | tags: %s | %s | %s",
-          mark, confit_option_type_name(option->type), deps, tags,
-          confit_tui_text_or_dash(option->prompt), row->dependency_state);
-      row->detail[sizeof(row->detail) - 1U] = '\0';
+      row->detail[0] = '\0';
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), mark);
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     confit_option_type_name(option->type));
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), deps);
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     " | tags: ");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), tags);
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     confit_tui_text_or_dash(option->prompt));
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
+      confit_tui_append_summary_text(row->detail, sizeof(row->detail),
+                                     row->dependency_state);
 
       confit_tui_format_value(option, resolved_value, row->value,
                               sizeof(row->value));
@@ -1540,9 +1556,15 @@ confit_tui_prompt_typed_value(ConfitTuiState *state, const ConfitOption *option,
   if (status == CONFIT_OK) {
     status = confit_tui_apply_value_edit(state, option, &value, diagnostic);
     if (status == CONFIT_OK) {
-      (void)snprintf(state->status, sizeof(state->status), "accepted %s = %s",
-                     option->id, input);
-      state->status[sizeof(state->status) - 1U] = '\0';
+      state->status[0] = '\0';
+      confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                     "accepted ");
+      confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                     option->id);
+      confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                     " = ");
+      confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                     input);
     }
   } else {
     confit_diagnostic_set(diagnostic, status, option->id, 0, 0,
@@ -2032,10 +2054,12 @@ static ConfitStatus confit_tui_save_profile(ConfitTuiState *state,
     confit_diagnostic_init(&reload_diagnostic);
     status = confit_tui_reload_saved_project(state, &reload_diagnostic);
     if (status == CONFIT_OK) {
-      (void)snprintf(state->status, sizeof(state->status),
-                     "saved and reloaded; full validation ok: %s",
-                     profile_path);
-      state->status[sizeof(state->status) - 1U] = '\0';
+      state->status[0] = '\0';
+      confit_tui_append_summary_text(
+          state->status, sizeof(state->status),
+          "saved and reloaded; full validation ok: ");
+      confit_tui_append_summary_text(state->status, sizeof(state->status),
+                                     profile_path);
     } else {
       confit_tui_set_status_from_diagnostic(state, "saved but reload failed",
                                             status, &reload_diagnostic);
