@@ -37,6 +37,7 @@ typedef enum ConfitTuiKey {
   CONFIT_TUI_KEY_TYPE = 24,
   CONFIT_TUI_KEY_LEFT = 25,
   CONFIT_TUI_KEY_VERBOSE_INSPECTOR = 26,
+  CONFIT_TUI_KEY_COMMAND = 27,
 } ConfitTuiKey;
 
 typedef struct ConfitTuiListItem {
@@ -93,6 +94,8 @@ int confit_tui_curses_render_text(const char *title, const char *header,
 ConfitTuiKey confit_tui_curses_read_key(void);
 size_t confit_tui_curses_page_step(void);
 int confit_tui_curses_read_line(const char *prompt, char *out, size_t out_size);
+int confit_tui_curses_read_command(const char *prompt, char *out,
+                                   size_t out_size);
 int confit_tui_curses_read_value_dialog(const char *title, const char *header,
                                         const char *prompt,
                                         const char *initial_status,

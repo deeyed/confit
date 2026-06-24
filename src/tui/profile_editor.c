@@ -55,10 +55,13 @@ typedef struct ConfitTuiState {
   char search[128];
   size_t search_count;
   size_t search_position;
+  char text_filter[128];
   char category[64];
   char tag[64];
   char status[256];
+  int flat_view;
   int verbose_inspector;
+  int quit_requested;
   int dirty;
   int profile_created;
 } ConfitTuiState;
@@ -789,6 +792,10 @@ static int confit_tui_option_matches_search(const ConfitOption *option,
 
 static int confit_tui_option_visible(const ConfitTuiState *state,
                                      const ConfitOption *option) {
+  if (state->text_filter[0] != '\0' &&
+      !confit_tui_option_matches_search(option, state->text_filter)) {
+    return 0;
+  }
   if (state->category[0] != '\0' &&
       strcmp(confit_tui_option_category_name(option), state->category) != 0) {
     return 0;
@@ -865,6 +872,15 @@ static ConfitStatus confit_tui_rebuild_view(ConfitTuiState *state,
 
   for (index = 0U; index < state->row_count; ++index) {
     const ConfitTuiRow *row = &state->rows[index];
+
+    if (state->flat_view) {
+      if (row->kind == CONFIT_TUI_ROW_OPTION &&
+          confit_tui_option_visible(state, row->option)) {
+        state->view_indices[state->view_count] = index;
+        state->view_count += 1U;
+      }
+      continue;
+    }
 
     if (row->kind == CONFIT_TUI_ROW_MENU) {
       if (row->menu_index < state->menu_count &&
@@ -2019,7 +2035,8 @@ static ConfitStatus confit_tui_select_row_index(ConfitTuiState *state,
   if (row_index >= state->row_count) {
     return CONFIT_OK;
   }
-  if (state->rows[row_index].kind == CONFIT_TUI_ROW_OPTION &&
+  if (!state->flat_view &&
+      state->rows[row_index].kind == CONFIT_TUI_ROW_OPTION &&
       state->rows[row_index].menu_index < state->menu_count &&
       state->rows[row_index].menu_index != state->current_menu_index) {
     state->current_menu_index = state->rows[row_index].menu_index;
@@ -2477,10 +2494,11 @@ static void confit_tui_clear_filters(ConfitTuiState *state) {
   state->search[0] = '\0';
   state->search_count = 0U;
   state->search_position = 0U;
+  state->text_filter[0] = '\0';
   state->category[0] = '\0';
   state->tag[0] = '\0';
   state->selected_view_index = 0U;
-  (void)snprintf(state->status, sizeof(state->status), "filters cleared");
+  (void)snprintf(state->status, sizeof(state->status), "cleared filters");
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 
@@ -2890,6 +2908,11 @@ static void confit_tui_format_breadcrumb(const ConfitTuiState *state, char *out,
     return;
   }
   out[0] = '\0';
+  if (state != 0 && state->flat_view) {
+    (void)snprintf(out, out_size, "Flat List");
+    out[out_size - 1U] = '\0';
+    return;
+  }
   if (state == 0 || state->menu_count == 0U ||
       state->current_menu_index >= state->menu_count) {
     (void)snprintf(out, out_size, "Main Menu");
@@ -3117,7 +3140,8 @@ static void confit_tui_profile_format_key_legend(
     size_t out_size) {
   const int has_filter =
       state != 0 && (state->search[0] != '\0' || state->category[0] != '\0' ||
-                     state->tag[0] != '\0');
+                     state->tag[0] != '\0' ||
+                     state->text_filter[0] != '\0');
   const char *filter_suffix = has_filter ? " x clear" : "";
   const char *inspector_mode =
       state != 0 && state->verbose_inspector ? "compact" : "verbose";
@@ -3130,26 +3154,27 @@ static void confit_tui_profile_format_key_legend(
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
                      "Left/Esc back | s save | / search | c/t filter%s | ? "
-                     "help | v %s | q quit",
+                     "help | : cmd | v %s | q quit",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
                      "Left/Esc back | / search | c/t filter%s | ? help | v "
-                     "%s | q quit",
+                     "%s | : cmd | q quit",
                      filter_suffix, inspector_mode);
     }
   } else {
     if (state != 0 && state->dirty) {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | s "
-                     "save | / search n/N | c/t filter%s | ? help | v %s | q "
-                     "quit",
+                     "save | / search n/N | c/t filter%s | ? help | : cmd | "
+                     "v %s | q quit",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | / "
-                     "search n/N | c/t filter%s | ? help | v %s | q quit",
+                     "search n/N | c/t filter%s | ? help | : cmd | v %s | q "
+                     "quit",
                      filter_suffix, inspector_mode);
     }
   }
@@ -3293,7 +3318,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
   (void)snprintf(
       header, sizeof(header),
       "mode=profile project=%s profile=%s target=%s dirty=%s\n"
-      "breadcrumb=%s | row %lu/%lu | search=%s %lu/%lu | filter=%s/%s",
+      "breadcrumb=%s | row %lu/%lu | search=%s %lu/%lu | filter=%s/%s | "
+      "text=%s",
       confit_tui_text_or_dash(state->project->name),
       confit_tui_text_or_dash(state->options->profile_name),
       confit_tui_text_or_dash(target_name), state->dirty ? "yes" : "no",
@@ -3305,7 +3331,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
       confit_tui_text_or_dash(state->search),
       (unsigned long)state->search_position, (unsigned long)state->search_count,
       confit_tui_text_or_dash(state->category),
-      confit_tui_text_or_dash(state->tag));
+      confit_tui_text_or_dash(state->tag),
+      confit_tui_text_or_dash(state->text_filter));
   header[sizeof(header) - 1U] = '\0';
   confit_tui_profile_format_inspector(state, selected, inspector,
                                       sizeof(inspector));
@@ -3499,6 +3526,168 @@ static ConfitStatus confit_tui_go_parent_menu(ConfitTuiState *state,
   return CONFIT_OK;
 }
 
+static char *confit_tui_command_trim(char *text) {
+  char *end;
+
+  if (text == 0) {
+    return 0;
+  }
+  while (*text != '\0' && isspace((unsigned char)*text)) {
+    text += 1;
+  }
+  end = text + strlen(text);
+  while (end > text && isspace((unsigned char)end[-1])) {
+    end -= 1;
+  }
+  *end = '\0';
+  if (text[0] == ':') {
+    text += 1;
+    while (*text != '\0' && isspace((unsigned char)*text)) {
+      text += 1;
+    }
+  }
+  return text;
+}
+
+static int confit_tui_command_starts_with(const char *command,
+                                          const char *name) {
+  size_t index;
+
+  if (command == 0 || name == 0) {
+    return 0;
+  }
+  for (index = 0U; name[index] != '\0'; ++index) {
+    if (tolower((unsigned char)command[index]) !=
+        tolower((unsigned char)name[index])) {
+      return 0;
+    }
+  }
+  return command[index] == '\0' || isspace((unsigned char)command[index]);
+}
+
+static const char *confit_tui_command_arg(const char *command,
+                                          const char *name) {
+  const char *arg;
+
+  if (!confit_tui_command_starts_with(command, name)) {
+    return 0;
+  }
+  arg = command + strlen(name);
+  while (*arg != '\0' && isspace((unsigned char)*arg)) {
+    arg += 1;
+  }
+  return arg;
+}
+
+static ConfitStatus confit_tui_command_rebuild(ConfitTuiState *state,
+                                               ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+
+  state->selected_view_index = 0U;
+  status = confit_tui_rebuild_view(state, diagnostic);
+  if (status == CONFIT_OK) {
+    confit_tui_select_first_option(state);
+    confit_tui_refresh_search_position(state);
+  }
+  return status;
+}
+
+static ConfitStatus confit_tui_dispatch_command(ConfitTuiState *state,
+                                                const char *command,
+                                                ConfitDiagnostic *diagnostic) {
+  const char *arg;
+
+  if (command == 0 || command[0] == '\0') {
+    (void)snprintf(state->status, sizeof(state->status), "empty command");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (confit_tui_command_starts_with(command, "verbose")) {
+    state->verbose_inspector = 1;
+    (void)snprintf(state->status, sizeof(state->status),
+                   "verbose inspector mode");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (confit_tui_command_starts_with(command, "noverbose")) {
+    state->verbose_inspector = 0;
+    (void)snprintf(state->status, sizeof(state->status),
+                   "compact inspector mode");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (confit_tui_command_starts_with(command, "tree")) {
+    state->flat_view = 0;
+    state->current_menu_index = 0U;
+    (void)snprintf(state->status, sizeof(state->status), "tree view");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return confit_tui_command_rebuild(state, diagnostic);
+  }
+  if (confit_tui_command_starts_with(command, "flat")) {
+    state->flat_view = 1;
+    state->current_menu_index = 0U;
+    (void)snprintf(state->status, sizeof(state->status), "flat view");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return confit_tui_command_rebuild(state, diagnostic);
+  }
+  arg = confit_tui_command_arg(command, "filter");
+  if (arg != 0) {
+    if (arg[0] == '\0') {
+      (void)snprintf(state->status, sizeof(state->status),
+                     "usage: :filter <text>");
+      state->status[sizeof(state->status) - 1U] = '\0';
+      return CONFIT_OK;
+    }
+    (void)snprintf(state->text_filter, sizeof(state->text_filter), "%s", arg);
+    state->text_filter[sizeof(state->text_filter) - 1U] = '\0';
+    (void)snprintf(state->status, sizeof(state->status), "filter: %s",
+                   state->text_filter);
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return confit_tui_command_rebuild(state, diagnostic);
+  }
+  if (confit_tui_command_starts_with(command, "clear")) {
+    confit_tui_clear_filters(state);
+    return confit_tui_command_rebuild(state, diagnostic);
+  }
+  if (confit_tui_command_starts_with(command, "help")) {
+    (void)snprintf(state->status, sizeof(state->status),
+                   "commands: verbose noverbose tree flat filter <text> clear "
+                   "help quit");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+  if (confit_tui_command_starts_with(command, "quit")) {
+    state->quit_requested = 1;
+    (void)snprintf(state->status, sizeof(state->status), "quit requested");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
+  }
+
+  (void)snprintf(state->status, sizeof(state->status), "unknown command: %s",
+                 command);
+  state->status[sizeof(state->status) - 1U] = '\0';
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_run_command(ConfitTuiState *state,
+                                           ConfitDiagnostic *diagnostic) {
+  char input[160];
+  char *command;
+  int input_status;
+
+  input_status = confit_tui_curses_read_command(":", input, sizeof(input));
+  if (input_status != 0) {
+    if (input_status > 0) {
+      (void)snprintf(state->status, sizeof(state->status),
+                     "command cancelled");
+      state->status[sizeof(state->status) - 1U] = '\0';
+    }
+    return CONFIT_OK;
+  }
+  command = confit_tui_command_trim(input);
+  return confit_tui_dispatch_command(state, command, diagnostic);
+}
+
 static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
                                           ConfitTuiKey key,
                                           const char *target_name,
@@ -3512,6 +3701,9 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
   }
   if (key == CONFIT_TUI_KEY_KEYMAP_HELP || key == CONFIT_TUI_KEY_HELP) {
     return confit_tui_show_detail(state, target_name, diagnostic);
+  }
+  if (key == CONFIT_TUI_KEY_COMMAND) {
+    return confit_tui_run_command(state, diagnostic);
   }
   if (key == CONFIT_TUI_KEY_SEARCH) {
     return confit_tui_set_search(state, diagnostic);
@@ -3550,7 +3742,7 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
       return confit_tui_go_parent_menu(state, diagnostic);
     }
     if (state->search[0] != '\0' || state->category[0] != '\0' ||
-        state->tag[0] != '\0') {
+        state->tag[0] != '\0' || state->text_filter[0] != '\0') {
       confit_tui_clear_filters(state);
       return confit_tui_rebuild_view(state, diagnostic);
     }
@@ -3620,6 +3812,22 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
     if (status != CONFIT_OK) {
       confit_tui_set_status_from_diagnostic(state, "error", status,
                                             &diagnostic);
+    }
+    if (state->quit_requested) {
+      int should_quit;
+
+      state->quit_requested = 0;
+      confit_diagnostic_init(&diagnostic);
+      should_quit = 0;
+      status = confit_tui_confirm_dirty_quit(state, &should_quit, &diagnostic);
+      if (status != CONFIT_OK) {
+        confit_tui_set_status_from_diagnostic(state, "error", status,
+                                              &diagnostic);
+        continue;
+      }
+      if (should_quit) {
+        break;
+      }
     }
   } while (1);
 

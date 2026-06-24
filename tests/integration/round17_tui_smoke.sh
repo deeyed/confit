@@ -169,6 +169,58 @@ grep -aF "Target Board <delos.target.board> enum deps ok" \
   "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
 grep -aF "verbose" "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
 
+printf ':help\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-help.txt"
+
+grep -aF "commands: verbose noverbose tree flat filter <text> clear help quit" \
+  "$WORK_DIR/tui-command-help.txt" >/dev/null
+
+printf ':bogus\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-unknown.txt"
+
+grep -aF "unknown command: bogus" "$WORK_DIR/tui-command-unknown.txt" \
+  >/dev/null
+
+printf ':\033q' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-cancel.txt"
+
+grep -aF "command cancelled" "$WORK_DIR/tui-command-cancel.txt" >/dev/null
+
+printf '/board\n:verbose\n:noverbose\nq' | env TERM=xterm COLUMNS=220 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-verbose.txt"
+
+grep -aF "verbose inspector mode" "$WORK_DIR/tui-command-verbose.txt" \
+  >/dev/null
+grep -aF "compact" "$WORK_DIR/tui-command-verbose.txt" >/dev/null
+grep -aF "verbose: type:enum" "$WORK_DIR/tui-command-verbose.txt" >/dev/null
+grep -aF "Target Board <delos.target.board> enum deps ok" \
+  "$WORK_DIR/tui-command-verbose.txt" >/dev/null
+
+printf ':flat\n:tree\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-tree-flat.txt"
+
+grep -aF "Flat List" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
+grep -aF "flat view" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
+grep -aF "tree" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
+grep -aF "Main Menu" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
+
+printf ':filter board\n:clear\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-filter.txt"
+
+grep -aF "filter: board" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+grep -aF "c/t filter x clear" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+grep -aF "cleared filters" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+
+printf ':quit\n' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-command-quit.txt"
+
 printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-dirty-row.txt"
