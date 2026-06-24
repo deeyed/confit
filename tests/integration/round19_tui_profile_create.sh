@@ -25,7 +25,7 @@ grep -aF "row 1/9" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-profile-create.txt" \
   >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "Menu" "$WORK_DIR/tui-profile-create.txt" >/dev/null
+grep -aF "Options" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "arrows/jk move PgUp/PgDn Home/End Enter/Space toggle / search n/N result" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null

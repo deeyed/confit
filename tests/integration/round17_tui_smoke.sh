@@ -23,7 +23,8 @@ printf 'jq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
 grep -aF "row 1/" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "Menu" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "Options" "$WORK_DIR/tui.txt" >/dev/null
+! grep -aF " Menu " "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "[-]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "deps" "$WORK_DIR/tui.txt" >/dev/null

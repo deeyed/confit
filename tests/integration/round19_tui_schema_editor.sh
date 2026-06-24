@@ -31,7 +31,7 @@ grep -aF "Confit Schema Editor - menuconfig guarded schema" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Field" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "Menu" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "Options" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "arrows/jk PgUp/PgDn Home/End n new y type d/e default p prompt h help" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null

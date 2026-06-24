@@ -61,7 +61,7 @@ PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
 grep -aF "row 1/9" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "project=" "$WORK_DIR/tui-edit.txt" >/dev/null
-grep -aF "Menu" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "Options" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
