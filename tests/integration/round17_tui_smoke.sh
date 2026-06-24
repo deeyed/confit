@@ -35,9 +35,9 @@ grep -aF "[+]  debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "path: debug" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "mode=profile project=delos profile=sim-dsh target=host-sim" \
   "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
+grep -aF "keys: move | enter menu | Esc back/exit" \
   "$WORK_DIR/tui.txt" >/dev/null
-grep -aF "Esc exit" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF ": cmd | ? help | v" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Keys" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Status" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Inspector" "$WORK_DIR/tui.txt" >/dev/null
@@ -242,7 +242,8 @@ printf ':filter board\n:clear\n%s' "$ESC_KEY" |
 grep -aF "filter: board" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "filter board" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "target menu path: target" "$WORK_DIR/tui-command-filter.txt" >/dev/null
-grep -aF "x clear | ? help" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+grep -aF "x clear | : cmd | ? help" \
+  "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "cleared filters" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "Main Menu" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 

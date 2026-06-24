@@ -55,7 +55,8 @@ title/path band
 context header + breadcrumb
 full-width list viewport
 fixed inspector/status band
-key legend 또는 : command line
+key legend/status band
+blank command row
 ```
 
 현재 위치는 breadcrumb로 표시된다.
@@ -142,8 +143,16 @@ option의 help text field를 수정한다.
 
 ## `:` command mode
 
-`:`를 누르면 화면 아래에 command prompt가 열린다. 많은 view option을 단축키로
-늘어놓지 않고 command로 켜고 끄기 위한 기능이다.
+TUI 맨 아래 한 줄은 항상 command row로 예약된다. 평소에는 완전히 비어 있고,
+key legend나 status message가 이 줄을 사용하지 않는다. `:`를 누를 때만 그 빈
+줄에 command prompt가 열린다. `/` search prompt와 `c`/`t` filter prompt도 같은
+command row를 쓴다.
+
+이 구조 덕분에 command 입력 중에도 key legend와 status row는 흔들리지 않는다.
+Command row는 cursor가 켜진 입력 중에만 눈에 보이며, 입력이 끝나거나 취소되면
+다시 blank가 된다.
+
+많은 view option을 단축키로 늘어놓지 않고 command로 켜고 끄기 위한 기능이다.
 
 주요 command:
 
@@ -159,6 +168,15 @@ option의 help text field를 수정한다.
 ```
 
 Command 입력 중 `Esc`를 누르면 입력을 취소하고 이전 화면으로 돌아간다.
+빈 command와 알 수 없는 command, `:filter` 인자 누락 같은 실패는 command row가
+아니라 status row에 표시된다.
+
+예:
+
+```text
+:bogus
+status: unknown command: bogus
+```
 
 ## Profile editor에서 하는 일
 
@@ -303,5 +321,8 @@ graph validation을 다시 수행한다.
   승격할 수 있다.
 - List row는 prompt와 value 중심으로 읽는다. 자세한 id/dependency 정보는
   inspector, `:verbose`, Profile help/detail에서 본다.
+- 맨 아래 command row는 입력 전용이다. 평소에는 비워 두며, key legend/status를
+  그 줄에 넣지 않는다.
+- 종료와 뒤로 가기는 `Esc`를 기본으로 기억한다. `q`는 호환 alias일 뿐이다.
 - TUI가 저장한 뒤에도 중요한 profile은 `confit check`를 다시 실행한다.
 - 중요한 변경은 `confit diff`와 generated report로 review한다.

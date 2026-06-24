@@ -3162,29 +3162,25 @@ static void confit_tui_profile_format_key_legend(
   if (selected != 0 && selected->kind == CONFIT_TUI_ROW_MENU) {
     if (state != 0 && state->dirty) {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter menu | "
-                     "Left/Esc back | s save | / search | c/t filter%s | ? "
-                     "help | : cmd | v %s | Esc exit",
+                     "keys: move | enter menu | Esc back/exit | s save | / "
+                     "search | c/t filter%s | : cmd | ? help | v %s",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter menu | "
-                     "Left/Esc back | / search | c/t filter%s | ? help | v "
-                     "%s | : cmd | Esc exit",
+                     "keys: move | enter menu | Esc back/exit | / search | "
+                     "c/t filter%s | : cmd | ? help | v %s",
                      filter_suffix, inspector_mode);
     }
   } else {
     if (state != 0 && state->dirty) {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter/e edit | s "
-                     "save | / search n/N | c/t filter%s | ? help | : cmd | "
-                     "v %s | Esc exit",
+                     "keys: move | enter/e edit | Esc exit | s save | / "
+                     "search n/N | c/t filter%s | : cmd | ? help | v %s",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
-                     "keys: move jk/arrows Pg/Home/End | enter/e edit | / "
-                     "search n/N | c/t filter%s | ? help | : cmd | v %s | "
-                     "Esc exit",
+                     "keys: move | enter/e edit | Esc exit | / search n/N | "
+                     "c/t filter%s | : cmd | ? help | v %s",
                      filter_suffix, inspector_mode);
     }
   }

@@ -36,7 +36,7 @@ grep -aF "project=" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Options" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "schema edits change all profiles" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new" \
+grep -aF "keys: move | enter/d edit | y type | n new | p/h/c/t/r/o fields" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "breadcrumb=Main Menu > schema" "$WORK_DIR/tui-schema.txt" \
   >/dev/null

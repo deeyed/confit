@@ -2257,17 +2257,17 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   if (selected != 0 && selected->kind == CONFIT_TUI_SCHEMA_ROW_MENU) {
     (void)snprintf(
         key_legend, sizeof(key_legend),
-        "keys: move jk/arrows Pg/Home/End | enter menu | Left/Esc back | "
-        "n new | : cmd | v %s | ? keys%s | Esc exit",
-        state->verbose_inspector ? "compact" : "verbose",
-        state->dirty ? " | s save" : "");
+        "keys: move | enter menu | Esc back/exit | n new | : cmd | ? keys%s | "
+        "v %s",
+        state->dirty ? " | s save" : "",
+        state->verbose_inspector ? "compact" : "verbose");
   } else {
     (void)snprintf(
         key_legend, sizeof(key_legend),
-        "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new | "
-        "p/h/c/t/r/o category path | : cmd | v %s | ? keys%s | Esc exit",
-        state->verbose_inspector ? "compact" : "verbose",
-        state->dirty ? " | s save" : "");
+        "keys: move | enter/d edit | y type | n new | p/h/c/t/r/o fields | "
+        "Esc exit | : cmd | ? keys%s | v %s",
+        state->dirty ? " | s save" : "",
+        state->verbose_inspector ? "compact" : "verbose");
   }
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "%s",

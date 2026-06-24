@@ -31,7 +31,7 @@ grep -aF "Options" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "[+]  edit" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "mode=profile project=delos profile=fresh" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
-grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
+grep -aF "keys: move | enter menu | Esc back/exit" \
   "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "s save" "$WORK_DIR/tui-profile-create.txt" >/dev/null
 grep -aF "created new profile fresh" "$WORK_DIR/tui-profile-create.txt" \
