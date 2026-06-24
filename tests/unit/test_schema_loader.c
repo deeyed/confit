@@ -218,6 +218,65 @@ done:
   return ok;
 }
 
+static int expect_portable_path_schema(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitOption *option;
+  ConfitProfile *profile;
+  char path[512];
+  int ok;
+
+  if (!join_fixture(path, sizeof(path),
+                    "tests/fixtures/schema/valid/portable-paths")) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  ok = 0;
+  if (confit_schema_load_project(path, &project, &diagnostic) != CONFIT_OK) {
+    goto done;
+  }
+
+  option = confit_project_find_option(project, "delos.windows.sdk_root");
+  if (option == 0 || option->type != CONFIT_OPTION_TYPE_PATH ||
+      option->default_value.kind != CONFIT_VALUE_PATH ||
+      strcmp(option->default_value.as.string_value,
+             "C:\\Delos SDK\\toolchain") != 0) {
+    goto done;
+  }
+
+  option = confit_project_find_option(project,
+                                      "delos.windows.compiler_args");
+  if (option == 0 || option->type != CONFIT_OPTION_TYPE_STRING ||
+      option->default_value.kind != CONFIT_VALUE_STRING ||
+      strcmp(option->default_value.as.string_value,
+             "-IC:\\Delos SDK\\include;$ENV{DELOS_EXTRA}") != 0) {
+    goto done;
+  }
+
+  profile = find_profile(project, "windows");
+  if (profile == 0 || profile->value_count != 2U ||
+      strcmp(profile->values[0].option_id,
+             "delos.windows.generated_root") != 0 ||
+      profile->values[0].value.kind != CONFIT_VALUE_PATH ||
+      strcmp(profile->values[0].value.as.string_value,
+             "C:\\Users\\delos\\generated\\config") != 0 ||
+      strcmp(profile->values[1].option_id,
+             "delos.windows.compiler_args") != 0 ||
+      profile->values[1].value.kind != CONFIT_VALUE_STRING ||
+      strcmp(profile->values[1].value.as.string_value,
+             "-DROOT=\"C:\\Delos SDK\";$ENV{DELOS_EXTRA}") != 0) {
+    goto done;
+  }
+
+  ok = 1;
+
+done:
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
@@ -476,6 +535,9 @@ int main(void) {
           "tests/fixtures/schema/invalid/build-selection-unknown-field",
           "unknown selection field")) {
     return 42;
+  }
+  if (!expect_portable_path_schema()) {
+    return 43;
   }
 
   return 0;

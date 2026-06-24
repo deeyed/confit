@@ -37,12 +37,12 @@ static int read_fixture_text(const char *fixture, char **out_text) {
          CONFIT_OK;
 }
 
-static int load_project(ConfitProject **out_project) {
+static int load_project_fixture(const char *fixture,
+                                ConfitProject **out_project) {
   ConfitDiagnostic diagnostic;
   char path[512];
 
-  if (!join_fixture(path, sizeof(path),
-                    "tests/fixtures/schema/valid/basic")) {
+  if (!join_fixture(path, sizeof(path), fixture)) {
     return 0;
   }
 
@@ -50,6 +50,24 @@ static int load_project(ConfitProject **out_project) {
   *out_project = 0;
   return confit_schema_load_project(path, out_project, &diagnostic) ==
          CONFIT_OK;
+}
+
+static int load_project(ConfitProject **out_project) {
+  return load_project_fixture("tests/fixtures/schema/valid/basic",
+                              out_project);
+}
+
+static int text_has_no_cr(const char *text) {
+  return text != 0 && strchr(text, '\r') == 0;
+}
+
+static int text_contains(const char *text, const char *needle) {
+  const int ok = text != 0 && needle != 0 && strstr(text, needle) != 0;
+
+  if (!ok) {
+    fprintf(stderr, "missing generated text fragment:\n%s\n", needle);
+  }
+  return ok;
 }
 
 static int expect_serialized_value(const ConfitValue *value,
@@ -181,6 +199,24 @@ static int check_value_serialization_helpers(void) {
                                      "\"drivers/uart\"");
   confit_value_clear(&value);
 
+  ok = ok && confit_value_set_path(
+                 &value,
+                 "C:\\Delos SDK\\board\\nucleo-h753zi.ld;${BOARD}") ==
+                 CONFIT_OK;
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_PATH,
+                 CONFIT_GENERATOR_VALUE_TEXT,
+                 "C:\\\\Delos SDK\\\\board\\\\nucleo-h753zi.ld;${BOARD}");
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_PATH,
+                 CONFIT_GENERATOR_VALUE_LUA,
+                 "\"C:\\\\Delos SDK\\\\board\\\\nucleo-h753zi.ld;${BOARD}\"");
+  ok = ok && expect_serialized_value(
+                 &value, CONFIT_OPTION_TYPE_PATH,
+                 CONFIT_GENERATOR_VALUE_CMAKE,
+                 "\"C:\\\\Delos SDK\\\\board\\\\nucleo-h753zi.ld\\;\\${BOARD}\"");
+  confit_value_clear(&value);
+
   confit_value_set_uint(&value, 4096U);
   resolved.option_id = "delos.trace.capacity";
   resolved.value = value;
@@ -218,6 +254,91 @@ static int check_value_serialization_helpers(void) {
                  "\"targets/renode-nucleo-h753zi.toml\" }");
   confit_value_clear(&value);
 
+  return ok;
+}
+
+static int check_portable_path_generation(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitResolvedConfig *config;
+  ConfitBuildIntegrationOptions options;
+  char *cmake_fragment;
+  char *qstar_config_module;
+  int ok;
+
+  if (!load_project_fixture("tests/fixtures/schema/valid/portable-paths",
+                            &project)) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  config = 0;
+  if (confit_resolver_resolve(project, "windows", 0, 0, 0U, &config,
+                              &diagnostic) != CONFIT_OK) {
+    confit_project_free(project);
+    return 0;
+  }
+
+  options.profile_name = "windows;${cfg}";
+  options.target_name = "C:\\targets\\renode";
+  options.header_path = "include\\generated\\config.h";
+  options.report_json_path = "reports\\config.report.json";
+  options.explain_text_path = "reports\\config.explain.txt";
+  options.graph_json_path = "reports\\config.graph.json";
+  options.inputs_json_path = "reports\\config.inputs.json";
+
+  cmake_fragment = 0;
+  qstar_config_module = 0;
+  if (confit_generate_cmake_fragment(project, config, &options,
+                                     &cmake_fragment, &diagnostic) !=
+          CONFIT_OK ||
+      confit_generate_qstar_config_module(project, config, &options,
+                                          &qstar_config_module,
+                                          &diagnostic) != CONFIT_OK) {
+    confit_generator_string_free(cmake_fragment);
+    confit_generator_string_free(qstar_config_module);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 0;
+  }
+
+  ok = text_has_no_cr(cmake_fragment) &&
+       text_has_no_cr(qstar_config_module) &&
+       text_contains(cmake_fragment,
+                     "set(CONFIT_PROFILE \"windows\\;\\${cfg}\")\n") &&
+       text_contains(cmake_fragment,
+                     "set(CONFIT_TARGET \"C:\\\\targets\\\\renode\")\n") &&
+       text_contains(
+           cmake_fragment,
+           "set(CONFIT_CONFIG_HEADER "
+           "\"${CMAKE_CURRENT_LIST_DIR}/include\\\\generated\\\\config.h\")\n") &&
+       text_contains(
+           cmake_fragment,
+           "set(DELOS_CONFIG_WINDOWS_SDK_ROOT "
+           "\"C:\\\\Delos SDK\\\\toolchain\")\n") &&
+       text_contains(
+           cmake_fragment,
+           "set(DELOS_CONFIG_WINDOWS_COMPILER_ARGS "
+           "\"-DROOT=\\\"C:\\\\Delos SDK\\\"\\;\\$ENV{DELOS_EXTRA}\")\n") &&
+       text_contains(qstar_config_module,
+                     "profile = \"windows;${cfg}\",\n") &&
+       text_contains(qstar_config_module,
+                     "target = \"C:\\\\targets\\\\renode\",\n") &&
+       text_contains(qstar_config_module,
+                     "header = \"include\\\\generated\\\\config.h\"") &&
+       text_contains(
+           qstar_config_module,
+           "[\"delos.windows.sdk_root\"] = { type = \"path\", "
+           "value = \"C:\\\\Delos SDK\\\\toolchain\"") &&
+       text_contains(
+           qstar_config_module,
+           "[\"delos.windows.compiler_args\"] = { type = \"string\", "
+           "value = \"-DROOT=\\\"C:\\\\Delos SDK\\\";$ENV{DELOS_EXTRA}\"");
+
+  confit_generator_string_free(cmake_fragment);
+  confit_generator_string_free(qstar_config_module);
+  confit_resolved_config_free(config);
+  confit_project_free(project);
   return ok;
 }
 
@@ -303,6 +424,7 @@ int main(void) {
   }
 
   ok = check_value_serialization_helpers() &&
+       check_portable_path_generation() &&
        strcmp(header, golden) == 0 && strcmp(header, header_again) == 0 &&
        strcmp(cmake_fragment, cmake_golden) == 0 &&
        strcmp(qstar_config_module, qstar_config_golden) == 0 &&
@@ -311,7 +433,11 @@ int main(void) {
        strstr(header, "/Users/") == 0 &&
        strstr(cmake_fragment, "timestamp") == 0 &&
        strstr(qstar_config_module, "/Users/") == 0 &&
-       strstr(qstar_manifest, "/Users/") == 0;
+       strstr(qstar_manifest, "/Users/") == 0 &&
+       text_has_no_cr(header) &&
+       text_has_no_cr(cmake_fragment) &&
+       text_has_no_cr(qstar_config_module) &&
+       text_has_no_cr(qstar_manifest);
 
   confit_generator_string_free(header);
   confit_generator_string_free(header_again);

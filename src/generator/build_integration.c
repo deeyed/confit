@@ -221,6 +221,61 @@ static ConfitStatus confit_integration_append_escaped_range(
   return confit_integration_append(builder, "\"");
 }
 
+static ConfitStatus confit_integration_append_cmake_payload(
+    ConfitIntegrationBuilder *builder, const char *text) {
+  size_t index;
+  ConfitStatus status;
+
+  if (text == 0) {
+    return CONFIT_OK;
+  }
+
+  for (index = 0U; text[index] != '\0'; ++index) {
+    switch (text[index]) {
+    case '"':
+    case '\\':
+    case '$':
+    case ';':
+      status = confit_integration_append(builder, "\\");
+      if (status == CONFIT_OK) {
+        status = confit_integration_append_char(builder, text[index]);
+      }
+      break;
+    case '\n':
+      status = confit_integration_append(builder, "\\n");
+      break;
+    case '\r':
+      status = confit_integration_append(builder, "\\r");
+      break;
+    case '\t':
+      status = confit_integration_append(builder, "\\t");
+      break;
+    default:
+      status = confit_integration_append_char(builder, text[index]);
+      break;
+    }
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_integration_append_cmake_escaped(
+    ConfitIntegrationBuilder *builder, const char *text) {
+  ConfitStatus status;
+
+  status = confit_integration_append(builder, "\"");
+  if (status == CONFIT_OK) {
+    status = confit_integration_append_cmake_payload(builder, text);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, "\"");
+  }
+  return status;
+}
+
 static const char *confit_integration_profile_name(
     const ConfitBuildIntegrationOptions *options) {
   return options != 0 && options->profile_name != 0 ? options->profile_name
@@ -397,7 +452,7 @@ static ConfitStatus confit_cmake_append_set(
     status = confit_integration_append(builder, " ");
   }
   if (status == CONFIT_OK) {
-    status = confit_integration_append_escaped(builder, value);
+    status = confit_integration_append_cmake_escaped(builder, value);
   }
   if (status == CONFIT_OK) {
     status = confit_integration_append(builder, ")\n");
@@ -420,7 +475,7 @@ static ConfitStatus confit_cmake_append_artifact_set(
     status = confit_integration_append(builder, "\"${CMAKE_CURRENT_LIST_DIR}/");
   }
   if (status == CONFIT_OK) {
-    status = confit_integration_append(builder, path);
+    status = confit_integration_append_cmake_payload(builder, path);
   }
   if (status == CONFIT_OK) {
     status = confit_integration_append(builder, "\")\n");

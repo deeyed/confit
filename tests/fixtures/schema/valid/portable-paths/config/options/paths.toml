@@ -1,0 +1,23 @@
+[option."delos.windows.sdk_root"]
+type = "path"
+default = "C:\\Delos SDK\\toolchain"
+prompt = "Windows SDK root"
+category = "build/windows"
+tags = ["windows", "path"]
+help = "Windows-style absolute SDK path with a drive letter and spaces."
+
+[option."delos.windows.generated_root"]
+type = "path"
+default = "build\\generated\\config"
+prompt = "Generated config root"
+category = "build/windows"
+tags = ["windows", "path"]
+help = "Windows-style relative generated output path."
+
+[option."delos.windows.compiler_args"]
+type = "string"
+default = "-IC:\\Delos SDK\\include;$ENV{DELOS_EXTRA}"
+prompt = "Compiler arguments"
+category = "build/windows"
+tags = ["windows", "escaping"]
+help = "String value used to verify CMake and Lua escaping."

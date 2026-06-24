@@ -1,0 +1,7 @@
+[profile]
+name = "windows"
+schema_version = 1
+
+[values]
+"delos.windows.generated_root" = "C:\\Users\\delos\\generated\\config"
+"delos.windows.compiler_args" = "-DROOT=\"C:\\Delos SDK\";$ENV{DELOS_EXTRA}"

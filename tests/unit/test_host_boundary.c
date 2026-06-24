@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "confit/diagnostic.h"
@@ -13,6 +14,7 @@ int main(void) {
   ConfitDiagnostic diagnostic;
   char fixture_path[512];
   char joined_path[64];
+  char expected_path[64];
   char *text;
   size_t text_size;
   char **paths;
@@ -56,6 +58,24 @@ int main(void) {
   }
   if (strcmp(joined_path, "left\\right") != 0) {
     return 21;
+  }
+
+  if (confit_host_path_join(joined_path, sizeof(joined_path), "C:\\delos",
+                            "config", &diagnostic) != CONFIT_OK) {
+    return 22;
+  }
+  (void)snprintf(expected_path, sizeof(expected_path), "C:\\delos%cconfig",
+                 confit_host_path_separator());
+  if (strcmp(joined_path, expected_path) != 0) {
+    return 23;
+  }
+
+  if (confit_host_path_join(joined_path, sizeof(joined_path), "C:\\",
+                            "config", &diagnostic) != CONFIT_OK) {
+    return 24;
+  }
+  if (strcmp(joined_path, "C:\\config") != 0) {
+    return 25;
   }
 
   if (confit_host_path_join(joined_path, 4U, "left", "right",

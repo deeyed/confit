@@ -65,6 +65,91 @@ static int expect_text(const char *actual, const char *golden_path) {
   return ok;
 }
 
+static int text_has_no_cr(const char *text) {
+  return text != 0 && strchr(text, '\r') == 0;
+}
+
+static int text_contains(const char *text, const char *needle) {
+  return text != 0 && needle != 0 && strstr(text, needle) != 0;
+}
+
+static int load_project_fixture(const char *fixture,
+                                ConfitProject **out_project) {
+  ConfitDiagnostic diagnostic;
+  char path[512];
+
+  if (!join_fixture(path, sizeof(path), fixture)) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  *out_project = 0;
+  return confit_schema_load_project(path, out_project, &diagnostic) ==
+         CONFIT_OK;
+}
+
+static int check_portable_json_escaping(void) {
+  static const ConfitInputFile portable_inputs[] = {
+      {"config\\profiles\\windows.toml", "abcd"},
+      {"config/options/paths.toml", "1234"},
+  };
+  ConfitReportOptions options;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitResolvedConfig *config;
+  char *report_json;
+  char *inputs_json;
+  int ok;
+
+  if (!load_project_fixture("tests/fixtures/schema/valid/portable-paths",
+                            &project)) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  config = 0;
+  if (confit_resolver_resolve(project, "windows", 0, 0, 0U, &config,
+                              &diagnostic) != CONFIT_OK) {
+    confit_project_free(project);
+    return 0;
+  }
+
+  options.profile_name = "windows";
+  options.target_name = "C:\\targets\\renode";
+  options.input_files = portable_inputs;
+  options.input_file_count = sizeof(portable_inputs) / sizeof(portable_inputs[0]);
+
+  report_json = 0;
+  inputs_json = 0;
+  if (confit_generate_report_json(project, config, &options, &report_json,
+                                  &diagnostic) != CONFIT_OK ||
+      confit_generate_inputs_json(project, &options, &inputs_json,
+                                  &diagnostic) != CONFIT_OK) {
+    confit_generator_string_free(report_json);
+    confit_generator_string_free(inputs_json);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 0;
+  }
+
+  ok = text_has_no_cr(report_json) &&
+       text_has_no_cr(inputs_json) &&
+       text_contains(report_json,
+                     "\"target\": \"C:\\\\targets\\\\renode\"") &&
+       text_contains(report_json,
+                     "\"value\": \"C:\\\\Users\\\\delos\\\\generated\\\\config\"") &&
+       text_contains(report_json,
+                     "\"value\": \"-DROOT=\\\"C:\\\\Delos SDK\\\";$ENV{DELOS_EXTRA}\"") &&
+       text_contains(inputs_json,
+                     "\"path\": \"config\\\\profiles\\\\windows.toml\"");
+
+  confit_generator_string_free(report_json);
+  confit_generator_string_free(inputs_json);
+  confit_resolved_config_free(config);
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   static const ConfitInputFile input_files[] = {
       {"config/project.toml",
@@ -156,8 +241,13 @@ int main(void) {
        expect_text(inputs_json, "tests/golden/reports/config.inputs.json") &&
        strcmp(report_json, report_json_again) == 0 &&
        strcmp(inputs_json, inputs_json_again) == 0 &&
+       check_portable_json_escaping() &&
        strstr(report_json, "timestamp") == 0 &&
-       strstr(inputs_json, "/Users/") == 0;
+       strstr(inputs_json, "/Users/") == 0 &&
+       text_has_no_cr(report_json) &&
+       text_has_no_cr(explain_text) &&
+       text_has_no_cr(graph_json) &&
+       text_has_no_cr(inputs_json);
 
   confit_generator_string_free(report_json);
   confit_generator_string_free(report_json_again);

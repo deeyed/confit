@@ -19,6 +19,12 @@ static int join_fixture(char *out, size_t out_size, const char *fixture) {
 }
 
 int main(void) {
+  static const char crlf_source[] =
+      "[project]\r\n"
+      "name = \"delos\"\r\n"
+      "schema_version = 1\r\n"
+      "[values]\r\n"
+      "\"delos.path\" = \"C:\\\\Delos SDK\\\\config\"\r\n";
   ConfitDiagnostic diagnostic;
   ConfitParserDocument *document;
   char path[512];
@@ -117,6 +123,21 @@ int main(void) {
                               &diagnostic) != CONFIT_ERR_PARSE) {
     return 19;
   }
+
+  document = 0;
+  confit_diagnostic_clear(&diagnostic);
+  if (confit_parser_load_text("inline-crlf", crlf_source,
+                              strlen(crlf_source), &document,
+                              &diagnostic) != CONFIT_OK) {
+    return 20;
+  }
+  if (confit_parser_document_table_count(document) != 2U ||
+      confit_parser_document_key_count(document) != 3U ||
+      confit_parser_document_line_count(document) != 5U) {
+    confit_parser_document_free(document);
+    return 21;
+  }
+  confit_parser_document_free(document);
 
   return 0;
 }
