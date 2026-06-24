@@ -1,6 +1,7 @@
 #include "confit/schema.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -986,8 +987,23 @@ static const char *confit_schema_path_basename(const char *path) {
 static ConfitStatus confit_schema_source_label(
     char *out, size_t out_size, const char *directory_name, const char *path,
     ConfitDiagnostic *diagnostic) {
-  return confit_schema_join(out, out_size, directory_name,
-                            confit_schema_path_basename(path), diagnostic);
+  const char *basename;
+
+  if (out == 0 || out_size == 0U || directory_name == 0) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0,
+                            0, "invalid source label argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  basename = confit_schema_path_basename(path);
+  if (snprintf(out, out_size, "%s/%s", directory_name, basename) >=
+      (int)out_size) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0,
+                            0, "source label is too long");
+    out[0] = '\0';
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  return CONFIT_OK;
 }
 
 static char *confit_schema_parse_value_key(const char *text, size_t begin,
