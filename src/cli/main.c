@@ -1005,9 +1005,17 @@ static const char *confit_cli_doctor_platform_lane(void) {
 #if defined(_WIN32)
   return "windows-cli-only";
 #elif defined(__APPLE__)
+#if CONFIT_BUILD_HAS_CURSES
   return "macos-cli-tui";
+#else
+  return "macos-cli-only";
+#endif
 #elif defined(__linux__)
+#if CONFIT_BUILD_HAS_CURSES
   return "linux-cli-tui";
+#else
+  return "linux-cli-only";
+#endif
 #else
   return "portable-cli-preview";
 #endif
@@ -1017,9 +1025,17 @@ static const char *confit_cli_doctor_platform_note(void) {
 #if defined(_WIN32)
   return "windows clang-only CLI lane; TUI unsupported";
 #elif defined(__APPLE__)
+#if CONFIT_BUILD_HAS_CURSES
   return "macOS CLI and curses TUI lane";
+#else
+  return "macOS CLI-only lane; TUI disabled at build time";
+#endif
 #elif defined(__linux__)
+#if CONFIT_BUILD_HAS_CURSES
   return "Linux CLI and curses TUI lane";
+#else
+  return "Linux CLI-only lane; TUI disabled at build time";
+#endif
 #else
   return "portable CLI lane; platform is not release-gated yet";
 #endif

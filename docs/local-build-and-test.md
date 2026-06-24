@@ -71,6 +71,12 @@ Windows CTest lane에서는 POSIX shell integration tests를 등록하지 않는
 `confit_test_cli_workflow`가 child process로 CLI command를 실행하고, `doctor`가 Windows clang-only
 CLI lane을 보고하는지와 `confit tui`가 exit code `8`로 실패하는지를 검증한다.
 
+macOS/Linux 기본 CTest에는 `confit.cli.cli_only_lane`도 포함된다. 이 test는
+별도 `-DCONFIT_ENABLE_TUI=OFF` build를 만들고, no-TUI build에서 `confit tui`가
+exit code `8`로 실패하는지 확인한다. Host에 `clang`이 있으면
+`-DCMAKE_SYSTEM_NAME=Windows` configure smoke도 실행해 Windows에서
+`CONFIT_ENABLE_TUI=OFF`가 강제되는지 확인한다.
+
 기본 build directory:
 
 ```text
@@ -110,11 +116,16 @@ Windows native CLI-only 확인 예시는 다음과 같다.
 ```sh
 cmake -S . -B build/confit -G Ninja \
   -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCONFIT_ENABLE_TUI=ON
+grep -Fx "CONFIT_ENABLE_TUI:BOOL=OFF" build/confit/CMakeCache.txt
 cmake --build build/confit --target confit
 ctest --test-dir build/confit --output-on-failure
 build/confit/confit.exe doctor
 ```
+
+Windows에서 `CONFIT_ENABLE_TUI=ON`을 넘겨도 CMake는 CLI-only lane을 보호하기
+위해 TUI를 `OFF`로 강제한다.
 
 ## Cutover Dry-Run
 

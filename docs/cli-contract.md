@@ -47,6 +47,7 @@ Windows support is CLI-only during this contract phase. The supported Windows
 compiler lane is GNU-style Clang with a native Windows build driver such as
 Ninja. MSVC and `clang-cl` are not supported. `confit tui ...` on Windows must
 fail explicitly with exit code `8` instead of attempting a partial terminal UI.
+`CONFIT_ENABLE_TUI` is forced off on Windows even if a user passes it as `ON`.
 
 ## Global Options
 

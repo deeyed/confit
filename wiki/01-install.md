@@ -113,6 +113,9 @@ doctor ok
 ```
 
 Windows에서는 현재 CLI-only lane이므로 TUI는 unsupported로 실패해야 정상이다.
+Windows compiler lane은 GNU-style clang만 지원하며, MSVC와 `clang-cl`은
+지원하지 않는다. Windows에서 `CONFIT_ENABLE_TUI=ON`을 넘겨도 CMake는
+`CONFIT_ENABLE_TUI=OFF`로 강제한다.
 
 ## 수동 설치
 

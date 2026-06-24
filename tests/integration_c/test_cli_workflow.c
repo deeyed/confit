@@ -9,6 +9,10 @@
 #define CONFIT_TEST_SOURCE_DIR "."
 #endif
 
+#ifndef CONFIT_TEST_HAS_TUI
+#define CONFIT_TEST_HAS_TUI 1
+#endif
+
 typedef struct ConfitCliWorkflowContext {
   const char *confit_bin;
   const char *source_dir;
@@ -199,8 +203,15 @@ static void test_doctor(ConfitCliWorkflowContext *context) {
                               "single executable artifact: <prefix>/bin/"
                               "confit.exe");
 #else
+#if CONFIT_TEST_HAS_TUI
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "cli-tui");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tui: enabled");
+#else
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "cli-only");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "TUI disabled at build time");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tui: unsupported");
+#endif
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "single executable artifact: <prefix>/bin/"
                               "confit");
@@ -866,7 +877,7 @@ static void test_unknown_command(ConfitCliWorkflowContext *context) {
 }
 
 static void test_platform_tui_lane(ConfitCliWorkflowContext *context) {
-#if defined(_WIN32)
+#if !CONFIT_TEST_HAS_TUI
   ConfitTestProcessResult result;
   const char *argv[] = {0, "tui", "--project", 0, "--profile",
                         "sim-dsh", 0};

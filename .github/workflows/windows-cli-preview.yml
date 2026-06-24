@@ -1,0 +1,56 @@
+name: Confit Windows CLI Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-cli-preview:
+    name: windows-clang-cli-only
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up GNU-style clang
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-cmake
+            mingw-w64-clang-x86_64-ninja
+
+      - name: Configure CLI-only Windows lane
+        run: |
+          cmake -S . -B build/windows-cli -G Ninja \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCONFIT_ENABLE_TUI=ON
+          grep -Fx "CONFIT_ENABLE_TUI:BOOL=OFF" \
+            build/windows-cli/CMakeCache.txt
+
+      - name: Build and test CLI
+        run: |
+          cmake --build build/windows-cli
+          ctest --test-dir build/windows-cli --output-on-failure
+
+      - name: Install smoke
+        run: |
+          cmake --install build/windows-cli --prefix build/windows-prefix
+          build/windows-prefix/bin/confit.exe doctor
+          set +e
+          build/windows-prefix/bin/confit.exe tui \
+            --project tests/fixtures/schema/valid/basic \
+            --profile sim-dsh
+          status=$?
+          set -e
+          test "$status" -eq 8

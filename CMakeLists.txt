@@ -19,15 +19,28 @@ if(MSVC OR "${CMAKE_C_SIMULATE_ID}" STREQUAL "MSVC" OR
   )
 endif()
 
-set(CONFIT_ENABLE_TUI ON)
-set(CONFIT_BUILD_HAS_CURSES_VALUE 1)
-if(WIN32)
-  set(CONFIT_ENABLE_TUI OFF)
-  set(CONFIT_BUILD_HAS_CURSES_VALUE 0)
+if(WIN32 AND NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+  message(FATAL_ERROR
+    "Confit Windows support is CLI-only and clang-only. "
+    "Use GNU-style clang, not MSVC, clang-cl, or MinGW GCC."
+  )
 endif()
 
+option(CONFIT_ENABLE_TUI "Build the ncurses TUI frontend on supported hosts" ON)
+
+if(WIN32)
+  if(CONFIT_ENABLE_TUI)
+    message(STATUS
+      "Confit Windows CLI-only lane: forcing CONFIT_ENABLE_TUI=OFF")
+  endif()
+  set(CONFIT_ENABLE_TUI OFF CACHE BOOL
+    "Build the ncurses TUI frontend on supported hosts" FORCE)
+endif()
+
+set(CONFIT_BUILD_HAS_CURSES_VALUE 0)
 if(CONFIT_ENABLE_TUI)
   find_package(Curses REQUIRED)
+  set(CONFIT_BUILD_HAS_CURSES_VALUE 1)
 endif()
 
 if(CMAKE_CONFIGURATION_TYPES)
@@ -204,6 +217,10 @@ target_link_libraries(confit PRIVATE
   confit_generator
   confit_tui
 )
+
+if(NOT CONFIT_ENABLE_TUI)
+  target_link_libraries(confit PRIVATE confit_graph)
+endif()
 
 target_compile_definitions(confit PRIVATE
   CONFIT_BUILD_MODE="${CONFIT_BUILD_MODE_VALUE}"
@@ -528,6 +545,7 @@ add_executable(confit_test_cli_workflow
 target_link_libraries(confit_test_cli_workflow PRIVATE confit_test_support)
 target_compile_definitions(confit_test_cli_workflow PRIVATE
   CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  CONFIT_TEST_HAS_TUI=${CONFIT_BUILD_HAS_CURSES_VALUE}
 )
 
 confit_target_warnings(confit_test_cli_workflow)
@@ -579,6 +597,14 @@ if(UNIX AND CONFIT_ENABLE_TUI)
 endif()
 
 if(UNIX)
+  add_test(
+    NAME confit.cli.cli_only_lane
+    COMMAND /bin/sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round2_cli_only_lane.sh
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/round2-cli-only-lane
+  )
+
   add_test(
     NAME confit.cli.stress
     COMMAND /bin/sh
