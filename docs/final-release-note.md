@@ -34,10 +34,17 @@ Confit은 Parus/Delos가 kconfig를 도입하지 않고 자체 TOML 기반 confi
 
 - 실제 Parus/Delos `config/` source tree adoption.
 - 실제 Delos CMake/QStar build graph wiring.
-- native Windows push CI validation. A manual `Confit Windows CLI Preview`
-  workflow exists as a draft lane.
 - Linux host validation outside this macOS checkout.
 - kconfiglib와 동등한 full menu tree/search/help maturity.
+
+Windows preview 상태:
+
+- Push/pull request `Confit CI`에 `windows-latest` / MSYS2 `CLANG64`
+  job이 포함된다.
+- Windows job은 CLI-only build, CTest, `doctor`, `check`,
+  `gen --artifact all`, generated artifact existence, install smoke,
+  unsupported TUI exit code `8`을 검증한다.
+- Windows TUI와 MSVC/`clang-cl` 지원은 여전히 범위 밖이다.
 
 ## Supported Command Surface
 

@@ -61,9 +61,51 @@ jobs:
           cmake -S . -B build-windows-ci -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang \
-            -DCONFIT_ENABLE_TUI=OFF
+            -DCONFIT_ENABLE_TUI=ON
+          grep -Fx "CONFIT_ENABLE_TUI:BOOL=OFF" build-windows-ci/CMakeCache.txt
           cmake --build build-windows-ci
           ctest --test-dir build-windows-ci --output-on-failure
+
+      - name: Windows CLI artifact smoke
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -eu
+          CONFIT_BIN=build-windows-ci/confit.exe
+          PROJECT_DIR=tests/fixtures/realish/delos
+          OUT_DIR=build-windows-ci/artifact-smoke/delos-sim-dsh
+
+          "$CONFIT_BIN" doctor > build-windows-ci/doctor.txt
+          grep -F "platform lane: windows-cli-only" build-windows-ci/doctor.txt
+          grep -F "tui: unsupported" build-windows-ci/doctor.txt
+          grep -F "install rule: single executable artifact: <prefix>/bin/confit.exe" \
+            build-windows-ci/doctor.txt
+
+          "$CONFIT_BIN" check --project "$PROJECT_DIR" --profile sim-dsh
+          "$CONFIT_BIN" gen --project "$PROJECT_DIR" --profile sim-dsh \
+            --out "$OUT_DIR" --artifact all
+
+          test -s "$OUT_DIR/config.h"
+          test -s "$OUT_DIR/config.cmake"
+          test -s "$OUT_DIR/config/config.qsm"
+          test -s "$OUT_DIR/config.qst"
+          test -s "$OUT_DIR/delos_build_selection/delos_build_selection.qsm"
+          test -s "$OUT_DIR/config.report.json"
+          test -s "$OUT_DIR/config.explain.txt"
+          test -s "$OUT_DIR/config.graph.json"
+          test -s "$OUT_DIR/config.inputs.json"
+          grep -F "confit-config-manifest-v1" "$OUT_DIR/config/config.qsm"
+          grep -F "delos-build-selection-v1" \
+            "$OUT_DIR/delos_build_selection/delos_build_selection.qsm"
+
+          set +e
+          "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+            > build-windows-ci/tui.out 2> build-windows-ci/tui.err
+          TUI_STATUS=$?
+          set -e
+          test "$TUI_STATUS" -eq 8
+          grep -F "unsupported command or platform" build-windows-ci/tui.err
+          grep -F "confit tui is unsupported" build-windows-ci/tui.err
 
       - name: Install smoke
         if: runner.os != 'Windows'
@@ -77,10 +119,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          cmake -S . -B build-windows-install -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang \
-            -DCONFIT_ENABLE_TUI=OFF
-          cmake --build build-windows-install --target confit
-          cmake --install build-windows-install --prefix install-windows-ci
+          cmake --install build-windows-ci --prefix install-windows-ci
+          test -s install-windows-ci/bin/confit.exe
           install-windows-ci/bin/confit.exe doctor

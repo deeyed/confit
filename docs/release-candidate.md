@@ -182,7 +182,7 @@ Confit release-candidate behavior follows these safety rules:
 | Determinism | Generated artifacts avoid timestamps and use stable option order. |
 | macOS | Verified by the local gate on 2026-06-24. |
 | Linux | Expected to work with CMake, a C17 compiler, `/bin/sh` for shell integration tests, and curses/ncurses development files for TUI builds. |
-| Windows | Contracted as CLI-only with GNU-style Clang and a native build driver. TUI is explicitly unsupported and should return exit code `8`. Native Windows host execution still needs a dedicated machine/CI gate before it is called fully validated. |
+| Windows | Contracted as CLI-only with GNU-style Clang and a native build driver. TUI is explicitly unsupported and should return exit code `8`. Push/pull request CI includes a `windows-latest` MSYS2 `CLANG64` preview gate for build, CTest, artifact smoke, install smoke, and unsupported TUI behavior. |
 
 ## macOS/Linux TUI 지원 범위
 
