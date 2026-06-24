@@ -82,6 +82,8 @@ int main(void) {
   ConfitChoice *choice;
   ConfitProfile *profile;
   ConfitTarget *target;
+  ConfitBuildSelectionTemplate *selection;
+  ConfitBuildSelectionSection *section;
   ConfitValue value;
   ConfitValue copy;
   ConfitValue min_value;
@@ -258,6 +260,42 @@ int main(void) {
       strcmp(target->values[0].value.as.string_value, "host-sim") != 0) {
     confit_project_free(project);
     return 35;
+  }
+
+  if (!expect_status(
+          confit_project_add_build_selection_template(project, &selection))) {
+    confit_project_free(project);
+    return 56;
+  }
+  if (!expect_status(confit_build_selection_template_set_output(
+          selection, "delos_build_selection"))) {
+    confit_project_free(project);
+    return 57;
+  }
+  if (!expect_status(confit_build_selection_template_add_section(
+          selection, "board", &section))) {
+    confit_project_free(project);
+    return 58;
+  }
+  if (!expect_status(confit_build_selection_section_add_field(
+          section, "id", "delos.target.board"))) {
+    confit_project_free(project);
+    return 59;
+  }
+  if (project->build_selection_template_count != 1U ||
+      strcmp(project->build_selection_templates[0].output,
+             "delos_build_selection") != 0 ||
+      project->build_selection_templates[0].section_count != 1U ||
+      strcmp(project->build_selection_templates[0].sections[0].name,
+             "board") != 0 ||
+      project->build_selection_templates[0].sections[0].field_count != 1U ||
+      strcmp(project->build_selection_templates[0]
+                 .sections[0]
+                 .fields[0]
+                 .option_id,
+             "delos.target.board") != 0) {
+    confit_project_free(project);
+    return 60;
   }
 
   if (!expect_status(confit_value_set_path(&value,

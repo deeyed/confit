@@ -161,6 +161,63 @@ done:
   return ok;
 }
 
+static int expect_build_selection_template(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitBuildSelectionTemplate *selection;
+  ConfitBuildSelectionSection *arch;
+  ConfitBuildSelectionSection *board;
+  char path[512];
+  int ok;
+
+  if (!join_fixture(path, sizeof(path),
+                    "tests/fixtures/schema/valid/build-selection")) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  ok = 0;
+  if (confit_schema_load_project(path, &project, &diagnostic) != CONFIT_OK) {
+    goto done;
+  }
+  if (project->option_count != 7U ||
+      project->build_selection_template_count != 1U) {
+    goto done;
+  }
+
+  selection = &project->build_selection_templates[0];
+  if (selection->output == 0 ||
+      strcmp(selection->output, "delos_build_selection") != 0 ||
+      selection->section_count != 2U) {
+    goto done;
+  }
+
+  arch = &selection->sections[0];
+  board = &selection->sections[1];
+  if (strcmp(arch->name, "arch") != 0 || arch->field_count != 3U ||
+      strcmp(arch->fields[0].name, "id") != 0 ||
+      strcmp(arch->fields[0].option_id, "delos.target.arch") != 0 ||
+      strcmp(arch->fields[2].name, "toolchain") != 0 ||
+      strcmp(arch->fields[2].option_id, "delos.toolchain.id") != 0) {
+    goto done;
+  }
+  if (strcmp(board->name, "board") != 0 || board->field_count != 4U ||
+      strcmp(board->fields[0].name, "id") != 0 ||
+      strcmp(board->fields[0].option_id, "delos.target.board") != 0 ||
+      strcmp(board->fields[3].name, "linker_script") != 0 ||
+      strcmp(board->fields[3].option_id,
+             "delos.board.linker_script") != 0) {
+    goto done;
+  }
+
+  ok = 1;
+
+done:
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
@@ -401,6 +458,24 @@ int main(void) {
           "category path must be slash-separated, without empty segments, "
           "and at most 63 bytes")) {
     return 38;
+  }
+  if (!expect_build_selection_template()) {
+    return 39;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/build-selection-bad-output",
+          "invalid selection output name")) {
+    return 40;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/build-selection-unknown-option",
+          "unknown selection option")) {
+    return 41;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/build-selection-unknown-field",
+          "unknown selection field")) {
+    return 42;
   }
 
   return 0;

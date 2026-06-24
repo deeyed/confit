@@ -133,6 +133,9 @@ local config = qstar.import_module("build/generated/config/delos/release/config"
 
 Project-specific build selection은 Confit core에 Delos/Parus board logic을
 넣지 않고 template 기반 artifact로 생성한다. Delos 예시는 다음 path다.
+어떤 resolved option을 `arch`, `board`, `claim` 같은 section에 배치할지는
+`selection/*.toml`의 build selection template이 선언한다. Template schema는
+`docs/build-selection-template-schema.md`를 따른다.
 
 ```text
 <out>/delos_build_selection/delos_build_selection.qsm

@@ -249,10 +249,55 @@ typedef struct ConfitTarget {
 } ConfitTarget;
 
 /**
+ * @brief build selection template field mapping이다.
+ *
+ * `name`은 project-defined output field 이름이고, `option_id`는 resolved
+ * config에서 읽을 option id다. Confit은 이름의 의미를 해석하지 않는다.
+ */
+typedef struct ConfitBuildSelectionField {
+  /** output field name. */
+  char *name;
+  /** resolved option id. */
+  char *option_id;
+} ConfitBuildSelectionField;
+
+/**
+ * @brief build selection template section mapping이다.
+ *
+ * 예를 들어 `selection.arch`, `selection.board` 같은 project-defined section을
+ * 표현한다. Section 이름과 field 이름은 template 작성자가 정한다.
+ */
+typedef struct ConfitBuildSelectionSection {
+  /** output section name. */
+  char *name;
+  /** field mapping 목록. */
+  ConfitBuildSelectionField *fields;
+  /** field mapping 개수. */
+  size_t field_count;
+} ConfitBuildSelectionSection;
+
+/**
+ * @brief project-specific build selection manifest template이다.
+ *
+ * Template은 Delos/Parus 같은 project가 어떤 resolved option을 build
+ * selection artifact에 노출할지 선언한다. Confit core는 board name, linker
+ * script path, object label의 의미를 하드코딩하지 않는다.
+ */
+typedef struct ConfitBuildSelectionTemplate {
+  /** output artifact stem/name. */
+  char *output;
+  /** project-defined section 목록. */
+  ConfitBuildSelectionSection *sections;
+  /** section 개수. */
+  size_t section_count;
+} ConfitBuildSelectionTemplate;
+
+/**
  * @brief 하나의 Confit project model이다.
  *
- * Project는 options, choices, profiles, targets 배열과 그 내부 문자열/value를
- * 모두 소유한다. `confit_project_free`는 전체 tree를 재귀적으로 해제한다.
+ * Project는 options, choices, profiles, targets, build selection templates
+ * 배열과 그 내부 문자열/value를 모두 소유한다. `confit_project_free`는 전체
+ * tree를 재귀적으로 해제한다.
  */
 typedef struct ConfitProject {
   /** project name. */
@@ -277,6 +322,10 @@ typedef struct ConfitProject {
   ConfitTarget *targets;
   /** target 개수. */
   size_t target_count;
+  /** build selection template 목록. */
+  ConfitBuildSelectionTemplate *build_selection_templates;
+  /** build selection template 개수. */
+  size_t build_selection_template_count;
 } ConfitProject;
 
 /**
@@ -488,6 +537,16 @@ ConfitStatus confit_project_add_profile(ConfitProject *project,
  */
 ConfitStatus confit_project_add_target(ConfitProject *project,
                                        ConfitTarget **out_target);
+
+/**
+ * @brief project에 build selection template record를 추가한다.
+ *
+ * @param project 갱신할 project.
+ * @param out_template 성공 시 추가된 template pointer를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_project_add_build_selection_template(
+    ConfitProject *project, ConfitBuildSelectionTemplate **out_template);
 
 /**
  * @brief option id로 option을 찾는다.
@@ -721,6 +780,40 @@ ConfitStatus confit_target_add_value(ConfitTarget *target,
                                      const char *option_id,
                                      const ConfitValue *value,
                                      const char *source);
+
+/**
+ * @brief build selection template의 output 이름을 설정한다.
+ *
+ * @param selection 갱신할 template.
+ * @param output output artifact stem/name.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_build_selection_template_set_output(
+    ConfitBuildSelectionTemplate *selection, const char *output);
+
+/**
+ * @brief build selection template에 section을 추가한다.
+ *
+ * @param selection 갱신할 template.
+ * @param name section 이름.
+ * @param out_section 성공 시 추가된 section pointer를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_build_selection_template_add_section(
+    ConfitBuildSelectionTemplate *selection, const char *name,
+    ConfitBuildSelectionSection **out_section);
+
+/**
+ * @brief build selection section에 field-to-option mapping을 추가한다.
+ *
+ * @param section 갱신할 section.
+ * @param name output field 이름.
+ * @param option_id resolved option id.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_build_selection_section_add_field(
+    ConfitBuildSelectionSection *section, const char *name,
+    const char *option_id);
 
 #ifdef __cplusplus
 }

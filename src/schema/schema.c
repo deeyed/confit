@@ -15,6 +15,8 @@ typedef enum ConfitSchemaTableKind {
   CONFIT_SCHEMA_TABLE_TARGET = 4,
   CONFIT_SCHEMA_TABLE_TARGET_CLAIM = 5,
   CONFIT_SCHEMA_TABLE_VALUES = 6,
+  CONFIT_SCHEMA_TABLE_SELECTION = 7,
+  CONFIT_SCHEMA_TABLE_SELECTION_SECTION = 8,
 } ConfitSchemaTableKind;
 
 typedef struct ConfitSchemaImports {
@@ -803,6 +805,47 @@ static int confit_schema_validate_option_id(const char *id) {
   return saw_dot && segment_has_char;
 }
 
+static int confit_schema_validate_identifier_fragment(const char *name) {
+  size_t index;
+
+  if (name == 0 || name[0] == '\0') {
+    return 0;
+  }
+
+  for (index = 0U; name[index] != '\0'; ++index) {
+    if (!confit_schema_valid_id_char(name[index])) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int confit_schema_validate_output_name(const char *name) {
+  size_t index;
+  int segment_has_char;
+
+  if (name == 0 || name[0] == '\0' || name[0] == '.' ||
+      name[0] == '-' || name[0] == '/') {
+    return 0;
+  }
+
+  segment_has_char = 0;
+  for (index = 0U; name[index] != '\0'; ++index) {
+    if (name[index] == '.') {
+      if (!segment_has_char) {
+        return 0;
+      }
+      segment_has_char = 0;
+      continue;
+    }
+    if (!confit_schema_valid_id_char(name[index])) {
+      return 0;
+    }
+    segment_has_char = 1;
+  }
+  return segment_has_char;
+}
+
 static ConfitOptionType confit_schema_parse_option_type(const char *value) {
   if (strcmp(value, "bool") == 0) {
     return CONFIT_OPTION_TYPE_BOOL;
@@ -860,6 +903,64 @@ static ConfitTarget *confit_schema_find_target(ConfitProject *project,
     if (project->targets[index].name != 0 &&
         strcmp(project->targets[index].name, name) == 0) {
       return &project->targets[index];
+    }
+  }
+  return 0;
+}
+
+static ConfitBuildSelectionTemplate *confit_schema_find_build_selection_template(
+    ConfitProject *project, const char *output,
+    const ConfitBuildSelectionTemplate *ignore) {
+  size_t index;
+
+  if (project == 0 || output == 0) {
+    return 0;
+  }
+
+  for (index = 0U; index < project->build_selection_template_count; ++index) {
+    ConfitBuildSelectionTemplate *selection =
+        &project->build_selection_templates[index];
+
+    if (selection == ignore || selection->output == 0) {
+      continue;
+    }
+    if (strcmp(selection->output, output) == 0) {
+      return selection;
+    }
+  }
+  return 0;
+}
+
+static ConfitBuildSelectionSection *
+confit_schema_find_build_selection_section(
+    ConfitBuildSelectionTemplate *selection, const char *name) {
+  size_t index;
+
+  if (selection == 0 || name == 0) {
+    return 0;
+  }
+
+  for (index = 0U; index < selection->section_count; ++index) {
+    if (selection->sections[index].name != 0 &&
+        strcmp(selection->sections[index].name, name) == 0) {
+      return &selection->sections[index];
+    }
+  }
+  return 0;
+}
+
+static int confit_schema_build_selection_section_has_field(
+    const ConfitBuildSelectionSection *section, const char *name) {
+  size_t index;
+
+  if (section == 0 || name == 0) {
+    return 0;
+  }
+
+  for (index = 0U; index < section->field_count; ++index) {
+    if (section->fields[index].name != 0 &&
+        strcmp(section->fields[index].name, name) == 0) {
+      return 1;
     }
   }
   return 0;
@@ -2564,6 +2665,284 @@ static ConfitStatus confit_schema_parse_target_file(
   return status;
 }
 
+static ConfitStatus confit_schema_parse_selection_root_field(
+    ConfitProject *project, ConfitBuildSelectionTemplate *selection,
+    int *saw_schema, const char *key, const char *line_text,
+    size_t value_begin, size_t value_end, const char *path, size_t line,
+    ConfitDiagnostic *diagnostic) {
+  char *string_value;
+  ConfitStatus status;
+
+  if (strncmp(key, "x_", 2U) == 0) {
+    return CONFIT_OK;
+  }
+  if (strcmp(key, "schema") != 0 && strcmp(key, "output") != 0) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
+                            "unknown selection field");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  string_value = confit_schema_parse_quoted_string(
+      line_text, value_begin, value_end, path, line, diagnostic);
+  if (string_value == 0) {
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  if (strcmp(key, "schema") == 0) {
+    if (strcmp(string_value, "confit-build-selection-template-v1") != 0) {
+      free(string_value);
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "unsupported build selection template schema");
+      return CONFIT_ERR_SCHEMA;
+    }
+    *saw_schema = 1;
+    free(string_value);
+    return CONFIT_OK;
+  }
+
+  if (!confit_schema_validate_output_name(string_value)) {
+    free(string_value);
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U,
+                            "invalid selection output name");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (confit_schema_find_build_selection_template(project, string_value,
+                                                  selection) != 0) {
+    free(string_value);
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U,
+                            "duplicate selection output");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_build_selection_template_set_output(selection, string_value);
+  free(string_value);
+  return status;
+}
+
+static ConfitStatus confit_schema_parse_selection_section_field(
+    ConfitProject *project, ConfitBuildSelectionSection *section,
+    const char *key, const char *line_text, size_t value_begin,
+    size_t value_end, const char *path, size_t line,
+    ConfitDiagnostic *diagnostic) {
+  char *option_id;
+  ConfitStatus status;
+
+  if (strncmp(key, "x_", 2U) == 0) {
+    return CONFIT_OK;
+  }
+  if (!confit_schema_validate_identifier_fragment(key)) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
+                            "invalid selection field name");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (confit_schema_build_selection_section_has_field(section, key)) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line, 1U,
+                            "duplicate selection field");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  option_id = confit_schema_parse_quoted_string(line_text, value_begin,
+                                                value_end, path, line,
+                                                diagnostic);
+  if (option_id == 0) {
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (!confit_schema_validate_option_id(option_id)) {
+    free(option_id);
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U,
+                            "invalid selection option id");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (confit_project_find_option(project, option_id) == 0) {
+    free(option_id);
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                            value_begin + 1U,
+                            "unknown selection option");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_build_selection_section_add_field(section, key, option_id);
+  free(option_id);
+  return status;
+}
+
+static ConfitStatus confit_schema_finish_selection(
+    const ConfitBuildSelectionTemplate *selection, int saw_schema,
+    const char *path, size_t table_line, ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  if (!saw_schema || selection->output == 0) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, table_line, 1U,
+                            "selection schema and output are required");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (selection->section_count == 0U) {
+    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, table_line, 1U,
+                            "selection template needs at least one section");
+    return CONFIT_ERR_SCHEMA;
+  }
+  for (index = 0U; index < selection->section_count; ++index) {
+    if (selection->sections[index].field_count == 0U) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, table_line,
+                              1U,
+                              "selection section needs at least one field");
+      return CONFIT_ERR_SCHEMA;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_schema_parse_selection_file(
+    ConfitProject *project, const char *path, ConfitDiagnostic *diagnostic) {
+  ConfitParserDocument *document;
+  ConfitBuildSelectionTemplate *selection;
+  ConfitBuildSelectionSection *section;
+  const char *text;
+  size_t text_size;
+  size_t offset;
+  size_t line_number;
+  size_t table_line;
+  ConfitSchemaLine line;
+  ConfitSchemaTableKind table_kind;
+  ConfitStatus status;
+  int saw_schema;
+
+  status = confit_schema_load_document(path, &document, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  selection = 0;
+  status = confit_project_add_build_selection_template(project, &selection);
+  if (status != CONFIT_OK) {
+    confit_parser_document_free(document);
+    return status;
+  }
+
+  text = confit_parser_document_source_text(document);
+  text_size = confit_parser_document_source_size(document);
+  offset = 0U;
+  line_number = 1U;
+  table_line = 1U;
+  table_kind = CONFIT_SCHEMA_TABLE_NONE;
+  section = 0;
+  saw_schema = 0;
+
+  while (confit_schema_next_line(text, text_size, &offset, &line_number,
+                                 &line)) {
+    size_t begin;
+    size_t end;
+    size_t equals_index;
+    char *key;
+
+    end = confit_schema_strip_comment(line.begin, line.length);
+    begin = confit_schema_trim_left(line.begin, end);
+    end = confit_schema_trim_right(line.begin, begin, end);
+    if (begin >= end) {
+      continue;
+    }
+
+    if (line.begin[begin] == '[') {
+      char *table_name;
+
+      table_name = 0;
+      if (!confit_schema_parse_table(line.begin, begin, end, &table_name)) {
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line.line,
+                                begin + 1U, "invalid table header");
+        confit_parser_document_free(document);
+        return CONFIT_ERR_SCHEMA;
+      }
+      if (strcmp(table_name, "selection") == 0) {
+        table_kind = CONFIT_SCHEMA_TABLE_SELECTION;
+        section = 0;
+        table_line = line.line;
+      } else if (strncmp(table_name, "selection.", 10U) == 0 &&
+                 table_name[10] != '\0') {
+        const char *section_name = table_name + 10;
+
+        if (!confit_schema_validate_identifier_fragment(section_name)) {
+          free(table_name);
+          confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path,
+                                  line.line, begin + 1U,
+                                  "invalid selection section name");
+          confit_parser_document_free(document);
+          return CONFIT_ERR_SCHEMA;
+        }
+        if (confit_schema_find_build_selection_section(selection,
+                                                       section_name) != 0) {
+          free(table_name);
+          confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path,
+                                  line.line, begin + 1U,
+                                  "duplicate selection section");
+          confit_parser_document_free(document);
+          return CONFIT_ERR_SCHEMA;
+        }
+        status = confit_build_selection_template_add_section(
+            selection, section_name, &section);
+        if (status != CONFIT_OK) {
+          free(table_name);
+          confit_parser_document_free(document);
+          return status;
+        }
+        table_kind = CONFIT_SCHEMA_TABLE_SELECTION_SECTION;
+      } else {
+        free(table_name);
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line.line,
+                                begin + 1U, "unknown selection table");
+        confit_parser_document_free(document);
+        return CONFIT_ERR_SCHEMA;
+      }
+      free(table_name);
+      continue;
+    }
+
+    if (table_kind != CONFIT_SCHEMA_TABLE_SELECTION &&
+        table_kind != CONFIT_SCHEMA_TABLE_SELECTION_SECTION) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line.line,
+                              begin + 1U, "expected selection table");
+      confit_parser_document_free(document);
+      return CONFIT_ERR_SCHEMA;
+    }
+
+    if (!confit_schema_find_equals(line.begin, begin, end, &equals_index)) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line.line,
+                              begin + 1U, "expected key/value entry");
+      confit_parser_document_free(document);
+      return CONFIT_ERR_SCHEMA;
+    }
+
+    key = confit_schema_parse_bare_token(line.begin, begin, equals_index);
+    if (key == 0) {
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line.line,
+                              begin + 1U, "missing key");
+      confit_parser_document_free(document);
+      return CONFIT_ERR_SCHEMA;
+    }
+
+    status = table_kind == CONFIT_SCHEMA_TABLE_SELECTION
+                 ? confit_schema_parse_selection_root_field(
+                       project, selection, &saw_schema, key, line.begin,
+                       equals_index + 1U, end, path, line.line, diagnostic)
+                 : confit_schema_parse_selection_section_field(
+                       project, section, key, line.begin, equals_index + 1U,
+                       end, path, line.line, diagnostic);
+    free(key);
+    if (status != CONFIT_OK) {
+      confit_parser_document_free(document);
+      return status;
+    }
+  }
+
+  status = confit_schema_finish_selection(selection, saw_schema, path,
+                                          table_line, diagnostic);
+  confit_parser_document_free(document);
+  return status;
+}
+
 static ConfitStatus confit_schema_parse_project_file(
     ConfitProject *project, const char *path, ConfitSchemaImports *imports,
     ConfitDiagnostic *diagnostic) {
@@ -2740,6 +3119,42 @@ static ConfitStatus confit_schema_load_target_directory(
   for (index = 0U; index < path_count; ++index) {
     status = confit_schema_parse_target_file(project, paths[index], audit,
                                              diagnostic);
+    if (status != CONFIT_OK) {
+      confit_host_string_list_free(paths, path_count);
+      return status;
+    }
+  }
+
+  confit_host_string_list_free(paths, path_count);
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_schema_load_selection_directory(
+    ConfitProject *project, const char *config_root,
+    ConfitDiagnostic *diagnostic) {
+  char selection_dir[1024];
+  char **paths;
+  size_t path_count;
+  size_t index;
+  ConfitStatus status;
+
+  status = confit_schema_join(selection_dir, sizeof(selection_dir),
+                              config_root, "selection", diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  paths = 0;
+  path_count = 0U;
+  status = confit_host_list_toml_files(selection_dir, &paths, &path_count,
+                                       diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  for (index = 0U; index < path_count; ++index) {
+    status = confit_schema_parse_selection_file(project, paths[index],
+                                                diagnostic);
     if (status != CONFIT_OK) {
       confit_host_string_list_free(paths, path_count);
       return status;
@@ -3037,6 +3452,14 @@ ConfitStatus confit_schema_load_project_with_audit(
   }
 
   status = confit_schema_validate_option_stability(project, audit, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_schema_imports_clear(&imports);
+    confit_project_free(project);
+    return status;
+  }
+
+  status = confit_schema_load_selection_directory(project, config_root,
+                                                  diagnostic);
   if (status != CONFIT_OK) {
     confit_schema_imports_clear(&imports);
     confit_project_free(project);

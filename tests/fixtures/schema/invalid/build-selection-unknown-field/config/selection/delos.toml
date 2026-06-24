@@ -1,0 +1,7 @@
+[selection]
+schema = "confit-build-selection-template-v1"
+output = "delos_build_selection"
+mystery = "field"
+
+[selection.board]
+id = "delos.target.board"

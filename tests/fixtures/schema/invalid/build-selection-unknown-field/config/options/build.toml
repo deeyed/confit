@@ -1,0 +1,6 @@
+[option."delos.target.board"]
+type = "enum"
+default = "host-sim"
+choices = ["host-sim"]
+prompt = "Target board"
+category = "target"

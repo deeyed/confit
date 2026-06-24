@@ -582,6 +582,81 @@ static void confit_target_clear(ConfitTarget *target) {
   confit_target_init(target);
 }
 
+static void confit_build_selection_field_init(
+    ConfitBuildSelectionField *field) {
+  if (field == 0) {
+    return;
+  }
+
+  field->name = 0;
+  field->option_id = 0;
+}
+
+static void confit_build_selection_field_clear(
+    ConfitBuildSelectionField *field) {
+  if (field == 0) {
+    return;
+  }
+
+  free(field->name);
+  free(field->option_id);
+  confit_build_selection_field_init(field);
+}
+
+static void confit_build_selection_section_init(
+    ConfitBuildSelectionSection *section) {
+  if (section == 0) {
+    return;
+  }
+
+  section->name = 0;
+  section->fields = 0;
+  section->field_count = 0U;
+}
+
+static void confit_build_selection_section_clear(
+    ConfitBuildSelectionSection *section) {
+  size_t index;
+
+  if (section == 0) {
+    return;
+  }
+
+  free(section->name);
+  for (index = 0U; index < section->field_count; ++index) {
+    confit_build_selection_field_clear(&section->fields[index]);
+  }
+  free(section->fields);
+  confit_build_selection_section_init(section);
+}
+
+static void confit_build_selection_template_init(
+    ConfitBuildSelectionTemplate *selection) {
+  if (selection == 0) {
+    return;
+  }
+
+  selection->output = 0;
+  selection->sections = 0;
+  selection->section_count = 0U;
+}
+
+static void confit_build_selection_template_clear(
+    ConfitBuildSelectionTemplate *selection) {
+  size_t index;
+
+  if (selection == 0) {
+    return;
+  }
+
+  free(selection->output);
+  for (index = 0U; index < selection->section_count; ++index) {
+    confit_build_selection_section_clear(&selection->sections[index]);
+  }
+  free(selection->sections);
+  confit_build_selection_template_init(selection);
+}
+
 ConfitProject *confit_project_create(void) {
   ConfitProject *project;
 
@@ -623,6 +698,12 @@ void confit_project_free(ConfitProject *project) {
     confit_target_clear(&project->targets[index]);
   }
   free(project->targets);
+
+  for (index = 0U; index < project->build_selection_template_count; ++index) {
+    confit_build_selection_template_clear(
+        &project->build_selection_templates[index]);
+  }
+  free(project->build_selection_templates);
 
   free(project);
 }
@@ -740,6 +821,30 @@ ConfitStatus confit_project_add_target(ConfitProject *project,
   *out_target = &project->targets[project->target_count];
   confit_target_init(*out_target);
   project->target_count += 1U;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_project_add_build_selection_template(
+    ConfitProject *project, ConfitBuildSelectionTemplate **out_template) {
+  ConfitBuildSelectionTemplate *new_templates;
+
+  if (project == 0 || out_template == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  new_templates = (ConfitBuildSelectionTemplate *)realloc(
+      project->build_selection_templates,
+      (project->build_selection_template_count + 1U) *
+          sizeof(project->build_selection_templates[0]));
+  if (new_templates == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  project->build_selection_templates = new_templates;
+  *out_template =
+      &project->build_selection_templates[project->build_selection_template_count];
+  confit_build_selection_template_init(*out_template);
+  project->build_selection_template_count += 1U;
   return CONFIT_OK;
 }
 
@@ -1172,4 +1277,74 @@ ConfitStatus confit_target_add_value(ConfitTarget *target,
 
   return confit_named_value_append(&target->values, &target->value_count,
                                    option_id, value, source);
+}
+
+ConfitStatus confit_build_selection_template_set_output(
+    ConfitBuildSelectionTemplate *selection, const char *output) {
+  if (selection == 0 || output == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  return confit_model_replace_string(&selection->output, output);
+}
+
+ConfitStatus confit_build_selection_template_add_section(
+    ConfitBuildSelectionTemplate *selection, const char *name,
+    ConfitBuildSelectionSection **out_section) {
+  ConfitBuildSelectionSection *new_sections;
+  ConfitStatus status;
+
+  if (selection == 0 || name == 0 || out_section == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  new_sections = (ConfitBuildSelectionSection *)realloc(
+      selection->sections,
+      (selection->section_count + 1U) * sizeof(selection->sections[0]));
+  if (new_sections == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  selection->sections = new_sections;
+  *out_section = &selection->sections[selection->section_count];
+  confit_build_selection_section_init(*out_section);
+  status = confit_model_replace_string(&(*out_section)->name, name);
+  if (status != CONFIT_OK) {
+    confit_build_selection_section_clear(*out_section);
+    return status;
+  }
+  selection->section_count += 1U;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_build_selection_section_add_field(
+    ConfitBuildSelectionSection *section, const char *name,
+    const char *option_id) {
+  ConfitBuildSelectionField *new_fields;
+  ConfitBuildSelectionField *field;
+  ConfitStatus status;
+
+  if (section == 0 || name == 0 || option_id == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  new_fields = (ConfitBuildSelectionField *)realloc(
+      section->fields, (section->field_count + 1U) * sizeof(section->fields[0]));
+  if (new_fields == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+
+  section->fields = new_fields;
+  field = &section->fields[section->field_count];
+  confit_build_selection_field_init(field);
+  status = confit_model_replace_string(&field->name, name);
+  if (status == CONFIT_OK) {
+    status = confit_model_replace_string(&field->option_id, option_id);
+  }
+  if (status != CONFIT_OK) {
+    confit_build_selection_field_clear(field);
+    return status;
+  }
+  section->field_count += 1U;
+  return CONFIT_OK;
 }

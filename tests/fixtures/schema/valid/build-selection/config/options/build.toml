@@ -1,0 +1,43 @@
+[option."delos.target.arch"]
+type = "enum"
+default = "armv7m"
+choices = ["host", "armv7m"]
+prompt = "Target architecture"
+category = "target"
+
+[option."delos.target.cpu"]
+type = "string"
+default = "cortex-m7"
+prompt = "Target CPU"
+category = "target"
+
+[option."delos.toolchain.id"]
+type = "string"
+default = "arm-none-eabi"
+prompt = "Toolchain id"
+category = "toolchain"
+
+[option."delos.target.board"]
+type = "enum"
+default = "nucleo-h753zi"
+choices = ["host-sim", "nucleo-h753zi"]
+prompt = "Target board"
+category = "target"
+
+[option."delos.board.objects"]
+type = "string"
+default = "//src/board/armv7m/stm32h7/nucleo-h753zi:board_objects"
+prompt = "Board objects label"
+category = "target/board"
+
+[option."delos.board.include_dirs"]
+type = "string"
+default = "src/board/armv7m/stm32h7/nucleo-h753zi"
+prompt = "Board include directories"
+category = "target/board"
+
+[option."delos.board.linker_script"]
+type = "path"
+default = "linker/armv7m/nucleo-h753zi.ld"
+prompt = "Board linker script"
+category = "target/board"

@@ -1,0 +1,6 @@
+[selection]
+schema = "confit-build-selection-template-v1"
+output = "delos_build_selection"
+
+[selection.board]
+id = "delos.target.missing"
