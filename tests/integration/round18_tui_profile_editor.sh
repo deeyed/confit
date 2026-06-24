@@ -45,6 +45,8 @@ PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
   printf '%s\n' 'TUI name'
   printf '%s' '?'
   printf '%s' "$PAGE_DOWN_KEY"
+  printf '%s' "$PAGE_DOWN_KEY"
+  printf '%s' "$PAGE_DOWN_KEY"
   printf '%s' 'q'
   printf '%s\n' 'x/path'
   printf '%s' 'e'

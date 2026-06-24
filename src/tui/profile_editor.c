@@ -1767,10 +1767,13 @@ static ConfitStatus confit_tui_search_jump(ConfitTuiState *state, int direction,
   }
   state->search_count = match_count;
   state->search_position = match_position;
-  (void)snprintf(state->status, sizeof(state->status), "%s %lu/%lu: %s",
-                 status_prefix, (unsigned long)state->search_position,
-                 (unsigned long)state->search_count,
-                 confit_tui_text_or_dash(state->rows[best_match].option->id));
+  (void)snprintf(
+      state->status, sizeof(state->status), "%s %lu/%lu: %s <%s> category=%s",
+      status_prefix, (unsigned long)state->search_position,
+      (unsigned long)state->search_count,
+      confit_tui_text_or_dash(state->rows[best_match].option->prompt),
+      confit_tui_text_or_dash(state->rows[best_match].option->id),
+      confit_tui_option_category_name(state->rows[best_match].option));
   state->status[sizeof(state->status) - 1U] = '\0';
   return CONFIT_OK;
 }
@@ -2149,6 +2152,24 @@ static ConfitStatus confit_tui_detail_append_line(ConfitTuiTextBuilder *builder,
   return status;
 }
 
+static ConfitStatus
+confit_tui_detail_append_section(ConfitTuiTextBuilder *builder,
+                                 const char *title) {
+  ConfitStatus status;
+
+  if (builder->size > 0U) {
+    status = confit_tui_text_append(builder, "\n");
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  status = confit_tui_text_append(builder, title);
+  if (status == CONFIT_OK) {
+    status = confit_tui_text_append(builder, "\n");
+  }
+  return status;
+}
+
 static ConfitStatus confit_tui_detail_append_wrapped_word(
     ConfitTuiTextBuilder *builder, const char *word, size_t word_size,
     size_t wrap_width, size_t *line_size) {
@@ -2307,7 +2328,7 @@ confit_tui_detail_append_dependencies(ConfitTuiTextBuilder *builder,
                                       const ConfitOption *option) {
   ConfitStatus status;
 
-  status = confit_tui_text_append(builder, "\nDependencies\n");
+  status = confit_tui_detail_append_section(builder, "Declared Dependencies");
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_dependency_kind(
         builder, option, CONFIT_DEPENDENCY_REQUIRES, "requires: ");
@@ -2342,7 +2363,7 @@ static ConfitStatus confit_tui_detail_append_runtime_dependency_state(
   disabled = 0;
   confit_tui_format_dependency_state(state, option, current, state_line,
                                      sizeof(state_line), &disabled);
-  status = confit_tui_text_append(builder, "\nDependency State\n");
+  status = confit_tui_detail_append_section(builder, "Dependency State");
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(
         builder, "display policy: ",
@@ -2359,6 +2380,13 @@ static ConfitStatus confit_tui_detail_append_runtime_dependency_state(
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(
         builder, "edit block: ", disabled ? state_line : "-");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_section(builder, "Blocked Reason");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
+        builder, "reason: ", disabled ? state_line : "-");
   }
   dependency_id = confit_tui_find_inactive_dependency(
       state, option, CONFIT_DEPENDENCY_VISIBLE_IF);
@@ -2437,14 +2465,20 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
                           sizeof(default_value));
 
   confit_tui_text_builder_init(&builder);
-  status = confit_tui_detail_append_line(
+  status = confit_tui_detail_append_section(&builder, "Overview");
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(
       &builder, "prompt: ", confit_tui_text_or_dash(option->prompt));
+  }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(&builder, "id: ", option->id);
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(
         &builder, "type: ", confit_option_type_name(option->type));
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_section(&builder, "Value");
   }
   if (status == CONFIT_OK) {
     status =
@@ -2458,6 +2492,9 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
     status = confit_tui_detail_append_line(
         &builder, "source: ",
         resolved != 0 ? confit_tui_text_or_dash(resolved->source) : "default");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_section(&builder, "Location");
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(
@@ -2475,7 +2512,7 @@ confit_tui_build_option_detail(const ConfitTuiState *state,
     status = confit_tui_detail_append_dependencies(&builder, option);
   }
   if (status == CONFIT_OK) {
-    status = confit_tui_text_append(&builder, "\nHelp\n");
+    status = confit_tui_detail_append_section(&builder, "Help Text");
   }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_wrapped(
@@ -2519,7 +2556,10 @@ confit_tui_build_category_detail(const ConfitTuiState *state,
   count_line[sizeof(count_line) - 1U] = '\0';
 
   confit_tui_text_builder_init(&builder);
-  status = confit_tui_detail_append_line(&builder, "menu: ", name);
+  status = confit_tui_detail_append_section(&builder, "Menu");
+  if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_line(&builder, "menu: ", name);
+  }
   if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(
         &builder, "state: ",
@@ -2530,11 +2570,17 @@ confit_tui_build_category_detail(const ConfitTuiState *state,
     status = confit_tui_detail_append_line(&builder, "options: ", count_line);
   }
   if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_section(&builder, "Summary");
+  }
+  if (status == CONFIT_OK) {
     status = confit_tui_detail_append_line(&builder, "summary: ", row->detail);
   }
   if (status == CONFIT_OK) {
+    status = confit_tui_detail_append_section(&builder, "Help Text");
+  }
+  if (status == CONFIT_OK) {
     status = confit_tui_text_append(&builder,
-                                    "\nSelect an option inside this menu to "
+                                    "Select an option inside this menu to "
                                     "inspect current value, default, "
                                     "source, dependencies, and help text.\n");
   }
@@ -2636,7 +2682,7 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
   }
 
   (void)snprintf(header, sizeof(header),
-                 "project=%s profile=%s target=%s selected=%s",
+                 "mode=help project=%s profile=%s target=%s selected=%s",
                  confit_tui_text_or_dash(state->project->name),
                  confit_tui_text_or_dash(state->options->profile_name),
                  confit_tui_text_or_dash(target_name),
@@ -2654,7 +2700,7 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
     status_line[sizeof(status_line) - 1U] = '\0';
     if (confit_tui_curses_render_text(
             "Confit Help", header, body,
-            "arrows/jk scroll PgUp/PgDn Home/End Esc/q/h/? close", status_line,
+            "keys: scroll jk/arrows Pg/Home/End | q/Esc close", status_line,
             first_line) != 0) {
       free(body);
       return CONFIT_ERR_INTERNAL;

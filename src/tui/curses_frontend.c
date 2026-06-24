@@ -788,6 +788,21 @@ static const char *confit_tui_curses_skip_text_lines(const char *text,
   return cursor;
 }
 
+static int confit_tui_curses_text_line_is_section(const char *line,
+                                                  size_t line_size) {
+  size_t index;
+
+  if (line == 0 || line_size == 0U || isspace((unsigned char)line[0])) {
+    return 0;
+  }
+  for (index = 0U; index < line_size; ++index) {
+    if (line[index] == ':') {
+      return 0;
+    }
+  }
+  return line_size <= 48U;
+}
+
 static void confit_tui_curses_render_text_body(const char *body, int top,
                                                int left, int height, int width,
                                                size_t first_line) {
@@ -811,8 +826,16 @@ static void confit_tui_curses_render_text_body(const char *body, int top,
       cursor += 1;
     }
     line_size = (size_t)(cursor - line_begin);
+    confit_tui_curses_style_on(
+        confit_tui_curses_text_line_is_section(line_begin, line_size)
+            ? CONFIT_TUI_STYLE_CATEGORY
+            : CONFIT_TUI_STYLE_HELP);
     move(top + row, left);
     addnstr(line_begin, line_size < (size_t)width ? (int)line_size : width);
+    confit_tui_curses_style_off(
+        confit_tui_curses_text_line_is_section(line_begin, line_size)
+            ? CONFIT_TUI_STYLE_CATEGORY
+            : CONFIT_TUI_STYLE_HELP);
     if (*cursor == '\n') {
       cursor += 1;
     }

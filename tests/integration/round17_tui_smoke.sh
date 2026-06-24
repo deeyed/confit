@@ -79,8 +79,8 @@ grep -aF "moved End" "$WORK_DIR/tui-end.txt" >/dev/null
 printf '/board\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-search-single.txt"
 
-grep -aF "search 1/1: delos.target.board" "$WORK_DIR/tui-search-single.txt" \
-  >/dev/null
+grep -aF "search 1/1: Target Board <delos.target.board> category=target" \
+  "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
 
 for cols in 80 100 120 160; do
@@ -118,17 +118,23 @@ grep -aF "search 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "next result 2/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "previous result 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 
-printf 'j?%sqq' "$PAGE_DOWN_KEY" | "$CONFIT_BIN" tui \
+printf 'j?%s%s%sqq' "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" |
+  "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-detail-question.txt"
 
 grep -aF "Confit Help" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "help project=delos profile=sim-dsh target=host-sim" \
+  "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Overview" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "prompt: Enable DDC" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "id: delos.debug.ddc" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "type: bool" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Value" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "current: true" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "default: false" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "source:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Location" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "category: debug" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "tags: debug, host-tooling" "$WORK_DIR/tui-detail-question.txt" \
   >/dev/null
@@ -139,11 +145,18 @@ grep -aF "row state: blocked: required by delos.target.board" \
   "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "edit block: blocked: required by delos.target.board" \
   "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Blocked Reason" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "reason: blocked: required by delos.target.board" \
+  "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "requires:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "conflicts:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
-grep -aF "forces:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
-grep -aF "recommends:" "$WORK_DIR/tui-detail-question.txt" >/dev/null
-grep -aF "Help" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "forces: delos.internal.debug_gate" \
+  "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "recommends: delos.internal.debug_gate" \
+  "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "Help Text" "$WORK_DIR/tui-detail-question.txt" >/dev/null
+grep -aF "scroll jk/arrows Pg/Home/End | q/Esc close" \
+  "$WORK_DIR/tui-detail-question.txt" >/dev/null
 
 printf '/ddc\neq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-required-block.txt"
@@ -151,7 +164,8 @@ printf '/ddc\neq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
 grep -aF "blocked: required by delos.target.board" \
   "$WORK_DIR/tui-required-block.txt" >/dev/null
 
-printf '/debug_gate\n?qq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/debug_gate\n?%sqq' "$PAGE_DOWN_KEY" |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-forced-detail.txt"
 
 grep -aF "row state: blocked: forced by delos.debug.ddc" \
@@ -172,7 +186,8 @@ grep -aF "confit.dep.hidden" "$WORK_DIR/tui-dependency-ux.txt" >/dev/null
 grep -aF "confit.dep.recommended" "$WORK_DIR/tui-dependency-ux.txt" \
   >/dev/null
 
-printf '/confit.dep.hidden\n?qq' | "$CONFIT_BIN" tui \
+printf '/confit.dep.hidden\n?%sqq' "$PAGE_DOWN_KEY" |
+  "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-visible-if-detail.txt"
 
@@ -183,7 +198,8 @@ grep -aF "visible_if inactive: confit.dep.gate" \
 grep -aF "edit policy: blocked or guarded" \
   "$WORK_DIR/tui-visible-if-detail.txt" >/dev/null
 
-printf '/confit.dep.recommended\n?qq' | "$CONFIT_BIN" tui \
+printf '/confit.dep.recommended\n?%sqq' "$PAGE_DOWN_KEY" |
+  "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-recommended-detail.txt"
 

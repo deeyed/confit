@@ -81,6 +81,17 @@ Status line은 즉시성 메시지만 담당한다. `ready`, `search 1/3`, `bloc
 `saved and reloaded ...`, `cancelled` 같은 결과나 이유를 표시하고, project/profile/target 같은 context는
 상단 band에만 둔다.
 
+## Help And Search Views
+
+`?` 또는 `h`로 여는 detail 화면은 kconfiglib help view처럼 섹션 단위로 읽히게 구성한다. Option detail은
+`Overview`, `Value`, `Location`, `Dependency State`, `Blocked Reason`, `Declared Dependencies`,
+`Help Text` 순서로 표시한다. 따라서 prompt, id, type, current value, default, source, category, tags,
+dependency edge, 현재 profile 기준 blocked reason, help text를 한 화면에서 순서대로 확인할 수 있다.
+
+Search jump(`/`)는 목록을 filter하지 않고 일치 항목으로 이동한다. 상단 context band는
+`search=<query> current/total`을 계속 보여주고, status line은 `search 1/3: Prompt <option.id>
+category=name`처럼 현재 match context를 표시한다. `n`과 `N`도 같은 형식으로 다음/이전 match를 보여준다.
+
 ## Fixed TUI Keymap
 
 Confit TUI keymap은 kconfiglib/menuconfig 계열 조작감을 기준으로 고정한다. Profile editor와 schema editor는
