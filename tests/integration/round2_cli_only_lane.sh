@@ -38,7 +38,8 @@ grep -F "unsupported command or platform" "$WORK_DIR/no-tui.err" >/dev/null
 grep -F "confit tui is unsupported in this CLI-only platform lane" \
   "$WORK_DIR/no-tui.err" >/dev/null
 
-if command -v clang >/dev/null 2>&1; then
+HOST_SYSTEM=$(uname -s)
+if [ "$HOST_SYSTEM" = "Darwin" ] && command -v clang >/dev/null 2>&1; then
   cmake -S "$SOURCE_DIR" -B "$WINDOWS_CONFIGURE_DIR" \
     -DCMAKE_SYSTEM_NAME=Windows \
     -DCMAKE_C_COMPILER="$(command -v clang)" \
@@ -48,7 +49,7 @@ if command -v clang >/dev/null 2>&1; then
   grep -Fx "CONFIT_ENABLE_TUI:BOOL=OFF" \
     "$WINDOWS_CONFIGURE_DIR/CMakeCache.txt" >/dev/null
 else
-  echo "clang not found; skipped Windows configure guard smoke"
+  echo "skipped Windows configure guard smoke on $HOST_SYSTEM"
 fi
 
 echo "cli-only lane ok"
