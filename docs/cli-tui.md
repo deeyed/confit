@@ -133,6 +133,10 @@ category/tag에 맞지 않는 menu row를 숨긴다. Search는 현재 category/t
 Profile edit는 입력 시점에 검증한다. Bool은 즉시 toggle된다. Enum은 choice popup에서 후보만 선택할 수
 있다. Int/uint/hex/float/string/path는 value dialog에서 입력하며, range, enum candidate, finite float,
 relative path, non-empty string/path 조건을 만족하지 않으면 dialog를 닫지 않고 같은 자리에서 다시 입력받는다.
+Enum popup은 current/default/candidate 목록과 현재 후보 위치를 표시한다. Value dialog는 current/default,
+type policy, range, key hint를 보여주고, invalid 입력은 dialog 내부 status row에 남긴 뒤 입력값을 비워
+재입력을 요구한다. 따라서 validation 실패는 기본 browse 화면의 status line으로 흘러가며 사라지지 않고,
+dialog 안에서 명확히 막힌다.
 저장 직전에는 현재 edits를 포함해 resolver full validation을 다시 수행한다. 저장 후에는 profile TOML을
 디스크에서 다시 load하고 graph/resolve를 재실행해 화면 state와 file state를 맞춘다. 실패 시 status line은
 `error: <option-id>: <reason>` 또는 `saved but reload failed: ...` 형태로 원인 option을 표시한다.

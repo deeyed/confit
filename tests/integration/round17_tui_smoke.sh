@@ -224,7 +224,8 @@ printf '/confit.dep.recommended\neqj\n' | "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-recommends-edit.txt"
 
-grep -aF "edited" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
+grep -aF "toggled confit.dep.recommended = true" \
+  "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
 ! grep -aF "blocked:" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
 grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-recommends-edit.txt" \
   >/dev/null

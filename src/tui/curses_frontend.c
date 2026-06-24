@@ -1146,7 +1146,7 @@ static void confit_tui_curses_render_value_dialog(const char *title,
   int input_width;
 
   erase();
-  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 10);
+  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 16);
   if (height < 7 || width < 36) {
     confit_tui_curses_add_clipped(0, 0, confit_tui_curses_text(title),
                                   COLS > 0 ? COLS : 80);
@@ -1279,7 +1279,7 @@ static void confit_tui_curses_render_choice_dialog(
   size_t index;
 
   erase();
-  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 14);
+  confit_tui_curses_dialog_rect(&top, &left, &height, &width, 16);
   if (height < 8 || width < 36) {
     confit_tui_curses_add_clipped(0, 0, confit_tui_curses_text(title),
                                   COLS > 0 ? COLS : 80);
@@ -1360,12 +1360,14 @@ int confit_tui_curses_select_dialog(const char *title, const char *header,
   if (selected_index >= item_count) {
     selected_index = 0U;
   }
-  (void)snprintf(status, sizeof(status), "Enter selects, Esc cancels");
-  status[sizeof(status) - 1U] = '\0';
-
   do {
     int ch;
 
+    (void)snprintf(status, sizeof(status),
+                   "choice %lu/%lu | Enter/Space selects, Esc/q cancels",
+                   (unsigned long)(selected_index + 1U),
+                   (unsigned long)item_count);
+    status[sizeof(status) - 1U] = '\0';
     confit_tui_curses_render_choice_dialog(title, header, items, item_count,
                                            selected_index, status);
     ch = getch();

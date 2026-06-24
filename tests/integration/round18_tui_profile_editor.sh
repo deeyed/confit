@@ -67,16 +67,50 @@ grep -aF "Options" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "[-]  edit" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "tags:" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "delos.edit.mode" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "toggled delos.edit.bool = true" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
 grep -aF "Confit Choice" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "choices: sim, hw" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: choose one listed candidate" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
+grep -aF "choice 1/2 | Enter/Space selects, Esc/q cancels" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "selected delos.edit.mode = hw" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
 grep -aF "Confit Value" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "keys: Enter validates, Ctrl-U clears, Esc cancels" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: integer only" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "range: [0, 10]" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "required: integer in range [0, 10]" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
 grep -aF "invalid int: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: unsigned integer only" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
+grep -aF "required: unsigned integer in range [0, 8]" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid uint: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: unsigned integer or 0x hex value" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "range: [0x0, 0xFF]" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "required: unsigned integer or 0x hex in range [0x0, 0xFF]" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid hex: outside range" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: finite floating point number" "$WORK_DIR/tui-edit.txt" \
+  >/dev/null
+grep -aF "required: finite float in range [0, 1]" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid float: expected finite value" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
+grep -aF "policy: non-empty text; control characters rejected" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "required: non-empty text" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid string: value required" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "production TUI help panel" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "without losing" "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "policy: relative path; absolute/control paths rejected" \
+  "$WORK_DIR/tui-edit.txt" >/dev/null
+grep -aF "required: relative path" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "invalid path: expected relative path" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
 grep -aF "Overwrite Profile" "$WORK_DIR/tui-edit.txt" >/dev/null
