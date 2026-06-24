@@ -27,7 +27,8 @@ grep -aF "SCHEMA EDIT MODE is a guarded workflow." \
 grep -aF "Generated outputs are not written here" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "SCHEMA EDIT MODE - guarded" "$WORK_DIR/tui-schema.txt" >/dev/null
-grep -aF "option 0/0" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu | row 0/0 | view=tree" \
+  "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit TUI - menuconfig schema" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "Confit Schema Field" "$WORK_DIR/tui-schema.txt" >/dev/null
@@ -37,12 +38,15 @@ grep -aF "schema edits change all profiles" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu > schema" "$WORK_DIR/tui-schema.txt" \
+  >/dev/null
 grep -aF "Created Prompt <delos.schema.mode>" "$WORK_DIR/tui-schema.txt" \
   >/dev/null
 grep -aF "Limit Prompt <delos.schema.limit>" "$WORK_DIR/tui-schema.txt" \
   >/dev/null
 grep -aF "type=enum" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "choices=red,blue" "$WORK_DIR/tui-schema.txt" >/dev/null
+grep -aF "category path:schema" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "policy: dotted option id; letters, numbers, _, - allowed" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "policy: one of bool,int,uint,hex,string,enum,float,path" \
@@ -55,6 +59,56 @@ grep -aF "required: numeric min,max containing the current default" \
   "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "reloaded graph" "$WORK_DIR/tui-schema.txt" >/dev/null
+
+NAV_PROJECT_DIR="$WORK_DIR/schema-navigation"
+cp -R "$PROJECT_SRC" "$NAV_PROJECT_DIR"
+printf '\nndelos.schema.nav\nbool\nNav Prompt\ncschema/tree\n%s%s\n\n:help\n:verbose\n:noverbose\n:flat\n:tree\ns%s' \
+  "$ESC_KEY" "$ESC_KEY" "$ESC_KEY" |
+  "$CONFIT_BIN" tui --project "$NAV_PROJECT_DIR" --schema-edit \
+    >"$WORK_DIR/tui-schema-navigation.txt"
+
+grep -aF "commands: verbose noverbose tree flat filter <text> clear help quit" \
+  "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "flat view" "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "view=tree" "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "back to Main Menu > schema" "$WORK_DIR/tui-schema-navigation.txt" \
+  >/dev/null
+grep -aF "back to Main Menu" "$WORK_DIR/tui-schema-navigation.txt" \
+  >/dev/null
+grep -aF "entered menu Main Menu > schema" \
+  "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "breadcrumb=Main Menu > schema > tree" \
+  "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "schema menu path: schema/tree" \
+  "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "Nav Prompt <delos.schema.nav> bool category path:schema/tree" \
+  "$WORK_DIR/tui-schema-navigation.txt" \
+  >/dev/null
+grep -aF "verbose inspector mode" "$WORK_DIR/tui-schema-navigation.txt" \
+  >/dev/null
+grep -aF "compact" "$WORK_DIR/tui-schema-navigation.txt" >/dev/null
+grep -aF "saved and validated" "$WORK_DIR/tui-schema-navigation.txt" \
+  >/dev/null
+
+DEPTH_PROJECT_DIR="$WORK_DIR/schema-depth"
+cp -R "$PROJECT_SRC" "$DEPTH_PROJECT_DIR"
+printf '\nndelos.schema.deep\nbool\nDeep Prompt\ncschema/deep/extra/too\ns%s' \
+  "$ESC_KEY" |
+  "$CONFIT_BIN" tui --project "$DEPTH_PROJECT_DIR" --schema-edit \
+    >"$WORK_DIR/tui-schema-depth-warning.txt"
+
+grep -aF "warning: category path depth exceeds 3 levels" \
+  "$WORK_DIR/tui-schema-depth-warning.txt" >/dev/null
+grep -aF "category path:schema/deep/extra/too" \
+  "$WORK_DIR/tui-schema-depth-warning.txt" >/dev/null
+grep -aF "saved and validated" "$WORK_DIR/tui-schema-depth-warning.txt" \
+  >/dev/null
+grep -F 'category = "schema/deep/extra/too"' \
+  "$DEPTH_PROJECT_DIR/config/options/tui-schema.toml" >/dev/null
+"$CONFIT_BIN" graph --project "$DEPTH_PROJECT_DIR" \
+  >"$WORK_DIR/depth-graph.json"
+grep -F '"id": "delos.schema.deep"' "$WORK_DIR/depth-graph.json" \
+  >/dev/null
 
 printf '\nn%s?%s' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
