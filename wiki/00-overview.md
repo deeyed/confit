@@ -107,3 +107,20 @@ Confit은 다음 일을 하지 않는다.
 - CMake나 QStar 자체를 대체하지 않는다.
 
 Confit은 “설정 원본을 읽고, 검증하고, 설명하고, generated artifact를 만드는 도구”다.
+
+## v0.1.0-rc1에서 믿을 수 있는 것
+
+`0.1.0-rc1` 기준으로 Confit은 다음 조건에서 실사용 후보로 볼 수 있다.
+
+- macOS/Linux host에서는 CLI와 ncurses TUI를 함께 사용할 수 있다.
+- Windows host에서는 GNU-style clang 기반 CLI-only preview를 사용할 수 있다.
+- Windows TUI는 아직 지원하지 않는다.
+- `confit gen --artifact all`은 C source, report, CMake, QStar, build
+  selection이 함께 소비할 deterministic artifact set을 만든다.
+- `confit compat`는 Parus/Delos처럼 서로 맞아야 하는 두 project의 resolved
+  value 조합을 검사한다.
+- CI는 macOS/Linux/Windows preview를 모두 확인한다.
+
+아직 믿으면 안 되는 것은 “자동 source tree migration”이다. Confit은 실제
+Parus/Delos `config/` tree를 몰래 만들거나 build graph를 자동으로 고치지
+않는다. 그런 adoption은 별도 review 단위로 진행해야 한다.

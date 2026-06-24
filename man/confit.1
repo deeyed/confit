@@ -40,6 +40,43 @@ config/config.qsm
 config.qst  (deprecated compatibility artifact)
 <output>/<output>.qsm  (if selection/*.toml declares one)
 .EE
+.SH RC1 지원 범위
+Confit 0.1.0-rc1은 fixture-backed release candidate다.
+macOS/Linux에서는 CLI와 ncurses TUI를 지원한다.
+Windows에서는 MSYS2
+.B CLANG64
+와 GNU-style clang 기반 CLI-only preview를 지원한다.
+Windows TUI, MSVC,
+.B clang-cl
+은 지원하지 않는다.
+.PP
+rc1에서 믿을 수 있는 주요 범위는 schema/profile/target validation,
+deterministic resolve, dependency graph validation, explanation, diff,
+compatibility check, generated artifact, CMake/QStar manifest, build
+selection module, macOS/Linux TUI profile/schema editing이다.
+.PP
+실제 Parus/Delos
+.I config/
+source tree adoption과 CMake/QStar graph wiring은 Confit install이나
+.B gen
+이 자동으로 수행하지 않는다. 별도 integration review에서 처리해야 한다.
+.PP
+Push/pull request CI는
+.I ubuntu-latest
+,
+.I macos-latest
+,
+.I windows-latest
+를 확인한다. Windows CI는 CLI-only build, CTest,
+.B doctor
+,
+.B check
+,
+gen --artifact all, generated artifact existence,
+.B confit tui
+exit code 8, 그리고
+.I confit.exe
+install smoke를 검증한다.
 .SH 명령
 .TP
 .B help [command]

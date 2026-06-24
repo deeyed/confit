@@ -15,6 +15,25 @@ Confit의 핵심 역할은 다음과 같다.
 - Parus와 Delos처럼 서로 맞아야 하는 두 프로젝트의 compatibility를 검사한다.
 - macOS/Linux에서는 ncurses TUI로 profile 편집과 guarded schema 편집을 제공한다.
 
+## v0.1.0-rc1 지원 범위
+
+Confit `0.1.0-rc1`은 fixture-backed release candidate다. Confit 자체의 CLI,
+TUI, generated artifact, compatibility check, CMake/QStar manifest 생성은
+Confit repository CI와 realish fixture로 검증한다. 실제 Parus/Delos source
+tree adoption과 build graph wiring은 별도 integration review에서 진행한다.
+
+지원 범위:
+
+- macOS/Linux: CLI + ncurses TUI.
+- Windows: MSYS2 `CLANG64` / GNU-style clang 기반 CLI-only preview.
+- Windows TUI: unsupported. `confit tui`는 exit code `8`로 실패해야 정상이다.
+- generated artifact: `config.h`, reports, `config.cmake`,
+  `config/config.qsm`, compatibility `config.qst`, build selection `.qsm`.
+- CI matrix: `ubuntu-latest`, `macos-latest`, `windows-latest`.
+
+정본 판정은 [../docs/final-release-note.md](../docs/final-release-note.md)를
+따른다.
+
 ## 읽는 순서
 
 처음이라면 아래 순서대로 읽는다.

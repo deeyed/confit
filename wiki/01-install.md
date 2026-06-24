@@ -117,6 +117,32 @@ Windows compiler lane은 GNU-style clang만 지원하며, MSVC와 `clang-cl`은
 지원하지 않는다. Windows에서 `CONFIT_ENABLE_TUI=ON`을 넘겨도 CMake는
 `CONFIT_ENABLE_TUI=OFF`로 강제한다.
 
+Windows preview 설치 산출물은 단일 실행 파일이다.
+
+```text
+<prefix>/bin/confit.exe
+```
+
+Windows rc1 preview는 PowerShell installer를 제공하지 않는다. CMake/Ninja로
+빌드한 뒤 `confit.exe`를 원하는 `bin` directory로 복사하는 것이 공식 preview
+규칙이다. 문서와 manpage는 repository checkout의 `docs/`, `wiki/`,
+`man/confit.1`을 읽는다.
+
+## CI에서 확인되는 범위
+
+`Confit CI`는 push와 pull request마다 다음 platform을 확인한다.
+
+```text
+ubuntu-latest
+macos-latest
+windows-latest / MSYS2 CLANG64
+```
+
+macOS/Linux job은 CLI, Unix integration tests, TUI scripted tests, stress
+test를 포함한 full local gate를 실행한다. Windows job은 CLI-only preview로
+`doctor`, `check`, `gen --artifact all`, generated artifact existence,
+`confit tui` unsupported exit code `8`, `confit.exe` install smoke를 확인한다.
+
 ## 수동 설치
 
 script를 쓰지 않고 CMake만으로 설치할 수도 있다.
