@@ -149,19 +149,24 @@ tools/confit/scripts/confit-cutover-dry-run.sh \
 
 ## Local Install
 
-Confit의 필수 설치 산출물은 단일 실행 파일이다.
+Confit의 설치 규칙은 단순하다. 실행 시 필요한 산출물은 플랫폼별 단일 바이너리 하나이고,
+문서 산출물은 플랫폼 정책에 따라 제공한다. 설치는 어떤 project `config/` tree도 생성하거나
+수정하지 않는다.
+
+### macOS/Linux 설치
 
 ```text
 <prefix>/bin/confit
 ```
 
-사용자 문서 산출물은 manpage다.
+macOS/Linux의 사용자 문서 산출물은 manpage다.
 
 ```text
 <prefix>/share/man/man1/confit.1
 ```
 
-local checkout에서 설치하려면 다음 명령을 사용한다.
+local checkout에서 설치하려면 다음 명령을 사용한다. 이 스크립트는 POSIX shell을 사용하는
+macOS/Linux용 installer다.
 
 ```sh
 # Standalone Confit repository root
@@ -172,8 +177,8 @@ tools/confit/scripts/install-local.sh --prefix ~/.local
 ```
 
 이 스크립트는 network를 사용하지 않는다. source tree 밖 임시 build directory에서 `confit` target을
-빌드하고, CMake install rule로 `<prefix>/bin/confit`을 설치한다. 설치 과정은 어떤 project `config/`
-tree도 생성하거나 수정하지 않는다.
+빌드하고, CMake install rule로 `<prefix>/bin/confit`과
+`<prefix>/share/man/man1/confit.1`을 설치한다.
 
 같은 동작을 수동으로 수행하면 다음과 같다.
 
@@ -194,6 +199,55 @@ cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ~/.local/bin/confit doctor
 man confit
 ```
+
+`confit doctor`는 설치 규칙을 다음처럼 노출해야 한다.
+
+```text
+install rule: single executable artifact: <prefix>/bin/confit
+```
+
+### Windows preview 설치
+
+Windows는 현재 CLI-only preview lane이다. TUI는 빌드하지 않고, 설치 산출물도 단일 실행 파일
+하나로 제한한다.
+
+```text
+<prefix>/bin/confit.exe
+```
+
+지원 compiler는 GNU-style Clang이다. MSVC와 `clang-cl`은 지원하지 않는다. Windows preview에서는
+PowerShell install script를 아직 제공하지 않는다. 복잡한 installer를 만들기 전에 CLI 동작, path
+직렬화, generated artifact parity를 먼저 안정화하기 위한 결정이다.
+
+Windows에서 local preview를 구성하려면 CMake로 빌드한 뒤 실행 파일만 복사한다.
+
+```powershell
+cmake -S . -B build/confit-windows -G Ninja `
+  -DCMAKE_C_COMPILER=clang `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCONFIT_ENABLE_TUI=OFF
+cmake --build build/confit-windows --target confit
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.local\bin"
+Copy-Item build\confit-windows\confit.exe "$env:USERPROFILE\.local\bin\confit.exe" -Force
+& "$env:USERPROFILE\.local\bin\confit.exe" doctor
+```
+
+Windows 문서와 manpage는 설치 위치로 복사하지 않고 repository checkout의 문서로 제공한다.
+
+```text
+docs/*.md
+wiki/*.md
+man/confit.1
+```
+
+Windows `confit doctor`는 설치 규칙을 다음처럼 노출해야 한다.
+
+```text
+install rule: single executable artifact: <prefix>/bin/confit.exe
+```
+
+Windows에서 `confit tui`를 실행하면 partial UI를 시도하지 않고 exit code `8`
+(`unsupported command or platform`)로 실패해야 한다.
 
 ## Fixture Convention
 

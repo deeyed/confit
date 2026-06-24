@@ -210,7 +210,25 @@ sibling repository discovery or mutation
 
 ## Local Install Contract
 
-The local install command is:
+The install contract is intentionally small. Confit is installed as one runtime
+executable plus platform-appropriate local documentation. Installation must not
+create project schemas, generated config trees, hidden state, or service files.
+
+### macOS/Linux Install Surface
+
+The required runtime artifact is:
+
+```text
+<prefix>/bin/confit
+```
+
+The required local documentation artifact is:
+
+```text
+<prefix>/share/man/man1/confit.1
+```
+
+The local install command for macOS/Linux is:
 
 ```sh
 # Standalone Confit repository root
@@ -220,7 +238,12 @@ scripts/install-local.sh --prefix ~/.local
 tools/confit/scripts/install-local.sh --prefix ~/.local
 ```
 
-The equivalent portable install flow is:
+The script is deliberately boring: it builds the local checkout in a temporary
+directory, runs the CMake install rule, performs `confit --version`, and prints
+the installed paths. It does not fetch network dependencies and it does not
+modify any project `config/` tree.
+
+The equivalent manual flow is:
 
 ```sh
 CONFIT_SRC=.
@@ -232,23 +255,42 @@ cmake --build /tmp/confit-build --target confit
 cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```
 
-The required runtime install artifact is a single executable:
+### Windows Preview Install Surface
 
-```text
-<prefix>/bin/confit
-```
-
-On Windows hosts, the executable name is:
+Windows support is a CLI-only preview lane. The required runtime artifact is a
+single executable:
 
 ```text
 <prefix>/bin/confit.exe
 ```
 
-The local documentation install artifact is:
+Windows preview builds must use GNU-style Clang with a native build driver such
+as Ninja. MSVC and `clang-cl` are not part of this contract.
+
+The official Windows preview install rule is a manual binary copy after build:
+
+```powershell
+cmake -S . -B build/confit-windows -G Ninja `
+  -DCMAKE_C_COMPILER=clang `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCONFIT_ENABLE_TUI=OFF
+cmake --build build/confit-windows --target confit
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.local\bin"
+Copy-Item build\confit-windows\confit.exe "$env:USERPROFILE\.local\bin\confit.exe" -Force
+```
+
+Confit does not ship a PowerShell install script in this contract phase. That is
+an explicit packaging decision: the Windows lane is still proving CLI behavior,
+path serialization, and generated artifact parity before a richer installer is
+introduced. Windows documentation is read from the repository checkout:
 
 ```text
-<prefix>/share/man/man1/confit.1
+docs/*.md
+wiki/*.md
+man/confit.1
 ```
+
+### Optional Completion Artifacts
 
 Optional completion artifacts are allowed, but Confit must run without them:
 

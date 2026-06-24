@@ -298,6 +298,58 @@ tree를 만들거나
 .IP \(bu 2
 runtime source, hidden binary DB, network-fetched configuration은
 Confit의 범위가 아니다.
+.SH 설치
+Confit의 runtime 설치 산출물은 단일 실행 파일이다.
+.PP
+macOS/Linux의 필수 산출물:
+.EX
+<prefix>/bin/confit
+<prefix>/share/man/man1/confit.1
+.EE
+.PP
+macOS/Linux local checkout에서는 다음 스크립트를 사용할 수 있다.
+.EX
+scripts/install-local.sh --prefix ~/.local
+.EE
+.PP
+Delos subtree checkout에서는 다음처럼 실행한다.
+.EX
+tools/confit/scripts/install-local.sh --prefix ~/.local
+.EE
+.PP
+이 스크립트는 network dependency를 받지 않고,
+source tree 밖 임시 build directory에서 빌드한 뒤 CMake install rule을
+사용한다. 설치는 project
+.I config/
+tree를 만들거나 수정하지 않는다.
+.PP
+Windows는 CLI-only preview lane이다. Windows의 필수 runtime 산출물:
+.EX
+<prefix>/bin/confit.exe
+.EE
+.PP
+Windows preview는 GNU-style clang과 Ninja 계열 build driver만 지원한다.
+MSVC와
+.B clang-cl
+은 지원하지 않는다. 이 단계에서는 PowerShell install script를 제공하지
+않고, 빌드된
+.I confit.exe
+를 사용자가 선택한
+.I bin
+directory로 복사하는 규칙을 공식 preview 설치 방식으로 둔다.
+.PP
+Windows 문서와 manpage는 설치 위치로 복사하지 않고 repository checkout의
+.I docs/
+,
+.I wiki/
+,
+.I man/confit.1
+에서 읽는다.
+.PP
+.B confit doctor
+는 현재 platform의 설치 규칙을
+.B install rule: single executable artifact: ...
+형태로 출력해야 한다.
 .SH 플랫폼
 macOS와 Linux에서는 CLI와 ncurses 기반 TUI를 지원한다.
 TUI build에는 CMake가 찾을 수 있는 curses/ncurses 개발 파일이 필요하다.

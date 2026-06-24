@@ -10,14 +10,22 @@ usage() {
 Usage:
   install-local.sh --prefix <path> [--build-dir <path>]
 
-Builds Confit from the local checkout and installs the single required
-executable artifact and the local manual page:
+Builds Confit from the local checkout and installs the macOS/Linux local
+package surface:
 
   <prefix>/bin/confit
   <prefix>/share/man/man1/confit.1
 
 This script does not fetch network dependencies and does not edit project
 config trees.
+
+Windows is a CLI-only preview lane and does not use this POSIX installer.
+Build with GNU-style clang/Ninja and copy the single executable to:
+
+  <prefix>/bin/confit.exe
+
+Windows docs and the manpage are provided from the repository checkout until a
+dedicated Windows installer is introduced.
 USAGE
 }
 
@@ -49,6 +57,13 @@ while [ "$#" -gt 0 ]; do
 done
 
 [ -n "$PREFIX" ] || die "missing --prefix"
+
+HOST_SYSTEM=$(uname -s 2>/dev/null || echo unknown)
+case "$HOST_SYSTEM" in
+  MINGW* | MSYS* | CYGWIN*)
+    die "Windows preview installs confit.exe by manual copy, not install-local.sh; see docs/local-build-and-test.md"
+    ;;
+esac
 
 case "$PREFIX" in
   / | "$ROOT_DIR" | "$ROOT_DIR"/*)
