@@ -1268,7 +1268,7 @@ int confit_tui_curses_select_dialog(const char *title, const char *header,
     int ch;
 
     (void)snprintf(status, sizeof(status),
-                   "choice %lu/%lu | Enter/Space selects, Esc/q cancels",
+                   "choice %lu/%lu | Enter/Space selects, Esc cancels",
                    (unsigned long)(selected_index + 1U),
                    (unsigned long)item_count);
     status[sizeof(status) - 1U] = '\0';

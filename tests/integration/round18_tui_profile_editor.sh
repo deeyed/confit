@@ -15,6 +15,8 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 
 TERM=xterm
 export TERM
+ESC_KEY=$(printf '\033')
+ESC3="${ESC_KEY}${ESC_KEY}${ESC_KEY}"
 PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
 
 {
@@ -47,14 +49,14 @@ PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
   printf '%s' "$PAGE_DOWN_KEY"
   printf '%s' "$PAGE_DOWN_KEY"
   printf '%s' "$PAGE_DOWN_KEY"
-  printf '%s' 'q'
+  printf '%s' "$ESC_KEY"
   printf '%s\n' 'x/path'
   printf '%s' 'e'
   printf '%s\n' '/tmp/bad'
   printf '%s\n' 'build/new'
   printf '%s' 's'
   printf '\n'
-  printf '%s' 'q'
+  printf '%s' "$ESC_KEY"
 } >"$WORK_DIR/tui-edit.keys"
 
 "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile edit \
@@ -73,7 +75,7 @@ grep -aF "Confit Choice" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "choices: sim, hw" "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "policy: choose one listed candidate" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
-grep -aF "choice 1/2 | Enter/Space selects, Esc/q cancels" \
+grep -aF "choice 1/2 | Enter/Space selects, Esc cancels" \
   "$WORK_DIR/tui-edit.txt" >/dev/null
 grep -aF "selected delos.edit.mode = hw" "$WORK_DIR/tui-edit.txt" \
   >/dev/null
@@ -125,7 +127,7 @@ grep -Fx "check ok" "$WORK_DIR/check.txt" >/dev/null
 STACK_DIR="$WORK_DIR/profile-menu-stack"
 cp -R "$PROJECT_SRC" "$STACK_DIR"
 
-printf '\n\n\033jq' |
+printf '\n\n%sj%s%s' "$ESC_KEY" "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$STACK_DIR" --profile edit \
     >"$WORK_DIR/tui-menu-stack.txt"
 
@@ -143,7 +145,7 @@ test "$bool_menu_pos" -gt "$bool_option_pos"
 DISCARD_DIR="$WORK_DIR/profile-discard"
 cp -R "$PROJECT_SRC" "$DISCARD_DIR"
 
-printf '/bool\neqj\n' |
+printf '/bool\ne%sj\n' "$ESC3" |
   "$CONFIT_BIN" tui --project "$DISCARD_DIR" --profile edit \
     >"$WORK_DIR/tui-discard.txt"
 
@@ -155,7 +157,7 @@ diff -u "$PROJECT_SRC/config/profiles/edit.toml" \
 QUIT_SAVE_DIR="$WORK_DIR/profile-quit-save"
 cp -R "$PROJECT_SRC" "$QUIT_SAVE_DIR"
 
-printf '/bool\neq\n\n' |
+printf '/bool\ne%s\n\n' "$ESC3" |
   "$CONFIT_BIN" tui --project "$QUIT_SAVE_DIR" --profile edit \
     >"$WORK_DIR/tui-quit-save.txt"
 
@@ -166,3 +168,16 @@ grep -aF '"delos.edit.bool" = true' \
 "$CONFIT_BIN" check --project "$QUIT_SAVE_DIR" --profile edit \
   >"$WORK_DIR/check-quit-save.txt"
 grep -Fx "check ok" "$WORK_DIR/check-quit-save.txt" >/dev/null
+
+CANCEL_DIR="$WORK_DIR/profile-dirty-cancel"
+cp -R "$PROJECT_SRC" "$CANCEL_DIR"
+
+printf '/bool\ne%sjj\n%sj\n' "$ESC3" "$ESC3" |
+  "$CONFIT_BIN" tui --project "$CANCEL_DIR" --profile edit \
+    >"$WORK_DIR/tui-dirty-cancel.txt"
+
+grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-dirty-cancel.txt" >/dev/null
+grep -aF "quit cancelled" "$WORK_DIR/tui-dirty-cancel.txt" >/dev/null
+grep -aF "Discard changes" "$WORK_DIR/tui-dirty-cancel.txt" >/dev/null
+diff -u "$PROJECT_SRC/config/profiles/edit.toml" \
+  "$CANCEL_DIR/config/profiles/edit.toml"

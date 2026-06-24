@@ -15,8 +15,9 @@ cp -R "$PROJECT_SRC" "$PROJECT_DIR"
 
 TERM=xterm
 export TERM
+ESC_KEY=$(printf '\033')
 
-printf '\nndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help\ncschema\ntschema,created\nored,blue\ndblue\nndelos.schema.limit\nint\nLimit Prompt\npLimit Prompt\nyint\nhLimit help\ncschema\ntschema,limit\nr0,16\nsq' |
+printf '\nndelos.schema.mode\nenum\nInitial Prompt\npCreated Prompt\nhCreated help\ncschema\ntschema,created\nored,blue\ndblue\nndelos.schema.limit\nint\nLimit Prompt\npLimit Prompt\nyint\nhLimit help\ncschema\ntschema,limit\nr0,16\ns%s' "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema.txt"
 
@@ -55,7 +56,7 @@ grep -aF "required: numeric min,max containing the current default" \
 grep -aF "saved and validated" "$WORK_DIR/tui-schema.txt" >/dev/null
 grep -aF "reloaded graph" "$WORK_DIR/tui-schema.txt" >/dev/null
 
-printf '\nn\033?q' |
+printf '\nn%s?%s' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-cancel-help.txt"
 
@@ -65,7 +66,7 @@ grep -aF "keys: move jk/arrows Pg/Home/End" \
 grep -aF "edit y/d/p/h/c/t/r/o" "$WORK_DIR/tui-schema-cancel-help.txt" \
   >/dev/null
 
-printf '\nninvalid\n\033q' |
+printf '\nninvalid\n%s%s' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-invalid-id.txt"
 
@@ -75,7 +76,7 @@ grep -aF "invalid schema option id" "$WORK_DIR/tui-schema-invalid-id.txt" \
 grep -aF "required: dotted option id; letters, numbers, _, - allowed" \
   "$WORK_DIR/tui-schema-invalid-id.txt" >/dev/null
 
-printf '\nndelos.schema.bad\nint\nBad\nr10,1\n\033q' |
+printf '\nndelos.schema.bad\nint\nBad\nr10,1\n%s%s' "$ESC_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --schema-edit \
     >"$WORK_DIR/tui-schema-invalid-range.txt"
 

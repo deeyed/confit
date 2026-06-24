@@ -16,8 +16,9 @@ rm -f "$PROJECT_DIR/config/profiles/fresh.toml"
 
 TERM=xterm
 export TERM
+ESC_KEY=$(printf '\033')
 
-printf 'sq' |
+printf 's%s' "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile fresh \
     >"$WORK_DIR/tui-profile-create.txt"
 

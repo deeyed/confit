@@ -1495,7 +1495,7 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   (void)snprintf(
       key_legend, sizeof(key_legend),
       "keys: move jk/arrows Pg/Home/End | enter/d default | y type | n new | "
-      "p/h/c/t/r/o fields | ? keys%s | q quit",
+      "p/h/c/t/r/o fields | ? keys%s | Esc exit",
       state->dirty ? " | s save" : "");
   key_legend[sizeof(key_legend) - 1U] = '\0';
   (void)snprintf(status_line, sizeof(status_line), "%s",
@@ -1604,7 +1604,7 @@ static int confit_tui_schema_move_selection(ConfitTuiSchemaState *state,
 static void confit_tui_schema_show_keymap(ConfitTuiSchemaState *state) {
   (void)snprintf(state->status, sizeof(state->status),
                  "keys: move jk/arrows Pg/Home/End | n new | edit "
-                 "y/d/p/h/c/t/r/o | s save | Esc cancel | q quit");
+                 "y/d/p/h/c/t/r/o | s save | Esc exit | q alias");
   state->status[sizeof(state->status) - 1U] = '\0';
 }
 
@@ -1733,7 +1733,7 @@ ConfitStatus confit_tui_run_schema_editor(const ConfitTuiOptions *options,
       break;
     }
     key = confit_tui_curses_read_key();
-    if (key == CONFIT_TUI_KEY_QUIT) {
+    if (key == CONFIT_TUI_KEY_QUIT || key == CONFIT_TUI_KEY_CANCEL) {
       break;
     }
     confit_diagnostic_init(diagnostic);

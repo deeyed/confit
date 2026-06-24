@@ -13,11 +13,16 @@ mkdir -p "$WORK_DIR"
 
 TERM=xterm
 export TERM
+ESC_KEY=$(printf '\033')
+ESC2="${ESC_KEY}${ESC_KEY}"
+ESC3="${ESC_KEY}${ESC_KEY}${ESC_KEY}"
 PAGE_DOWN_KEY=$(tput knp 2>/dev/null || printf '\033[6~')
 HOME_KEY=$(tput khome 2>/dev/null || printf '\033[H')
 END_KEY=$(tput kend 2>/dev/null || printf '\033[F')
 
-printf 'jq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+printf 'j%s' "$ESC_KEY" |
+  env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui.txt"
 
 grep -aF "row 1/" "$WORK_DIR/tui.txt" >/dev/null
@@ -32,11 +37,12 @@ grep -aF "mode=profile project=delos profile=sim-dsh target=host-sim" \
   "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
   "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "Esc exit" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Keys" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Status" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Inspector" "$WORK_DIR/tui.txt" >/dev/null
 
-printf 'q' | env TERM=xterm-256color "$CONFIT_BIN" tui \
+printf '%s' "$ESC_KEY" | env TERM=xterm-256color "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-256color.txt"
 
@@ -45,7 +51,7 @@ grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-256color.txt" \
 grep -aF "Options" "$WORK_DIR/tui-256color.txt" >/dev/null
 grep -aF "row 1/" "$WORK_DIR/tui-256color.txt" >/dev/null
 
-printf 'q' | env TERM=xterm NO_COLOR=1 "$CONFIT_BIN" tui \
+printf '%s' "$ESC_KEY" | env TERM=xterm NO_COLOR=1 "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-no-color.txt"
 
@@ -54,7 +60,8 @@ grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-no-color.txt" \
 grep -aF "Options" "$WORK_DIR/tui-no-color.txt" >/dev/null
 grep -aF "row 1/" "$WORK_DIR/tui-no-color.txt" >/dev/null
 
-printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+printf '\n%s%s' "$ESC_KEY" "$ESC_KEY" |
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-enter-menu.txt"
 
 grep -aF "entered menu Main Menu > debug" "$WORK_DIR/tui-enter-menu.txt" \
@@ -63,25 +70,25 @@ grep -aF "Enable DDC" "$WORK_DIR/tui-enter-menu.txt" >/dev/null
 grep -aF "Enable DDC <delos.debug.ddc> bool" "$WORK_DIR/tui-enter-menu.txt" \
   >/dev/null
 
-printf '%sq' "$PAGE_DOWN_KEY" |
+printf '%s%s' "$PAGE_DOWN_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-page-down.txt"
 
 grep -aF "moved PageDown" "$WORK_DIR/tui-page-down.txt" >/dev/null
 
-printf 'j%sq' "$HOME_KEY" |
+printf 'j%s%s' "$HOME_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-home.txt"
 
 grep -aF "moved Home" "$WORK_DIR/tui-home.txt" >/dev/null
 
-printf '%sq' "$END_KEY" |
+printf '%s%s' "$END_KEY" "$ESC_KEY" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-end.txt"
 
 grep -aF "moved End" "$WORK_DIR/tui-end.txt" >/dev/null
 
-printf '/board\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/board\n%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-search-single.txt"
 
 grep -aF "search 1/1: Target Board <delos.target.board> category=target" \
@@ -89,19 +96,19 @@ grep -aF "search 1/1: Target Board <delos.target.board> category=target" \
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
 
 for cols in 80 100 120 160; do
-  printf '/board\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+  printf '/board\n%s' "$ESC2" | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-$cols.txt"
   grep -aF "Target Board" "$WORK_DIR/tui-row-$cols.txt" >/dev/null
   grep -aF "Target Board <delos.target.board> enum" \
     "$WORK_DIR/tui-row-$cols.txt" >/dev/null
-  printf '/ddc\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+  printf '/ddc\n%s' "$ESC2" | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-debug-$cols.txt"
   grep -aF "Enable DDC" "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
   grep -aF "Enable DDC <delos.debug.ddc> bool" \
     "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
-  printf '/debug_gate\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
+  printf '/debug_gate\n%s' "$ESC2" | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-gate-$cols.txt"
   grep -aF "delos.internal.debug_gate" "$WORK_DIR/tui-row-gate-$cols.txt" \
@@ -127,7 +134,7 @@ grep -aF \
 ! grep -aF "tags: target | state=deps ok" "$WORK_DIR/tui-row-160.txt" \
   >/dev/null
 
-printf '/board\nvq' | env TERM=xterm COLUMNS=240 LINES=24 \
+printf '/board\nv%s' "$ESC2" | env TERM=xterm COLUMNS=240 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-verbose-board.txt"
 
@@ -145,7 +152,7 @@ grep -aF "id:delos.target.board" "$WORK_DIR/tui-verbose-board.txt" \
 grep -aF "blocked_reason:-" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
 grep -aF "state:deps ok" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
 
-printf '/ddc\nvq' | env TERM=xterm COLUMNS=240 LINES=24 \
+printf '/ddc\nv%s' "$ESC2" | env TERM=xterm COLUMNS=240 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-verbose-ddc.txt"
 
@@ -160,7 +167,7 @@ grep -aF "blocked_reason:blocked: required by delos.target.board" \
 grep -aF "state:blocked: required by delos.target.board" \
   "$WORK_DIR/tui-verbose-ddc.txt" >/dev/null
 
-printf '/board\nvvq' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf '/board\nvv%s' "$ESC2" | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-verbose-toggle.txt"
 
@@ -169,27 +176,28 @@ grep -aF "Target Board <delos.target.board> enum deps ok" \
   "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
 grep -aF "verbose" "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
 
-printf ':help\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf ':help\n%s' "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-help.txt"
 
 grep -aF "commands: verbose noverbose tree flat filter <text> clear help quit" \
   "$WORK_DIR/tui-command-help.txt" >/dev/null
 
-printf ':bogus\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf ':bogus\n%s' "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-unknown.txt"
 
 grep -aF "unknown command: bogus" "$WORK_DIR/tui-command-unknown.txt" \
   >/dev/null
 
-printf ':\033q' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf ':%s%s' "$ESC_KEY" "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-cancel.txt"
 
 grep -aF "command cancelled" "$WORK_DIR/tui-command-cancel.txt" >/dev/null
 
-printf '/board\n:verbose\n:noverbose\nq' | env TERM=xterm COLUMNS=220 LINES=24 \
+printf '/board\n:verbose\n:noverbose\n%s' "$ESC2" |
+  env TERM=xterm COLUMNS=220 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-verbose.txt"
 
@@ -200,7 +208,7 @@ grep -aF "verbose: type:enum" "$WORK_DIR/tui-command-verbose.txt" >/dev/null
 grep -aF "Target Board <delos.target.board> enum deps ok" \
   "$WORK_DIR/tui-command-verbose.txt" >/dev/null
 
-printf ':flat\n:tree\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf ':flat\n:tree\n%s' "$ESC_KEY" | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-tree-flat.txt"
 
@@ -209,7 +217,8 @@ grep -aF "flat view" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
 grep -aF "tree" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
 grep -aF "Main Menu" "$WORK_DIR/tui-command-tree-flat.txt" >/dev/null
 
-printf ':filter board\n:clear\nq' | env TERM=xterm COLUMNS=180 LINES=24 \
+printf ':filter board\n:clear\n%s' "$ESC_KEY" |
+  env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-filter.txt"
 
@@ -221,7 +230,7 @@ printf ':quit\n' | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-command-quit.txt"
 
-printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
+printf '/gain\ne0.50\n%sj\n' "$ESC2" | env TERM=xterm COLUMNS=120 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-dirty-row.txt"
 
@@ -230,14 +239,15 @@ grep -aF "Default Gain <delos.sim.default_gain> float deps ok dirty" \
   "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 grep -aF "Discard changes" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 
-printf '/delos\nnNq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/delos\nnN%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-search-next-prev.txt"
 
 grep -aF "search 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "next result 2/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 grep -aF "previous result 1/" "$WORK_DIR/tui-search-next-prev.txt" >/dev/null
 
-printf '/ddc\n?%s%s%sqq' "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" |
+printf '/ddc\n?%s%s%s%s' "$PAGE_DOWN_KEY" "$PAGE_DOWN_KEY" \
+  "$PAGE_DOWN_KEY" "$ESC3" |
   "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-detail-question.txt"
@@ -274,16 +284,16 @@ grep -aF "forces: delos.internal.debug_gate" \
 grep -aF "recommends: delos.internal.debug_gate" \
   "$WORK_DIR/tui-detail-question.txt" >/dev/null
 grep -aF "Help Text" "$WORK_DIR/tui-detail-question.txt" >/dev/null
-grep -aF "scroll jk/arrows Pg/Home/End | q/Esc close" \
+grep -aF "scroll jk/arrows Pg/Home/End | Esc/q close" \
   "$WORK_DIR/tui-detail-question.txt" >/dev/null
 
-printf '/ddc\neq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/ddc\ne%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-required-block.txt"
 
 grep -aF "blocked: required by delos.target.board" \
   "$WORK_DIR/tui-required-block.txt" >/dev/null
 
-printf '/debug_gate\n?%sqq' "$PAGE_DOWN_KEY" |
+printf '/debug_gate\n?%s%s' "$PAGE_DOWN_KEY" "$ESC3" |
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-forced-detail.txt"
 
@@ -292,20 +302,21 @@ grep -aF "row state: blocked: forced by delos.debug.ddc" \
 grep -aF "edit block: blocked: forced by delos.debug.ddc" \
   "$WORK_DIR/tui-forced-detail.txt" >/dev/null
 
-printf '/debug_gate\neq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/debug_gate\ne%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-forced-block.txt"
 
 grep -aF "blocked: forced by delos.debug.ddc" \
   "$WORK_DIR/tui-forced-block.txt" >/dev/null
 
-printf '\nq' | "$CONFIT_BIN" tui --project "$DEPENDENCY_PROJECT_DIR" \
+printf '\n%s%s' "$ESC_KEY" "$ESC_KEY" |
+  "$CONFIT_BIN" tui --project "$DEPENDENCY_PROJECT_DIR" \
   --profile deps >"$WORK_DIR/tui-dependency-ux.txt"
 
 grep -aF "Visible If Gate" "$WORK_DIR/tui-dependency-ux.txt" >/dev/null
 grep -aF "Recommended Option" "$WORK_DIR/tui-dependency-ux.txt" \
   >/dev/null
 
-printf '/confit.dep.hidden\n?%sqq' "$PAGE_DOWN_KEY" |
+printf '/confit.dep.hidden\n?%s%s' "$PAGE_DOWN_KEY" "$ESC3" |
   "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-visible-if-detail.txt"
@@ -317,7 +328,7 @@ grep -aF "visible_if inactive: confit.dep.gate" \
 grep -aF "edit policy: blocked or guarded" \
   "$WORK_DIR/tui-visible-if-detail.txt" >/dev/null
 
-printf '/confit.dep.recommended\n?%sqq' "$PAGE_DOWN_KEY" |
+printf '/confit.dep.recommended\n?%s%s' "$PAGE_DOWN_KEY" "$ESC3" |
   "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-recommended-detail.txt"
@@ -325,21 +336,21 @@ printf '/confit.dep.recommended\n?%sqq' "$PAGE_DOWN_KEY" |
 grep -aF "row state: recommended by confit.dep.recommender" \
   "$WORK_DIR/tui-recommended-detail.txt" >/dev/null
 
-printf '/confit.dep.requires\neq' | "$CONFIT_BIN" tui \
+printf '/confit.dep.requires\ne%s' "$ESC2" | "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-requires-block.txt"
 
 grep -aF "blocked: requires confit.dep.prereq" \
   "$WORK_DIR/tui-requires-block.txt" >/dev/null
 
-printf '/confit.dep.conflicted\neq' | "$CONFIT_BIN" tui \
+printf '/confit.dep.conflicted\ne%s' "$ESC2" | "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-conflicts-block.txt"
 
 grep -aF "blocked: conflicts with confit.dep.conflict_target" \
   "$WORK_DIR/tui-conflicts-block.txt" >/dev/null
 
-printf '/confit.dep.recommended\neqj\n' | "$CONFIT_BIN" tui \
+printf '/confit.dep.recommended\ne%sj\n' "$ESC2" | "$CONFIT_BIN" tui \
   --project "$DEPENDENCY_PROJECT_DIR" --profile deps \
   >"$WORK_DIR/tui-recommends-edit.txt"
 
@@ -350,21 +361,27 @@ grep -aF "Unsaved Profile Changes" "$WORK_DIR/tui-recommends-edit.txt" \
   >/dev/null
 grep -aF "Discard changes" "$WORK_DIR/tui-recommends-edit.txt" >/dev/null
 
-printf 'jhqq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf 'jh%s%s' "$ESC_KEY" "$ESC_KEY" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-detail-h.txt"
 
 grep -aF "Confit Help" "$WORK_DIR/tui-detail-h.txt" >/dev/null
 grep -aF "closed detail" "$WORK_DIR/tui-detail-h.txt" >/dev/null
 
-printf '/\033q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+printf '/%s%s' "$ESC_KEY" "$ESC_KEY" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
   --profile sim-dsh >"$WORK_DIR/tui-cancel.txt"
 
 grep -aF "cancelled" "$WORK_DIR/tui-cancel.txt" >/dev/null
 
-printf 'q' | env TERM=xterm LINES=8 COLUMNS=35 \
+printf '%s' "$ESC_KEY" | env TERM=xterm LINES=8 COLUMNS=35 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-small.txt"
 
 grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-small.txt" \
   >/dev/null
 grep -aF "compact terminal fallback" "$WORK_DIR/tui-small.txt" >/dev/null
+
+printf 'q' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-q-alias.txt"
+
+grep -aF "Confit TUI - menuconfig profile" "$WORK_DIR/tui-q-alias.txt" \
+  >/dev/null

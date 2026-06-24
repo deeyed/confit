@@ -3114,7 +3114,7 @@ static ConfitStatus confit_tui_show_detail(ConfitTuiState *state,
     status_line[sizeof(status_line) - 1U] = '\0';
     if (confit_tui_curses_render_text(
             "Confit Help", header, body,
-            "keys: scroll jk/arrows Pg/Home/End | q/Esc close", status_line,
+            "keys: scroll jk/arrows Pg/Home/End | Esc/q close", status_line,
             first_line) != 0) {
       free(body);
       return CONFIT_ERR_INTERNAL;
@@ -3154,13 +3154,13 @@ static void confit_tui_profile_format_key_legend(
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
                      "Left/Esc back | s save | / search | c/t filter%s | ? "
-                     "help | : cmd | v %s | q quit",
+                     "help | : cmd | v %s | Esc exit",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
                      "Left/Esc back | / search | c/t filter%s | ? help | v "
-                     "%s | : cmd | q quit",
+                     "%s | : cmd | Esc exit",
                      filter_suffix, inspector_mode);
     }
   } else {
@@ -3168,13 +3168,13 @@ static void confit_tui_profile_format_key_legend(
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | s "
                      "save | / search n/N | c/t filter%s | ? help | : cmd | "
-                     "v %s | q quit",
+                     "v %s | Esc exit",
                      filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | / "
-                     "search n/N | c/t filter%s | ? help | : cmd | v %s | q "
-                     "quit",
+                     "search n/N | c/t filter%s | ? help | : cmd | v %s | "
+                     "Esc exit",
                      filter_suffix, inspector_mode);
     }
   }
@@ -3473,6 +3473,12 @@ confit_tui_confirm_dirty_quit(ConfitTuiState *state, int *out_quit,
   }
   *out_quit = state->dirty ? 0 : 1;
   return CONFIT_OK;
+}
+
+static ConfitStatus confit_tui_request_exit(ConfitTuiState *state,
+                                            int *out_quit,
+                                            ConfitDiagnostic *diagnostic) {
+  return confit_tui_confirm_dirty_quit(state, out_quit, diagnostic);
 }
 
 static ConfitStatus confit_tui_enter_menu(ConfitTuiState *state,
@@ -3790,13 +3796,22 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
       return status;
     }
     key = confit_tui_curses_read_key();
+    if (key == CONFIT_TUI_KEY_CANCEL && state->current_menu_index != 0U) {
+      confit_diagnostic_init(&diagnostic);
+      status = confit_tui_go_parent_menu(state, &diagnostic);
+      if (status != CONFIT_OK) {
+        confit_tui_set_status_from_diagnostic(state, "error", status,
+                                              &diagnostic);
+      }
+      continue;
+    }
     if (key == CONFIT_TUI_KEY_QUIT ||
         (key == CONFIT_TUI_KEY_CANCEL && state->current_menu_index == 0U)) {
       int should_quit;
 
       confit_diagnostic_init(&diagnostic);
       should_quit = 0;
-      status = confit_tui_confirm_dirty_quit(state, &should_quit, &diagnostic);
+      status = confit_tui_request_exit(state, &should_quit, &diagnostic);
       if (status != CONFIT_OK) {
         confit_tui_set_status_from_diagnostic(state, "error", status,
                                               &diagnostic);
@@ -3819,7 +3834,7 @@ static ConfitStatus confit_tui_render_loop(ConfitTuiState *state) {
       state->quit_requested = 0;
       confit_diagnostic_init(&diagnostic);
       should_quit = 0;
-      status = confit_tui_confirm_dirty_quit(state, &should_quit, &diagnostic);
+      status = confit_tui_request_exit(state, &should_quit, &diagnostic);
       if (status != CONFIT_OK) {
         confit_tui_set_status_from_diagnostic(state, "error", status,
                                               &diagnostic);
