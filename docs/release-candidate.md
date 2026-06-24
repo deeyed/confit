@@ -182,6 +182,33 @@ Confit release-candidate behavior follows these safety rules:
 | Linux | Expected to work with CMake, a C17 compiler, `/bin/sh` for shell integration tests, and curses/ncurses development files for TUI builds. |
 | Windows | Contracted as CLI-only with GNU-style Clang and a native build driver. TUI is explicitly unsupported and should return exit code `8`. Native Windows host execution still needs a dedicated machine/CI gate before it is called fully validated. |
 
+## macOS/Linux TUI Support Scope
+
+The supported TUI host scope for this release-candidate is macOS and Linux
+terminal environments with curses/ncurses support. The TUI is a host tool only:
+it edits Confit profile/schema TOML and never becomes a Parus/Delos runtime
+service.
+
+Validated on macOS:
+
+- local CMake build with AppleClang and the platform curses library
+- full `tests/run_tests.sh` gate
+- `script(1)` pseudo-terminal manual QA for profile browse/search/help/edit,
+  save, dirty quit, schema warning, schema edit, and schema save
+
+Validated or expected on Linux:
+
+- GitHub Actions includes `ubuntu-latest`
+- Linux CI installs `build-essential`, `cmake`, and `libncurses-dev`
+- the same `./tests/run_tests.sh` gate is used on Linux and macOS
+
+Not claimed yet:
+
+- native Windows TUI support
+- exhaustive terminal emulator matrix testing
+- kconfiglib-equivalent symbol browser, reverse dependency browser, or exact
+  menu tree semantics
+
 ## Manual TUI QA Evidence
 
 Interactive TUI evidence is recorded under:
@@ -192,7 +219,12 @@ tools/confit/tests/manual/
 
 Current coverage includes profile browsing, search, bool toggle, typed edit,
 help/detail, save, dirty quit confirmation, guarded schema-edit entry, schema
-field editing, and schema save validation.
+field editing, and schema save validation. The latest macOS pseudo-terminal
+manual pass is:
+
+```text
+tests/manual/round9-tui-readability-manual-qa.md
+```
 
 ## Kconfiglib Comparison
 
