@@ -8,14 +8,17 @@ last_verified: 2026-06-24
 # Local Build And Test
 
 Confit은 Delos runtime build와 분리된 host-side tool이다. Confit 자체 build/test harness는
-`tools/confit/` 안에서만 정의하고, build output은 source tree 밖 임시 디렉터리에 둔다.
+Confit source tree 안에서만 정의하고, build output은 source tree 밖 임시 디렉터리에 둔다.
 macOS/Linux TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가
 찾을 수 있는 curses/ncurses 개발 파일이 있어야 한다. Windows는 이 구현 단계에서 CLI-only lane이며
 TUI target은 unsupported stub으로 빌드된다.
 
+Standalone repository root에서는 Confit source path가 `.`이다. Delos subtree checkout에서는 같은 source
+path가 `tools/confit`이다.
+
 ## Build Dependencies
 
-Confit TUI는 macOS/Linux에서 `tools/confit/CMakeLists.txt`의 `find_package(Curses REQUIRED)`로 system
+Confit TUI는 macOS/Linux에서 `CMakeLists.txt`의 `find_package(Curses REQUIRED)`로 system
 curses/ncurses를 찾는다. `vendor/`에는 TUI shim을 두지 않는다. Windows에서는 curses를 찾지 않고
 `confit tui`가 명시적인 unsupported-platform 결과를 반환한다.
 
@@ -36,7 +39,7 @@ Platform별 확인 사항:
 | Linux | 배포판 개발 package가 필요하다. 예: Debian/Ubuntu `libncurses-dev`, Fedora `ncurses-devel`, Arch `ncurses`. |
 | Windows | CLI-only lane이다. GNU-style Clang과 Ninja 계열 build driver를 사용한다. MSVC와 `clang-cl`은 지원하지 않는다. curses/ncurses와 `/bin/sh`는 Windows gate의 필수 조건이 아니다. |
 
-macOS/Linux에서 의존성 탐지 실패 시 `cmake -S tools/confit -B /tmp/confit-build` 단계에서 Curses package
+macOS/Linux에서 의존성 탐지 실패 시 `cmake -S <confit-source> -B /tmp/confit-build` 단계에서 Curses package
 오류가 난다. Windows에서는 Curses package를 찾지 않는다.
 
 ## CI-like Local Gate
@@ -44,13 +47,17 @@ macOS/Linux에서 의존성 탐지 실패 시 `cmake -S tools/confit -B /tmp/con
 라운드별 기본 local gate는 다음 명령이다.
 
 ```sh
+# Standalone Confit repository root
+./tests/run_tests.sh
+
+# Delos subtree checkout
 tools/confit/tests/run_tests.sh
 ```
 
 이 script는 다음 순서로 동작한다.
 
 1. 기존 임시 build directory를 삭제한다.
-2. `cmake -S tools/confit -B <build-dir>`로 clean configure를 수행한다.
+2. `cmake -S <confit-source> -B <build-dir>`로 clean configure를 수행한다.
 3. `cmake --build <build-dir>`로 `confit`과 unit test binary를 build한다.
 4. `ctest --test-dir <build-dir> --output-on-failure`로 unit/CLI tests를 실행한다.
 5. C 기반 integration runner가 shell 없이 `confit` child process를 실행해 stdout/stderr와 exit code를
@@ -73,6 +80,10 @@ ${TMPDIR:-/tmp}/confit-build
 다른 build directory를 쓰려면 첫 번째 인자로 넘긴다.
 
 ```sh
+# Standalone Confit repository root
+./tests/run_tests.sh /tmp/confit-custom-build
+
+# Delos subtree checkout
 tools/confit/tests/run_tests.sh /tmp/confit-custom-build
 ```
 
@@ -81,19 +92,23 @@ tools/confit/tests/run_tests.sh /tmp/confit-custom-build
 수동으로 같은 과정을 나누어 실행할 수 있다.
 
 ```sh
-cmake -S tools/confit -B /tmp/confit-build
+CONFIT_SRC=.
+# Delos subtree checkout에서는 다음 값을 사용한다.
+# CONFIT_SRC=tools/confit
+
+cmake -S "$CONFIT_SRC" -B /tmp/confit-build
 cmake --build /tmp/confit-build
 ctest --test-dir /tmp/confit-build --output-on-failure
 /tmp/confit-build/confit --version
 /tmp/confit-build/confit help
-/tmp/confit-build/confit diff --project tools/confit/tests/fixtures/schema/valid/basic --profile sim-dsh --base debug
+/tmp/confit-build/confit diff --project "$CONFIT_SRC/tests/fixtures/schema/valid/basic" --profile sim-dsh --base debug
 /tmp/confit-build/confit_test_cli_workflow
 ```
 
 Windows native CLI-only 확인 예시는 다음과 같다.
 
 ```sh
-cmake -S tools/confit -B build/confit -G Ninja \
+cmake -S . -B build/confit -G Ninja \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build/confit --target confit
@@ -137,6 +152,10 @@ Confit의 필수 설치 산출물은 단일 실행 파일이다.
 local checkout에서 설치하려면 다음 명령을 사용한다.
 
 ```sh
+# Standalone Confit repository root
+scripts/install-local.sh --prefix ~/.local
+
+# Delos subtree checkout
 tools/confit/scripts/install-local.sh --prefix ~/.local
 ```
 
@@ -147,7 +166,11 @@ tree도 생성하거나 수정하지 않는다.
 같은 동작을 수동으로 수행하면 다음과 같다.
 
 ```sh
-cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+CONFIT_SRC=.
+# Delos subtree checkout에서는 다음 값을 사용한다.
+# CONFIT_SRC=tools/confit
+
+cmake -S "$CONFIT_SRC" -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/confit-build --target confit
 cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```

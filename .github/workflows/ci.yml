@@ -1,0 +1,42 @@
+name: Confit CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libncurses-dev
+
+      - name: Configure, build, and test
+        run: ./tests/run_tests.sh
+
+      - name: Install smoke
+        run: |
+          cmake -S . -B "${RUNNER_TEMP}/confit-install-build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "${RUNNER_TEMP}/confit-install-build"
+          cmake --install "${RUNNER_TEMP}/confit-install-build" --prefix "${RUNNER_TEMP}/confit-prefix"
+          "${RUNNER_TEMP}/confit-prefix/bin/confit" doctor

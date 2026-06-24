@@ -54,11 +54,15 @@ integration artifact로만 다룬다.
 - [final-release-note.md](docs/final-release-note.md): 18라운드 종료 시점 실전 투입 후보 판정과 남은 위험.
 - [wiki/](wiki/README.md): 처음 쓰는 사용자와 AI 자동화를 위한 한국어 실전 사용 설명서.
 - [man/confit.1](man/confit.1): `man confit`으로 읽는 한국어 CLI reference.
+- [.github/workflows/ci.yml](.github/workflows/ci.yml): standalone repository용 macOS/Linux build/test CI.
 
 ## Recommended Repository Placement
 
-Confit prototype은 처음에는 Delos repo의 `tools/confit/` 아래에서 문서와 실험 구현을 시작한다.
-안정화 뒤에는 별도 repository 또는 Parus/Delos가 공유하는 tools workspace로 분리할 수 있다.
+Confit은 standalone repository로 사용할 수 있다. Delos monorepo 안에 vendored copy 또는 subtree로 둘 때는
+`tools/confit/` 아래에 위치한다.
+
+이 문서의 명령 예시는 standalone repository root에서는 `.` 기준으로 실행한다. Delos subtree에서 실행할 때는
+같은 경로 앞에 `tools/confit/`을 붙이면 된다.
 
 Parus와 Delos 각 프로젝트는 다음 source layout을 가진다.
 
@@ -92,7 +96,12 @@ build/generated/config/<project>/<profile>/
 Confit의 필수 설치 산출물은 단일 실행 파일이다.
 
 ```sh
+# Standalone Confit repository root
+scripts/install-local.sh --prefix ~/.local
+
+# Delos subtree checkout
 tools/confit/scripts/install-local.sh --prefix ~/.local
+
 ~/.local/bin/confit doctor
 man confit
 ```
@@ -100,7 +109,12 @@ man confit
 수동 설치도 같은 규칙을 따른다.
 
 ```sh
+# Standalone Confit repository root
+cmake -S . -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+
+# Delos subtree checkout
 cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+
 cmake --build /tmp/confit-build --target confit
 cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```

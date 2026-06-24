@@ -212,13 +212,21 @@ sibling repository discovery or mutation
 The local install command is:
 
 ```sh
+# Standalone Confit repository root
+scripts/install-local.sh --prefix ~/.local
+
+# Delos subtree checkout
 tools/confit/scripts/install-local.sh --prefix ~/.local
 ```
 
 The equivalent portable install flow is:
 
 ```sh
-cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
+CONFIT_SRC=.
+# Delos subtree checkout에서는 다음 값을 사용한다.
+# CONFIT_SRC=tools/confit
+
+cmake -S "$CONFIT_SRC" -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/confit-build --target confit
 cmake --install /tmp/confit-build --prefix "$HOME/.local"
 ```
