@@ -46,6 +46,7 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 - [syntax-stability.md](docs/syntax-stability.md): 문법 안정성, versioning, deprecation 원칙.
 - [resolution-dag.md](docs/resolution-dag.md): option graph, dependency resolution, conflict explanation.
 - [generators.md](docs/generators.md): generated `config.h`, report, graph, input manifest 산출물.
+- [build-selection-workflow.md](docs/build-selection-workflow.md): QStar/CMake가 resolved config와 build selection을 소비하는 정본 흐름.
 - [cli-tui.md](docs/cli-tui.md): CLI, TUI, profile/schema editing workflow 전략.
 - [cutover-dry-run.md](docs/cutover-dry-run.md): fixture mirror 기반 cutover rehearsal 절차.
 - [rollback.md](docs/rollback.md): generated artifact와 TOML edit rollback 규칙.

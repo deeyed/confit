@@ -183,6 +183,27 @@ confit gen \\
   --out /tmp/confit-generated/delos/sim-dsh \\
   --artifact all
 .EE
+.SS Delos build selection 생성
+.EX
+confit gen \\
+  --project fixtures/delos \\
+  --profile release \\
+  --target renode-nucleo-h753zi \\
+  --out build/generated/config/delos/release \\
+  --artifact all
+.EE
+.SS QStar import
+.EX
+local config = qstar.import_module("build/generated/config/delos/release/config")
+local selection = qstar.import_module(
+  "build/generated/config/delos/release/delos_build_selection"
+)
+.EE
+.SS CMake include
+.EX
+include("${CMAKE_BINARY_DIR}/generated/config/delos/release/config.cmake")
+message(STATUS "board=${DELOS_CONFIG_TARGET_BOARD}")
+.EE
 .SS Compatibility 검사
 .EX
 confit compat \\
@@ -300,5 +321,9 @@ s                 저장
 .I tools/confit/docs/cli-contract.md
 .br
 .I tools/confit/docs/toml-schema.md
+.br
+.I tools/confit/docs/build-selection-workflow.md
+.br
+.I tools/confit/docs/qstar-build-manifest-contract.md
 .br
 .I tools/confit/docs/final-release-note.md

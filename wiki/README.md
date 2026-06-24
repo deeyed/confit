@@ -10,7 +10,8 @@ Confit의 핵심 역할은 다음과 같다.
 - option schema, profile, target, dependency graph를 검증한다.
 - 선택한 profile을 deterministic하게 resolve한다.
 - `config.h`, report, graph, input manifest, `config.cmake`,
-  `config/config.qsm`을 생성한다. 기존 `config.qst`는 compatibility artifact다.
+  `config/config.qsm`, project-specific build selection module을 생성한다.
+  기존 `config.qst`는 compatibility artifact다.
 - Parus와 Delos처럼 서로 맞아야 하는 두 프로젝트의 compatibility를 검사한다.
 - macOS/Linux에서는 ncurses TUI로 profile 편집과 guarded schema 편집을 제공한다.
 
@@ -79,6 +80,7 @@ confit tui \
 
 - `docs/cli-contract.md`: CLI 계약의 정본.
 - `docs/toml-schema.md`: TOML schema의 정본.
+- `docs/build-selection-workflow.md`: QStar/CMake build selection 연결의 정본.
 - `docs/qstar-build-manifest-contract.md`: QStar build manifest 계약의 정본.
 - `docs/final-release-note.md`: 현재 release-candidate 판정.
 - `wiki/`: 사용자가 따라 하기 위한 설명과 예시.

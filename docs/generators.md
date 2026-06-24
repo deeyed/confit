@@ -35,6 +35,18 @@ build/generated/config/delos/sim-dsh/
     delos_build_selection.qsm
 ```
 
+Delos target selection까지 포함한 실제 wiring 예시는 다음 명령을 기준으로
+문서화한다.
+
+```sh
+confit gen \
+  --project fixtures/delos \
+  --profile release \
+  --target renode-nucleo-h753zi \
+  --out build/generated/config/delos/release \
+  --artifact all
+```
+
 ## C Header
 
 `config.h`는 C code가 소비하는 정본 header다.
@@ -163,11 +175,21 @@ local selection = qstar.import_module(
 )
 ```
 
+Delos release target selection 예시는 다음과 같다.
+
+```lua
+local config = qstar.import_module("build/generated/config/delos/release/config")
+local selection = qstar.import_module(
+  "build/generated/config/delos/release/delos_build_selection"
+)
+```
+
 `--artifact all`은 `qstar`와 `build-selection`을 모두 포함한다.
 
 `.qst`는 QStar graph declaration fragment이고, `.qsm`은 pure table-return
 helper module이다. 자세한 계약은
-`docs/qstar-build-manifest-contract.md`를 따른다.
+`docs/qstar-build-manifest-contract.md`와
+`docs/build-selection-workflow.md`를 따른다.
 
 ## JSON Report
 

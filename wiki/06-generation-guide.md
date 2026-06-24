@@ -29,6 +29,29 @@ delos_build_selection/
   delos_build_selection.qsm
 ```
 
+Delos build graph wiring을 검증할 때는 board/CPU/linker selection이 있는
+target을 지정한다.
+
+```sh
+confit gen \
+  --project fixtures/delos \
+  --profile release \
+  --target renode-nucleo-h753zi \
+  --out build/generated/config/delos/release \
+  --artifact all
+```
+
+Delos monorepo fixture에서는 project path만 다음처럼 바꾼다.
+
+```sh
+confit gen \
+  --project tools/confit/tests/fixtures/realish/delos \
+  --profile release \
+  --target renode-nucleo-h753zi \
+  --out build/generated/config/delos/release \
+  --artifact all
+```
+
 ## artifact 선택
 
 전체 생성:
@@ -177,6 +200,14 @@ if(DELOS_CONFIG_TARGET_BOARD STREQUAL "host-sim")
 endif()
 ```
 
+Delos release target selection을 CMake에서 확인하는 최소 예시는 다음과 같다.
+
+```cmake
+include("${CMAKE_BINARY_DIR}/generated/config/delos/release/config.cmake")
+message(STATUS "board=${DELOS_CONFIG_TARGET_BOARD}")
+message(STATUS "board-source=${DELOS_CONFIG_TARGET_BOARD_SOURCE}")
+```
+
 주요 변수 예:
 
 ```cmake
@@ -212,8 +243,25 @@ local config = qstar.import_module(
 build graph 선택에 바로 쓰는 project-specific table은
 `--artifact build-selection`이 생성하는 별도 module을 import한다.
 
+Delos release target selection 예시는 다음과 같다.
+
+```lua
+local config = qstar.import_module("build/generated/config/delos/release/config")
+local selection = qstar.import_module(
+  "build/generated/config/delos/release/delos_build_selection"
+)
+```
+
+`config.values["delos.target.board"].value`는 resolved value table에서 board
+값을 읽는 경로다. `selection.board.objects`,
+`selection.board.include_dirs`, `selection.board.linker_script`는 build graph가
+바로 쓰기 좋게 template으로 재구성한 값이다.
+
 기존 `config.qst`는 compatibility artifact로 남긴다. 새 integration에서
 정본 import 대상으로 삼지 않는다.
+
+더 자세한 QStar/CMake 연결 절차는 `docs/build-selection-workflow.md`를
+정본으로 따른다.
 
 ## Generated output review checklist
 
