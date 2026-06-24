@@ -985,23 +985,6 @@ static void confit_tui_format_dependency_summary(const ConfitOption *option,
   out[out_size - 1U] = '\0';
 }
 
-static void confit_tui_format_tag_summary(const ConfitOption *option, char *out,
-                                          size_t out_size) {
-  size_t index;
-
-  if (out == 0 || out_size == 0U) {
-    return;
-  }
-  out[0] = '\0';
-  for (index = 0U; index < option->tag_count; ++index) {
-    confit_tui_append_unique_tag(out, out_size, option->tags[index]);
-  }
-  if (out[0] == '\0') {
-    (void)snprintf(out, out_size, "-");
-  }
-  out[out_size - 1U] = '\0';
-}
-
 static void confit_tui_format_menu_detail(const ConfitTuiState *state,
                                           size_t menu_index, char *out,
                                           size_t out_size) {
@@ -1111,7 +1094,6 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
     const ConfitResolvedValue *resolved;
     const ConfitNamedValue *edit;
     const ConfitValue *resolved_value;
-    char tags[96];
     char deps[96];
     ConfitTuiRow *row;
     size_t option_menu_index;
@@ -1125,7 +1107,6 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
     resolved = confit_resolved_config_find(state->config, option->id);
     resolved_value = resolved != 0 ? &resolved->value : &option->default_value;
     edit = confit_tui_find_const_edit(state, option->id);
-    confit_tui_format_tag_summary(option, tags, sizeof(tags));
     confit_tui_format_dependency_summary(option, deps, sizeof(deps));
 
     row = &state->rows[state->row_count];
@@ -1153,9 +1134,6 @@ static ConfitStatus confit_tui_refresh_rows(ConfitTuiState *state,
                                    confit_option_type_name(option->type));
     confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
     confit_tui_append_summary_text(row->detail, sizeof(row->detail), deps);
-    confit_tui_append_summary_text(row->detail, sizeof(row->detail),
-                                   " | tags: ");
-    confit_tui_append_summary_text(row->detail, sizeof(row->detail), tags);
     confit_tui_append_summary_text(row->detail, sizeof(row->detail), " | ");
     confit_tui_append_summary_text(row->detail, sizeof(row->detail), "state=");
     confit_tui_append_summary_text(
@@ -3154,12 +3132,29 @@ static void confit_tui_profile_format_key_legend(
   out[out_size - 1U] = '\0';
 }
 
+static void confit_tui_profile_format_inspector(const ConfitTuiRow *selected,
+                                                char *out, size_t out_size) {
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  if (selected == 0) {
+    (void)snprintf(out, out_size, "inspector: no selection");
+  } else if (selected->detail[0] != '\0') {
+    (void)snprintf(out, out_size, "inspector: %s", selected->detail);
+  } else {
+    (void)snprintf(out, out_size, "inspector: %s",
+                   confit_tui_text_or_dash(selected->item.label));
+  }
+  out[out_size - 1U] = '\0';
+}
+
 static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
                                              const char *target_name) {
   ConfitTuiListItem *items;
   ConfitTuiScreen screen;
   char breadcrumb[256];
   char header[320];
+  char inspector[512];
   char key_legend[192];
   char status_line[384];
   const ConfitTuiRow *selected;
@@ -3198,6 +3193,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
       confit_tui_text_or_dash(state->category),
       confit_tui_text_or_dash(state->tag));
   header[sizeof(header) - 1U] = '\0';
+  confit_tui_profile_format_inspector(selected, inspector, sizeof(inspector));
   confit_tui_profile_format_key_legend(state, selected, key_legend,
                                        sizeof(key_legend));
   (void)snprintf(status_line, sizeof(status_line), "%s",
@@ -3206,6 +3202,7 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
 
   screen.title = "Confit TUI - menuconfig profile";
   screen.header = header;
+  screen.inspector = inspector;
   screen.key_legend = key_legend;
   screen.items = items;
   screen.item_count = state->view_count;

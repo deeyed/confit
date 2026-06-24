@@ -51,6 +51,7 @@ typedef struct ConfitTuiListItem {
 typedef struct ConfitTuiScreen {
   const char *title;
   const char *header;
+  const char *inspector;
   const char *key_legend;
   const ConfitTuiListItem *items;
   size_t item_count;

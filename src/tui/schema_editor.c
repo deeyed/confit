@@ -1435,6 +1435,7 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   ConfitTuiScreen screen;
   char status_line[384];
   char header[384];
+  char inspector[512];
   char key_legend[192];
   char (*labels)[192];
   char (*details)[512];
@@ -1500,8 +1501,16 @@ confit_tui_schema_render(const ConfitTuiSchemaState *state) {
   (void)snprintf(status_line, sizeof(status_line), "%s",
                  state->status[0] != '\0' ? state->status : "guarded");
   status_line[sizeof(status_line) - 1U] = '\0';
+  if (state->option_count > 0U && state->selected_index < state->option_count) {
+    (void)snprintf(inspector, sizeof(inspector), "inspector: %s",
+                   details[state->selected_index]);
+  } else {
+    (void)snprintf(inspector, sizeof(inspector), "inspector: no selection");
+  }
+  inspector[sizeof(inspector) - 1U] = '\0';
   screen.title = "Confit TUI - menuconfig schema";
   screen.header = header;
+  screen.inspector = inspector;
   screen.key_legend = key_legend;
   screen.items = items;
   screen.item_count = state->option_count;

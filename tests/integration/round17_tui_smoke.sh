@@ -34,6 +34,7 @@ grep -aF "keys: move jk/arrows Pg/Home/End | enter menu" \
   "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Keys" "$WORK_DIR/tui.txt" >/dev/null
 grep -aF "Status" "$WORK_DIR/tui.txt" >/dev/null
+grep -aF "Inspector" "$WORK_DIR/tui.txt" >/dev/null
 
 printf 'q' | env TERM=xterm-256color "$CONFIT_BIN" tui \
   --project "$PROJECT_DIR" --profile sim-dsh \
@@ -58,7 +59,8 @@ printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
 
 grep -aF "entered menu Main Menu > debug" "$WORK_DIR/tui-enter-menu.txt" \
   >/dev/null
-grep -aF "Enable DDC <delos.debug.ddc>" "$WORK_DIR/tui-enter-menu.txt" \
+grep -aF "Enable DDC" "$WORK_DIR/tui-enter-menu.txt" >/dev/null
+grep -aF "id=delos.debug.ddc | type=bool" "$WORK_DIR/tui-enter-menu.txt" \
   >/dev/null
 
 printf '%sq' "$PAGE_DOWN_KEY" |
@@ -90,33 +92,45 @@ for cols in 80 100 120 160; do
   printf '/board\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-$cols.txt"
-  grep -aF "Target Board <delos.target.board>" \
+  grep -aF "Target Board" "$WORK_DIR/tui-row-$cols.txt" >/dev/null
+  grep -aF "id=delos.target.board | type=enum" \
     "$WORK_DIR/tui-row-$cols.txt" >/dev/null
   printf '/ddc\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-debug-$cols.txt"
-  grep -aF "Enable DDC <delos.debug.ddc> [blocked]" \
+  grep -aF "Enable DDC" "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
+  grep -aF "id=delos.debug.ddc | type=bool" \
     "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
   printf '/debug_gate\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-gate-$cols.txt"
-  grep -aF "delos.internal.debug_gate> [forced]" \
+  grep -aF "delos.internal.debug_gate" "$WORK_DIR/tui-row-gate-$cols.txt" \
+    >/dev/null
+  grep -aF "id=delos.internal.debug_gate | type=bool" \
     "$WORK_DIR/tui-row-gate-$cols.txt" >/dev/null
+  grep -aF "Inspector" "$WORK_DIR/tui-row-$cols.txt" >/dev/null
 done
 
-grep -aF "id=delos.target.board | type=enum | state=deps ok" \
-  "$WORK_DIR/tui-row-100.txt" >/dev/null
-grep -aF "id=delos.target.board | type=enum | state=deps ok" \
-  "$WORK_DIR/tui-row-120.txt" >/dev/null
+grep -aF "id=delos.target.board | type=enum" "$WORK_DIR/tui-row-100.txt" \
+  >/dev/null
+grep -aF "id=delos.target.board | type=enum" "$WORK_DIR/tui-row-120.txt" \
+  >/dev/null
 grep -aF \
-  "id=delos.target.board | type=enum | deps: r1 c0 v1 f0 rec0 | tags: target | state=deps ok" \
+  "id=delos.target.board | type=enum | deps: r1 c0 v1 f0 rec0 | state=deps ok" \
   "$WORK_DIR/tui-row-160.txt" >/dev/null
+grep -aF "state=blocked: required by delos.target.board" \
+  "$WORK_DIR/tui-row-debug-160.txt" >/dev/null
+grep -aF "state=blocked: forced by delos.debug.ddc" \
+  "$WORK_DIR/tui-row-gate-160.txt" >/dev/null
+! grep -aF "tags: target | state=deps ok" "$WORK_DIR/tui-row-160.txt" \
+  >/dev/null
 
 printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-dirty-row.txt"
 
-grep -aF "* Default Gain <delos.sim.default_gain>" \
+grep -aF "* Default Gain" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
+grep -aF "dirty | id=delos.sim.default_gain | type=float" \
   "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 grep -aF "Discard changes" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 
@@ -191,8 +205,8 @@ grep -aF "blocked: forced by delos.debug.ddc" \
 printf '\nq' | "$CONFIT_BIN" tui --project "$DEPENDENCY_PROJECT_DIR" \
   --profile deps >"$WORK_DIR/tui-dependency-ux.txt"
 
-grep -aF "confit.dep.hidden" "$WORK_DIR/tui-dependency-ux.txt" >/dev/null
-grep -aF "confit.dep.recommended" "$WORK_DIR/tui-dependency-ux.txt" \
+grep -aF "Visible If Gate" "$WORK_DIR/tui-dependency-ux.txt" >/dev/null
+grep -aF "Recommended Option" "$WORK_DIR/tui-dependency-ux.txt" \
   >/dev/null
 
 printf '/confit.dep.hidden\n?%sqq' "$PAGE_DOWN_KEY" |
