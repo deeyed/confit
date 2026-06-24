@@ -29,6 +29,8 @@ grep -F "config.h: ok" "$OUT_DIR/delos-realish/artifact-diff.txt" \
   >/dev/null
 grep -F "config/config.qsm: ok" \
   "$OUT_DIR/delos-realish/artifact-diff.txt" >/dev/null
+grep -F "delos_build_selection/delos_build_selection.qsm: ok" \
+  "$OUT_DIR/delos-realish/artifact-diff.txt" >/dev/null
 
 "$SCRIPT" --project parus-realish --out "$OUT_DIR" \
   --confit-bin "$CONFIT_BIN" >"$WORK_DIR/parus.txt"

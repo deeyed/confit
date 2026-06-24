@@ -167,10 +167,15 @@ generated files:
   config.graph.json
   config.inputs.json
 EOF
+  if [ "$selector" = "delos-realish" ]; then
+    echo "  delos_build_selection/delos_build_selection.qsm" \
+      >>"$run_dir/CUTOVER_SUMMARY.txt"
+  fi
 }
 
 verify_artifact_set() {
-  generated_dir=$1
+  selector=$1
+  generated_dir=$2
 
   for artifact in \
     config.h \
@@ -185,12 +190,37 @@ verify_artifact_set() {
     [ -f "$generated_dir/$artifact" ] ||
       die "generated artifact is missing: $generated_dir/$artifact"
   done
+  if [ "$selector" = "delos-realish" ]; then
+    artifact=delos_build_selection/delos_build_selection.qsm
+    [ -f "$generated_dir/$artifact" ] ||
+      die "generated artifact is missing: $generated_dir/$artifact"
+  fi
 }
 
-compare_golden_artifacts() {
+compare_one_golden_artifact() {
   run_dir=$1
   generated_dir=$2
   golden_dir=$3
+  artifact=$4
+  diff_log=$5
+
+  if cmp -s "$golden_dir/$artifact" "$generated_dir/$artifact"; then
+    echo "$artifact: ok" >>"$diff_log"
+  else
+    diff_path="$run_dir/diff/$artifact.diff"
+    mkdir -p "$(dirname -- "$diff_path")"
+    echo "$artifact: changed" >>"$diff_log"
+    diff -u "$golden_dir/$artifact" "$generated_dir/$artifact" \
+      >"$diff_path" || true
+    die "generated artifact differs from golden: $artifact"
+  fi
+}
+
+compare_golden_artifacts() {
+  selector=$1
+  run_dir=$2
+  generated_dir=$3
+  golden_dir=$4
   diff_log="$run_dir/artifact-diff.txt"
 
   : >"$diff_log"
@@ -204,17 +234,13 @@ compare_golden_artifacts() {
     config.graph.json \
     config.inputs.json
   do
-    if cmp -s "$golden_dir/$artifact" "$generated_dir/$artifact"; then
-      echo "$artifact: ok" >>"$diff_log"
-    else
-      diff_path="$run_dir/diff/$artifact.diff"
-      mkdir -p "$(dirname -- "$diff_path")"
-      echo "$artifact: changed" >>"$diff_log"
-      diff -u "$golden_dir/$artifact" "$generated_dir/$artifact" \
-        >"$diff_path" || true
-      die "generated artifact differs from golden: $artifact"
-    fi
+    compare_one_golden_artifact "$run_dir" "$generated_dir" "$golden_dir" \
+      "$artifact" "$diff_log"
   done
+  if [ "$selector" = "delos-realish" ]; then
+    compare_one_golden_artifact "$run_dir" "$generated_dir" "$golden_dir" \
+      delos_build_selection/delos_build_selection.qsm "$diff_log"
+  fi
 }
 
 run_compat_gate() {
@@ -261,8 +287,9 @@ run_project() {
     --out "$run_dir/generated" --artifact all >"$run_dir/gen.txt"
   grep -F "gen ok:" "$run_dir/gen.txt" >/dev/null
 
-  verify_artifact_set "$run_dir/generated"
-  compare_golden_artifacts "$run_dir" "$run_dir/generated" "$golden_dir"
+  verify_artifact_set "$selector" "$run_dir/generated"
+  compare_golden_artifacts "$selector" "$run_dir" "$run_dir/generated" \
+    "$golden_dir"
 
   grep -F '"schema": "confit-inputs-v1"' \
     "$run_dir/generated/config.inputs.json" >/dev/null

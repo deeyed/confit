@@ -67,3 +67,72 @@ help = "Convenience path for the primary user-facing artifact."
 owner = "delos-build"
 since = "0.1.0"
 stability = "stable"
+
+[option."delos.target.claim_level"]
+type = "enum"
+default = "host-simulator"
+choices = ["host-simulator", "qemu-smoke", "qemu-system", "renode-probe"]
+prompt = "Target claim level"
+category = "target"
+tags = ["target", "claim"]
+help = "Claim level exported to build selection manifests."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.toolchain.id"]
+type = "enum"
+default = "host"
+choices = ["host", "arm-none-eabi"]
+prompt = "Toolchain"
+category = "target/toolchain"
+tags = ["target", "toolchain"]
+help = "Build toolchain selected by the target."
+owner = "delos-build"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.board.family"]
+type = "enum"
+default = "host"
+choices = ["host", "arm-mps2", "stm32h7"]
+prompt = "Board family"
+category = "target/board"
+tags = ["target", "board"]
+help = "Board family selected by the target."
+owner = "delos-board"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.board.objects"]
+type = "string"
+default = "//src/board/host/sim:board_objects"
+prompt = "Board object labels"
+category = "target/board"
+tags = ["target", "board", "qstar"]
+help = "Semicolon-separated QStar object labels selected by the board."
+owner = "delos-board"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.board.include_dirs"]
+type = "path"
+default = "src/board/host/sim"
+prompt = "Board include directories"
+category = "target/board"
+tags = ["target", "board", "include"]
+help = "Semicolon-separated include directories selected by the board."
+owner = "delos-board"
+since = "0.1.0"
+stability = "stable"
+
+[option."delos.board.linker_script"]
+type = "path"
+default = "linker/host-sim.ld"
+prompt = "Board linker script"
+category = "target/board"
+tags = ["target", "board", "linker"]
+help = "Linker script selected by the board."
+owner = "delos-board"
+since = "0.1.0"
+stability = "stable"

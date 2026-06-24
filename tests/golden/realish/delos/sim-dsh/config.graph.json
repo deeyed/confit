@@ -28,7 +28,13 @@
     {"id": "delos.target.board", "type": "enum"},
     {"id": "delos.target.cpu", "type": "enum"},
     {"id": "delos.target.output_name", "type": "string"},
-    {"id": "delos.target.artifact_entry", "type": "path"}
+    {"id": "delos.target.artifact_entry", "type": "path"},
+    {"id": "delos.target.claim_level", "type": "enum"},
+    {"id": "delos.toolchain.id", "type": "enum"},
+    {"id": "delos.board.family", "type": "enum"},
+    {"id": "delos.board.objects", "type": "string"},
+    {"id": "delos.board.include_dirs", "type": "path"},
+    {"id": "delos.board.linker_script", "type": "path"}
   ],
   "edges": [
     {"from": "delos.debug.ddc", "to": "delos.profile.release", "kind": "conflicts"},

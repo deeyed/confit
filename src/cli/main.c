@@ -2979,9 +2979,33 @@ static ConfitStatus confit_cli_gen_check_output(
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_cli_build_selection_artifact_name(
+    const ConfitBuildSelectionTemplate *selection, char *out, size_t out_size,
+    ConfitDiagnostic *diagnostic) {
+  int written;
+
+  if (selection == 0 || selection->output == 0 || out == 0 ||
+      out_size == 0U) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "invalid build selection artifact argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  written = snprintf(out, out_size, "%s/%s.qsm", selection->output,
+                     selection->output);
+  if (written < 0 || (size_t)written >= out_size) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION,
+                          selection->output, 0, 0,
+                          "build selection artifact path is too long");
+    return CONFIT_ERR_GENERATION;
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_cli_gen_preflight(
-    const ConfitCliGenArgs *args, ConfitDiagnostic *diagnostic) {
+    const ConfitCliGenArgs *args, const ConfitProject *project,
+    ConfitDiagnostic *diagnostic) {
   ConfitStatus status;
+  size_t index;
 
   if (args->dry_run) {
     return CONFIT_OK;
@@ -3024,6 +3048,21 @@ static ConfitStatus confit_cli_gen_preflight(
                                                    CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_cli_gen_check_output(args, "config.qst", diagnostic);
   }
+  for (index = 0U; status == CONFIT_OK && project != 0 &&
+                    index < project->build_selection_template_count;
+       ++index) {
+    char artifact_name[512];
+
+    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+      break;
+    }
+    status = confit_cli_build_selection_artifact_name(
+        &project->build_selection_templates[index], artifact_name,
+        sizeof(artifact_name), diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_cli_gen_check_output(args, artifact_name, diagnostic);
+    }
+  }
   return status;
 }
 
@@ -3045,8 +3084,9 @@ static ConfitStatus confit_cli_gen_print_dry_run_line(
 }
 
 static ConfitStatus confit_cli_gen_print_dry_run(
-    const ConfitCliGenArgs *args) {
+    const ConfitCliGenArgs *args, const ConfitProject *project) {
   ConfitStatus status;
+  size_t index;
 
   status = confit_host_stdout_write("gen dry-run: ");
   if (status == CONFIT_OK) {
@@ -3083,6 +3123,62 @@ static ConfitStatus confit_cli_gen_print_dry_run(
   if (status == CONFIT_OK && confit_cli_gen_wants(args,
                                                    CONFIT_CLI_ARTIFACT_QSTAR)) {
     status = confit_cli_gen_print_dry_run_line(args, "config.qst");
+  }
+  for (index = 0U; status == CONFIT_OK && project != 0 &&
+                    index < project->build_selection_template_count;
+       ++index) {
+    char artifact_name[512];
+    ConfitDiagnostic diagnostic;
+
+    if (!confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+      break;
+    }
+    confit_diagnostic_init(&diagnostic);
+    status = confit_cli_build_selection_artifact_name(
+        &project->build_selection_templates[index], artifact_name,
+        sizeof(artifact_name), &diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_cli_gen_print_dry_run_line(args, artifact_name);
+    }
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_write_build_selection_modules(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    const ConfitBuildIntegrationOptions *build_options,
+    const ConfitCliGenArgs *args, ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  size_t index;
+
+  status = CONFIT_OK;
+  for (index = 0U; status == CONFIT_OK && project != 0 &&
+                    index < project->build_selection_template_count;
+       ++index) {
+    const ConfitBuildSelectionTemplate *selection;
+    char file_name[256];
+    int written;
+    char *module_text;
+
+    selection = &project->build_selection_templates[index];
+    written = snprintf(file_name, sizeof(file_name), "%s.qsm",
+                       selection->output);
+    if (written < 0 || (size_t)written >= sizeof(file_name)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION,
+                            selection->output, 0, 0,
+                            "build selection module name is too long");
+      return CONFIT_ERR_GENERATION;
+    }
+
+    module_text = 0;
+    status = confit_generate_build_selection_qsm(
+        project, config, build_options, selection, &module_text, diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_cli_write_child_artifact(
+          args->out_dir, selection->output, file_name, module_text,
+          diagnostic);
+    }
+    confit_generator_string_free(module_text);
   }
   return status;
 }
@@ -3138,7 +3234,7 @@ static ConfitStatus confit_cli_generate_artifacts(
     report_options.input_file_count = input_files.count;
   }
   if (status == CONFIT_OK) {
-    status = confit_cli_gen_preflight(args, diagnostic);
+    status = confit_cli_gen_preflight(args, project, diagnostic);
   }
   if (status == CONFIT_OK &&
       confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_HEADER)) {
@@ -3184,7 +3280,7 @@ static ConfitStatus confit_cli_generate_artifacts(
                                             &qstar_manifest, diagnostic);
   }
   if (status == CONFIT_OK && args->dry_run) {
-    status = confit_cli_gen_print_dry_run(args);
+    status = confit_cli_gen_print_dry_run(args, project);
   }
   if (status == CONFIT_OK && !args->dry_run) {
     status = confit_host_make_directories(args->out_dir, diagnostic);
@@ -3225,6 +3321,12 @@ static ConfitStatus confit_cli_generate_artifacts(
     status = confit_cli_write_child_artifact(
         args->out_dir, "config", "config.qsm", qstar_config_module,
         diagnostic);
+  }
+  if (status == CONFIT_OK && !args->dry_run &&
+      confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {
+    status = confit_cli_write_build_selection_modules(project, config,
+                                                      &build_options, args,
+                                                      diagnostic);
   }
   if (status == CONFIT_OK && !args->dry_run &&
       confit_cli_gen_wants(args, CONFIT_CLI_ARTIFACT_QSTAR)) {

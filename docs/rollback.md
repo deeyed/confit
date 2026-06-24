@@ -36,6 +36,7 @@ config.h
 config.cmake
 config/config.qsm
 config.qst
+delos_build_selection/delos_build_selection.qsm
 config.report.json
 config.explain.txt
 config.graph.json

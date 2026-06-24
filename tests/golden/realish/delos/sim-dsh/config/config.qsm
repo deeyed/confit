@@ -7,8 +7,8 @@ return {
   profile = "sim-dsh",
   target = "sim-dsh",
   confit_version = "confit 0.1.0-round1",
-  source_hash = "0x8080CE8307BD0C47",
-  option_count = 27,
+  source_hash = "0xCB0CE82CF1E24297",
+  option_count = 33,
   artifacts = {
     header = "config.h",
     report_json = "config.report.json",
@@ -19,6 +19,10 @@ return {
     legacy_qst = "config.qst"
   },
   values = {
+    ["delos.board.family"] = { type = "enum", value = "host", text = "host", source = "targets/sim-dsh.toml" },
+    ["delos.board.include_dirs"] = { type = "path", value = "src/board/host/sim", text = "src/board/host/sim", source = "targets/sim-dsh.toml" },
+    ["delos.board.linker_script"] = { type = "path", value = "linker/host-sim.ld", text = "linker/host-sim.ld", source = "targets/sim-dsh.toml" },
+    ["delos.board.objects"] = { type = "string", value = "//src/board/host/sim:board_objects", text = "//src/board/host/sim:board_objects", source = "targets/sim-dsh.toml" },
     ["delos.build.output_root"] = { type = "path", value = "build/target", text = "build/target", source = "targets/sim-dsh.toml" },
     ["delos.build.profile"] = { type = "enum", value = "debug", text = "debug", source = "profiles/debug.toml" },
     ["delos.dcg.enabled"] = { type = "bool", value = true, text = "true", source = "profiles/debug.toml" },
@@ -42,9 +46,11 @@ return {
     ["delos.target.arch"] = { type = "enum", value = "host", text = "host", source = "targets/sim-dsh.toml" },
     ["delos.target.artifact_entry"] = { type = "path", value = "build/target/delos-sim", text = "build/target/delos-sim", source = "profiles/sim-dsh.toml" },
     ["delos.target.board"] = { type = "enum", value = "host-sim", text = "host-sim", source = "profiles/sim-dsh.toml" },
+    ["delos.target.claim_level"] = { type = "enum", value = "host-simulator", text = "host-simulator", source = "targets/sim-dsh.toml" },
     ["delos.target.cpu"] = { type = "enum", value = "host", text = "host", source = "profiles/sim-dsh.toml" },
     ["delos.target.kind"] = { type = "enum", value = "sim:dsh", text = "sim:dsh", source = "profiles/sim-dsh.toml" },
     ["delos.target.output_name"] = { type = "string", value = "delos-sim", text = "delos-sim", source = "profiles/sim-dsh.toml" },
+    ["delos.toolchain.id"] = { type = "enum", value = "host", text = "host", source = "targets/sim-dsh.toml" },
     ["delos.trace.capacity"] = { type = "uint", value = 4, text = "4", source = "profiles/sim-dsh.toml" }
   }
 }

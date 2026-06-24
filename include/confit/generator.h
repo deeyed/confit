@@ -239,6 +239,27 @@ ConfitStatus confit_generate_qstar_config_module(
     ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief project-specific build selection QStar import module을 생성한다.
+ *
+ * 반환된 문자열은 caller가 소유하며 `confit_generator_string_free`로 해제한다.
+ * Module은 build selection template의 `output` 이름 아래
+ * `<output>/<output>.qsm`으로 기록되는 pure Lua table helper다.
+ *
+ * @param project source project model.
+ * @param config resolver가 만든 resolved config.
+ * @param options optional build integration generator options.
+ * @param selection build selection template.
+ * @param out_text 성공 시 NUL 종료 QStar module text를 받는다.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받는다.
+ * @return 성공하면 CONFIT_OK.
+ */
+ConfitStatus confit_generate_build_selection_qsm(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    const ConfitBuildIntegrationOptions *options,
+    const ConfitBuildSelectionTemplate *selection, char **out_text,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief `config.qst` QStar manifest fragment를 생성한다.
  *
  * 반환된 문자열은 caller가 소유하며 `confit_generator_string_free`로 해제한다.

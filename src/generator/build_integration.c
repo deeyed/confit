@@ -179,6 +179,48 @@ static ConfitStatus confit_integration_append_escaped(
   return confit_integration_append(builder, "\"");
 }
 
+static ConfitStatus confit_integration_append_escaped_range(
+    ConfitIntegrationBuilder *builder, const char *text, size_t text_size) {
+  size_t index;
+  ConfitStatus status;
+
+  status = confit_integration_append(builder, "\"");
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  if (text != 0) {
+    for (index = 0U; index < text_size; ++index) {
+      switch (text[index]) {
+      case '"':
+      case '\\':
+        status = confit_integration_append(builder, "\\");
+        if (status == CONFIT_OK) {
+          status = confit_integration_append_char(builder, text[index]);
+        }
+        break;
+      case '\n':
+        status = confit_integration_append(builder, "\\n");
+        break;
+      case '\r':
+        status = confit_integration_append(builder, "\\r");
+        break;
+      case '\t':
+        status = confit_integration_append(builder, "\\t");
+        break;
+      default:
+        status = confit_integration_append_char(builder, text[index]);
+        break;
+      }
+      if (status != CONFIT_OK) {
+        return status;
+      }
+    }
+  }
+
+  return confit_integration_append(builder, "\"");
+}
+
 static const char *confit_integration_profile_name(
     const ConfitBuildIntegrationOptions *options) {
   return options != 0 && options->profile_name != 0 ? options->profile_name
@@ -248,6 +290,85 @@ static const ConfitOption *confit_integration_find_option(
     }
   }
   return 0;
+}
+
+static ConfitStatus confit_integration_append_indent(
+    ConfitIntegrationBuilder *builder, size_t count) {
+  ConfitStatus status;
+  size_t index;
+
+  status = CONFIT_OK;
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    status = confit_integration_append_char(builder, ' ');
+  }
+  return status;
+}
+
+static int confit_integration_is_lua_ident_start(char value) {
+  return confit_integration_is_lower(value) ||
+         confit_integration_is_upper(value) || value == '_';
+}
+
+static int confit_integration_is_lua_ident_continue(char value) {
+  return confit_integration_is_lua_ident_start(value) ||
+         confit_integration_is_digit(value);
+}
+
+static int confit_integration_is_lua_identifier(const char *text) {
+  size_t index;
+
+  if (text == 0 || !confit_integration_is_lua_ident_start(text[0])) {
+    return 0;
+  }
+  for (index = 1U; text[index] != '\0'; ++index) {
+    if (!confit_integration_is_lua_ident_continue(text[index])) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static ConfitStatus confit_qstar_append_lua_key(
+    ConfitIntegrationBuilder *builder, const char *key) {
+  ConfitStatus status;
+
+  if (confit_integration_is_lua_identifier(key)) {
+    return confit_integration_append(builder, key);
+  }
+
+  status = confit_integration_append(builder, "[");
+  if (status == CONFIT_OK) {
+    status = confit_integration_append_escaped(builder, key);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, "]");
+  }
+  return status;
+}
+
+static int confit_integration_has_suffix(const char *text,
+                                         const char *suffix) {
+  size_t text_size;
+  size_t suffix_size;
+
+  if (text == 0 || suffix == 0) {
+    return 0;
+  }
+  text_size = strlen(text);
+  suffix_size = strlen(suffix);
+  if (suffix_size > text_size) {
+    return 0;
+  }
+  return strcmp(text + text_size - suffix_size, suffix) == 0;
+}
+
+static int confit_qstar_selection_field_is_list(const char *name) {
+  return name != 0 &&
+         (strcmp(name, "objects") == 0 ||
+          strcmp(name, "include_dirs") == 0 ||
+          confit_integration_has_suffix(name, "_dirs") ||
+          confit_integration_has_suffix(name, "_paths") ||
+          confit_integration_has_suffix(name, "_labels"));
 }
 
 static ConfitStatus confit_integration_source_hash(
@@ -638,6 +759,249 @@ ConfitStatus confit_generate_qstar_config_module(
   CONFIT_QSM_SECTION(confit_integration_append(&builder, "}\n"));
 
 #undef CONFIT_QSM_SECTION
+
+  *out_text = builder.text;
+  return CONFIT_OK;
+}
+
+static const char *confit_qstar_selection_string_payload(
+    const ConfitValue *value) {
+  if (value == 0) {
+    return 0;
+  }
+  if (value->kind == CONFIT_VALUE_STRING ||
+      value->kind == CONFIT_VALUE_ENUM ||
+      value->kind == CONFIT_VALUE_PATH) {
+    return value->as.string_value != 0 ? value->as.string_value : "";
+  }
+  return 0;
+}
+
+static ConfitStatus confit_qstar_append_selection_list_value(
+    ConfitIntegrationBuilder *builder, const char *text, size_t indent) {
+  size_t begin;
+  size_t index;
+  ConfitStatus status;
+
+  status = confit_integration_append(builder, "{\n");
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  begin = 0U;
+  index = 0U;
+  while (text != 0 && text[index] != '\0') {
+    if (text[index] == ';') {
+      if (index > begin) {
+        status = confit_integration_append_indent(builder, indent + 2U);
+        if (status == CONFIT_OK) {
+          status = confit_integration_append_escaped_range(
+              builder, text + begin, index - begin);
+        }
+        if (status == CONFIT_OK) {
+          status = confit_integration_append(builder, ",\n");
+        }
+        if (status != CONFIT_OK) {
+          return status;
+        }
+      }
+      begin = index + 1U;
+    }
+    index += 1U;
+  }
+
+  if (text != 0 && index > begin) {
+    status = confit_integration_append_indent(builder, indent + 2U);
+    if (status == CONFIT_OK) {
+      status =
+          confit_integration_append_escaped_range(builder, text + begin,
+                                                  index - begin);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_integration_append(builder, ",\n");
+    }
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+
+  status = confit_integration_append_indent(builder, indent);
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, "}");
+  }
+  return status;
+}
+
+static ConfitStatus confit_qstar_append_selection_field(
+    ConfitIntegrationBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedConfig *config, const ConfitBuildSelectionField *field,
+    size_t indent, ConfitDiagnostic *diagnostic) {
+  const ConfitResolvedValue *resolved_value;
+  const ConfitOption *option;
+  const char *list_text;
+  char *value_text;
+  ConfitStatus status;
+
+  resolved_value = confit_resolved_config_find(config, field->option_id);
+  if (resolved_value == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, field->option_id,
+                          0, 0,
+                          "selection option is missing from resolved config");
+    return CONFIT_ERR_GENERATION;
+  }
+
+  option = confit_integration_find_option(project, field->option_id);
+  if (option == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, field->option_id, 0,
+                          0,
+                          "selection option is missing from project schema");
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  status = confit_integration_append_indent(builder, indent);
+  if (status == CONFIT_OK) {
+    status = confit_qstar_append_lua_key(builder, field->name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, " = ");
+  }
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  list_text = confit_qstar_selection_field_is_list(field->name)
+                  ? confit_qstar_selection_string_payload(
+                        &resolved_value->value)
+                  : 0;
+  if (list_text != 0) {
+    status = confit_qstar_append_selection_list_value(builder, list_text,
+                                                      indent);
+  } else {
+    value_text = 0;
+    status = confit_generator_serialize_value(
+        &resolved_value->value, option->type, CONFIT_GENERATOR_VALUE_LUA,
+        &value_text, diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_integration_append(builder, value_text);
+    }
+    confit_generator_string_free(value_text);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, ",\n");
+  }
+  return status;
+}
+
+static ConfitStatus confit_qstar_append_selection_section(
+    ConfitIntegrationBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedConfig *config,
+    const ConfitBuildSelectionSection *section, int comma,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  size_t index;
+
+  status = confit_integration_append(builder, "  ");
+  if (status == CONFIT_OK) {
+    status = confit_qstar_append_lua_key(builder, section->name);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, " = {\n");
+  }
+  if (status != CONFIT_OK) {
+    return status;
+  }
+
+  for (index = 0U; index < section->field_count; ++index) {
+    status = confit_qstar_append_selection_field(
+        builder, project, config, &section->fields[index], 4U, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+
+  status = confit_integration_append(builder, "  }");
+  if (status == CONFIT_OK) {
+    status = confit_integration_append(builder, comma ? ",\n" : "\n");
+  }
+  return status;
+}
+
+ConfitStatus confit_generate_build_selection_qsm(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    const ConfitBuildIntegrationOptions *options,
+    const ConfitBuildSelectionTemplate *selection, char **out_text,
+    ConfitDiagnostic *diagnostic) {
+  ConfitIntegrationBuilder builder;
+  uint64_t source_hash;
+  char source_hash_text[32];
+  char schema_text[256];
+  ConfitStatus status;
+  size_t index;
+
+  if (out_text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "missing build selection module output pointer");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_text = 0;
+  if (project == 0 || project->name == 0 || config == 0 ||
+      selection == 0 || selection->output == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
+                          "invalid build selection module generator argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  status = confit_integration_source_hash(config, &source_hash, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  (void)snprintf(source_hash_text, sizeof(source_hash_text), "0x%llX",
+                 (unsigned long long)source_hash);
+  (void)snprintf(schema_text, sizeof(schema_text), "%s-build-selection-v1",
+                 project->name);
+
+  confit_integration_builder_init(&builder);
+
+#define CONFIT_SELECTION_QSM_SECTION(call_expr)                                \
+  do {                                                                         \
+    status = (call_expr);                                                      \
+    if (status != CONFIT_OK) {                                                 \
+      free(builder.text);                                                      \
+      return status;                                                           \
+    }                                                                          \
+  } while (0)
+
+  CONFIT_SELECTION_QSM_SECTION(confit_integration_append(
+      &builder, "-- Generated by Confit. Do not edit.\n"));
+  CONFIT_SELECTION_QSM_SECTION(confit_integration_append(
+      &builder,
+      "-- Pure project build selection module for qstar.import_module.\n\n"));
+  CONFIT_SELECTION_QSM_SECTION(confit_integration_append(&builder,
+                                                         "return {\n"));
+  CONFIT_SELECTION_QSM_SECTION(
+      confit_qstar_append_key_value(&builder, "schema", schema_text, 1));
+  CONFIT_SELECTION_QSM_SECTION(
+      confit_qstar_append_key_value(&builder, "project", project->name, 1));
+  CONFIT_SELECTION_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "profile", confit_integration_profile_name(options), 1));
+  CONFIT_SELECTION_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "target", confit_integration_target_name(options), 1));
+  CONFIT_SELECTION_QSM_SECTION(confit_qstar_append_key_value(
+      &builder, "source_hash", source_hash_text, 1));
+  CONFIT_SELECTION_QSM_SECTION(confit_integration_append(&builder, "\n"));
+
+  for (index = 0U; index < selection->section_count; ++index) {
+    CONFIT_SELECTION_QSM_SECTION(confit_qstar_append_selection_section(
+        &builder, project, config, &selection->sections[index],
+        index + 1U < selection->section_count, diagnostic));
+    if (index + 1U < selection->section_count) {
+      CONFIT_SELECTION_QSM_SECTION(
+          confit_integration_append(&builder, "\n"));
+    }
+  }
+  CONFIT_SELECTION_QSM_SECTION(confit_integration_append(&builder, "}\n"));
+
+#undef CONFIT_SELECTION_QSM_SECTION
 
   *out_text = builder.text;
   return CONFIT_OK;

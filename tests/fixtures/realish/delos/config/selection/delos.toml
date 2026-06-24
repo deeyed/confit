@@ -1,0 +1,19 @@
+[selection]
+schema = "confit-build-selection-template-v1"
+output = "delos_build_selection"
+
+[selection.arch]
+id = "delos.target.arch"
+cpu = "delos.target.cpu"
+toolchain = "delos.toolchain.id"
+
+[selection.board]
+id = "delos.target.board"
+family = "delos.board.family"
+objects = "delos.board.objects"
+include_dirs = "delos.board.include_dirs"
+linker_script = "delos.board.linker_script"
+
+[selection.claim]
+level = "delos.target.claim_level"
+kind = "delos.target.kind"

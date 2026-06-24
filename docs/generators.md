@@ -31,6 +31,8 @@ build/generated/config/delos/sim-dsh/
   config/
     config.qsm
   config.qst
+  delos_build_selection/
+    delos_build_selection.qsm
 ```
 
 ## C Header
@@ -133,6 +135,8 @@ return {
 QStar generator 규칙:
 
 - `config/config.qsm`은 resolved value table과 artifact manifest를 포함한다.
+- `selection/*.toml` build selection template이 있으면
+  `<output>/<output>.qsm` project-specific selection module도 생성한다.
 - `.qsm` 안에서 project, toolset, target, stage, run target을 선언하지 않는다.
 - `qstar.import_module(...)`에는 `.qsm` file path를 직접 넘기지 않는다.
 - QStar root or target layer가 명시적으로 import한다.

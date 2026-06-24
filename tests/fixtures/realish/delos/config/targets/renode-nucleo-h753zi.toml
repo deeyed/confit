@@ -1,0 +1,22 @@
+[target]
+name = "renode-nucleo-h753zi"
+schema_version = 1
+arch = "armv7m"
+board = "nucleo-h753zi"
+
+[target.claim]
+level = "renode-probe"
+
+[values]
+"delos.target.kind" = "renode:nucleo-h753zi"
+"delos.target.arch" = "armv7m"
+"delos.target.board" = "nucleo-h753zi"
+"delos.target.cpu" = "cortex-m7"
+"delos.target.output_name" = "delos-nucleo-h753zi"
+"delos.target.artifact_entry" = "build/target/delos-nucleo-h753zi"
+"delos.target.claim_level" = "renode-probe"
+"delos.toolchain.id" = "arm-none-eabi"
+"delos.board.family" = "stm32h7"
+"delos.board.objects" = "//src/board/armv7m/stm32h7/nucleo-h753zi:board_objects"
+"delos.board.include_dirs" = "src/board/armv7m/stm32h7/nucleo-h753zi"
+"delos.board.linker_script" = "linker/armv7m/nucleo-h753zi.ld"

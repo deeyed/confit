@@ -2,11 +2,15 @@
 /* project: delos */
 /* profile: sim-dsh */
 /* target: sim-dsh */
-/* source hash: 0x8080CE8307BD0C47 */
+/* source hash: 0xCB0CE82CF1E24297 */
 
 #ifndef DELOS_GENERATED_CONFIG_H
 #define DELOS_GENERATED_CONFIG_H
 
+#define DELOS_CONFIG_BOARD_FAMILY "host"
+#define DELOS_CONFIG_BOARD_INCLUDE_DIRS "src/board/host/sim"
+#define DELOS_CONFIG_BOARD_LINKER_SCRIPT "linker/host-sim.ld"
+#define DELOS_CONFIG_BOARD_OBJECTS "//src/board/host/sim:board_objects"
 #define DELOS_CONFIG_BUILD_OUTPUT_ROOT "build/target"
 #define DELOS_CONFIG_BUILD_PROFILE "debug"
 #define DELOS_CONFIG_DCG_ENABLED 1
@@ -30,11 +34,13 @@
 #define DELOS_CONFIG_TARGET_ARCH "host"
 #define DELOS_CONFIG_TARGET_ARTIFACT_ENTRY "build/target/delos-sim"
 #define DELOS_CONFIG_TARGET_BOARD "host-sim"
+#define DELOS_CONFIG_TARGET_CLAIM_LEVEL "host-simulator"
 #define DELOS_CONFIG_TARGET_CPU "host"
 #define DELOS_CONFIG_TARGET_KIND "sim:dsh"
 #define DELOS_CONFIG_TARGET_OUTPUT_NAME "delos-sim"
+#define DELOS_CONFIG_TOOLCHAIN_ID "host"
 #define DELOS_CONFIG_TRACE_CAPACITY 4U
 
-#define DELOS_CONFIG_SOURCE_HASH 0x8080CE8307BD0C47ULL
+#define DELOS_CONFIG_SOURCE_HASH 0xCB0CE82CF1E24297ULL
 
 #endif /* DELOS_GENERATED_CONFIG_H */

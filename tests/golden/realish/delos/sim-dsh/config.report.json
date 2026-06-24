@@ -4,8 +4,12 @@
   "profile": "sim-dsh",
   "target": "sim-dsh",
   "status": "ok",
-  "source_hash": "0x8080CE8307BD0C47",
+  "source_hash": "0xCB0CE82CF1E24297",
   "options": [
+    {"id": "delos.board.family", "type": "enum", "value": "host", "source": "targets/sim-dsh.toml"},
+    {"id": "delos.board.include_dirs", "type": "path", "value": "src/board/host/sim", "source": "targets/sim-dsh.toml"},
+    {"id": "delos.board.linker_script", "type": "path", "value": "linker/host-sim.ld", "source": "targets/sim-dsh.toml"},
+    {"id": "delos.board.objects", "type": "string", "value": "//src/board/host/sim:board_objects", "source": "targets/sim-dsh.toml"},
     {"id": "delos.build.output_root", "type": "path", "value": "build/target", "source": "targets/sim-dsh.toml"},
     {"id": "delos.build.profile", "type": "enum", "value": "debug", "source": "profiles/debug.toml"},
     {"id": "delos.dcg.enabled", "type": "bool", "value": true, "source": "profiles/debug.toml"},
@@ -29,9 +33,11 @@
     {"id": "delos.target.arch", "type": "enum", "value": "host", "source": "targets/sim-dsh.toml"},
     {"id": "delos.target.artifact_entry", "type": "path", "value": "build/target/delos-sim", "source": "profiles/sim-dsh.toml"},
     {"id": "delos.target.board", "type": "enum", "value": "host-sim", "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.target.claim_level", "type": "enum", "value": "host-simulator", "source": "targets/sim-dsh.toml"},
     {"id": "delos.target.cpu", "type": "enum", "value": "host", "source": "profiles/sim-dsh.toml"},
     {"id": "delos.target.kind", "type": "enum", "value": "sim:dsh", "source": "profiles/sim-dsh.toml"},
     {"id": "delos.target.output_name", "type": "string", "value": "delos-sim", "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.toolchain.id", "type": "enum", "value": "host", "source": "targets/sim-dsh.toml"},
     {"id": "delos.trace.capacity", "type": "uint", "value": 4, "source": "profiles/sim-dsh.toml"}
   ],
   "compat": []

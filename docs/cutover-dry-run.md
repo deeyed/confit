@@ -55,13 +55,17 @@ For `--project delos-realish`, the script writes:
     config/
       config.qsm
     config.qst
+    delos_build_selection/
+      delos_build_selection.qsm
     config.report.json
     config.explain.txt
     config.graph.json
     config.inputs.json
 ```
 
-`parus-realish` uses the same layout under `<out>/parus-realish/`.
+`parus-realish` uses the same layout under `<out>/parus-realish/`, except it
+omits `delos_build_selection/` unless the Parus fixture declares its own
+build-selection template.
 
 ## Gates
 

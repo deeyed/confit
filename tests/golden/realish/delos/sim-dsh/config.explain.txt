@@ -2,6 +2,18 @@ profile: sim-dsh
 target: sim-dsh
 
 enabled:
+  delos.board.family
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
+  delos.board.include_dirs
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
+  delos.board.linker_script
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
+  delos.board.objects
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
   delos.build.output_root
     because resolved text is non-empty
     set by targets/sim-dsh.toml
@@ -62,6 +74,9 @@ enabled:
   delos.target.board
     because resolved text is non-empty
     set by profiles/sim-dsh.toml
+  delos.target.claim_level
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
   delos.target.cpu
     because resolved text is non-empty
     set by profiles/sim-dsh.toml
@@ -71,6 +86,9 @@ enabled:
   delos.target.output_name
     because resolved text is non-empty
     set by profiles/sim-dsh.toml
+  delos.toolchain.id
+    because resolved text is non-empty
+    set by targets/sim-dsh.toml
   delos.trace.capacity
     because resolved number is non-zero
     set by profiles/sim-dsh.toml

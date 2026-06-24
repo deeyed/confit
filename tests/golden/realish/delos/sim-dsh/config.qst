@@ -7,8 +7,8 @@ return {
   profile = "sim-dsh",
   target = "sim-dsh",
   confit_version = "confit 0.1.0-round1",
-  source_hash = "0x8080CE8307BD0C47",
-  option_count = "27",
+  source_hash = "0xCB0CE82CF1E24297",
+  option_count = "33",
   artifacts = {
     header = "config.h",
     report_json = "config.report.json",
