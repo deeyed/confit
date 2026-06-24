@@ -1994,7 +1994,6 @@ static int confit_tui_row_matches_search(const ConfitTuiState *state,
                                          const ConfitTuiRow *row) {
   return row != 0 && row->kind == CONFIT_TUI_ROW_OPTION &&
          row->menu_index < state->menu_count &&
-         confit_tui_option_visible(state, row->option) &&
          confit_tui_option_matches_search(row->option, state->search);
 }
 
@@ -2040,7 +2039,7 @@ static ConfitStatus confit_tui_select_row_index(ConfitTuiState *state,
       state->rows[row_index].menu_index < state->menu_count &&
       state->rows[row_index].menu_index != state->current_menu_index) {
     state->current_menu_index = state->rows[row_index].menu_index;
-    status = confit_tui_refresh_rows(state, diagnostic);
+    status = confit_tui_rebuild_view(state, diagnostic);
     if (status != CONFIT_OK) {
       return status;
     }
@@ -3139,8 +3138,7 @@ static void confit_tui_profile_format_key_legend(
     const ConfitTuiState *state, const ConfitTuiRow *selected, char *out,
     size_t out_size) {
   const int has_filter =
-      state != 0 && (state->search[0] != '\0' || state->category[0] != '\0' ||
-                     state->tag[0] != '\0' ||
+      state != 0 && (state->category[0] != '\0' || state->tag[0] != '\0' ||
                      state->text_filter[0] != '\0');
   const char *filter_suffix = has_filter ? " x clear" : "";
   const char *inspector_mode =

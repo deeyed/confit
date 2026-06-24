@@ -94,6 +94,16 @@ printf '/board\n%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
 grep -aF "search 1/1: Target Board <delos.target.board> category=target" \
   "$WORK_DIR/tui-search-single.txt" >/dev/null
 grep -aF "delos.target.board" "$WORK_DIR/tui-search-single.txt" >/dev/null
+grep -aF "target | row 1/1" "$WORK_DIR/tui-search-single.txt" >/dev/null
+
+printf '/gain\n%s' "$ESC2" | "$CONFIT_BIN" tui --project "$PROJECT_DIR" \
+  --profile sim-dsh >"$WORK_DIR/tui-search-other-menu.txt"
+
+grep -aF "search 1/1: Default Gain <delos.sim.default_gain> category=sim" \
+  "$WORK_DIR/tui-search-other-menu.txt" >/dev/null
+grep -aF "sim | row 1/1" "$WORK_DIR/tui-search-other-menu.txt" >/dev/null
+grep -aF "Default Gain <delos.sim.default_gain> float deps ok" \
+  "$WORK_DIR/tui-search-other-menu.txt" >/dev/null
 
 for cols in 80 100 120 160; do
   printf '/board\n%s' "$ESC2" | env TERM=xterm COLUMNS="$cols" LINES=24 \
@@ -223,8 +233,10 @@ printf ':filter board\n:clear\n%s' "$ESC_KEY" |
   >"$WORK_DIR/tui-command-filter.txt"
 
 grep -aF "filter: board" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+grep -aF "target menu path: target" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "c/t filter x clear" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 grep -aF "cleared filters" "$WORK_DIR/tui-command-filter.txt" >/dev/null
+grep -aF "Main Menu" "$WORK_DIR/tui-command-filter.txt" >/dev/null
 
 printf ':quit\n' | env TERM=xterm COLUMNS=180 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
