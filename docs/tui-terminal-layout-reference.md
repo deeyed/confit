@@ -159,8 +159,9 @@ Confit에 적용할 원칙은 다음과 같다.
   바꿔야 하는 곳에는 box를 계속 쓴다.
 - TUI renderer에 `ConfitTuiLayout` 같은 계산 결과를 두고, draw 함수는 계산된 rect만 사용하게 한다.
 - 최소 폭/높이 정책을 코드에 명시한다. 예: compact, standard, wide, split-detail.
-- terminal 폭이 넓을 때만 오른쪽 detail pane 또는 extended columns를 보여준다.
-- terminal 폭이 좁을 때는 prompt와 marker만 남기고 id/detail은 detail view로 이동한다.
+- terminal 폭이 넓어도 선택 row 아래에 id/detail 줄을 동적으로 삽입하지 않는다.
+- id, type, deps, tags, source 같은 보조 정보는 하단 고정 inspector 또는 help/detail view로 이동한다.
+- terminal 폭이 좁을 때는 prompt와 marker, 짧은 value만 남긴다.
 
 ## btop Theme Lessons
 
@@ -184,12 +185,13 @@ Confit에 적용할 원칙은 다음과 같다.
 1. 기본 profile editor browse 화면에서 중앙 `Menu` box를 제거한다.
 2. 화면은 위에서부터 title/path, context header, list viewport, separator/status, key legend 순서로 둔다.
 3. list viewport는 terminal 좌우 폭을 최대한 사용한다.
-4. option row의 1차 정보는 marker와 prompt다.
-5. id, source, dependency badge, range, tags는 wide terminal에서만 보조 정보로 표시한다.
-6. 작은 terminal에서는 compact fallback을 쓰며, fallback에서도 prompt가 먼저 보여야 한다.
-7. 도움말/detail/search/schema warning/input dialog는 focus 전환이 필요한 view이므로 box 또는 fullscreen
+4. option row의 1차 정보는 marker, prompt, 짧은 value다.
+5. id, source, dependency badge, range, tags는 row 아래에 붙이지 않고 하단 inspector에 고정한다.
+6. `:verbose`를 켰을 때만 inspector가 id/type/deps/tags/source를 길게 보여준다.
+7. 작은 terminal에서는 compact fallback을 쓰며, fallback에서도 prompt가 먼저 보여야 한다.
+8. 도움말/detail/search/schema warning/input dialog는 focus 전환이 필요한 view이므로 box 또는 fullscreen
    view를 사용할 수 있다.
-8. renderer는 layout 계산, style 선택, row clipping을 책임지고 core/profile/schema model을 직접 변경하지
+9. renderer는 layout 계산, style 선택, row clipping을 책임지고 core/profile/schema model을 직접 변경하지
    않는다.
 
 ## Width Policy
@@ -197,9 +199,9 @@ Confit에 적용할 원칙은 다음과 같다.
 Confit TUI는 terminal 폭을 다음 네 등급으로 다룬다.
 
 - `compact`: 40-79 columns. title, one-line status, marker + prompt 중심 list, 최소 key hint.
-- `standard`: 80-119 columns. marker + prompt + short value/source badge.
-- `wide`: 120-159 columns. id/category/search/filter/dirty 상태를 header와 row suffix에 일부 표시.
-- `expanded`: 160 columns 이상. 오른쪽 detail pane 또는 extended row detail을 검토한다.
+- `standard`: 80-119 columns. marker + prompt + short value, compact inspector.
+- `wide`: 120-159 columns. breadcrumb/header와 fixed inspector를 더 넓게 쓰되 row 높이는 유지한다.
+- `expanded`: 160 columns 이상. 오른쪽 pane을 검토할 수 있지만 row 아래 detail 삽입은 금지한다.
 
 이 정책은 magic number가 아니라 test matrix의 기준이 되어야 한다. 각 라운드는 최소 80/100/120/160 columns
 rendering smoke를 갖는 것을 목표로 한다.
@@ -214,6 +216,7 @@ rendering smoke를 갖는 것을 목표로 한다.
 - dirty
 - search/filter enabled state
 - current mode: profile editor, schema editor, help, search, dialog
+- current menu breadcrumb
 
 하단 status line에는 즉시 사라져도 되는 이벤트를 둔다.
 
@@ -222,6 +225,11 @@ rendering smoke를 갖는 것을 목표로 한다.
 - blocked reason summary
 - search result count
 - validation error summary
+
+하단 inspector에는 선택한 option의 안정적인 보조 정보를 둔다.
+
+- compact: prompt, option id, type, short dependency state
+- verbose: id, type, source, deps, tags, blocked reason
 
 하단 key legend는 항상 짧아야 한다. 모든 키를 한 번에 나열하지 않고 현재 mode에서 중요한 키만 보여준다.
 전체 keymap은 docs에 두고, TUI footer는 현재 조작에 필요한 힌트만 담당한다.

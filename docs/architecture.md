@@ -89,13 +89,15 @@ QStar의 `qstar.config`와 future Confit `config.qst`는 역할이 다르다. Co
 ## Dependency Philosophy
 
 Kconfig는 tree menu를 사용자에게 보여주지만, 실제 문제는 option dependency graph다. Confit은
-사용자 표시용 category tree와 정본 dependency graph를 분리한다.
+사용자 표시용 category/menu tree와 정본 dependency graph를 분리한다.
 
-- Category tree: TUI/문서/검색용 view.
+- Category/menu tree: TUI/문서/검색용 view.
 - Option DAG: resolver와 checker가 사용하는 권위 graph.
 
-깊은 menu nesting은 피한다. 사용자는 option 이름, category, tag, dependency explanation으로 탐색할
-수 있어야 한다.
+TUI는 kconfiglib처럼 menu 안으로 들어가는 얕은 navigation을 지원한다. 그러나 깊은 menu nesting은
+피한다. 기본은 2단계, 큰 영역에서만 3단계까지 허용하고, 4단계 이상은 schema 설계 냄새로 본다.
+사용자는 얕은 menu, option 이름, category path, tag, dependency explanation, search로 탐색할 수 있어야
+한다.
 
 ## Safety Philosophy
 

@@ -216,7 +216,8 @@ Confit 적용점:
 - Confit TUI dirty state는 “profile TOML에 아직 저장하지 않은 override가 있는지”로 둔다.
 - save target은 `.config`가 아니라 `config/profiles/<profile>.toml`이다.
 - save 전 full schema/graph/resolve validation을 강제한다.
-- `q`는 dirty state가 있을 때 save/discard/cancel dialog를 띄운다.
+- Confit의 기본 exit/back key는 `Esc`다. Root menu에서 dirty state가 있으면 save/discard/cancel dialog를
+  띄운다. `q`는 호환 alias로만 둘 수 있다.
 - 저장 성공 후 profile을 reload/resolve해서 화면 state와 파일 state를 일치시킨다.
 
 ## Search And Jump Flow
@@ -295,12 +296,12 @@ Confit TUI에 직접 반영할 항목:
 - `draw -> doupdate -> get key -> transition` loop.
 - current menu, visible row list, selected index, scroll offset, parent row stack.
 - Space/Enter behavior split.
-- show-help, show-name, show-all mode.
+- `:` command mode를 통한 verbose/noverbose/tree/flat/filter 같은 view control.
 - menuconfig marker convention.
 - fullscreen jump/search dialog.
 - fullscreen info/help dialog.
 - floating input/key dialog primitives.
-- dirty quit confirm.
+- dirty exit confirm.
 - save success/error dialog.
 - safe curses drawing helpers.
 

@@ -129,7 +129,9 @@ Confit은 수천 개 option을 가정한다.
 - Option lookup은 id 기반 index를 가져야 한다.
 - Graph validation은 deterministic해야 한다.
 - Report output order는 stable sort를 따라야 한다.
-- TUI는 깊은 tree traversal이 아니라 검색, tag, dependency explanation을 기본 탐색 수단으로 둔다.
+- TUI는 얕은 menu stack navigation을 지원하되, 검색, tag, dependency explanation을 기본 탐색 수단으로
+  유지한다. 권장 menu depth는 2단계이고, 4단계 이상은 strict mode에서 failure로 승격 가능한 설계
+  warning으로 취급한다.
 - Explanation은 큰 graph에서도 특정 option 중심으로 빠르게 조회 가능해야 한다.
 
 Local scale gate는 5,000개 option synthetic project를 생성해 `check`, `list`, `graph`, `gen`을 실행한다.

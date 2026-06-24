@@ -25,7 +25,7 @@ Confit의 핵심 역할은 다음과 같다.
 6. [05-profile-target-guide.md](05-profile-target-guide.md): profile, target, override 이해.
 7. [06-generation-guide.md](06-generation-guide.md): generated artifact와 `confit gen`.
 8. [07-compat-guide.md](07-compat-guide.md): Parus/Delos compatibility check.
-9. [08-tui-guide.md](08-tui-guide.md): TUI 진입, 조작, 저장, schema edit.
+9. [08-tui-guide.md](08-tui-guide.md): TUI 진입, 얕은 menu tree 탐색, `:` command mode, 저장, schema edit.
 10. [09-ai-usage-guide.md](09-ai-usage-guide.md): AI가 Confit을 다룰 때 지켜야 할 규칙.
 11. [10-troubleshooting.md](10-troubleshooting.md): 오류, exit code, 흔한 문제 해결.
 12. [11-parus-delos-adoption.md](11-parus-delos-adoption.md): 실제 Parus/Delos 적용 순서.
@@ -81,4 +81,3 @@ confit tui \
 - `docs/final-release-note.md`: 현재 release-candidate 판정.
 - `wiki/`: 사용자가 따라 하기 위한 설명과 예시.
 - `man/confit.1`: 터미널에서 빠르게 보는 압축 reference.
-

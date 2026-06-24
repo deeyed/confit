@@ -120,23 +120,32 @@ Confit remains a host-side tool:
 - Generated files are written only under explicit output paths.
 - Real Parus/Delos source adoption must happen in a separate reviewed integration round.
 
-## TUI Status
+## TUI 상태
 
-macOS/Linux TUI status:
+macOS/Linux TUI 상태:
 
-- ncurses-backed menuconfig-style profile editor works for browsing, search,
-  help/detail, bool toggle, enum selection, typed value editing, save, and dirty
-  quit confirmation.
-- guarded schema editor works for creating/editing option metadata and saving
-  human-readable TOML after validation.
-- scripted CTest coverage and prior manual transcripts are checked in under
-  `tools/confit/tests/manual/`.
+- ncurses 기반 menuconfig-style profile editor는 browsing, search, help/detail,
+  bool toggle, enum selection, typed value editing, save, dirty exit
+  confirmation을 수행할 수 있다.
+- guarded schema editor는 option metadata 생성/수정과 validation 후
+  human-readable TOML 저장을 수행할 수 있다.
+- scripted CTest coverage와 manual transcript는 `tools/confit/tests/manual/`
+  아래에 보관한다.
 
-Remaining TUI gaps:
+문서화한 다음 TUI 방향:
 
-- full Kconfig menu/choice/comment/source tree semantics are not implemented.
-- search and help are useful but not as mature as kconfiglib menuconfig.
-- Windows TUI is intentionally unsupported.
+- category path에서 만든 shallow kconfiglib-style menu-stack navigation
+- detailed id/type/deps/tags를 선택 row 아래가 아니라 fixed bottom inspector로
+  옮긴 stable one-line option row
+- view control을 위한 `:verbose` 및 관련 `:` command
+- 기본 cancel/back/root-exit key로 `Esc` 사용. `q`는 compatibility alias로만
+  남길 수 있다.
+
+남은 TUI gap:
+
+- full Kconfig menu/choice/comment/source semantics는 구현하지 않았다.
+- search와 help는 유용하지만 kconfiglib menuconfig만큼 성숙하지는 않다.
+- Windows TUI는 의도적으로 unsupported다.
 
 ## Production Adoption Recommendation
 

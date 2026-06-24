@@ -182,78 +182,86 @@ Confit release-candidate behavior follows these safety rules:
 | Linux | Expected to work with CMake, a C17 compiler, `/bin/sh` for shell integration tests, and curses/ncurses development files for TUI builds. |
 | Windows | Contracted as CLI-only with GNU-style Clang and a native build driver. TUI is explicitly unsupported and should return exit code `8`. Native Windows host execution still needs a dedicated machine/CI gate before it is called fully validated. |
 
-## macOS/Linux TUI Support Scope
+## macOS/Linux TUI 지원 범위
 
-The supported TUI host scope for this release-candidate is macOS and Linux
-terminal environments with curses/ncurses support. The TUI is a host tool only:
-it edits Confit profile/schema TOML and never becomes a Parus/Delos runtime
-service.
+이 release-candidate에서 TUI 지원 범위는 curses/ncurses를 사용할 수 있는
+macOS/Linux terminal 환경이다. TUI는 host tool일 뿐이며, Confit
+profile/schema TOML을 편집한다. Parus/Delos runtime service가 되지 않는다.
 
-Validated on macOS:
+macOS에서 검증한 항목:
 
-- local CMake build with AppleClang and the platform curses library
-- full `tests/run_tests.sh` gate
-- `script(1)` pseudo-terminal manual QA for profile browse/search/help/edit,
-  save, dirty quit, schema warning, schema edit, and schema save
+- AppleClang과 platform curses library를 사용한 local CMake build
+- 전체 `tests/run_tests.sh` gate
+- `script(1)` pseudo-terminal manual QA: profile browse/search/help/edit,
+  save, dirty exit, schema warning, schema edit, schema save
 
-Validated or expected on Linux:
+Linux에서 검증 또는 기대하는 항목:
 
-- GitHub Actions includes `ubuntu-latest`
-- Linux CI installs `build-essential`, `cmake`, and `libncurses-dev`
-- the same `./tests/run_tests.sh` gate is used on Linux and macOS
+- GitHub Actions에 `ubuntu-latest` job이 있다.
+- Linux CI는 `build-essential`, `cmake`, `libncurses-dev`를 설치한다.
+- Linux와 macOS 모두 같은 `./tests/run_tests.sh` gate를 사용한다.
 
-Not claimed yet:
+아직 구현 완료로 보지 않는 항목:
 
-- native Windows TUI support
-- exhaustive terminal emulator matrix testing
-- kconfiglib-equivalent symbol browser, reverse dependency browser, or exact
-  menu tree semantics
+- native Windows TUI 지원
+- terminal emulator matrix 전수 테스트
+- kconfiglib와 동등한 symbol browser 또는 reverse dependency browser
+- 구현 완료된 shallow menu-stack navigation. 해당 작업의 문서화된 방향은
+  `docs/cli-tui.md`에 있다.
 
-## Manual TUI QA Evidence
+## Manual TUI QA 근거
 
-Interactive TUI evidence is recorded under:
+Interactive TUI 근거는 다음 위치에 기록한다.
 
 ```text
 tools/confit/tests/manual/
 ```
 
-Current coverage includes profile browsing, search, bool toggle, typed edit,
-help/detail, save, dirty quit confirmation, guarded schema-edit entry, schema
-field editing, and schema save validation. The latest macOS pseudo-terminal
-manual pass is:
+현재 coverage는 profile browsing, search, bool toggle, typed edit, help/detail,
+save, dirty exit confirmation, guarded schema-edit entry, schema field editing,
+schema save validation을 포함한다. 최신 macOS pseudo-terminal manual pass는
+다음 문서다.
 
 ```text
 tests/manual/round9-tui-readability-manual-qa.md
 ```
 
-## Kconfiglib Comparison
+## Kconfiglib 비교
 
-Confit TUI is close enough to exercise real profile/schema workflows in a
-menuconfig-style terminal interface, but it should not yet be described as fully
-equivalent to Python kconfiglib menuconfig.
+Confit TUI는 실제 profile/schema workflow를 menuconfig-style terminal
+interface에서 수행할 수 있을 만큼 가까워졌다. 다만 아직 Python kconfiglib
+menuconfig와 완전히 동등하다고 표현해서는 안 된다.
 
-Comparable enough for early Confit use:
+초기 Confit 사용에 충분히 가까운 부분:
 
-- ncurses-backed full-screen menu layout with title, header, boxed menu, key
-  legend, and status line.
-- Kconfig-like navigation keys for arrows, `j/k`, page movement, home/end,
-  search, help/detail, save, and quit confirmation.
-- Profile editing with bool toggle, enum popup, typed value dialogs, edit-time
-  validation, save confirmation, reload after save, and dirty quit confirmation.
-- Schema editing with an explicit warning, field dialogs, type/default/range/
-  choice validation, schema/graph validation before save, and TOML output.
+- title, context header, list viewport, key legend, status line을 갖춘
+  ncurses 기반 full-screen profile/schema editor
+- arrows, `j/k`, page movement, home/end, search, help/detail, save,
+  dirty-exit confirmation을 포함한 Kconfig 계열 navigation key
+- bool toggle, enum popup, typed value dialog, edit-time validation, save
+  confirmation, save 후 reload를 포함한 profile editing
+- 명시적 warning, field dialog, type/default/range/choice validation, 저장 전
+  schema/graph validation, TOML output을 포함한 schema editing
 
-Remaining gaps before claiming kconfiglib-level maturity:
+Kconfiglib 수준 성숙도를 주장하기 전에 문서화한 다음 TUI 계약:
 
-- Confit schema does not model a full Kconfig menu tree with explicit `menu`,
-  `choice`, `comment`, and `source` nodes. Category grouping approximates this
-  for Confit but is not the same structure.
-- Search lacks a rich symbol-result browser with jump history and all symbol
-  metadata.
-- Help/detail is practical but less polished for long text wrapping, symbol
-  references, and dependency expression rendering.
-- Reverse dependency exploration and fix suggestions are still shallow.
-- Schema editor is guarded and useful, but real project schema changes still
-  need review outside the TUI.
-- Native Windows terminal/curses behavior is intentionally out of scope for this
-  release-candidate phase.
+- category path 기반 shallow menu-stack navigation. 2단계를 권장하고 4단계
+  이상은 schema design warning으로 취급한다.
+- 안정적인 one-line option row. id/type/deps/tags는 선택 row 아래가 아니라
+  고정 하단 inspector로 이동한다.
+- `verbose`, `noverbose`, `tree`, `flat`, `filter`, `clear` 같은 view control을
+  위한 `:` command mode
+- `Esc`를 기본 cancel/back/root-exit flow로 사용한다. `q`는 compatibility
+  alias로만 남길 수 있다.
+
+남은 gap:
+
+- Search는 jump history와 전체 symbol metadata를 갖춘 풍부한 symbol-result
+  browser 수준은 아니다.
+- Help/detail은 긴 text wrapping, symbol reference, dependency expression
+  rendering에서 더 다듬을 여지가 있다.
+- Reverse dependency exploration과 fix suggestion은 아직 얕다.
+- Schema editor는 guarded workflow로 유용하지만, 실제 project schema 변경은
+  여전히 TUI 밖 code review가 필요하다.
+- Native Windows terminal/curses behavior는 이 release-candidate 단계의 범위
+  밖이다.

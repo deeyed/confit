@@ -65,6 +65,19 @@ since = "0.1.0"
 stability = "stable"
 ```
 
+`category`는 TUI와 문서가 사용하는 표시용 menu path다. 단일 이름도 허용하지만,
+Parus/Delos처럼 option이 많은 project에서는 slash-separated path를 쓴다.
+
+```toml
+category = "runtime/trace"
+```
+
+Category path는 resolver 권위 구조가 아니다. Option validity는 category tree가
+아니라 dependency DAG(`requires`, `conflicts`, `forces`, `visible_if`)가
+결정한다. TUI menu depth는 2단계를 기본으로 하고, 큰 영역에서만 3단계를
+허용한다. 4단계 이상은 일반 validation warning, strict validation failure로
+승격할 수 있는 schema design smell로 본다.
+
 지원 type:
 
 | Type | 의미 |

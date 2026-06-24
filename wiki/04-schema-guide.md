@@ -22,7 +22,8 @@ stability = "stable"
 - `type`: 값의 type.
 - `default`: 기본값.
 - `prompt`: TUI와 report에 보이는 짧은 설명.
-- `category`: TUI grouping과 list filtering에 쓰는 분류.
+- `category`: TUI menu path와 list filtering에 쓰는 표시용 분류. 단순
+  이름도 가능하지만, 큰 project에서는 `runtime/trace`처럼 얕은 path를 쓴다.
 - `tags`: 검색과 filtering에 쓰는 label.
 - `help`: 사용자가 판단할 수 있는 긴 설명.
 - `owner`: 담당 영역.
@@ -30,6 +31,33 @@ stability = "stable"
 - `stability`: `stable`, `experimental`, `deprecated` 같은 안정성 표시.
 
 metadata가 빠지면 일반 validation에서는 warning, strict validation에서는 failure가 될 수 있다.
+
+## Category path와 menu depth
+
+Confit의 dependency 정본은 tree가 아니라 DAG다. `category`는 resolver가 쓰는
+권위 구조가 아니라 TUI와 문서가 사람이 읽기 좋은 menu를 만들기 위한 표시용
+metadata다.
+
+작은 project는 단일 category만 써도 된다.
+
+```toml
+category = "debug"
+```
+
+Parus/Delos처럼 option이 많아지면 slash-separated path를 쓴다.
+
+```toml
+category = "runtime/trace"
+```
+
+권장 규칙:
+
+- 2단계를 기본으로 한다. 예: `runtime/trace`.
+- 큰 영역에서만 3단계를 허용한다. 예: `runtime/scheduler/policy`.
+- 4단계 이상은 피한다. 너무 깊은 menu는 search, tag, help/detail보다 사용성이
+  나빠진다.
+- category path는 표시용이다. Option validity는 `requires`, `conflicts`,
+  `forces`, `visible_if` 같은 dependency field로 표현한다.
 
 ## 지원 type
 
