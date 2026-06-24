@@ -132,7 +132,7 @@ printf '\n\n\033jq' |
 grep -aF "entered menu Main Menu > edit" "$WORK_DIR/tui-menu-stack.txt" \
   >/dev/null
 grep -aF "Edit Bool" "$WORK_DIR/tui-menu-stack.txt" >/dev/null
-grep -aF "id=delos.edit.bool | type=bool" "$WORK_DIR/tui-menu-stack.txt" \
+grep -aF "Edit Bool <delos.edit.bool> bool" "$WORK_DIR/tui-menu-stack.txt" \
   >/dev/null
 bool_option_pos=$(grep -aboF "Edit Bool" \
   "$WORK_DIR/tui-menu-stack.txt" | tail -n 1 | cut -d: -f1)

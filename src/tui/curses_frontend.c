@@ -909,6 +909,9 @@ ConfitTuiKey confit_tui_curses_read_key(void) {
   if (ch == 'o' || ch == 'O') {
     return CONFIT_TUI_KEY_CHOICES;
   }
+  if (ch == 'v' || ch == 'V') {
+    return CONFIT_TUI_KEY_VERBOSE_INSPECTOR;
+  }
   if (ch == '?') {
     return CONFIT_TUI_KEY_KEYMAP_HELP;
   }

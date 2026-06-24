@@ -36,6 +36,7 @@ typedef enum ConfitTuiKey {
   CONFIT_TUI_KEY_DEFAULT = 23,
   CONFIT_TUI_KEY_TYPE = 24,
   CONFIT_TUI_KEY_LEFT = 25,
+  CONFIT_TUI_KEY_VERBOSE_INSPECTOR = 26,
 } ConfitTuiKey;
 
 typedef struct ConfitTuiListItem {

@@ -60,7 +60,7 @@ printf '\nq' | "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
 grep -aF "entered menu Main Menu > debug" "$WORK_DIR/tui-enter-menu.txt" \
   >/dev/null
 grep -aF "Enable DDC" "$WORK_DIR/tui-enter-menu.txt" >/dev/null
-grep -aF "id=delos.debug.ddc | type=bool" "$WORK_DIR/tui-enter-menu.txt" \
+grep -aF "Enable DDC <delos.debug.ddc> bool" "$WORK_DIR/tui-enter-menu.txt" \
   >/dev/null
 
 printf '%sq' "$PAGE_DOWN_KEY" |
@@ -93,44 +93,88 @@ for cols in 80 100 120 160; do
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-$cols.txt"
   grep -aF "Target Board" "$WORK_DIR/tui-row-$cols.txt" >/dev/null
-  grep -aF "id=delos.target.board | type=enum" \
+  grep -aF "Target Board <delos.target.board> enum" \
     "$WORK_DIR/tui-row-$cols.txt" >/dev/null
   printf '/ddc\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-debug-$cols.txt"
   grep -aF "Enable DDC" "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
-  grep -aF "id=delos.debug.ddc | type=bool" \
+  grep -aF "Enable DDC <delos.debug.ddc> bool" \
     "$WORK_DIR/tui-row-debug-$cols.txt" >/dev/null
   printf '/debug_gate\nq' | env TERM=xterm COLUMNS="$cols" LINES=24 \
     "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
     >"$WORK_DIR/tui-row-gate-$cols.txt"
   grep -aF "delos.internal.debug_gate" "$WORK_DIR/tui-row-gate-$cols.txt" \
     >/dev/null
-  grep -aF "id=delos.internal.debug_gate | type=bool" \
+  grep -aF "delos.internal.debug_gate <delos.internal.debug_gate> bool" \
     "$WORK_DIR/tui-row-gate-$cols.txt" >/dev/null
   grep -aF "Inspector" "$WORK_DIR/tui-row-$cols.txt" >/dev/null
 done
 
-grep -aF "id=delos.target.board | type=enum" "$WORK_DIR/tui-row-100.txt" \
+grep -aF "Target Board <delos.target.board> enum" \
+  "$WORK_DIR/tui-row-100.txt" \
   >/dev/null
-grep -aF "id=delos.target.board | type=enum" "$WORK_DIR/tui-row-120.txt" \
+grep -aF "Target Board <delos.target.board> enum" \
+  "$WORK_DIR/tui-row-120.txt" \
   >/dev/null
-grep -aF \
-  "id=delos.target.board | type=enum | deps: r1 c0 v1 f0 rec0 | state=deps ok" \
+grep -aF "Target Board <delos.target.board> enum deps ok" \
   "$WORK_DIR/tui-row-160.txt" >/dev/null
-grep -aF "state=blocked: required by delos.target.board" \
+grep -aF "Enable DDC <delos.debug.ddc> bool blocked: required by delos.target.board" \
   "$WORK_DIR/tui-row-debug-160.txt" >/dev/null
-grep -aF "state=blocked: forced by delos.debug.ddc" \
+grep -aF \
+  "delos.internal.debug_gate <delos.internal.debug_gate> bool blocked: forced by delos.debug.ddc" \
   "$WORK_DIR/tui-row-gate-160.txt" >/dev/null
 ! grep -aF "tags: target | state=deps ok" "$WORK_DIR/tui-row-160.txt" \
   >/dev/null
+
+printf '/board\nvq' | env TERM=xterm COLUMNS=240 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-verbose-board.txt"
+
+grep -aF "verbose inspector mode" "$WORK_DIR/tui-verbose-board.txt" \
+  >/dev/null
+grep -aF "compact" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
+grep -aF "verbose: type:enum" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
+grep -aF "source:profiles/sim-dsh.toml" "$WORK_DIR/tui-verbose-board.txt" \
+  >/dev/null
+grep -aF "deps: r1 c0 v1 f0 rec0" "$WORK_DIR/tui-verbose-board.txt" \
+  >/dev/null
+grep -aF "tags:target" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
+grep -aF "id:delos.target.board" "$WORK_DIR/tui-verbose-board.txt" \
+  >/dev/null
+grep -aF "blocked_reason:-" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
+grep -aF "state:deps ok" "$WORK_DIR/tui-verbose-board.txt" >/dev/null
+
+printf '/ddc\nvq' | env TERM=xterm COLUMNS=240 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-verbose-ddc.txt"
+
+grep -aF "verbose: type:bool" "$WORK_DIR/tui-verbose-ddc.txt" >/dev/null
+grep -aF "source:profiles/debug.toml" "$WORK_DIR/tui-verbose-ddc.txt" \
+  >/dev/null
+grep -aF "tags:debug,host-tooling" "$WORK_DIR/tui-verbose-ddc.txt" \
+  >/dev/null
+grep -aF "id:delos.debug.ddc" "$WORK_DIR/tui-verbose-ddc.txt" >/dev/null
+grep -aF "blocked_reason:blocked: required by delos.target.board" \
+  "$WORK_DIR/tui-verbose-ddc.txt" >/dev/null
+grep -aF "state:blocked: required by delos.target.board" \
+  "$WORK_DIR/tui-verbose-ddc.txt" >/dev/null
+
+printf '/board\nvvq' | env TERM=xterm COLUMNS=180 LINES=24 \
+  "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
+  >"$WORK_DIR/tui-verbose-toggle.txt"
+
+grep -aF "compact" "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
+grep -aF "Target Board <delos.target.board> enum deps ok" \
+  "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
+grep -aF "verbose" "$WORK_DIR/tui-verbose-toggle.txt" >/dev/null
 
 printf '/gain\ne0.50\nqj\n' | env TERM=xterm COLUMNS=120 LINES=24 \
   "$CONFIT_BIN" tui --project "$PROJECT_DIR" --profile sim-dsh \
   >"$WORK_DIR/tui-dirty-row.txt"
 
 grep -aF "* Default Gain" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
-grep -aF "dirty | id=delos.sim.default_gain | type=float" \
+grep -aF "Default Gain <delos.sim.default_gain> float deps ok dirty" \
   "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 grep -aF "Discard changes" "$WORK_DIR/tui-dirty-row.txt" >/dev/null
 

@@ -58,6 +58,7 @@ typedef struct ConfitTuiState {
   char category[64];
   char tag[64];
   char status[256];
+  int verbose_inspector;
   int dirty;
   int profile_created;
 } ConfitTuiState;
@@ -981,6 +982,25 @@ static void confit_tui_format_dependency_summary(const ConfitOption *option,
                    (unsigned long)conflicts_count, (unsigned long)visible_count,
                    (unsigned long)forces_count,
                    (unsigned long)recommends_count);
+  }
+  out[out_size - 1U] = '\0';
+}
+
+static void confit_tui_format_tag_summary(const ConfitOption *option, char *out,
+                                          size_t out_size) {
+  size_t index;
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  out[0] = '\0';
+  if (option != 0) {
+    for (index = 0U; index < option->tag_count; ++index) {
+      confit_tui_append_unique_tag(out, out_size, option->tags[index]);
+    }
+  }
+  if (out[0] == '\0') {
+    (void)snprintf(out, out_size, "-");
   }
   out[out_size - 1U] = '\0';
 }
@@ -3098,6 +3118,9 @@ static void confit_tui_profile_format_key_legend(
   const int has_filter =
       state != 0 && (state->search[0] != '\0' || state->category[0] != '\0' ||
                      state->tag[0] != '\0');
+  const char *filter_suffix = has_filter ? " x clear" : "";
+  const char *inspector_mode =
+      state != 0 && state->verbose_inspector ? "compact" : "verbose";
 
   if (out == 0 || out_size == 0U) {
     return;
@@ -3107,45 +3130,136 @@ static void confit_tui_profile_format_key_legend(
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
                      "Left/Esc back | s save | / search | c/t filter%s | ? "
-                     "help | q quit",
-                     has_filter ? " x clear" : "");
+                     "help | v %s | q quit",
+                     filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter menu | "
-                     "Left/Esc back | / search | c/t filter%s | ? help | q "
-                     "quit",
-                     has_filter ? " x clear" : "");
+                     "Left/Esc back | / search | c/t filter%s | ? help | v "
+                     "%s | q quit",
+                     filter_suffix, inspector_mode);
     }
   } else {
     if (state != 0 && state->dirty) {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | s "
-                     "save | / search n/N | c/t filter%s | ? help | q quit",
-                     has_filter ? " x clear" : "");
+                     "save | / search n/N | c/t filter%s | ? help | v %s | q "
+                     "quit",
+                     filter_suffix, inspector_mode);
     } else {
       (void)snprintf(out, out_size,
                      "keys: move jk/arrows Pg/Home/End | enter/e edit | / "
-                     "search n/N | c/t filter%s | ? help | q quit",
-                     has_filter ? " x clear" : "");
+                     "search n/N | c/t filter%s | ? help | v %s | q quit",
+                     filter_suffix, inspector_mode);
     }
   }
   out[out_size - 1U] = '\0';
 }
 
-static void confit_tui_profile_format_inspector(const ConfitTuiRow *selected,
-                                                char *out, size_t out_size) {
+static const char *
+confit_tui_profile_row_source(const ConfitTuiState *state,
+                              const ConfitTuiRow *selected) {
+  const ConfitResolvedValue *resolved;
+
+  if (state == 0 || selected == 0 || selected->option == 0) {
+    return "-";
+  }
+  if (confit_tui_find_const_edit(state, selected->option->id) != 0) {
+    return "pending edit";
+  }
+  resolved = confit_resolved_config_find(state->config, selected->option->id);
+  if (resolved != 0 && resolved->source != 0 && resolved->source[0] != '\0') {
+    return resolved->source;
+  }
+  return "default";
+}
+
+static const char *confit_tui_profile_blocked_reason(
+    const ConfitTuiRow *selected) {
+  const char *state;
+
+  if (selected == 0) {
+    return "-";
+  }
+  state = confit_tui_text_or_dash(selected->dependency_state);
+  if (strncmp(state, "blocked:", 8U) == 0 ||
+      strncmp(state, "hidden:", 7U) == 0) {
+    return state;
+  }
+  return "-";
+}
+
+static void confit_tui_profile_format_compact_inspector(
+    const ConfitTuiRow *selected, char *out, size_t out_size) {
   if (out == 0 || out_size == 0U) {
     return;
   }
   if (selected == 0) {
-    (void)snprintf(out, out_size, "inspector: no selection");
-  } else if (selected->detail[0] != '\0') {
-    (void)snprintf(out, out_size, "inspector: %s", selected->detail);
+    (void)snprintf(out, out_size, "no selection");
+  } else if (selected->kind == CONFIT_TUI_ROW_MENU) {
+    (void)snprintf(out, out_size, "%s menu %s",
+                   confit_tui_text_or_dash(selected->item.label),
+                   confit_tui_text_or_dash(selected->detail));
   } else {
-    (void)snprintf(out, out_size, "inspector: %s",
-                   confit_tui_text_or_dash(selected->item.label));
+    (void)snprintf(
+        out, out_size, "%s <%s> %s %s%s",
+        confit_tui_text_or_dash(selected->item.label),
+        confit_tui_text_or_dash(selected->option != 0 ? selected->option->id
+                                                      : 0),
+        confit_tui_text_or_dash(selected->option != 0
+                                    ? confit_option_type_name(
+                                          selected->option->type)
+                                    : 0),
+        confit_tui_text_or_dash(selected->dependency_state),
+        selected->detail[0] != '\0' && strstr(selected->detail, "dirty") != 0
+            ? " dirty"
+            : "");
   }
   out[out_size - 1U] = '\0';
+}
+
+static void confit_tui_profile_format_verbose_inspector(
+    const ConfitTuiState *state, const ConfitTuiRow *selected, char *out,
+    size_t out_size) {
+  char deps[96];
+  char tags[128];
+
+  if (out == 0 || out_size == 0U) {
+    return;
+  }
+  if (selected == 0) {
+    (void)snprintf(out, out_size, "verbose: no selection");
+  } else if (selected->kind == CONFIT_TUI_ROW_MENU) {
+    (void)snprintf(out, out_size, "verbose: %s",
+                   confit_tui_text_or_dash(selected->detail));
+  } else {
+    confit_tui_format_dependency_summary(selected->option, deps, sizeof(deps));
+    confit_tui_format_tag_summary(selected->option, tags, sizeof(tags));
+    (void)snprintf(
+        out, out_size,
+        "verbose: type:%s | source:%s | %s | tags:%s | id:%s | "
+        "blocked_reason:%s | state:%s",
+        confit_tui_text_or_dash(selected->option != 0
+                                    ? confit_option_type_name(
+                                          selected->option->type)
+                                    : 0),
+        confit_tui_profile_row_source(state, selected), deps, tags,
+        confit_tui_text_or_dash(selected->option != 0 ? selected->option->id
+                                                      : 0),
+        confit_tui_profile_blocked_reason(selected),
+        confit_tui_text_or_dash(selected->dependency_state));
+  }
+  out[out_size - 1U] = '\0';
+}
+
+static void confit_tui_profile_format_inspector(const ConfitTuiState *state,
+                                                const ConfitTuiRow *selected,
+                                                char *out, size_t out_size) {
+  if (state != 0 && state->verbose_inspector) {
+    confit_tui_profile_format_verbose_inspector(state, selected, out, out_size);
+  } else {
+    confit_tui_profile_format_compact_inspector(selected, out, out_size);
+  }
 }
 
 static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
@@ -3193,7 +3307,8 @@ static ConfitStatus confit_tui_render_screen(const ConfitTuiState *state,
       confit_tui_text_or_dash(state->category),
       confit_tui_text_or_dash(state->tag));
   header[sizeof(header) - 1U] = '\0';
-  confit_tui_profile_format_inspector(selected, inspector, sizeof(inspector));
+  confit_tui_profile_format_inspector(state, selected, inspector,
+                                      sizeof(inspector));
   confit_tui_profile_format_key_legend(state, selected, key_legend,
                                        sizeof(key_legend));
   (void)snprintf(status_line, sizeof(status_line), "%s",
@@ -3418,6 +3533,14 @@ static ConfitStatus confit_tui_handle_key(ConfitTuiState *state,
   if (key == CONFIT_TUI_KEY_CLEAR_FILTER) {
     confit_tui_clear_filters(state);
     return confit_tui_rebuild_view(state, diagnostic);
+  }
+  if (key == CONFIT_TUI_KEY_VERBOSE_INSPECTOR) {
+    state->verbose_inspector = !state->verbose_inspector;
+    (void)snprintf(state->status, sizeof(state->status),
+                   "%s inspector mode",
+                   state->verbose_inspector ? "verbose" : "compact");
+    state->status[sizeof(state->status) - 1U] = '\0';
+    return CONFIT_OK;
   }
   if (key == CONFIT_TUI_KEY_LEFT) {
     return confit_tui_go_parent_menu(state, diagnostic);
