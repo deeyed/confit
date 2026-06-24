@@ -244,7 +244,7 @@ helper module이다. 자세한 계약은
   "project": "delos",
   "profile": "sim-dsh",
   "target": "host-sim",
-  "confit_version": "confit 0.1.0-round1",
+  "confit_version": "confit 0.1.0-rc1",
   "files": [
     {"path": "config/project.toml", "sha256": "..."},
     {"path": "config/profiles/sim-dsh.toml", "sha256": "..."}

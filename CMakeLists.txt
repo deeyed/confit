@@ -30,6 +30,14 @@ if(CONFIT_ENABLE_TUI)
   find_package(Curses REQUIRED)
 endif()
 
+if(CMAKE_CONFIGURATION_TYPES)
+  set(CONFIT_BUILD_MODE_VALUE "$<CONFIG>")
+elseif(CMAKE_BUILD_TYPE)
+  set(CONFIT_BUILD_MODE_VALUE "${CMAKE_BUILD_TYPE}")
+else()
+  set(CONFIT_BUILD_MODE_VALUE "unspecified")
+endif()
+
 if(APPLE AND CMAKE_C_COMPILER_ID MATCHES "Clang")
   add_compile_options(
     -Wno-availability
@@ -198,6 +206,7 @@ target_link_libraries(confit PRIVATE
 )
 
 target_compile_definitions(confit PRIVATE
+  CONFIT_BUILD_MODE="${CONFIT_BUILD_MODE_VALUE}"
   CONFIT_BUILD_C_COMPILER_ID="${CMAKE_C_COMPILER_ID}"
   CONFIT_BUILD_C_COMPILER_VERSION="${CMAKE_C_COMPILER_VERSION}"
   CONFIT_BUILD_HAS_CURSES=${CONFIT_BUILD_HAS_CURSES_VALUE}
@@ -421,7 +430,7 @@ add_test(
 )
 
 set_tests_properties(confit.cli.version
-  PROPERTIES PASS_REGULAR_EXPRESSION "confit 0\\.1\\.0-round1"
+  PROPERTIES PASS_REGULAR_EXPRESSION "confit 0\\.1\\.0-rc1"
 )
 
 add_test(

@@ -49,7 +49,7 @@ cc -std=c17 -Wall -Wextra -Werror -pedantic \
   $CURSES_LIBS \
   -o "$BUILD_DIR/confit"
 
-"$BUILD_DIR/confit" --version | grep -Fx "confit 0.1.0-round1" >/dev/null
+"$BUILD_DIR/confit" --version | grep -Fx "confit 0.1.0-rc1" >/dev/null
 "$BUILD_DIR/confit" --color never --quiet help >"$BUILD_DIR/help.txt"
 grep -F "Usage:" "$BUILD_DIR/help.txt" >/dev/null
 for command in help doctor init check resolve gen explain list graph diff compat profile tui completion
@@ -69,7 +69,12 @@ done
 
 "$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out"
 grep -F "Confit doctor" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "version: confit 0.1.0-rc1" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "build mode:" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "platform lane:" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "curses:" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "tui:" "$BUILD_DIR/doctor.out" >/dev/null
+grep -F "generators enabled:" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "doctor ok" "$BUILD_DIR/doctor.out" >/dev/null
 
 "$BUILD_DIR/confit" doctor \

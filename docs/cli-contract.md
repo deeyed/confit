@@ -22,7 +22,7 @@ Confit has thirteen operational top-level commands plus the `help` command.
 | Command | Contract |
 |---|---|
 | `help [command]` | Show global help or command-specific help. |
-| `doctor` | Check host tool installation, platform support, build metadata, project layout, and generator availability. |
+| `doctor` | Check release identity, build mode, platform lane, TUI support, generator availability, installation, and project layout. |
 | `init` | Create a Confit project skeleton from a named template. |
 | `check` | Parse project TOML, validate schema, validate graph constraints, and resolve the selected profile. |
 | `resolve` | Emit the resolved configuration without generating build artifacts. |

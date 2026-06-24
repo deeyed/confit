@@ -1,5 +1,5 @@
 .\" Confit manual page. Install with CMake to share/man/man1.
-.TH CONFIT 1 "2026-06-25" "Confit 0.1.0" "Confit Manual"
+.TH CONFIT 1 "2026-06-25" "Confit 0.1.0-rc1" "Confit Manual"
 .SH 이름
 confit \- Parus/Delos용 host-side configuration authority tool
 .SH 사용법
@@ -46,8 +46,8 @@ config.qst  (deprecated compatibility artifact)
 전체 도움말 또는 특정 command 도움말을 출력한다.
 .TP
 .B doctor [--project path]
-설치, platform, compiler, curses/TUI, generator,
-project layout 상태를 확인한다.
+설치, release identity, build mode, platform lane, compiler, curses/TUI,
+generator, project layout 상태를 확인한다.
 .TP
 .B init --project path --template minimal|delos|parus [--force] [--dry-run]
 새 Confit project skeleton을 만든다.

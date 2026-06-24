@@ -18,14 +18,18 @@
 
 ```text
 Confit doctor
-  version: confit 0.1.0-round1
+  version: confit 0.1.0-rc1
   executable: /Users/gungye/.local/bin/confit
+  build mode: Release
   platform: Darwin
+  platform lane: macos-cli-tui
   platform note: macOS CLI and curses TUI lane
   compiler: AppleClang 21.0.0.21000101
   curses: available; TUI enabled
+  tui: enabled
   install rule: single executable artifact: <prefix>/bin/confit
   generators: header, reports, cmake, qstar, build-selection
+  generators enabled: header, reports, cmake, qstar, build-selection
   deferred generators: none in this build
   project: not checked
 doctor ok

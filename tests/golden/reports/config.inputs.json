@@ -3,7 +3,7 @@
   "project": "delos",
   "profile": "sim-dsh",
   "target": "host-sim",
-  "confit_version": "confit 0.1.0-round1",
+  "confit_version": "confit 0.1.0-rc1",
   "files": [
     {"path": "config/options/debug.toml", "sha256": "8736b1e8de009bf1f83f2708ee4dc7505f851bf1458ef659aa49414e9542e99b"},
     {"path": "config/options/runtime.toml", "sha256": "36d9fc94969ef669fbeed84a103191c7a9f238fa49c89f2b1d796da754eb3a0d"},

@@ -4,7 +4,7 @@
 set(CONFIT_PROJECT "parus")
 set(CONFIT_PROFILE "qemu-aarch64")
 set(CONFIT_TARGET "qemu-virt-aarch64")
-set(CONFIT_VERSION "confit 0.1.0-round1")
+set(CONFIT_VERSION "confit 0.1.0-rc1")
 set(CONFIT_SOURCE_HASH "0x922E8FF882EEEDB3")
 set(CONFIT_OPTION_COUNT "33")
 

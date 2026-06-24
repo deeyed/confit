@@ -953,6 +953,10 @@ static int confit_cli_run_unsupported_command(
 #define CONFIT_BUILD_SYSTEM_NAME "unknown"
 #endif
 
+#ifndef CONFIT_BUILD_MODE
+#define CONFIT_BUILD_MODE "unspecified"
+#endif
+
 #ifndef CONFIT_BUILD_C_COMPILER_ID
 #define CONFIT_BUILD_C_COMPILER_ID "unknown"
 #endif
@@ -988,6 +992,25 @@ static ConfitStatus confit_cli_write_doctor_size(const char *key,
 
   (void)snprintf(buffer, sizeof(buffer), "%lu", (unsigned long)value);
   return confit_cli_write_doctor_kv(key, buffer);
+}
+
+static const char *confit_cli_doctor_build_mode(void) {
+  if (CONFIT_BUILD_MODE[0] == '\0') {
+    return "unspecified";
+  }
+  return CONFIT_BUILD_MODE;
+}
+
+static const char *confit_cli_doctor_platform_lane(void) {
+#if defined(_WIN32)
+  return "windows-cli-only";
+#elif defined(__APPLE__)
+  return "macos-cli-tui";
+#elif defined(__linux__)
+  return "linux-cli-tui";
+#else
+  return "portable-cli-preview";
+#endif
 }
 
 static const char *confit_cli_doctor_platform_note(void) {
@@ -1054,8 +1077,16 @@ static int confit_cli_run_doctor(int argc, char **argv) {
                                         confit_cli_executable_path);
   }
   if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("build mode",
+                                        confit_cli_doctor_build_mode());
+  }
+  if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv("platform",
                                         CONFIT_BUILD_SYSTEM_NAME);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("platform lane",
+                                        confit_cli_doctor_platform_lane());
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv("platform note",
@@ -1075,12 +1106,23 @@ static int confit_cli_run_doctor(int argc, char **argv) {
 #endif
   }
   if (status == CONFIT_OK) {
+#if CONFIT_BUILD_HAS_CURSES
+    status = confit_cli_write_doctor_kv("tui", "enabled");
+#else
+    status = confit_cli_write_doctor_kv("tui", "unsupported");
+#endif
+  }
+  if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv("install rule",
                                         confit_cli_doctor_install_rule());
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
         "generators", "header, reports, cmake, qstar, build-selection");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "generators enabled", "header, reports, cmake, qstar, build-selection");
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(

@@ -102,9 +102,13 @@ man confit
 `confit doctor`에서 다음을 확인한다.
 
 ```text
+version: confit 0.1.0-rc1
+build mode: Release 또는 unspecified
 platform: Darwin 또는 Linux
+platform lane: macos-cli-tui 또는 linux-cli-tui
 curses: available; TUI enabled
-generators: header, reports, cmake, qstar module
+tui: enabled
+generators enabled: header, reports, cmake, qstar, build-selection
 doctor ok
 ```
 

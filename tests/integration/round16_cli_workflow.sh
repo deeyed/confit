@@ -127,7 +127,7 @@ grep -F "DELOS_CONFIG_TARGET_BOARD_SOURCE \"profiles/sim-dsh.toml\"" \
 grep -F "confit-config-manifest-v1" "$GEN_DIR/config/config.qsm" >/dev/null
 grep -F "[\"delos.target.board\"]" "$GEN_DIR/config/config.qsm" >/dev/null
 grep -F "confit-qstar-manifest-v1" "$GEN_DIR/config.qst" >/dev/null
-grep -F '"confit_version": "confit 0.1.0-round1"' \
+grep -F '"confit_version": "confit 0.1.0-rc1"' \
   "$GEN_DIR/config.inputs.json" >/dev/null
 grep -F '"config/targets/host-sim.toml"' "$GEN_DIR/config.inputs.json" \
   >/dev/null

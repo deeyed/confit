@@ -6,7 +6,7 @@ return {
   project = "parus",
   profile = "qemu-aarch64",
   target = "qemu-virt-aarch64",
-  confit_version = "confit 0.1.0-round1",
+  confit_version = "confit 0.1.0-rc1",
   source_hash = "0x922E8FF882EEEDB3",
   option_count = "33",
   artifacts = {

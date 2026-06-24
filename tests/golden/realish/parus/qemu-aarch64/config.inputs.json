@@ -3,7 +3,7 @@
   "project": "parus",
   "profile": "qemu-aarch64",
   "target": "qemu-virt-aarch64",
-  "confit_version": "confit 0.1.0-round1",
+  "confit_version": "confit 0.1.0-rc1",
   "files": [
     {"path": "config/options/boot.toml", "sha256": "357739c0702d44c5ec11588593748c829b2611c8af5e8630a6726979972a660b"},
     {"path": "config/options/build.toml", "sha256": "3b89b404153b5751befead939a11a12fdaa1630a886cf04782a93d7d449b9d77"},

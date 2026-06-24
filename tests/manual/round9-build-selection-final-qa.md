@@ -162,8 +162,12 @@ Installed binary checks:
 Observed:
 
 ```text
-confit 0.1.0-round1
+confit 0.1.0-rc1
+build mode: Release
+platform lane: macos-cli-tui
+tui: enabled
 generators: header, reports, cmake, qstar, build-selection
+generators enabled: header, reports, cmake, qstar, build-selection
 doctor ok
 ```
 

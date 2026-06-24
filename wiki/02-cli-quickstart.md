@@ -24,6 +24,11 @@ $CONFIT_BIN doctor
 예상:
 
 ```text
+version: confit 0.1.0-rc1
+build mode: Release 또는 unspecified
+platform lane: macos-cli-tui 또는 linux-cli-tui
+tui: enabled
+generators enabled: header, reports, cmake, qstar, build-selection
 doctor ok
 ```
 

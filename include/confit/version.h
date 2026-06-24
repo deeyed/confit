@@ -21,9 +21,19 @@ extern "C" {
 #define CONFIT_VERSION_PATCH 0
 
 /**
- * @brief 현재 구현 라벨이다.
+ * @brief 현재 release candidate 라벨이다.
  */
-#define CONFIT_VERSION_LABEL "round1"
+#define CONFIT_VERSION_LABEL "rc1"
+
+/**
+ * @brief semver prerelease까지 포함한 release 문자열이다.
+ */
+#define CONFIT_VERSION_RELEASE "0.1.0-rc1"
+
+/**
+ * @brief CLI와 generated artifact에 기록할 display 문자열이다.
+ */
+#define CONFIT_VERSION_DISPLAY "confit " CONFIT_VERSION_RELEASE
 
 /**
  * @brief CLI가 출력할 안정적인 version 문자열을 반환한다.

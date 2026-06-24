@@ -24,7 +24,7 @@ int main(void) {
              "unsupported command or platform") != 0) {
     return 13;
   }
-  if (strcmp(confit_version_string(), "confit 0.1.0-round1") != 0) {
+  if (strcmp(confit_version_string(), CONFIT_VERSION_DISPLAY) != 0) {
     return 4;
   }
 

@@ -6,7 +6,7 @@ return {
   project = "delos",
   profile = "sim-dsh",
   target = "host-sim",
-  confit_version = "confit 0.1.0-round1",
+  confit_version = "confit 0.1.0-rc1",
   source_hash = "0x9C11AEAD955DCA37",
   option_count = 8,
   artifacts = {

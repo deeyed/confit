@@ -4,7 +4,7 @@
 set(CONFIT_PROJECT "delos")
 set(CONFIT_PROFILE "sim-dsh")
 set(CONFIT_TARGET "host-sim")
-set(CONFIT_VERSION "confit 0.1.0-round1")
+set(CONFIT_VERSION "confit 0.1.0-rc1")
 set(CONFIT_SOURCE_HASH "0x9C11AEAD955DCA37")
 set(CONFIT_OPTION_COUNT "8")
 

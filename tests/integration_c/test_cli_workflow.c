@@ -179,18 +179,28 @@ static void test_doctor(ConfitCliWorkflowContext *context) {
   argv[3] = context->project_dir;
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "version: confit 0.1.0-rc1");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "build mode:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "platform lane:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "doctor ok");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "platform note:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tui:");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "generators enabled:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "options:");
 #if defined(_WIN32)
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "windows-cli-only");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "windows clang-only CLI lane");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "curses: not available; TUI unsupported");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tui: unsupported");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "single executable artifact: <prefix>/bin/"
                               "confit.exe");
 #else
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "cli-tui");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tui: enabled");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "single executable artifact: <prefix>/bin/"
                               "confit");
