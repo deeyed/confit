@@ -115,7 +115,8 @@ config.explain.txt
 config.graph.json
 config.inputs.json
 config.cmake
-config.qst
+config/config.qsm
+config.qst  # deprecated compatibility artifact
 ```
 
 Explain one option:

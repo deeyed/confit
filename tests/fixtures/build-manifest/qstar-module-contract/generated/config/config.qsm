@@ -1,0 +1,76 @@
+return {
+  schema = "confit-config-manifest-v1",
+  project = "delos",
+  profile = "release",
+  target = "renode-nucleo-h753zi",
+  confit_version = "confit 0.1.0-contract-fixture",
+  source_hash = "0x0123456789ABCDEF",
+  option_count = 9,
+
+  artifacts = {
+    header = "config.h",
+    report_json = "config.report.json",
+    explain_text = "config.explain.txt",
+    graph_json = "config.graph.json",
+    inputs_json = "config.inputs.json",
+    cmake = "config.cmake",
+    legacy_qst = "config.qst",
+  },
+
+  values = {
+    ["delos.target.arch"] = {
+      type = "enum",
+      value = "armv7m",
+      text = "armv7m",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.target.board"] = {
+      type = "enum",
+      value = "nucleo-h753zi",
+      text = "nucleo-h753zi",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.target.cpu"] = {
+      type = "enum",
+      value = "cortex-m7",
+      text = "cortex-m7",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.target.kind"] = {
+      type = "enum",
+      value = "renode:nucleo-h753zi",
+      text = "renode:nucleo-h753zi",
+      source = "profiles/release.toml",
+    },
+    ["delos.target.claim_level"] = {
+      type = "enum",
+      value = "renode-probe",
+      text = "renode-probe",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.memory.flash_origin"] = {
+      type = "hex",
+      value = 134217728,
+      text = "0x08000000",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.memory.flash_size"] = {
+      type = "uint",
+      value = 2097152,
+      text = "2097152",
+      source = "targets/renode-nucleo-h753zi.toml",
+    },
+    ["delos.driver.uart.enabled"] = {
+      type = "bool",
+      value = true,
+      text = "true",
+      source = "profiles/release.toml",
+    },
+    ["delos.trace.capacity"] = {
+      type = "uint",
+      value = 4096,
+      text = "4096",
+      source = "profiles/release.toml",
+    },
+  },
+}

@@ -34,6 +34,7 @@ tree, remove only those copied generated files:
 ```text
 config.h
 config.cmake
+config/config.qsm
 config.qst
 config.report.json
 config.explain.txt

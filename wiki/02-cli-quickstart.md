@@ -165,13 +165,14 @@ $CONFIT_BIN gen \
 생성 파일:
 
 ```sh
-find "$OUT" -maxdepth 1 -type f | sort
+find "$OUT" -maxdepth 2 -type f | sort
 ```
 
 예상:
 
 ```text
 config.cmake
+config/config.qsm
 config.explain.txt
 config.graph.json
 config.h
@@ -179,6 +180,9 @@ config.inputs.json
 config.qst
 config.report.json
 ```
+
+QStar에서 새 integration이 import할 정본은 `config/config.qsm`이다.
+`config.qst`는 기존 호환성을 위한 deprecated artifact로만 본다.
 
 ## 9. Parus/Delos compatibility 검사
 

@@ -24,7 +24,9 @@ Confit은 Parus/Delos가 kconfig를 도입하지 않고 자체 TOML 기반 confi
 - profile diff.
 - option explanation.
 - compatibility checks across Parus/Delos-style project roots.
-- generated `config.h`, reports, `config.cmake`, and `config.qst` under explicit `--out`.
+- generated `config.h`, reports, `config.cmake`, canonical QStar
+  `config/config.qsm`, and legacy compatibility `config.qst` under explicit
+  `--out`.
 - profile TOML management through CLI and ncurses TUI on macOS/Linux hosts.
 - guarded schema-edit TUI for reviewed schema changes.
 
@@ -107,7 +109,8 @@ config.explain.txt
 config.graph.json
 config.inputs.json
 config.cmake
-config.qst
+config/config.qsm
+config.qst  # deprecated compatibility artifact
 ```
 
 ## Safety Rules

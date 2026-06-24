@@ -81,7 +81,9 @@ Generated artifacts should stay under the build tree, for example:
 build/work/cmake/qemu-aarch64/generated/config/
   config.h
   config.cmake
-  config.qst
+  config/
+    config.qsm
+  config.qst  # deprecated compatibility artifact
   config.report.json
   config.explain.txt
   config.graph.json

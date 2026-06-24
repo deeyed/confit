@@ -36,7 +36,8 @@ config.explain.txt
 config.graph.json
 config.inputs.json
 config.cmake
-config.qst
+config/config.qsm
+config.qst  (deprecated compatibility artifact)
 .EE
 .SH 명령
 .TP
@@ -226,6 +227,14 @@ C source가 include하는 generated compile-time define.
 .TP
 .I config.inputs.json
 generated artifact를 만든 input manifest.
+.TP
+.I config/config.qsm
+QStar가
+.B qstar.import_module(".../config")
+로 읽는 canonical pure table module.
+.TP
+.I config.qst
+기존 호환성을 위한 deprecated QStar artifact.
 .SH 종료 코드
 .EX
 0  success

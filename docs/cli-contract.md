@@ -83,7 +83,7 @@ additional execution context to stderr and must not alter stdout payloads.
 | `--strict` | Treat warnings as command failures where applicable. |
 | `--dry-run` | Validate and report intended writes without writing files. |
 | `--out <path>` | Select the output directory for generated artifacts. |
-| `--artifact header|reports|cmake|qstar|all` | Select generated artifact groups. |
+| `--artifact header|reports|cmake|qstar|all` | Select generated artifact groups. The `qstar` group emits the canonical `config/config.qsm` module and any documented compatibility artifact. |
 | `--force` | Permit overwriting existing output files when the command would otherwise refuse. |
 
 Generators must be deterministic. Generated files must not contain timestamps or

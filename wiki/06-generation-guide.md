@@ -22,6 +22,8 @@ config.explain.txt
 config.graph.json
 config.inputs.json
 config.cmake
+config/
+  config.qsm
 config.qst
 ```
 
@@ -164,15 +166,29 @@ target_include_directories(delos_runtime PRIVATE "${CONFIT_CONFIG_INCLUDE_DIR}")
 
 실제 build graph wiring은 별도 integration round에서 review한다.
 
-## config.qst
+## config/config.qsm
 
-QStar graph가 읽을 수 있는 manifest fragment다. Confit이 QStar graph를 자동으로 수정하지는 않는다.
+QStar graph가 읽을 수 있는 canonical pure module이다. Confit이 QStar graph를
+자동으로 수정하지는 않는다. QStar에서는 `.qsm` file path가 아니라 module
+folder path를 넘긴다.
 
 예상 사용 방식:
 
-```text
-generated config manifest를 QStar rule이 명시적으로 입력으로 받는다.
+```lua
+local config = qstar.import_module(
+  "build/generated/config/delos/sim-dsh/config"
+)
 ```
+
+이 호출은 실제로
+`build/generated/config/delos/sim-dsh/config/config.qsm`을 읽는다.
+
+`config/config.qsm`은 resolved value table과 generated artifact path를 함께
+담는다. Delos/Parus QStar graph는 이 table을 읽어서 board, CPU, driver,
+linker script 같은 build-time selection을 선택할 수 있다.
+
+기존 `config.qst`는 compatibility artifact로 남긴다. 새 integration에서
+정본 import 대상으로 삼지 않는다.
 
 ## Generated output review checklist
 
@@ -189,4 +205,5 @@ review할 내용:
 - `config.h` define prefix가 project에 맞는가.
 - `config.inputs.json`에 예상 input만 들어갔는가.
 - generated path가 source tree가 아니라 build/output tree인가.
-- `config.cmake`와 `config.qst`를 실제 build graph에 연결하는 change가 별도 review 대상인가.
+- `config.cmake`와 `config/config.qsm`을 실제 build graph에 연결하는 change가 별도 review 대상인가.
+- 기존 `config.qst`를 새 QStar integration의 정본으로 사용하지 않는가.

@@ -52,6 +52,8 @@ For `--project delos-realish`, the script writes:
   generated/
     config.h
     config.cmake
+    config/
+      config.qsm
     config.qst
     config.report.json
     config.explain.txt

@@ -156,7 +156,9 @@ build/generated/config/<project>/<profile>/
   config.graph.json
   config.inputs.json
   config.cmake
-  config.qst
+  config/
+    config.qsm
+  config.qst  # deprecated compatibility artifact
 ```
 
 절대로 generated file을 source `config/` 안에 몰래 쓰지 않는다. `confit gen`은 항상 명시적인 `--out`을

@@ -104,7 +104,7 @@ man confit
 ```text
 platform: Darwin 또는 Linux
 curses: available; TUI enabled
-generators: header, reports, cmake, qstar manifest
+generators: header, reports, cmake, qstar module
 doctor ok
 ```
 

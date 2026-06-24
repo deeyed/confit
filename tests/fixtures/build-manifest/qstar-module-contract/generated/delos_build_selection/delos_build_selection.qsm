@@ -1,0 +1,35 @@
+return {
+  schema = "delos-build-selection-v1",
+  project = "delos",
+  profile = "release",
+  target = "renode-nucleo-h753zi",
+  source_hash = "0x0123456789ABCDEF",
+
+  arch = {
+    id = "armv7m",
+    cpu = "cortex-m7",
+    toolchain = "arm-none-eabi",
+  },
+
+  board = {
+    id = "nucleo-h753zi",
+    family = "stm32h7",
+    objects = {
+      "//src/board/armv7m/stm32h7/nucleo-h753zi:board_objects",
+    },
+    include_dirs = {
+      "src/board/armv7m/stm32h7/nucleo-h753zi",
+    },
+    linker_script = "linker/armv7m/nucleo-h753zi.ld",
+  },
+
+  config = {
+    header = "config.h",
+    report_json = "config.report.json",
+  },
+
+  claim = {
+    level = "renode-probe",
+    kind = "renode:nucleo-h753zi",
+  },
+}

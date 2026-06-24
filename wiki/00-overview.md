@@ -35,7 +35,8 @@ config.explain.txt
 config.graph.json
 config.inputs.json
 config.cmake
-config.qst
+config/config.qsm
+config.qst  # deprecated compatibility artifact
 ```
 
 ## 왜 kconfig를 그대로 쓰지 않는가
@@ -90,7 +91,8 @@ Confit이 의도적으로 더 중요하게 보는 것은 다음이다.
 `generated artifact`
 
 : Confit이 만들어 주는 결과 파일이다. C source는 보통 `config.h`를 include하고, build system은 필요하면
-  `config.cmake`나 `config.qst`를 명시적으로 읽는다.
+  `config.cmake`나 QStar용 `config/config.qsm`을 명시적으로 읽는다. 기존 `config.qst`는 compatibility
+  artifact다.
 
 ## Confit이 하지 않는 일
 
@@ -104,4 +106,3 @@ Confit은 다음 일을 하지 않는다.
 - CMake나 QStar 자체를 대체하지 않는다.
 
 Confit은 “설정 원본을 읽고, 검증하고, 설명하고, generated artifact를 만드는 도구”다.
-

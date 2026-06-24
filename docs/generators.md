@@ -2,7 +2,7 @@
 doc_type: tool-spec
 status: draft
 authority: informative
-last_verified: 2026-06-23
+last_verified: 2026-06-24
 ---
 
 # Generators
@@ -28,6 +28,8 @@ build/generated/config/delos/sim-dsh/
   config.graph.json
   config.inputs.json
   config.cmake
+  config/
+    config.qsm
   config.qst
 ```
 
@@ -79,14 +81,23 @@ CMake generator 규칙:
 - Fragment 안에 timestamp와 host-local absolute path를 넣지 않는다.
 - Project-specific alias variable은 generated artifact path를 가리킨다.
 
-## QStar Artifact
+## QStar Artifacts
 
-`config.qst`는 QStar graph가 소비할 수 있는 generated manifest fragment다.
-실제 QStar project를 수정하지 않고, 명시적 `--out` 아래에만 생성한다.
+Confit의 canonical QStar artifact는 pure helper module인
+`config/config.qsm`이다. 실제 QStar project를 수정하지 않고, 명시적
+`--out` 아래에만 생성한다. QStar에서는 `.qsm` file path가 아니라 module
+folder path를 넘긴다.
+
+```lua
+local config = qstar.import_module("build/generated/config/delos/sim-dsh/config")
+```
+
+`qstar.import_module(".../config")`는 실제로
+`.../config/config.qsm`을 읽는다.
 
 ```lua
 return {
-  schema = "confit-qstar-manifest-v1",
+  schema = "confit-config-manifest-v1",
   project = "delos",
   profile = "sim-dsh",
   target = "host-sim",
@@ -95,16 +106,29 @@ return {
     header = "config.h",
     report_json = "config.report.json",
     inputs_json = "config.inputs.json"
+  },
+  values = {
+    ["delos.debug.dsh"] = {
+      type = "bool",
+      value = true,
+      text = "true",
+      source = "profiles/sim-dsh.toml"
+    }
   }
 }
 ```
 
 QStar generator 규칙:
 
-- Generated fragment는 config artifact manifest만 포함한다.
-- Project, toolset, target, stage, run target을 선언하지 않는다.
-- `.qsm` helper로 숨기지 않는다. Generated config는 graph declaration이므로 `.qst`가 맞다.
+- `config/config.qsm`은 resolved value table과 artifact manifest를 포함한다.
+- `.qsm` 안에서 project, toolset, target, stage, run target을 선언하지 않는다.
+- `qstar.import_module(...)`에는 `.qsm` file path를 직접 넘기지 않는다.
 - QStar root or target layer가 명시적으로 import한다.
+- 기존 `config.qst`는 deprecated compatibility artifact다.
+
+`.qst`는 QStar graph declaration fragment이고, `.qsm`은 pure table-return
+helper module이다. 자세한 계약은
+`docs/qstar-build-manifest-contract.md`를 따른다.
 
 ## JSON Report
 
