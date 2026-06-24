@@ -58,11 +58,39 @@ confit_tui_schema_validate_range(const ConfitTuiSchemaOption *option,
 static void confit_tui_schema_validation_message(char *message,
                                                  size_t message_size,
                                                  const char *text) {
+  size_t length;
+
   if (message == 0 || message_size == 0U) {
     return;
   }
-  (void)snprintf(message, message_size, "%s", text);
-  message[message_size - 1U] = '\0';
+  if (text == 0) {
+    text = "";
+  }
+  length = strlen(text);
+  if (length >= message_size) {
+    length = message_size - 1U;
+  }
+  memcpy(message, text, length);
+  message[length] = '\0';
+}
+
+static void confit_tui_schema_copy_text(char *out, size_t out_size,
+                                        const char *text) {
+  confit_tui_schema_validation_message(out, out_size, text);
+}
+
+static void confit_tui_schema_append_text(char *out, size_t out_size,
+                                          const char *text) {
+  size_t used;
+
+  if (out == 0 || out_size == 0U || text == 0 || text[0] == '\0') {
+    return;
+  }
+  used = strlen(out);
+  if (used + 1U >= out_size) {
+    return;
+  }
+  confit_tui_schema_copy_text(out + used, out_size - used, text);
 }
 
 static void confit_tui_schema_set_status_from_diagnostic(
@@ -636,9 +664,9 @@ static ConfitStatus confit_tui_schema_add_option(ConfitTuiSchemaState *state,
   state->options_list = new_options;
   option = &state->options_list[state->option_count];
   memset(option, 0, sizeof(*option));
-  (void)snprintf(option->id, sizeof(option->id), "%s", id);
-  (void)snprintf(option->type, sizeof(option->type), "%s", type);
-  (void)snprintf(option->prompt, sizeof(option->prompt), "%s", prompt);
+  confit_tui_schema_copy_text(option->id, sizeof(option->id), id);
+  confit_tui_schema_copy_text(option->type, sizeof(option->type), type);
+  confit_tui_schema_copy_text(option->prompt, sizeof(option->prompt), prompt);
   confit_tui_schema_default_for_type(option);
   state->selected_index = state->option_count;
   state->option_count += 1U;
@@ -666,8 +694,7 @@ static ConfitStatus confit_tui_schema_set_string(char *slot, size_t slot_size,
     }
     return CONFIT_OK;
   }
-  (void)snprintf(slot, slot_size, "%s", input);
-  slot[slot_size - 1U] = '\0';
+  confit_tui_schema_copy_text(slot, slot_size, input);
   state->dirty = 1;
   (void)snprintf(state->status, sizeof(state->status), "schema field updated");
   state->status[sizeof(state->status) - 1U] = '\0';
@@ -708,8 +735,7 @@ static ConfitStatus confit_tui_schema_set_type(ConfitTuiSchemaState *state,
     state->status[sizeof(state->status) - 1U] = '\0';
     return CONFIT_OK;
   }
-  (void)snprintf(option->type, sizeof(option->type), "%s", input);
-  option->type[sizeof(option->type) - 1U] = '\0';
+  confit_tui_schema_copy_text(option->type, sizeof(option->type), input);
   confit_tui_schema_default_for_type(option);
   confit_tui_schema_clear_incompatible_fields(option);
   state->dirty = 1;
@@ -1245,10 +1271,12 @@ static ConfitStatus confit_tui_schema_save(ConfitTuiSchemaState *state,
     check_project = 0;
     check_graph = 0;
     state->dirty = 0;
-    (void)snprintf(state->status, sizeof(state->status),
-                   "schema saved and validated; reloaded graph %s",
-                   schema_path);
-    state->status[sizeof(state->status) - 1U] = '\0';
+    state->status[0] = '\0';
+    confit_tui_schema_append_text(
+        state->status, sizeof(state->status),
+        "schema saved and validated; reloaded graph ");
+    confit_tui_schema_append_text(state->status, sizeof(state->status),
+                                  schema_path);
   }
   confit_graph_free(check_graph);
   confit_project_free(check_project);
