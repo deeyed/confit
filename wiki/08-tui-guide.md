@@ -130,12 +130,15 @@ Esc               취소, 뒤로, root에서는 종료 흐름
 :                 command prompt
 /                 search jump
 n / N             다음/이전 search result
-? 또는 h          help/detail view
+? 또는 h          Profile editor에서는 help/detail view
 s                 저장
 ```
 
 `q`는 예전 menuconfig식 습관을 위한 alias로 남길 수 있지만, 사용자가 기억해야
 하는 기본 종료 키는 `Esc`다.
+
+Schema editor에서는 `?`가 keymap/status 도움말이고, `h`는 선택한 schema
+option의 help text field를 수정한다.
 
 ## `:` command mode
 
@@ -208,9 +211,10 @@ Cancel
 
 `Cancel`을 고르면 TUI로 돌아간다.
 
-## Help/detail view
+## Profile help/detail view
 
-`?` 또는 `h`를 누르면 선택한 menu 또는 option의 자세한 정보를 본다.
+Profile editor에서 `?` 또는 `h`를 누르면 선택한 menu 또는 option의 자세한
+정보를 본다.
 
 표시되는 정보:
 
@@ -229,6 +233,8 @@ help text
 ```
 
 “왜 못 바꾸는가”를 볼 때는 하단 inspector보다 help/detail view가 더 유용하다.
+Schema editor에서는 `?`로 keymap/status를 확인하고, schema field 자체의
+설명은 하단 inspector와 field dialog에서 확인한다.
 
 ## Search와 Filter
 
@@ -284,12 +290,18 @@ s      저장
 저장 전 schema와 graph validation을 수행한다. 저장 파일은 TOML이다. Hidden
 binary DB는 없다.
 
+현재 schema editor는 guarded draft schema 파일인
+`config/options/tui-schema.toml`에 저장한다. 저장 후에는 project를 reload하고
+graph validation을 다시 수행한다.
+
 ## TUI 사용 원칙
 
 - Profile 값 변경은 TUI로 해도 된다.
 - Schema edit은 guarded workflow이며 code review 대상이다.
 - Menu tree는 얕게 유지한다. 2단계를 기본으로 보고, 4단계 이상은 피한다.
+  4단계 이상 category path는 warning이며, `--strict` 검증에서는 failure로
+  승격할 수 있다.
 - List row는 prompt와 value 중심으로 읽는다. 자세한 id/dependency 정보는
-  inspector, `:verbose`, help/detail에서 본다.
+  inspector, `:verbose`, Profile help/detail에서 본다.
 - TUI가 저장한 뒤에도 중요한 profile은 `confit check`를 다시 실행한다.
 - 중요한 변경은 `confit diff`와 generated report로 review한다.

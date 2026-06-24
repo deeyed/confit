@@ -217,13 +217,14 @@ Interactive TUI 근거는 다음 위치에 기록한다.
 tools/confit/tests/manual/
 ```
 
-현재 coverage는 profile browsing, search, bool toggle, typed edit, help/detail,
-save, dirty exit confirmation, guarded schema-edit entry, schema field editing,
-schema save validation을 포함한다. 최신 macOS pseudo-terminal manual pass는
-다음 문서다.
+현재 coverage는 tree browse, submenu enter/back, search jump across menus,
+`:verbose`/`:noverbose`, `:flat`/`:tree`, `:filter`/`:clear`, bool toggle,
+enum edit, invalid input, help/detail, save, dirty Esc exit confirmation,
+guarded schema-edit entry, schema category path editing, schema save
+validation을 포함한다. 최신 macOS pseudo-terminal manual pass는 다음 문서다.
 
 ```text
-tests/manual/round9-tui-readability-manual-qa.md
+tests/manual/round9-tui-menu-workflow-manual-qa.md
 ```
 
 ## Kconfiglib 비교

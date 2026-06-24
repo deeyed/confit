@@ -209,6 +209,9 @@ project metadata와 schema version.
 .I config/options/*.toml
 option schema.
 .TP
+.I config/options/tui-schema.toml
+guarded schema editor가 저장하는 draft schema file.
+.TP
 .I config/profiles/*.toml
 profile values.
 .TP
@@ -267,7 +270,9 @@ Esc               취소, 뒤로, root에서는 종료 흐름
 e                 edit
 /                 search
 n / N             다음/이전 search result
-? 또는 h          help/detail
+profile ? 또는 h  help/detail
+schema ?          keymap/status
+schema h          선택 option help field 수정
 s                 저장
 .EE
 .SH 함께 볼 문서

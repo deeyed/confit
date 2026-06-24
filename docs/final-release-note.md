@@ -125,14 +125,15 @@ Confit remains a host-side tool:
 macOS/Linux TUI 상태:
 
 - ncurses 기반 menuconfig-style profile editor는 browsing, search, help/detail,
-  bool toggle, enum selection, typed value editing, save, dirty exit
-  confirmation을 수행할 수 있다.
-- guarded schema editor는 option metadata 생성/수정과 validation 후
-  human-readable TOML 저장을 수행할 수 있다.
+  shallow menu-stack navigation, `:` command mode, bool toggle, enum
+  selection, typed value editing, save, dirty Esc exit confirmation을 수행할 수
+  있다.
+- guarded schema editor는 option metadata/category path 생성/수정과 validation
+  후 human-readable TOML 저장을 수행할 수 있다.
 - scripted CTest coverage와 manual transcript는 `tools/confit/tests/manual/`
   아래에 보관한다.
 
-문서화한 다음 TUI 방향:
+현재 반영된 TUI 방향:
 
 - category path에서 만든 shallow kconfiglib-style menu-stack navigation
 - detailed id/type/deps/tags를 선택 row 아래가 아니라 fixed bottom inspector로

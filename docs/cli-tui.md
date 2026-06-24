@@ -166,10 +166,13 @@ id=delos.trace.capacity | type=uint | source=profile:sim-dsh |
 deps=- | tags=runtime,trace,observability | state=deps ok
 ```
 
-`?` 또는 `h` help/detail view는 inspector보다 긴 설명을 볼 때 사용한다.
-여기에는 prompt, id, type, current value, default, source, category path,
-tags, dependency state, blocked reason, declared dependencies, help text를
-섹션 단위로 표시한다.
+Profile editor의 `?` 또는 `h` help/detail view는 inspector보다 긴 설명을 볼
+때 사용한다. 여기에는 prompt, id, type, current value, default, source,
+category path, tags, dependency state, blocked reason, declared
+dependencies, help text를 섹션 단위로 표시한다.
+
+Schema editor에서는 `h`가 선택한 schema option의 help text field를 수정하는
+키다. Schema editor의 `?`는 현재 keymap/status 도움말을 보여준다.
 
 ## Command Mode
 
@@ -213,7 +216,6 @@ Footer와 wiki에서는 `Esc back/exit`를 기본 종료 모델로 설명한다.
 | `/` | search jump query를 입력한다. |
 | `n` | 현재 search query의 다음 결과로 이동한다. |
 | `N` | 현재 search query의 이전 결과로 이동한다. |
-| `?`, `h` | 현재 menu 또는 option의 help/detail 화면을 연다. |
 | `s` | dirty state가 있을 때 저장한다. |
 
 Profile editor:
@@ -222,6 +224,7 @@ Profile editor:
 |---|---|
 | `Enter`, `Space` | bool은 즉시 toggle, enum/string/int/path 등은 edit dialog를 연다. |
 | `e` | 현재 option 값을 edit한다. |
+| `?`, `h` | 현재 menu 또는 option의 help/detail 화면을 연다. |
 | `c` | category path filter prompt를 연다. |
 | `t` | tag filter prompt를 연다. |
 | `x` | search/filter state를 지운다. |
@@ -230,6 +233,7 @@ Schema editor:
 
 | Key | 동작 |
 |---|---|
+| `?` | schema editor keymap/status 도움말을 보여준다. |
 | `n` | 새 schema option draft를 만든다. |
 | `y` | 현재 option type을 수정한다. |
 | `d`, `e`, `Enter` | 현재 option default value를 수정한다. |
@@ -290,7 +294,7 @@ inspector, keymap을 공유한다. 화면 title과 context header는 항상
 `SCHEMA EDIT MODE - guarded`를 포함해야 한다.
 
 Schema field 수정은 profile value editor와 같은 dialog primitive를 쓴다.
-`id`, `type`, `default`, `prompt`, `help`, `category`, `tags`, `range`,
+`id`, `type`, `default`, `prompt`, `help`, `category path`, `tags`, `range`,
 `choices`는 입력 시점에 검증한다. 저장 경로는 draft option을 core model로
 다시 구성한 뒤 schema validation, graph build, graph validation을 통과해야
 TOML write를 수행한다. Write 후에도 project를 reload하고 graph validation을
@@ -313,9 +317,10 @@ TUI의 기본 저장 대상은 profile override TOML이다.
 config/profiles/user-sim-dsh.toml
 ```
 
-Schema edit mode에서는 `config/options/*.toml` 같은 schema file도 수정할 수
-있다. TUI가 저장하는 파일은 항상 사람이 읽을 수 있는 TOML이어야 한다. TUI
-전용 binary workspace나 hidden database를 정본으로 삼지 않는다.
+Schema edit mode에서는 guarded draft schema 파일인
+`config/options/tui-schema.toml`에 option draft를 저장한다. TUI가 저장하는
+파일은 항상 사람이 읽을 수 있는 TOML이어야 한다. TUI 전용 binary workspace나
+hidden database를 정본으로 삼지 않는다.
 
 ## No Runtime TUI
 
