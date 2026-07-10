@@ -476,6 +476,7 @@ static void confit_option_init(ConfitOption *option) {
   option->tag_count = 0;
   option->deprecated_aliases = 0;
   option->deprecated_alias_count = 0;
+  option->emit_mask = CONFIT_OPTION_OUTPUT_ALL;
   option->owner = 0;
   option->since = 0;
   option->stability = 0;
@@ -908,6 +909,32 @@ ConfitStatus confit_option_set_metadata(ConfitOption *option,
     return status;
   }
   return confit_model_replace_string(&option->help, help);
+}
+
+ConfitStatus confit_option_set_emit_mask(ConfitOption *option,
+                                         unsigned int emit_mask) {
+  if (option == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  if (emit_mask == 0U ||
+      (emit_mask & ~(unsigned int)CONFIT_OPTION_OUTPUT_ALL) != 0U) {
+    return CONFIT_ERR_SCHEMA;
+  }
+
+  option->emit_mask = emit_mask;
+  return CONFIT_OK;
+}
+
+int confit_option_emits(const ConfitOption *option,
+                        ConfitOptionOutput output) {
+  const unsigned int output_mask = (unsigned int)output;
+
+  if (option == 0 || output_mask == 0U ||
+      (output_mask & (output_mask - 1U)) != 0U ||
+      (output_mask & ~(unsigned int)CONFIT_OPTION_OUTPUT_ALL) != 0U) {
+    return 0;
+  }
+  return (option->emit_mask & output_mask) != 0U;
 }
 
 ConfitStatus confit_option_add_tag(ConfitOption *option, const char *tag) {

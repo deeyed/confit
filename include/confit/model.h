@@ -53,6 +53,30 @@ typedef enum ConfitOptionType {
 } ConfitOptionType;
 
 /**
+ * @brief option value를 내보낼 산출물 종류의 bit mask다.
+ *
+ * 이 mask는 resolution, dependency validation, TUI visibility에는 영향을 주지
+ * 않고 generator output visibility만 제한한다.
+ */
+typedef enum ConfitOptionOutput {
+  /** C config header. */
+  CONFIT_OPTION_OUTPUT_HEADER = 1U << 0,
+  /** CMake build integration fragment. */
+  CONFIT_OPTION_OUTPUT_CMAKE = 1U << 1,
+  /** QStar config module과 legacy manifest. */
+  CONFIT_OPTION_OUTPUT_QSTAR = 1U << 2,
+  /** JSON/explain/graph report. */
+  CONFIT_OPTION_OUTPUT_REPORT = 1U << 3,
+  /** project build selection module. */
+  CONFIT_OPTION_OUTPUT_SELECTION = 1U << 4,
+  /** 모든 현재 산출물. `emit`을 생략한 option의 호환 기본값이다. */
+  CONFIT_OPTION_OUTPUT_ALL =
+      CONFIT_OPTION_OUTPUT_HEADER | CONFIT_OPTION_OUTPUT_CMAKE |
+      CONFIT_OPTION_OUTPUT_QSTAR | CONFIT_OPTION_OUTPUT_REPORT |
+      CONFIT_OPTION_OUTPUT_SELECTION,
+} ConfitOptionOutput;
+
+/**
  * @brief Confit value payload kind이다.
  */
 typedef enum ConfitValueKind {
@@ -192,6 +216,8 @@ typedef struct ConfitOption {
   char **deprecated_aliases;
   /** deprecated alias 개수. */
   size_t deprecated_alias_count;
+  /** generator output visibility bit mask. */
+  unsigned int emit_mask;
   /** owner metadata. 없으면 `NULL`. */
   char *owner;
   /** first-supported version metadata. 없으면 `NULL`. */
@@ -584,6 +610,29 @@ ConfitStatus confit_option_set_metadata(ConfitOption *option,
                                         const char *prompt,
                                         const char *category,
                                         const char *help);
+
+/**
+ * @brief option의 generator output visibility mask를 설정한다.
+ *
+ * Mask는 비어 있지 않아야 하고 `CONFIT_OPTION_OUTPUT_ALL` 밖의 bit를 포함할
+ * 수 없다.
+ *
+ * @param option 갱신할 option.
+ * @param emit_mask `ConfitOptionOutput` bit의 조합.
+ * @return 성공하면 CONFIT_OK, mask가 잘못되면 CONFIT_ERR_SCHEMA.
+ */
+ConfitStatus confit_option_set_emit_mask(ConfitOption *option,
+                                         unsigned int emit_mask);
+
+/**
+ * @brief option이 주어진 산출물에 값을 내보내는지 확인한다.
+ *
+ * @param option 검사할 option.
+ * @param output 단일 `ConfitOptionOutput` 값.
+ * @return 내보내면 1, 아니면 0.
+ */
+int confit_option_emits(const ConfitOption *option,
+                        ConfitOptionOutput output);
 
 /**
  * @brief option에 tag를 추가한다.

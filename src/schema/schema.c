@@ -1166,7 +1166,7 @@ static int confit_schema_is_known_option_field(const char *key) {
       "forces",             "visible_if", "range",
       "choices",            "owner",     "since",
       "stability",          "deprecated", "replaced_by",
-      "deprecated_aliases"};
+      "deprecated_aliases", "emit"};
   size_t index;
 
   if (strncmp(key, "x_", 2U) == 0) {
@@ -1178,6 +1178,34 @@ static int confit_schema_is_known_option_field(const char *key) {
     if (strcmp(key, known_fields[index]) == 0) {
       return 1;
     }
+  }
+  return 0;
+}
+
+static int confit_schema_option_output_for_name(
+    const char *name, ConfitOptionOutput *out_output) {
+  if (name == 0 || out_output == 0) {
+    return 0;
+  }
+  if (strcmp(name, "header") == 0) {
+    *out_output = CONFIT_OPTION_OUTPUT_HEADER;
+    return 1;
+  }
+  if (strcmp(name, "cmake") == 0) {
+    *out_output = CONFIT_OPTION_OUTPUT_CMAKE;
+    return 1;
+  }
+  if (strcmp(name, "qstar") == 0) {
+    *out_output = CONFIT_OPTION_OUTPUT_QSTAR;
+    return 1;
+  }
+  if (strcmp(name, "report") == 0) {
+    *out_output = CONFIT_OPTION_OUTPUT_REPORT;
+    return 1;
+  }
+  if (strcmp(name, "selection") == 0) {
+    *out_output = CONFIT_OPTION_OUTPUT_SELECTION;
+    return 1;
   }
   return 0;
 }
@@ -1643,6 +1671,50 @@ static ConfitStatus confit_schema_parse_option_value(
 
   if (strncmp(key, "x_", 2U) == 0) {
     return CONFIT_OK;
+  }
+
+  if (strcmp(key, "emit") == 0) {
+    unsigned int emit_mask;
+
+    array_items = 0;
+    array_count = 0U;
+    if (!confit_schema_parse_string_array(line_text, value_begin, value_end,
+                                          &array_items, &array_count, path,
+                                          line, diagnostic)) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (array_count == 0U) {
+      confit_schema_string_array_free(array_items, array_count);
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "emit requires at least one output");
+      return CONFIT_ERR_SCHEMA;
+    }
+
+    emit_mask = 0U;
+    for (index = 0U; index < array_count; ++index) {
+      ConfitOptionOutput output;
+
+      if (!confit_schema_option_output_for_name(array_items[index], &output)) {
+        confit_schema_string_array_free(array_items, array_count);
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                                value_begin + 1U,
+                                "unknown option emit target");
+        return CONFIT_ERR_SCHEMA;
+      }
+      if ((emit_mask & (unsigned int)output) != 0U) {
+        confit_schema_string_array_free(array_items, array_count);
+        confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                                value_begin + 1U,
+                                "duplicate option emit target");
+        return CONFIT_ERR_SCHEMA;
+      }
+      emit_mask |= (unsigned int)output;
+    }
+
+    status = confit_option_set_emit_mask(option, emit_mask);
+    confit_schema_string_array_free(array_items, array_count);
+    return status;
   }
 
   if (confit_schema_dependency_kind_for_key(key, &dependency_kind)) {
@@ -2773,12 +2845,23 @@ static ConfitStatus confit_schema_parse_selection_section_field(
                             "invalid selection option id");
     return CONFIT_ERR_SCHEMA;
   }
-  if (confit_project_find_option(project, option_id) == 0) {
-    free(option_id);
-    confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
-                            value_begin + 1U,
-                            "unknown selection option");
-    return CONFIT_ERR_SCHEMA;
+  {
+    const ConfitOption *option = confit_project_find_option(project, option_id);
+
+    if (option == 0) {
+      free(option_id);
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "unknown selection option");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_SELECTION)) {
+      free(option_id);
+      confit_schema_set_error(diagnostic, CONFIT_ERR_SCHEMA, path, line,
+                              value_begin + 1U,
+                              "selection option does not emit to selection");
+      return CONFIT_ERR_SCHEMA;
+    }
   }
 
   status = confit_build_selection_section_add_field(section, key, option_id);

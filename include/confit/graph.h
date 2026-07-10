@@ -23,6 +23,8 @@ typedef struct ConfitGraphNode {
   ConfitOptionType type;
   /** prompt가 있으면 1. */
   int is_visible;
+  /** source option의 generator output visibility bit mask. */
+  unsigned int emit_mask;
 } ConfitGraphNode;
 
 /**

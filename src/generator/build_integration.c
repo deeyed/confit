@@ -347,6 +347,38 @@ static const ConfitOption *confit_integration_find_option(
   return 0;
 }
 
+static ConfitStatus confit_integration_count_emitted_values(
+    const ConfitProject *project, const ConfitResolvedConfig *config,
+    ConfitOptionOutput output, size_t *out_count,
+    ConfitDiagnostic *diagnostic) {
+  size_t count;
+  size_t index;
+
+  if (out_count == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+
+  count = 0U;
+  for (index = 0U; index < config->value_count; ++index) {
+    const ConfitResolvedValue *resolved = &config->values[index];
+    const ConfitOption *option =
+        confit_integration_find_option(project, resolved->option_id);
+
+    if (option == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                            resolved->option_id, 0, 0,
+                            "resolved option is missing from project schema");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (confit_option_emits(option, output)) {
+      count += 1U;
+    }
+  }
+
+  *out_count = count;
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_integration_append_indent(
     ConfitIntegrationBuilder *builder, size_t count) {
   ConfitStatus status;
@@ -518,6 +550,7 @@ ConfitStatus confit_generate_cmake_fragment(
   char source_hash_text[32];
   char option_count_text[32];
   ConfitStatus status;
+  size_t emitted_count;
   size_t index;
 
   if (out_text == 0) {
@@ -536,10 +569,15 @@ ConfitStatus confit_generate_cmake_fragment(
   if (status != CONFIT_OK) {
     return status;
   }
+  status = confit_integration_count_emitted_values(
+      project, config, CONFIT_OPTION_OUTPUT_CMAKE, &emitted_count, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
   (void)snprintf(source_hash_text, sizeof(source_hash_text), "0x%llX",
                  (unsigned long long)source_hash);
   (void)snprintf(option_count_text, sizeof(option_count_text), "%lu",
-                 (unsigned long)config->value_count);
+                 (unsigned long)emitted_count);
 
   confit_integration_builder_init(&builder);
 
@@ -603,6 +641,12 @@ ConfitStatus confit_generate_cmake_fragment(
   CONFIT_CMAKE_APPEND("_CONFIG_SOURCE_HASH \"${CONFIT_SOURCE_HASH}\")\n");
   CONFIT_CMAKE_APPEND("\n# Resolved option values.\n");
   for (index = 0U; index < config->value_count; ++index) {
+    const ConfitOption *option = confit_integration_find_option(
+        project, config->values[index].option_id);
+
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_CMAKE)) {
+      continue;
+    }
     CONFIT_CMAKE_SECTION(confit_cmake_append_resolved_value_record(
         &builder, project, &config->values[index], diagnostic));
   }
@@ -729,6 +773,8 @@ ConfitStatus confit_generate_qstar_config_module(
   char source_hash_text[32];
   char option_count_text[32];
   ConfitStatus status;
+  size_t emitted_count;
+  size_t emitted_index;
   size_t index;
 
   if (out_text == 0) {
@@ -747,10 +793,15 @@ ConfitStatus confit_generate_qstar_config_module(
   if (status != CONFIT_OK) {
     return status;
   }
+  status = confit_integration_count_emitted_values(
+      project, config, CONFIT_OPTION_OUTPUT_QSTAR, &emitted_count, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
   (void)snprintf(source_hash_text, sizeof(source_hash_text), "0x%llX",
                  (unsigned long long)source_hash);
   (void)snprintf(option_count_text, sizeof(option_count_text), "%lu",
-                 (unsigned long)config->value_count);
+                 (unsigned long)emitted_count);
 
   confit_integration_builder_init(&builder);
 
@@ -805,10 +856,18 @@ ConfitStatus confit_generate_qstar_config_module(
       &builder, "legacy_qst", confit_integration_legacy_qst_path(), 0));
   CONFIT_QSM_SECTION(confit_integration_append(&builder, "  },\n"));
   CONFIT_QSM_SECTION(confit_integration_append(&builder, "  values = {\n"));
+  emitted_index = 0U;
   for (index = 0U; index < config->value_count; ++index) {
+    const ConfitOption *option = confit_integration_find_option(
+        project, config->values[index].option_id);
+
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_QSTAR)) {
+      continue;
+    }
+    emitted_index += 1U;
     CONFIT_QSM_SECTION(confit_qstar_append_value_entry(
         &builder, project, &config->values[index],
-        index + 1U < config->value_count, diagnostic));
+        emitted_index < emitted_count, diagnostic));
   }
   CONFIT_QSM_SECTION(confit_integration_append(&builder, "  }\n"));
   CONFIT_QSM_SECTION(confit_integration_append(&builder, "}\n"));
@@ -910,6 +969,12 @@ static ConfitStatus confit_qstar_append_selection_field(
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, field->option_id, 0,
                           0,
                           "selection option is missing from project schema");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_SELECTION)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, field->option_id, 0,
+                          0,
+                          "selection option does not emit to selection");
     return CONFIT_ERR_SCHEMA;
   }
 
@@ -1071,6 +1136,7 @@ ConfitStatus confit_generate_qstar_manifest(
   char source_hash_text[32];
   char option_count_text[32];
   ConfitStatus status;
+  size_t emitted_count;
 
   if (out_text == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
@@ -1088,10 +1154,15 @@ ConfitStatus confit_generate_qstar_manifest(
   if (status != CONFIT_OK) {
     return status;
   }
+  status = confit_integration_count_emitted_values(
+      project, config, CONFIT_OPTION_OUTPUT_QSTAR, &emitted_count, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
   (void)snprintf(source_hash_text, sizeof(source_hash_text), "0x%llX",
                  (unsigned long long)source_hash);
   (void)snprintf(option_count_text, sizeof(option_count_text), "%lu",
-                 (unsigned long)config->value_count);
+                 (unsigned long)emitted_count);
 
   confit_integration_builder_init(&builder);
 

@@ -277,6 +277,57 @@ done:
   return ok;
 }
 
+static int expect_emit_visibility_schema(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitOption *option;
+  char path[512];
+  int ok;
+
+  if (!join_fixture(path, sizeof(path),
+                    "tests/fixtures/schema/valid/emit-visibility")) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  ok = 0;
+  if (confit_schema_load_project(path, &project, &diagnostic) != CONFIT_OK) {
+    goto done;
+  }
+
+  option = confit_project_find_option(project, "delos.legacy.all");
+  if (option == 0 || option->emit_mask != CONFIT_OPTION_OUTPUT_ALL ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_SELECTION)) {
+    goto done;
+  }
+
+  option = confit_project_find_option(project, "delos.build.objects");
+  if (option == 0 ||
+      confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_CMAKE) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_QSTAR) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_REPORT) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_SELECTION)) {
+    goto done;
+  }
+
+  option = confit_project_find_option(project, "delos.header.secret");
+  if (option == 0 ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER) ||
+      confit_option_emits(option, CONFIT_OPTION_OUTPUT_CMAKE) ||
+      confit_option_emits(option, CONFIT_OPTION_OUTPUT_REPORT)) {
+    goto done;
+  }
+
+  ok = project->build_selection_template_count == 1U;
+
+done:
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   ConfitDiagnostic diagnostic;
   ConfitProject *project;
@@ -538,6 +589,26 @@ int main(void) {
   }
   if (!expect_portable_path_schema()) {
     return 43;
+  }
+  if (!expect_emit_visibility_schema()) {
+    return 44;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/emit-empty",
+                           "emit requires at least one output")) {
+    return 45;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/emit-unknown",
+                           "unknown option emit target")) {
+    return 46;
+  }
+  if (!expect_schema_error("tests/fixtures/schema/invalid/emit-duplicate",
+                           "duplicate option emit target")) {
+    return 47;
+  }
+  if (!expect_schema_error(
+          "tests/fixtures/schema/invalid/build-selection-no-emit",
+          "selection option does not emit to selection")) {
+    return 48;
   }
 
   return 0;

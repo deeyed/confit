@@ -1,0 +1,4 @@
+[option."delos.invalid"]
+type = "bool"
+default = true
+emit = []

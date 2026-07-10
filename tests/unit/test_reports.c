@@ -150,6 +150,79 @@ static int check_portable_json_escaping(void) {
   return ok;
 }
 
+static int check_emit_visibility_reports(void) {
+  ConfitReportOptions options;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitResolvedConfig *config;
+  ConfitGraph *graph;
+  char *report_json;
+  char *explain_text;
+  char *graph_json;
+  int ok;
+
+  if (!load_project_fixture("tests/fixtures/schema/valid/emit-visibility",
+                            &project)) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  config = 0;
+  graph = 0;
+  if (confit_resolver_resolve(project, "default", 0, 0, 0U, &config,
+                              &diagnostic) != CONFIT_OK ||
+      confit_graph_build(project, &graph, &diagnostic) != CONFIT_OK ||
+      confit_graph_validate(graph, &diagnostic) != CONFIT_OK) {
+    confit_graph_free(graph);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 0;
+  }
+
+  options.profile_name = "default";
+  options.target_name = "none";
+  options.input_files = 0;
+  options.input_file_count = 0U;
+  report_json = 0;
+  explain_text = 0;
+  graph_json = 0;
+  if (config->value_count != 4U ||
+      confit_generate_report_json(project, config, &options, &report_json,
+                                  &diagnostic) != CONFIT_OK ||
+      confit_generate_explain_report(project, config, &options, &explain_text,
+                                     &diagnostic) != CONFIT_OK ||
+      confit_graph_to_json(graph, &graph_json) != CONFIT_OK) {
+    confit_generator_string_free(report_json);
+    confit_generator_string_free(explain_text);
+    confit_graph_string_free(graph_json);
+    confit_graph_free(graph);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 0;
+  }
+
+  ok = text_contains(report_json, "delos.legacy.all") &&
+       text_contains(report_json, "delos.build.objects") &&
+       text_contains(report_json, "delos.report.only") &&
+       strstr(report_json, "delos.header.secret") == 0 &&
+       text_contains(explain_text, "delos.legacy.all") &&
+       text_contains(explain_text, "delos.build.objects") &&
+       text_contains(explain_text, "delos.report.only") &&
+       strstr(explain_text, "delos.header.secret") == 0 &&
+       text_contains(graph_json, "delos.legacy.all") &&
+       text_contains(graph_json, "delos.build.objects") &&
+       text_contains(graph_json, "delos.report.only") &&
+       strstr(graph_json, "delos.header.secret") == 0;
+
+  confit_generator_string_free(report_json);
+  confit_generator_string_free(explain_text);
+  confit_graph_string_free(graph_json);
+  confit_graph_free(graph);
+  confit_resolved_config_free(config);
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   static const ConfitInputFile input_files[] = {
       {"config/project.toml",
@@ -242,6 +315,7 @@ int main(void) {
        strcmp(report_json, report_json_again) == 0 &&
        strcmp(inputs_json, inputs_json_again) == 0 &&
        check_portable_json_escaping() &&
+       check_emit_visibility_reports() &&
        strstr(report_json, "timestamp") == 0 &&
        strstr(inputs_json, "/Users/") == 0 &&
        text_has_no_cr(report_json) &&

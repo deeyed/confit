@@ -342,6 +342,103 @@ static int check_portable_path_generation(void) {
   return ok;
 }
 
+static int check_emit_visibility_generation(void) {
+  ConfitConfigHeaderOptions header_options;
+  ConfitBuildIntegrationOptions build_options;
+  ConfitDiagnostic diagnostic;
+  ConfitProject *project;
+  ConfitResolvedConfig *config;
+  char *header;
+  char *cmake_fragment;
+  char *qstar_config_module;
+  char *qstar_manifest;
+  char *selection_module;
+  int ok;
+
+  if (!load_project_fixture("tests/fixtures/schema/valid/emit-visibility",
+                            &project)) {
+    return 0;
+  }
+
+  confit_diagnostic_init(&diagnostic);
+  config = 0;
+  if (confit_resolver_resolve(project, "default", 0, 0, 0U, &config,
+                              &diagnostic) != CONFIT_OK) {
+    confit_project_free(project);
+    return 0;
+  }
+
+  header_options.profile_name = "default";
+  header_options.target_name = "none";
+  build_options.profile_name = "default";
+  build_options.target_name = "none";
+  build_options.header_path = "config.h";
+  build_options.report_json_path = "config.report.json";
+  build_options.explain_text_path = "config.explain.txt";
+  build_options.graph_json_path = "config.graph.json";
+  build_options.inputs_json_path = "config.inputs.json";
+  header = 0;
+  cmake_fragment = 0;
+  qstar_config_module = 0;
+  qstar_manifest = 0;
+  selection_module = 0;
+
+  if (project->build_selection_template_count != 1U ||
+      config->value_count != 4U ||
+      confit_generate_config_header(project, config, &header_options, &header,
+                                    &diagnostic) != CONFIT_OK ||
+      confit_generate_cmake_fragment(project, config, &build_options,
+                                     &cmake_fragment, &diagnostic) !=
+          CONFIT_OK ||
+      confit_generate_qstar_config_module(project, config, &build_options,
+                                          &qstar_config_module,
+                                          &diagnostic) != CONFIT_OK ||
+      confit_generate_qstar_manifest(project, config, &build_options,
+                                     &qstar_manifest, &diagnostic) !=
+          CONFIT_OK ||
+      confit_generate_build_selection_qsm(
+          project, config, &build_options,
+          &project->build_selection_templates[0], &selection_module,
+          &diagnostic) != CONFIT_OK) {
+    confit_generator_string_free(header);
+    confit_generator_string_free(cmake_fragment);
+    confit_generator_string_free(qstar_config_module);
+    confit_generator_string_free(qstar_manifest);
+    confit_generator_string_free(selection_module);
+    confit_resolved_config_free(config);
+    confit_project_free(project);
+    return 0;
+  }
+
+  ok = text_contains(header, "DELOS_CONFIG_LEGACY_ALL 1") &&
+       text_contains(header,
+                     "DELOS_CONFIG_HEADER_SECRET \"kernel-only\"") &&
+       strstr(header, "DELOS_CONFIG_BUILD_OBJECTS") == 0 &&
+       strstr(header, "DELOS_CONFIG_REPORT_ONLY") == 0 &&
+       text_contains(cmake_fragment, "set(CONFIT_OPTION_COUNT \"2\")") &&
+       text_contains(cmake_fragment, "DELOS_CONFIG_BUILD_OBJECTS") &&
+       strstr(cmake_fragment, "DELOS_CONFIG_HEADER_SECRET") == 0 &&
+       strstr(cmake_fragment, "DELOS_CONFIG_REPORT_ONLY") == 0 &&
+       text_contains(qstar_config_module, "option_count = 2,") &&
+       text_contains(qstar_config_module, "delos.build.objects") &&
+       strstr(qstar_config_module, "delos.header.secret") == 0 &&
+       strstr(qstar_config_module, "delos.report.only") == 0 &&
+       text_contains(qstar_manifest, "option_count = \"2\"") &&
+       text_contains(selection_module, "objects = {") &&
+       text_contains(selection_module, "//src/board:rpi5_objects") &&
+       text_contains(selection_module, "//src/arch:arm64_objects") &&
+       strstr(selection_module, "delos.header.secret") == 0;
+
+  confit_generator_string_free(header);
+  confit_generator_string_free(cmake_fragment);
+  confit_generator_string_free(qstar_config_module);
+  confit_generator_string_free(qstar_manifest);
+  confit_generator_string_free(selection_module);
+  confit_resolved_config_free(config);
+  confit_project_free(project);
+  return ok;
+}
+
 int main(void) {
   ConfitConfigHeaderOptions options;
   ConfitDiagnostic diagnostic;
@@ -425,6 +522,7 @@ int main(void) {
 
   ok = check_value_serialization_helpers() &&
        check_portable_path_generation() &&
+       check_emit_visibility_generation() &&
        strcmp(header, golden) == 0 && strcmp(header, header_again) == 0 &&
        strcmp(cmake_fragment, cmake_golden) == 0 &&
        strcmp(qstar_config_module, qstar_config_golden) == 0 &&

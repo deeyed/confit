@@ -370,6 +370,7 @@ ConfitStatus confit_generate_report_json(
   ConfitReportBuilder builder;
   uint64_t source_hash;
   ConfitStatus status;
+  size_t emitted;
   size_t index;
 
   if (out_json == 0) {
@@ -440,6 +441,7 @@ ConfitStatus confit_generate_report_json(
   CONFIT_REPORT_APPEND(",\n");
   CONFIT_REPORT_APPEND("  \"options\": [\n");
 
+  emitted = 0U;
   for (index = 0U; index < config->value_count; ++index) {
     const ConfitResolvedValue *resolved = &config->values[index];
     const ConfitOption *option =
@@ -450,6 +452,13 @@ ConfitStatus confit_generate_report_json(
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, resolved->option_id,
                             0, 0, "unknown report option");
       return CONFIT_ERR_SCHEMA;
+    }
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_REPORT)) {
+      continue;
+    }
+
+    if (emitted > 0U) {
+      CONFIT_REPORT_APPEND(",\n");
     }
 
     CONFIT_REPORT_APPEND("    {\"id\": ");
@@ -462,7 +471,10 @@ ConfitStatus confit_generate_report_json(
     CONFIT_REPORT_APPEND(", \"source\": ");
     CONFIT_REPORT_APPEND_JSON(resolved->source != 0 ? resolved->source : "");
     CONFIT_REPORT_APPEND("}");
-    CONFIT_REPORT_APPEND(index + 1U < config->value_count ? ",\n" : "\n");
+    emitted += 1U;
+  }
+  if (emitted > 0U) {
+    CONFIT_REPORT_APPEND("\n");
   }
 
   CONFIT_REPORT_APPEND("  ],\n");
@@ -478,8 +490,9 @@ ConfitStatus confit_generate_report_json(
 }
 
 static ConfitStatus confit_report_append_explain_group(
-    ConfitReportBuilder *builder, const ConfitResolvedConfig *config,
-    int want_active) {
+    ConfitReportBuilder *builder, const ConfitProject *project,
+    const ConfitResolvedConfig *config, int want_active,
+    ConfitDiagnostic *diagnostic) {
   size_t index;
   size_t count;
   ConfitStatus status;
@@ -487,7 +500,19 @@ static ConfitStatus confit_report_append_explain_group(
   count = 0U;
   for (index = 0U; index < config->value_count; ++index) {
     const ConfitResolvedValue *resolved = &config->values[index];
+    const ConfitOption *option =
+        confit_report_find_option(project, resolved->option_id);
     const int active = confit_report_value_is_active(&resolved->value);
+
+    if (option == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                            resolved->option_id, 0, 0,
+                            "unknown explain option");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_REPORT)) {
+      continue;
+    }
 
     if (active != want_active) {
       continue;
@@ -585,11 +610,13 @@ ConfitStatus confit_generate_explain_report(
   CONFIT_EXPLAIN_REPORT_APPEND("\n\n");
   CONFIT_EXPLAIN_REPORT_APPEND("enabled:\n");
   CONFIT_EXPLAIN_REPORT_SECTION(
-      confit_report_append_explain_group(&builder, config, 1));
+      confit_report_append_explain_group(&builder, project, config, 1,
+                                         diagnostic));
   CONFIT_EXPLAIN_REPORT_APPEND("\n");
   CONFIT_EXPLAIN_REPORT_APPEND("disabled:\n");
   CONFIT_EXPLAIN_REPORT_SECTION(
-      confit_report_append_explain_group(&builder, config, 0));
+      confit_report_append_explain_group(&builder, project, config, 0,
+                                         diagnostic));
 
 #undef CONFIT_EXPLAIN_REPORT_APPEND
 #undef CONFIT_EXPLAIN_REPORT_SECTION
