@@ -556,6 +556,19 @@ ConfitStatus confit_generate_config_header(
 
   for (index = 0U; index < config->value_count; ++index) {
     const ConfitResolvedValue *resolved_value = &config->values[index];
+    const ConfitOption *option =
+        confit_header_find_option(project, resolved_value->option_id);
+
+    if (option == 0) {
+      free(builder.text);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                            resolved_value->option_id, 0, 0,
+                            "resolved option is missing from project schema");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (!confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER)) {
+      continue;
+    }
 
     status = confit_header_append_define(&builder, project, resolved_value);
     if (status != CONFIT_OK) {

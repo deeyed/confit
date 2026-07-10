@@ -54,6 +54,7 @@ static ConfitStatus confit_graph_add_node(ConfitGraph *graph,
   graph->nodes[graph->node_count].type = option->type;
   graph->nodes[graph->node_count].is_visible =
       option->prompt != 0 && option->prompt[0] != '\0';
+  graph->nodes[graph->node_count].emit_mask = option->emit_mask;
   graph->node_count += 1U;
   return CONFIT_OK;
 }
@@ -495,6 +496,7 @@ static ConfitStatus confit_graph_json_append_escaped(
 ConfitStatus confit_graph_to_json(const ConfitGraph *graph, char **out_json) {
   ConfitGraphJsonBuilder builder;
   ConfitStatus status;
+  size_t emitted;
   size_t index;
 
   if (out_json == 0 || graph == 0) {
@@ -528,17 +530,42 @@ ConfitStatus confit_graph_to_json(const ConfitGraph *graph, char **out_json) {
   CONFIT_JSON_APPEND_ESCAPED(graph->project_name != 0 ? graph->project_name : "");
   CONFIT_JSON_APPEND(",\n");
   CONFIT_JSON_APPEND("  \"nodes\": [\n");
+  emitted = 0U;
   for (index = 0U; index < graph->node_count; ++index) {
+    if ((graph->nodes[index].emit_mask &
+         (unsigned int)CONFIT_OPTION_OUTPUT_REPORT) == 0U) {
+      continue;
+    }
+    if (emitted > 0U) {
+      CONFIT_JSON_APPEND(",\n");
+    }
     CONFIT_JSON_APPEND("    {\"id\": ");
     CONFIT_JSON_APPEND_ESCAPED(graph->nodes[index].id);
     CONFIT_JSON_APPEND(", \"type\": ");
     CONFIT_JSON_APPEND_ESCAPED(confit_option_type_name(graph->nodes[index].type));
     CONFIT_JSON_APPEND("}");
-    CONFIT_JSON_APPEND(index + 1U < graph->node_count ? ",\n" : "\n");
+    emitted += 1U;
+  }
+  if (emitted > 0U) {
+    CONFIT_JSON_APPEND("\n");
   }
   CONFIT_JSON_APPEND("  ],\n");
   CONFIT_JSON_APPEND("  \"edges\": [\n");
+  emitted = 0U;
   for (index = 0U; index < graph->edge_count; ++index) {
+    const ConfitGraphNode *from =
+        confit_graph_find_node(graph, graph->edges[index].from);
+    const ConfitGraphNode *to =
+        confit_graph_find_node(graph, graph->edges[index].to);
+
+    if (from == 0 || to == 0 ||
+        (from->emit_mask & (unsigned int)CONFIT_OPTION_OUTPUT_REPORT) == 0U ||
+        (to->emit_mask & (unsigned int)CONFIT_OPTION_OUTPUT_REPORT) == 0U) {
+      continue;
+    }
+    if (emitted > 0U) {
+      CONFIT_JSON_APPEND(",\n");
+    }
     CONFIT_JSON_APPEND("    {\"from\": ");
     CONFIT_JSON_APPEND_ESCAPED(graph->edges[index].from);
     CONFIT_JSON_APPEND(", \"to\": ");
@@ -547,7 +574,10 @@ ConfitStatus confit_graph_to_json(const ConfitGraph *graph, char **out_json) {
     CONFIT_JSON_APPEND_ESCAPED(
         confit_dependency_kind_name(graph->edges[index].kind));
     CONFIT_JSON_APPEND("}");
-    CONFIT_JSON_APPEND(index + 1U < graph->edge_count ? ",\n" : "\n");
+    emitted += 1U;
+  }
+  if (emitted > 0U) {
+    CONFIT_JSON_APPEND("\n");
   }
   CONFIT_JSON_APPEND("  ]\n");
   CONFIT_JSON_APPEND("}\n");

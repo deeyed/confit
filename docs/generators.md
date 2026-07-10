@@ -2,7 +2,7 @@
 doc_type: tool-spec
 status: draft
 authority: informative
-last_verified: 2026-06-24
+last_verified: 2026-07-10
 ---
 
 # Generators
@@ -47,6 +47,18 @@ confit gen \
   --artifact all
 ```
 
+## Per-Option Output Visibility
+
+Option schema의 `emit`은 artifact class별 value visibility를 정한다. 생략하면
+`["header", "cmake", "qstar", "report", "selection"]`과 같아서 기존
+project의 출력이 바뀌지 않는다. Generator는 자기 token이 포함된 option만
+내보내며, `CONFIT_OPTION_COUNT`와 QStar `option_count`도 해당 artifact가 실제로
+내보낸 option 개수를 뜻한다.
+
+Filtering은 source identity를 축소하지 않는다. Header, CMake, QStar, report에
+기록되는 source hash는 숨겨진 option까지 포함한 전체 resolved config를 기준으로
+계산한다. `config.inputs.json`도 실행에 사용한 전체 입력 파일을 계속 기록한다.
+
 ## C Header
 
 `config.h`는 C code가 소비하는 정본 header다.
@@ -65,6 +77,7 @@ confit gen \
 
 Header generator 규칙:
 
+- `emit`에 `header`가 포함된 option만 define을 출력한다.
 - Project prefix를 붙인다: `DELOS_CONFIG_`, `PARUS_CONFIG_`.
 - Boolean은 `0` 또는 `1`로 출력한다.
 - Unsigned integer에는 필요한 경우 `U` suffix를 붙인다.
@@ -98,8 +111,9 @@ CMake generator 규칙:
 - Fragment 안에서 source list를 직접 선언하지 않는다.
 - Fragment 안에 timestamp와 host-local absolute path를 넣지 않는다.
 - Project-specific alias variable은 generated artifact path를 가리킨다.
-- 모든 resolved option은 option id의 첫 segment를 project prefix로 바꾼
-  stable variable로 노출한다. 예를 들어 `delos.trace.capacity`는
+- `emit`에 `cmake`가 포함된 resolved option은 option id의 첫 segment를
+  project prefix로 바꾼 stable variable로 노출한다. 예를 들어
+  `delos.trace.capacity`는
   `DELOS_CONFIG_TRACE_CAPACITY`가 된다.
 - 각 option에는 direct value 변수와 함께 `_TYPE`, `_VALUE`, `_TEXT`,
   `_SOURCE` provenance 변수를 출력한다. CMake selector는 direct value
@@ -146,7 +160,8 @@ return {
 
 QStar generator 규칙:
 
-- `config/config.qsm`은 resolved value table과 artifact manifest를 포함한다.
+- `config/config.qsm`은 `emit`에 `qstar`가 포함된 resolved value table과
+  artifact manifest를 포함한다.
 - `--artifact qstar`는 `config/config.qsm`과 compatibility `config.qst`를
   생성한다.
 - `.qsm` 안에서 project, toolset, target, stage, run target을 선언하지 않는다.
@@ -186,6 +201,11 @@ local selection = qstar.import_module(
 
 `--artifact all`은 `qstar`와 `build-selection`을 모두 포함한다.
 
+Selection template이 참조하는 option은 `emit`에 `selection`을 포함해야 한다.
+그렇지 않으면 Confit은 template load를 schema error로 거부한다. 이 검사는
+build-time mapping이 우연히 header-only 또는 report-only option을 소비하는 것을
+막는다.
+
 `.qst`는 QStar graph declaration fragment이고, `.qsm`은 pure table-return
 helper module이다. 자세한 계약은
 `docs/qstar-build-manifest-contract.md`와
@@ -214,6 +234,7 @@ helper module이다. 자세한 계약은
 ```
 
 이 report는 CI, Codex agent, release gate가 소비할 수 있다.
+`options`에는 `emit`에 `report`가 포함된 option만 기록한다.
 
 ## Graph Report
 
@@ -233,6 +254,9 @@ helper module이다. 자세한 계약은
 ```
 
 이 파일은 TUI, CI, Codex agent가 dependency를 설명하거나 시각화할 때 사용한다.
+Graph JSON은 `emit`에 `report`가 포함된 node만 출력하고, 양 끝 node가 모두
+report-visible인 edge만 출력한다. 내부 dependency graph validation 자체는
+필터링하지 않는다.
 
 ## Input Manifest
 
@@ -274,6 +298,7 @@ disabled:
 ```
 
 Explanation은 TUI의 detail panel과 같은 정보를 공유해야 한다.
+이 산출물도 `emit`의 `report` visibility를 따른다.
 
 ## Compatibility Report
 

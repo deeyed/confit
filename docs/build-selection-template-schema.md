@@ -2,7 +2,7 @@
 doc_type: tool-spec
 status: draft
 authority: normative
-last_verified: 2026-06-24
+last_verified: 2026-07-10
 ---
 
 # Build Selection Template Schema
@@ -44,7 +44,8 @@ segment, shell-sensitive path는 허용하지 않는다. 같은 project 안에�
 
 `[selection.<section>]` table은 output manifest 안의 section을 뜻한다.
 Section 이름과 field 이름은 project가 정한다. Confit은 Delos board나 linker
-규칙을 해석하지 않고, field value가 기존 option id를 가리키는지만 검증한다.
+규칙을 해석하지 않고, field value가 기존 option id를 가리키며 그 option의
+`emit`에 `selection`이 포함되는지 검증한다.
 Generator는 field 이름이 `objects`, `include_dirs`, `*_dirs`, `*_paths`,
 `*_labels`인 문자열/path 값을 QStar Lua array로 출력한다. 한 option 안에 여러
 항목을 담아야 할 때는 세미콜론으로 구분한다.
@@ -60,6 +61,16 @@ id = "delos.target.board"
 objects = "delos.board.objects"
 include_dirs = "delos.board.include_dirs"
 linker_script = "delos.board.linker_script"
+```
+
+Build-only option은 C header에 노출하지 않고 selection과 build integration에만
+내보낼 수 있다.
+
+```toml
+[option."delos.board.objects"]
+type = "string"
+default = "//src/board:objects"
+emit = ["cmake", "qstar", "report", "selection"]
 ```
 
 위 예시는 이후 generator가 다음 모양의 project-specific selection table을 만들
@@ -100,4 +111,5 @@ return {
 - 같은 section 안에서 field 이름은 중복될 수 없다.
 - field value는 반드시 quoted option id여야 한다.
 - field value가 project option schema에 없으면 schema error다.
+- field가 참조한 option의 `emit`에 `selection`이 없으면 schema error다.
 - Template은 최소 하나의 section과 최소 하나의 field를 가져야 한다.

@@ -1,0 +1,4 @@
+[option."delos.board.objects"]
+type = "string"
+default = "//src/board:objects"
+emit = ["cmake", "qstar"]

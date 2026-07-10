@@ -2,7 +2,7 @@
 doc_type: tool-spec
 status: draft
 authority: informative
-last_verified: 2026-06-23
+last_verified: 2026-07-10
 ---
 
 # Confit TOML Schema
@@ -116,6 +116,36 @@ deprecated_aliases = ["delos.debug.old_dsh"]
 `since`, `stability`가 없으면 기본 check에서는 warning이며, strict validation에서는 failure로
 승격된다. `deprecated_aliases`는 기존 profile/target 값이 새 canonical option id로 deterministic하게
 해석되도록 하는 migration surface다.
+
+## Output Visibility
+
+Option은 `emit`으로 resolved value를 내보낼 generator 종류를 제한할 수 있다.
+허용 token은 정확히 `header`, `cmake`, `qstar`, `report`, `selection`이다.
+
+```toml
+[option."delos.board.objects"]
+type = "string"
+default = "//src/board:objects"
+emit = ["cmake", "qstar", "report", "selection"]
+```
+
+`emit`을 생략하면 다섯 output 모두에 내보내는 기존 동작을 유지한다. 명시한
+배열은 비어 있을 수 없고 같은 token을 중복하거나 알려지지 않은 token을 넣을
+수 없다.
+
+| Token | 적용 산출물 |
+|---|---|
+| `header` | `config.h`의 option define |
+| `cmake` | `config.cmake`의 resolved option variables |
+| `qstar` | `config/config.qsm` values와 legacy manifest option count |
+| `report` | report JSON, explanation text, graph JSON |
+| `selection` | `selection/*.toml`이 참조할 수 있는 option |
+
+Output visibility는 presentation/generator boundary다. `emit`에서 제외해도
+option은 profile/target override, resolution, dependency validation, source
+hash, compatibility check, TUI model에 계속 참여한다. 따라서 build-only string이나
+object label을 C header에서 숨기면서도 동일한 정본 resolved config에서 CMake,
+QStar, report, build selection을 생성할 수 있다.
 
 ## Dependencies
 

@@ -173,6 +173,24 @@ int main(void) {
     confit_project_free(project);
     return 18;
   }
+  if (option->emit_mask != CONFIT_OPTION_OUTPUT_ALL ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER) ||
+      !expect_status(confit_option_set_emit_mask(
+          option, CONFIT_OPTION_OUTPUT_CMAKE | CONFIT_OPTION_OUTPUT_QSTAR)) ||
+      confit_option_emits(option, CONFIT_OPTION_OUTPUT_HEADER) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_CMAKE) ||
+      !confit_option_emits(option, CONFIT_OPTION_OUTPUT_QSTAR) ||
+      confit_option_set_emit_mask(option, 0U) != CONFIT_ERR_SCHEMA ||
+      confit_option_set_emit_mask(option, 1U << 31) != CONFIT_ERR_SCHEMA ||
+      confit_option_emits(option, CONFIT_OPTION_OUTPUT_ALL)) {
+    confit_project_free(project);
+    return 60;
+  }
+  if (!expect_status(
+          confit_option_set_emit_mask(option, CONFIT_OPTION_OUTPUT_ALL))) {
+    confit_project_free(project);
+    return 61;
+  }
   if (!expect_status(confit_option_add_tag(option, "debug")) ||
       !expect_status(confit_option_add_tag(option, "host-tooling"))) {
     confit_project_free(project);

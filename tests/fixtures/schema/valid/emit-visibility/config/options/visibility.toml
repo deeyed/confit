@@ -1,0 +1,26 @@
+[option."delos.legacy.all"]
+type = "bool"
+default = true
+prompt = "Legacy option"
+category = "compat"
+
+[option."delos.build.objects"]
+type = "string"
+default = "//src/board:rpi5_objects"
+prompt = "Build object labels"
+category = "build"
+emit = ["cmake", "qstar", "report", "selection"]
+
+[option."delos.header.secret"]
+type = "string"
+default = "kernel-only"
+prompt = "Header-only value"
+category = "kernel"
+emit = ["header"]
+
+[option."delos.report.only"]
+type = "bool"
+default = false
+prompt = "Report-only value"
+category = "audit"
+emit = ["report"]
