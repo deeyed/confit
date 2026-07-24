@@ -1,28 +1,31 @@
 ---
 doc_type: release-note
-status: rc1-readiness
+status: v2-rc1
 authority: operational
-last_verified: 2026-06-25
+last_verified: 2026-07-24
 ---
 
-# Confit v0.1.0-rc1 Readiness Note
+# Confit v0.2.0-rc1 Release Candidate
 
-이 문서는 Confit `0.1.0-rc1` 후보를 Delos/Parus 팀이 어떤 조건에서 믿고
-사용할 수 있는지 정리한 release readiness note다. Confit은 host-side
+이 문서는 Confit `0.2.0-rc1` 후보를 Delos/Parus 팀이 어떤 조건에서 믿고
+사용할 수 있는지 정리한 release candidate 판정 기록이다. Confit은 host-side
 configuration authority tool이며, Parus/Delos runtime image 안에 들어가는
 library나 service가 아니다.
 
-이 readiness note는 `schema_version = 1`과 v1 artifact ABI만 평가한다.
-`schema_version = 2`는 별도 설계와 구현/검증 gate를 가지며, 이 rc1 판정을
-v2 지원 주장으로 사용할 수 없다.
+`schema_version = 1`은 동결된 기존 의미론과 artifact ABI를 유지한다.
+`schema_version = 2`는 parser, typed model, expression/link, resolver,
+artifact, CLI/TUI를 별도 hard cut으로 구현한다. V2 generator는 V1 artifact
+shape로 fallback하지 않으며, 실제 Parus/Delos source migration은 이 문서의
+검증만으로 자동 승인되지 않는다.
 
 ## 판정
 
-Confit `0.1.0-rc1`은 fixture-backed release candidate로 볼 수 있다. 즉,
-Confit 자체의 schema validation, profile resolution, generated artifact,
-TUI editing, CMake/QStar manifest, compatibility check는 현재 fixture와 CI에서
-검증되어 있다. 실제 Parus/Delos source tree adoption과 build graph wiring은
-별도 integration commit과 review로 진행해야 한다.
+Confit `0.2.0-rc1`은 **fixture-backed V2 release candidate**다. V1 baseline,
+V2 typed schema validation, deterministic requested/effective resolution,
+generated artifact, TUI editing, CMake/QStar manifest, compatibility check,
+V1-to-V2 read-only migration rehearsal은 Confit fixture와 CI gate로 검증한다.
+실제 Parus/Delos source tree adoption과 build graph wiring은 별도 integration
+commit과 review로 진행해야 한다.
 
 실전 투입 가능 범위:
 
@@ -39,6 +42,9 @@ TUI editing, CMake/QStar manifest, compatibility check는 현재 fixture와 CI�
 - macOS/Linux ncurses TUI profile editor.
 - macOS/Linux guarded ncurses TUI schema editor.
 - Windows GNU-style clang CLI-only preview.
+- `schema_version = 2`의 explicit import, typed expression/link, menu/choice,
+  requested/effective writer provenance, snapshot artifact와 compatibility ABI.
+- V2 synthetic scale, parser fuzz, sanitizer, migration shadow rehearsal.
 
 아직 별도 integration/release round가 필요한 범위:
 
@@ -47,14 +53,15 @@ TUI editing, CMake/QStar manifest, compatibility check는 현재 fixture와 CI�
 - real hardware/board build validation using generated selection artifacts.
 - Windows TUI.
 - MSVC and `clang-cl`.
-- full Kconfig language parity such as complete `choice`, `source`, `menu`,
-  `comment`, and defconfig semantics.
+- 실제 project의 모든 Kconfig-derived policy를 V2 schema로 옮기는 작업.
+- generated artifact를 실제 CMake/QStar graph와 board build에 연결한 결과의
+  hardware claim.
 
 ## Platform Support
 
 | Platform | Status | Notes |
 |---|---|---|
-| macOS | Supported for CLI + TUI | Uses system curses/ncurses detected by CMake. Local rc1 validation is on macOS. |
+| macOS | Supported for CLI + TUI | Uses system curses/ncurses detected by CMake. Local V2 RC validation is on macOS. |
 | Linux | Supported for CLI + TUI | Requires CMake, C17 compiler, `/bin/sh` for Unix integration tests, and curses/ncurses development files for TUI builds. |
 | Windows | CLI-only preview | Requires `windows-latest` style host, MSYS2 `CLANG64`, GNU-style clang, CMake, and Ninja. TUI is unsupported and must exit with code `8`. |
 
@@ -64,7 +71,7 @@ yet.
 
 ## Command Surface
 
-The `0.1.0-rc1` command surface is:
+The `0.2.0-rc1` command surface is:
 
 ```text
 confit help
@@ -209,7 +216,7 @@ Local rc1 gate:
 ```sh
 ./tests/run_tests.sh
 git diff --check
-scripts/install-local.sh --prefix ~/.local --build-dir /tmp/confit-rc1-install-build
+scripts/install-local.sh --prefix ~/.local --build-dir /tmp/confit-v2-rc1-install-build
 ~/.local/bin/confit --version
 ~/.local/bin/confit doctor
 MANPATH="$HOME/.local/share/man:${MANPATH:-}" man confit
@@ -229,9 +236,25 @@ confit gen \
   --project tests/fixtures/realish/delos \
   --profile release \
   --target renode-nucleo-h753zi \
-  --out /tmp/confit-rc1-durable/delos-release \
+  --out /tmp/confit-v2-rc1-durable/delos-release \
   --artifact all
 ```
+
+V2 hard-cut gate는 별도 realish fixture에서 실행한다. 이 fixture는 실제 project
+source가 아니라 migration review용 mirror다.
+
+```sh
+confit doctor --project tests/fixtures/realish-v2/delos
+confit check --project tests/fixtures/realish-v2/delos --profile sim-dsh --strict
+confit gen --project tests/fixtures/realish-v2/delos --profile sim-dsh \
+  --out /tmp/confit-v2-rc1-durable/delos-v2 --artifact all
+confit migrate --project tests/fixtures/realish/delos \
+  --out /tmp/confit-v2-candidate
+```
+
+`doctor`는 실행 파일의 supported schema versions, V2 resolver/artifact ABI,
+tomlc17 revision과 project schema dispatch 결과를 함께 출력한다. 이는 source의
+의미론을 바꾸지 않는 설치 및 incident triage 정보다.
 
 ## TUI Readiness
 
@@ -281,5 +304,7 @@ Use Confit in this order:
 5. Keep rollback simple: remove generated output, remove build graph include,
    revert source `config/` changes.
 
-Confit `0.1.0-rc1` is ready to be treated as the configuration authority
-candidate, but not as a silent source-tree migration mechanism.
+Confit `0.2.0-rc1`은 configuration authority candidate로 사용할 수 있다.
+다만 실제 source tree migration, build graph import, board/linker selection,
+hardware validation은 명시적으로 승인된 project integration change에서만
+수행한다. Confit은 silent source-tree migration mechanism이 아니다.

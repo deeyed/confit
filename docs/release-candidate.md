@@ -1,11 +1,15 @@
 ---
 doc_type: developer-guide
-status: draft
+status: historical-v1-rc1
 authority: operational
 last_verified: 2026-06-24
 ---
 
-# Release Candidate Notes
+# Historical V1 Release Candidate Notes
+
+> 이 문서는 V1 release candidate 당시의 운영 기록이다. 현재 정본 release
+> candidate 판정은 [final-release-note.md](final-release-note.md)의
+> `0.2.0-rc1` V1/V2 계약을 따른다.
 
 Confit v0 release-candidate scope is a host-side configuration workflow. It can
 load fixture projects, validate option schemas and dependency graphs, resolve

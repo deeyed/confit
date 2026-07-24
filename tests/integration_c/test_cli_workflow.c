@@ -191,7 +191,7 @@ static void test_doctor(ConfitCliWorkflowContext *context) {
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
-                              "version: confit 0.1.0-rc1");
+                              "version: confit 0.2.0-rc1");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "build mode:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "platform lane:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "doctor ok");

@@ -12,6 +12,7 @@
 #include "confit/generator.h"
 #include "confit/graph.h"
 #include "confit/host.h"
+#include "confit/project.h"
 #include "confit/resolver.h"
 #include "confit/schema.h"
 #include "confit/status.h"
@@ -1082,7 +1083,9 @@ static ConfitStatus confit_cli_parse_doctor_args(int argc, char **argv,
 static int confit_cli_run_doctor(int argc, char **argv) {
   ConfitCliDoctorArgs args;
   ConfitDiagnostic diagnostic;
+  ConfitProjectHandle *project_handle;
   ConfitProject *project;
+  ConfitSchemaVersion schema_version;
   ConfitStatus status;
 
   status = confit_cli_parse_doctor_args(argc, argv, &args);
@@ -1150,6 +1153,21 @@ static int confit_cli_run_doctor(int argc, char **argv) {
     status = confit_cli_write_doctor_kv(
         "deferred generators", "none in this build");
   }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("supported schema versions",
+                                        CONFIT_SUPPORTED_SCHEMA_VERSIONS);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("v2 resolver ABI",
+                                        CONFIT_RESOLVER_ABI_V2);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("v2 artifact ABI",
+                                        CONFIT_ARTIFACT_ABI_V2);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv("tomlc17", CONFIT_TOMLC17_REVISION);
+  }
 
   if (status != CONFIT_OK) {
     return confit_status_exit_code(status);
@@ -1164,16 +1182,41 @@ static int confit_cli_run_doctor(int argc, char **argv) {
   }
 
   confit_diagnostic_init(&diagnostic);
+  project_handle = 0;
+  status = confit_project_load(args.project_root, &project_handle, &diagnostic);
+  if (status != CONFIT_OK) {
+    return confit_cli_return_error(status, &diagnostic);
+  }
+  schema_version = confit_project_handle_schema_version(project_handle);
+
+  status = confit_cli_write_doctor_kv("project", args.project_root);
+  if (status == CONFIT_OK) {
+    if (schema_version == CONFIT_SCHEMA_VERSION_V1) {
+      status = confit_cli_write_doctor_kv("project schema", "1");
+    } else if (schema_version == CONFIT_SCHEMA_VERSION_V2) {
+      status = confit_cli_write_doctor_kv("project schema", "2");
+    } else {
+      status = confit_cli_write_doctor_kv("project schema", "unknown");
+    }
+  }
+  confit_project_handle_free(project_handle);
+  if (status != CONFIT_OK) {
+    return confit_status_exit_code(status);
+  }
+
+  if (schema_version == CONFIT_SCHEMA_VERSION_V2) {
+    status = confit_host_stdout_write_line("doctor ok");
+    return confit_status_exit_code(status);
+  }
+
+  confit_diagnostic_init(&diagnostic);
   project = 0;
   status = confit_schema_load_project(args.project_root, &project, &diagnostic);
   if (status != CONFIT_OK) {
     return confit_cli_return_error(status, &diagnostic);
   }
 
-  status = confit_cli_write_doctor_kv("project", args.project_root);
-  if (status == CONFIT_OK) {
-    status = confit_cli_write_doctor_size("options", project->option_count);
-  }
+  status = confit_cli_write_doctor_size("options", project->option_count);
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_size("profiles", project->profile_count);
   }

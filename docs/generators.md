@@ -275,7 +275,7 @@ report-visible인 edge만 출력한다. 내부 dependency graph validation 자�
   "project": "delos",
   "profile": "sim-dsh",
   "target": "host-sim",
-  "confit_version": "confit 0.1.0-rc1",
+  "confit_version": "confit 0.2.0-rc1",
   "files": [
     {"path": "config/project.toml", "sha256": "..."},
     {"path": "config/profiles/sim-dsh.toml", "sha256": "..."}

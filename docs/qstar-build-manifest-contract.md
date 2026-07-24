@@ -70,7 +70,7 @@ return {
   project = "delos",
   profile = "release",
   target = "renode-nucleo-h753zi",
-  confit_version = "confit 0.1.0-rc1",
+  confit_version = "confit 0.2.0-rc1",
   source_hash = "0x0123456789ABCDEF",
   option_count = 42,
 

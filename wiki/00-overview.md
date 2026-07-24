@@ -108,9 +108,9 @@ Confit은 다음 일을 하지 않는다.
 
 Confit은 “설정 원본을 읽고, 검증하고, 설명하고, generated artifact를 만드는 도구”다.
 
-## v0.1.0-rc1에서 믿을 수 있는 것
+## v0.2.0-rc1에서 믿을 수 있는 것
 
-`0.1.0-rc1` 기준으로 Confit은 다음 조건에서 실사용 후보로 볼 수 있다.
+`0.2.0-rc1` 기준으로 Confit은 다음 조건에서 실사용 후보로 볼 수 있다.
 
 - macOS/Linux host에서는 CLI와 ncurses TUI를 함께 사용할 수 있다.
 - Windows host에서는 GNU-style clang 기반 CLI-only preview를 사용할 수 있다.

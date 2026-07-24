@@ -184,7 +184,7 @@ static void test_version_and_doctor(ConfitV1BaselineContext *context) {
   version_argv[0] = context->confit_bin;
   test_run(context, version_argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
-  test_expect_text_equal(result.stdout_text, "confit 0.1.0-rc1\n",
+  test_expect_text_equal(result.stdout_text, "confit 0.2.0-rc1\n",
                          "--version");
   confit_test_process_result_clear(&result);
 
@@ -193,7 +193,10 @@ static void test_version_and_doctor(ConfitV1BaselineContext *context) {
   test_run(context, doctor_argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
-                              "version: confit 0.1.0-rc1");
+                              "version: confit 0.2.0-rc1");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "supported schema versions: 1, 2");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "project schema: 1");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "generators enabled: header, reports, cmake, "
                               "qstar, build-selection");

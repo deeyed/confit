@@ -116,6 +116,7 @@ static void test_run(ConfitCliV2WorkflowContext *context,
 static void test_v2_commands(ConfitCliV2WorkflowContext *context) {
   ConfitTestProcessResult result = {-1, 0, 0};
   char artifact[4096];
+  const char *doctor[] = {0, "doctor", "--project", 0, 0};
   const char *check[] = {0, "check", "--project", 0, "--profile", "release", 0};
   const char *resolve[] = {0, "resolve", "--project", 0, "--profile", "release",
                            "--format", "json", 0};
@@ -127,6 +128,21 @@ static void test_v2_commands(ConfitCliV2WorkflowContext *context) {
   const char *list[] = {0, "list", "--project", 0, "--kind", "options", 0};
   const char *diff[] = {0, "diff", "--project", 0, "--profile", "release", "--base",
                         "base", "--format", "json", 0};
+
+  doctor[0] = context->confit_bin;
+  doctor[3] = context->parus_dir;
+  test_run(context, doctor, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "supported schema versions: 1, 2");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "v2 resolver ABI: confit-resolver-v2");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "v2 artifact ABI: confit-artifact-v2");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tomlc17: R260618 (7813bdd)");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "project schema: 2");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "doctor ok");
+  confit_test_process_result_clear(&result);
 
   check[0] = context->confit_bin;
   check[3] = context->parus_dir;

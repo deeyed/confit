@@ -2,12 +2,12 @@
 doc_type: platform-contract
 status: draft
 authority: operational
-last_verified: 2026-06-25
+last_verified: 2026-07-24
 ---
 
 # Windows CLI-Only Lane
 
-Confit의 Windows 지원은 `0.1.0-rc1` 이후부터 CLI-only preview로 시작한다.
+Confit의 Windows 지원은 `0.2.0-rc1` 이후부터 CLI-only preview로 시작한다.
 이 문서는 Windows host에서 기대하는 build lane과 금지 사항을 고정한다.
 
 ## 지원 범위
@@ -65,7 +65,7 @@ CONFIT_ENABLE_TUI:BOOL=OFF
 Windows build의 `confit doctor`는 다음을 보여야 한다.
 
 ```text
-version: confit 0.1.0-rc1
+version: confit 0.2.0-rc1
 platform: Windows
 platform lane: windows-cli-only
 platform note: windows clang-only CLI lane; TUI unsupported

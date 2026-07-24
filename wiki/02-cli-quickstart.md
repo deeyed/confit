@@ -24,11 +24,15 @@ $CONFIT_BIN doctor
 예상:
 
 ```text
-version: confit 0.1.0-rc1
+version: confit 0.2.0-rc1
 build mode: Release 또는 unspecified
 platform lane: macos-cli-tui 또는 linux-cli-tui
 tui: enabled
 generators enabled: header, reports, cmake, qstar, build-selection
+supported schema versions: 1, 2
+v2 resolver ABI: confit-resolver-v2
+v2 artifact ABI: confit-artifact-v2
+tomlc17: R260618 (7813bdd)
 doctor ok
 ```
 
