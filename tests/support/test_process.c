@@ -26,6 +26,26 @@ void confit_test_process_result_clear(ConfitTestProcessResult *result) {
   result->stderr_text = 0;
 }
 
+static void confit_test_process_normalize_newlines(char *text) {
+  char *read_cursor;
+  char *write_cursor;
+
+  if (text == 0) {
+    return;
+  }
+  read_cursor = text;
+  write_cursor = text;
+  while (*read_cursor != '\0') {
+    if (*read_cursor == '\r' && read_cursor[1] == '\n') {
+      ++read_cursor;
+    }
+    *write_cursor = *read_cursor;
+    ++write_cursor;
+    ++read_cursor;
+  }
+  *write_cursor = '\0';
+}
+
 #if defined(_WIN32)
 static int confit_test_process_append_char(char *out, size_t out_size,
                                            size_t *offset, char value) {
@@ -195,6 +215,8 @@ int confit_test_process_run(const char *const *argv,
   result->exit_code = (int)exit_code;
   result->stdout_text = confit_test_fs_read_file(stdout_path);
   result->stderr_text = confit_test_fs_read_file(stderr_path);
+  confit_test_process_normalize_newlines(result->stdout_text);
+  confit_test_process_normalize_newlines(result->stderr_text);
   return result->stdout_text != 0 && result->stderr_text != 0;
 }
 #else
@@ -263,6 +285,8 @@ int confit_test_process_run(const char *const *argv,
 
   result->stdout_text = confit_test_fs_read_file(stdout_path);
   result->stderr_text = confit_test_fs_read_file(stderr_path);
+  confit_test_process_normalize_newlines(result->stdout_text);
+  confit_test_process_normalize_newlines(result->stderr_text);
   return result->stdout_text != 0 && result->stderr_text != 0;
 }
 #endif

@@ -222,12 +222,18 @@ ConfitStatus confit_v2_ledger_validate_value(
     for (index = 0U; index < value->as.string_list.count; ++index) {
       size_t other;
       for (other = index + 1U; other < value->as.string_list.count; ++other) {
-        size_t left_index;
-        size_t right_index;
-        (void)confit_v2_ledger_candidate_index(
-            &symbol->values, value->as.string_list.items[index], &left_index);
-        (void)confit_v2_ledger_candidate_index(
-            &symbol->values, value->as.string_list.items[other], &right_index);
+        size_t left_index = 0U;
+        size_t right_index = 0U;
+        if (!confit_v2_ledger_candidate_index(
+                &symbol->values, value->as.string_list.items[index],
+                &left_index) ||
+            !confit_v2_ledger_candidate_index(
+                &symbol->values, value->as.string_list.items[other],
+                &right_index)) {
+          confit_v2_ledger_diagnostic(path, line, column, CONFIT_ERR_SCHEMA,
+                                      kInvalidInputValue, diagnostic);
+          return CONFIT_ERR_SCHEMA;
+        }
         if (left_index > right_index) {
           char *swap = value->as.string_list.items[index];
           value->as.string_list.items[index] = value->as.string_list.items[other];

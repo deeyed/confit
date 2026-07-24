@@ -125,7 +125,8 @@ static int expect_positive_ledger(void) {
   result = result && selection != 0 &&
            selection->origin == CONFIT_V2_TARGET_SELECTION_PROFILE &&
            selection->source_path != 0 &&
-           strstr(selection->source_path, "profiles/debug.toml") != 0 &&
+           (strstr(selection->source_path, "profiles/debug.toml") != 0 ||
+            strstr(selection->source_path, "profiles\\debug.toml") != 0) &&
            selection->source_line > 0U;
   memset(&target_options, 0, sizeof(target_options));
   target_options.profile_name = "debug";

@@ -128,6 +128,7 @@ static int expect_v2_handle(void) {
     confit_project_handle_free(project);
     return 0;
   }
+  confit_snapshot_handle_free(snapshot);
   confit_project_handle_free(project);
   return 1;
 }

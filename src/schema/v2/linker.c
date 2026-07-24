@@ -485,8 +485,10 @@ ConfitStatus confit_v2_schema_link_project(
   for (index = 0U; index < linked->symbol_count; ++index) {
     linked->symbols[index] = &project->symbols[index];
   }
-  qsort(linked->symbols, linked->symbol_count, sizeof(*linked->symbols),
-        confit_v2_link_symbol_compare);
+  if (linked->symbol_count > 1U) {
+    qsort(linked->symbols, linked->symbol_count, sizeof(*linked->symbols),
+          confit_v2_link_symbol_compare);
+  }
   for (index = 0U; index < linked->symbol_count; ++index) {
     const ConfitV2Symbol *symbol = linked->symbols[index];
     if (!confit_v2_link_symbol_is_owned_by_namespace(project, symbol)) {

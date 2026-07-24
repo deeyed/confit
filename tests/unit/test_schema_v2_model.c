@@ -127,7 +127,9 @@ static int expect_valid_model(const char *path) {
   if (symbol == 0 || !symbol->range.is_set ||
       symbol->range.min_value.as.uint_value != 1U ||
       symbol->range.max_value.as.uint_value != 128U ||
-      symbol->span.path == 0 || strstr(symbol->span.path, "options/types.toml") == 0 ||
+      symbol->span.path == 0 ||
+      (strstr(symbol->span.path, "options/types.toml") == 0 &&
+       strstr(symbol->span.path, "options\\types.toml") == 0) ||
       symbol->span.line == 0U || symbol->span.column == 0U) {
     confit_v2_project_free(project);
     return 0;
