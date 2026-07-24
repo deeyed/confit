@@ -94,6 +94,16 @@ ConfitStatus confit_host_write_text_file(const char *path, const char *text,
                                          ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief text가 바뀐 경우에만 같은 directory의 temporary file을 atomic replace한다.
+ *
+ * 성공 시 `out_changed`는 새 bytes를 publish했으면 1, 기존 bytes와 같아 write를
+ * 생략했으면 0이다. Parent directory는 caller가 먼저 만들어야 한다.
+ */
+ConfitStatus confit_host_write_text_file_if_changed_atomic(
+    const char *path, const char *text, int *out_changed,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief directory path를 재귀적으로 생성한다.
  *
  * 이미 존재하는 directory는 성공으로 처리한다.

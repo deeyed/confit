@@ -2,7 +2,7 @@
 doc_type: artifact-contract
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
+implementation_status: implemented-api
 last_verified: 2026-07-24
 ---
 
@@ -42,10 +42,11 @@ profile
 target
 schema_version = 2
 resolver_abi
-artifact_schema
+artifact_abi
 confit_version
-confit_revision
 source_hash
+input_hash
+snapshot_hash
 ```
 
 Build timestamp, current directory의 absolute path, locale, process id는 artifact에
@@ -85,9 +86,7 @@ Schema id:
         "value": true
       },
       "available": true,
-      "visible": true,
-      "emit": ["header", "cmake", "qstar"],
-      "provenance_root": 17
+      "visible": true
     }
   ],
   "choices": [],
@@ -113,15 +112,14 @@ Unset은 field omission이 아니라 명시 state로 표현한다.
 Identity
 Selected Inputs
 Effective Values
-Unavailable Requests
 Choices
 Constraints
-Suggestions
 ```
 
-Option explanation에는 requested chain, default/computed expression,
-availability, choice, constraint causal slice를 포함한다. ANSI color와 terminal
-width wrapping을 파일에 넣지 않는다.
+Option explanation은 type, requested/effective origin, availability, visibility를
+stable row로 기록한다. 상세 causal graph와 provenance source는
+`config.report.json` 및 `config.graph.json`이 담당한다. ANSI color와 terminal width
+wrapping을 파일에 넣지 않는다.
 
 ## config.graph.json
 
@@ -142,8 +140,8 @@ provenance
 reverse_invalidation
 ```
 
-Source span과 static type을 포함한다. Pointer address나 allocation order는
-출력하지 않는다.
+각 edge는 owner/target canonical id로, provenance node는 kind/subject로 출력한다.
+Pointer address나 allocation order는 출력하지 않는다.
 
 ## config.inputs.json
 
@@ -159,12 +157,11 @@ Schema id:
 config-root 상대 canonical path
 content hash
 input role
-schema version
 ```
 
 Environment variable, host current directory, filesystem mtime는 semantic input이
-아니며 기록하지 않는다. CLI user override는 별도 typed input section에
-기록한다.
+아니며 기록하지 않는다. CLI user override의 typed input record는 artifact caller가
+`inputs` 목록으로 전달한다.
 
 ## config.changes.json
 
@@ -246,15 +243,15 @@ set(CONFIT_SCHEMA_VERSION "2")
 set(CONFIT_RESOLVER_ABI "confit-resolver-v2")
 ```
 
-Project prefix variable은 canonical option id에서 만든다.
+Project prefix variable은 project name과 canonical option id에서 만든다.
 
 ```cmake
 set(DELOS_CONFIG_DEBUG_DDC "ON")
 set(DELOS_CONFIG_TARGET_ARCH "armv7m")
 ```
 
-Tristate는 `"n"`, `"m"`, `"y"`다. List는 CMake list로 출력하되 semicolon,
-backslash, quote를 deterministic하게 escape한다. Unset option은
+Tristate는 `"n"`, `"m"`, `"y"`다. List는 CMake list로 출력하되 각 element 안의
+semicolon, backslash, quote를 deterministic하게 escape한다. Unset option은
 `<PREFIX>_SET "OFF"` companion variable을 내고 value variable은 만들지 않는다.
 
 ## config/config.qsm
@@ -271,7 +268,8 @@ QStar는 다음처럼 import한다.
 local config = qstar.import_module("build/generated/.../config")
 ```
 
-각 option은 requested/effective를 구분한다.
+각 option은 requested/effective를 구분한다. 이 canonical module은 emit surface와
+무관하게 snapshot의 모든 option을 기록한다.
 
 ```lua
 values = {
@@ -295,8 +293,13 @@ V2 selection module schema:
 schema = "confit-build-selection-v2"
 ```
 
-Template section과 field name은 project가 정의한다. Value는 반드시
-selection emit을 가진 option의 effective value에서 읽는다.
+Core generator의 build selection module은 `emit = ["selection"]`이 있는 option의
+typed `effective` value를 canonical id key로 기록한다. 따라서 generator는 board,
+CPU, linker처럼 project-specific 의미를 해석하지 않는다.
+
+Project-specific section/field template은 이 artifact ABI에 포함되지 않는다. 그런
+mapping은 canonical build selection module을 소비하는 project-side module에서
+명시적으로 수행해야 하며, 그 mapping을 Confit core에 암묵적으로 넣어서는 안 된다.
 
 List/path type은 Lua array/string으로 유지한다. Delimiter string으로 합치지
 않는다.
@@ -317,10 +320,11 @@ Generator는 먼저 memory에서 전체 artifact를 만든다.
 
 1. 기존 file과 byte compare한다.
 2. 같으면 file을 다시 쓰지 않는다.
-3. 다르면 같은 directory의 temporary file에 쓴다.
-4. flush/close 성공 후 host API로 atomic replace한다.
-5. 일부 artifact만 교체된 상태가 되지 않도록 output transaction manifest를
-   사용한다.
+3. 다르면 같은 directory의 temporary file에 쓴 뒤 atomic replace한다.
+
+Atomicity는 file 단위다. 쓰기 중 host I/O failure가 나면 이미 publish된 valid file은
+snapshot identity가 서로 일치하므로, consumer는 성공 status가 반환된 bundle만
+새 generation으로 채택해야 한다.
 
 Filesystem 구현은 `src/host/`를 통해서만 수행한다.
 

@@ -11,6 +11,10 @@ typedef struct ConfitV2ReverseNode {
 } ConfitV2ReverseNode;
 
 struct ConfitV2Snapshot {
+  char *project_name;
+  char *project_namespace;
+  char *project_version;
+  char *source_root;
   char *profile_name;
   char *target_name;
   uint64_t source_hash;

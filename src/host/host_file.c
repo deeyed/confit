@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 static ConfitStatus confit_host_file_error(ConfitDiagnostic *diagnostic,
                                            const char *path,
                                            const char *message) {
@@ -140,6 +145,68 @@ ConfitStatus confit_host_write_text_file(const char *path, const char *text,
   }
 
   return CONFIT_OK;
+}
+
+ConfitStatus confit_host_write_text_file_if_changed_atomic(
+    const char *path, const char *text, int *out_changed,
+    ConfitDiagnostic *diagnostic) {
+  char *existing = 0;
+  char *temporary;
+  size_t path_size;
+  size_t existing_size = 0U;
+  ConfitStatus status;
+
+  if (out_changed == 0 || path == 0 || path[0] == '\0' || text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "invalid atomic output argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_changed = 0;
+  if (confit_host_file_exists(path)) {
+    status = confit_host_read_text_file(path, &existing, &existing_size,
+                                        diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (existing_size == strlen(text) && memcmp(existing, text, existing_size) == 0) {
+      free(existing);
+      return CONFIT_OK;
+    }
+    free(existing);
+  }
+  path_size = strlen(path);
+  temporary = (char *)malloc(path_size + sizeof(".confit-tmp"));
+  if (temporary == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, path, 0, 0,
+                          "failed to allocate atomic output path");
+    return CONFIT_ERR_INTERNAL;
+  }
+  memcpy(temporary, path, path_size);
+  memcpy(temporary + path_size, ".confit-tmp", sizeof(".confit-tmp"));
+  status = confit_host_write_text_file(temporary, text, diagnostic);
+  if (status == CONFIT_OK) {
+#if defined(_WIN32)
+    if (MoveFileExA(temporary, path,
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                            "failed to atomically replace output file");
+      status = CONFIT_ERR_GENERATION;
+      (void)DeleteFileA(temporary);
+    }
+#else
+    if (rename(temporary, path) != 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, path, 0, 0,
+                            "failed to atomically replace output file");
+      status = CONFIT_ERR_GENERATION;
+      (void)remove(temporary);
+    }
+#endif
+  }
+  free(temporary);
+  if (status == CONFIT_OK) {
+    *out_changed = 1;
+  }
+  return status;
 }
 
 void confit_host_free(void *allocation) { free(allocation); }

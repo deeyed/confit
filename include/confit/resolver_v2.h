@@ -263,6 +263,7 @@ typedef struct ConfitV2SnapshotOption {
   const char *id;
   ConfitV2OptionType type;
   ConfitV2WriteDomain write_domain;
+  unsigned int emit_mask;
   int available;
   int visible;
   ConfitV2SnapshotAssignment requested;
@@ -353,7 +354,14 @@ uint64_t confit_v2_snapshot_source_hash(const ConfitV2Snapshot *snapshot);
 uint64_t confit_v2_snapshot_input_hash(const ConfitV2Snapshot *snapshot);
 uint64_t confit_v2_snapshot_semantic_hash(const ConfitV2Snapshot *snapshot);
 
-/** @brief snapshot이 기록한 selected profile/target name이다. */
+/** @brief snapshot이 기록한 immutable project/selection identity다. */
+const char *confit_v2_snapshot_project_name(const ConfitV2Snapshot *snapshot);
+const char *confit_v2_snapshot_project_namespace(
+    const ConfitV2Snapshot *snapshot);
+const char *confit_v2_snapshot_project_version(
+    const ConfitV2Snapshot *snapshot);
+/** @brief source provenance를 project-relative label로 바꿀 때 쓸 config root다. */
+const char *confit_v2_snapshot_source_root(const ConfitV2Snapshot *snapshot);
 const char *confit_v2_snapshot_profile_name(const ConfitV2Snapshot *snapshot);
 const char *confit_v2_snapshot_target_name(const ConfitV2Snapshot *snapshot);
 

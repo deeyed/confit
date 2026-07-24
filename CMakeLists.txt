@@ -340,6 +340,23 @@ target_compile_features(confit_generator PUBLIC c_std_17)
 
 confit_target_warnings(confit_generator)
 
+# V2 artifacts consume only an immutable V2 snapshot. The legacy generator
+# remains linked exclusively by the V1 CLI until the dispatch cutover lands.
+add_library(confit_generator_v2 STATIC
+  src/generator/dispatch.c
+  src/generator/v2/artifacts.c
+)
+
+target_link_libraries(confit_generator_v2
+  PUBLIC
+    confit_resolver_v2
+    confit_host
+)
+
+target_compile_features(confit_generator_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_generator_v2)
+
 add_library(confit_compat STATIC
   src/compat/compat.c
 )
@@ -659,6 +676,33 @@ confit_target_warnings(confit_test_resolver_v2_snapshot)
 add_test(
   NAME confit.unit.resolver_v2_snapshot
   COMMAND confit_test_resolver_v2_snapshot
+)
+
+add_executable(confit_test_generator_v2
+  tests/unit/test_generator_v2.c
+)
+
+target_link_libraries(confit_test_generator_v2 PRIVATE
+  confit_generator_v2
+  confit_test_support
+)
+target_compile_definitions(confit_test_generator_v2 PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  CONFIT_TEST_CMAKE_EXECUTABLE="${CMAKE_COMMAND}"
+)
+
+find_program(CONFIT_QSTAR_EXECUTABLE NAMES qstar)
+if(CONFIT_QSTAR_EXECUTABLE)
+  target_compile_definitions(confit_test_generator_v2 PRIVATE
+    CONFIT_TEST_QSTAR_EXECUTABLE="${CONFIT_QSTAR_EXECUTABLE}"
+  )
+endif()
+
+confit_target_warnings(confit_test_generator_v2)
+
+add_test(
+  NAME confit.unit.generator_v2
+  COMMAND confit_test_generator_v2
 )
 
 add_executable(confit_test_expression_v2

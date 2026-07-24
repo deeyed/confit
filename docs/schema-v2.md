@@ -583,14 +583,16 @@ List/set type의 header emit은 명시 encoding이 없으면 오류다.
 
 ## Build Selection
 
-Selection template는 project-specific section과 option mapping을 선언한다.
-Mapping target은 `selection` emit을 가진 option이어야 한다.
+`selection` emit은 option의 typed effective value를 canonical id key로 V2 build
+selection module에 기록한다. Mapping target은 `selection` emit을 가진 option이어야
+한다.
 
-Selection generator는 option id 의미를 해석하지 않는다. Board, CPU, linker,
-object label은 project schema가 정의한다.
+Project-specific section/field mapping은 별도 template contract로 선언할 수 있지만,
+generic V2 artifact generator는 option id 의미를 해석하지 않는다. Board, CPU,
+linker, object label의 의미는 project build graph가 명시적으로 정한다.
 
-V2 selection artifact는 `confit-build-selection-v2` metadata와 snapshot source
-hash를 포함한다.
+V2 selection artifact는 `confit-build-selection-v2` metadata와 snapshot source hash를
+포함한다.
 
 ## 금지 Field
 

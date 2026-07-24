@@ -224,6 +224,7 @@ static ConfitStatus confit_v2_snapshot_copy_option(
   }
   out->type = effective->symbol->type;
   out->write_domain = effective->symbol->write_domain;
+  out->emit_mask = effective->symbol->emit_mask;
   out->available = effective->available;
   out->visible = effective->visible;
   out->effective_is_set = effective->is_set;
@@ -588,11 +589,24 @@ ConfitStatus confit_v2_snapshot_freeze(
                                 kAllocationFailed, diagnostic);
     return CONFIT_ERR_INTERNAL;
   }
+  compiled = confit_v2_assignment_ledger_source(ledger);
+  {
+    const ConfitV2LinkedProject *linked =
+        confit_v2_compiled_structure_source(compiled);
+    const ConfitV2Project *project = confit_v2_linked_project_source(linked);
+
+    snapshot->project_name = confit_v2_ledger_strdup(project->name);
+    snapshot->project_namespace = confit_v2_ledger_strdup(project->namespace_name);
+    snapshot->project_version = confit_v2_ledger_strdup(project->version);
+    snapshot->source_root = confit_v2_ledger_strdup(project->config_root);
+  }
   snapshot->profile_name = confit_v2_ledger_strdup(
       confit_v2_assignment_ledger_profile_name(ledger));
   snapshot->target_name = confit_v2_ledger_strdup(
       confit_v2_assignment_ledger_target_name(ledger));
-  if ((confit_v2_assignment_ledger_profile_name(ledger) != 0 &&
+  if (snapshot->project_name == 0 || snapshot->project_namespace == 0 ||
+      snapshot->source_root == 0 ||
+      (confit_v2_assignment_ledger_profile_name(ledger) != 0 &&
        snapshot->profile_name == 0) ||
       (confit_v2_assignment_ledger_target_name(ledger) != 0 &&
        snapshot->target_name == 0)) {
@@ -622,7 +636,6 @@ ConfitStatus confit_v2_snapshot_freeze(
   if (status == CONFIT_OK) {
     status = confit_v2_snapshot_build_provenance(snapshot, evaluation, report);
   }
-  compiled = confit_v2_assignment_ledger_source(ledger);
   if (status == CONFIT_OK) {
     status = confit_v2_snapshot_build_reverse_index(snapshot, compiled, diagnostic);
   }
@@ -687,6 +700,10 @@ void confit_v2_snapshot_free(ConfitV2Snapshot *snapshot) {
   if (snapshot == 0) {
     return;
   }
+  free(snapshot->project_name);
+  free(snapshot->project_namespace);
+  free(snapshot->project_version);
+  free(snapshot->source_root);
   free(snapshot->profile_name);
   free(snapshot->target_name);
   for (index = 0U; index < snapshot->option_count; ++index) {
@@ -728,6 +745,24 @@ uint64_t confit_v2_snapshot_input_hash(const ConfitV2Snapshot *snapshot) {
 
 uint64_t confit_v2_snapshot_semantic_hash(const ConfitV2Snapshot *snapshot) {
   return snapshot != 0 ? snapshot->semantic_hash : 0U;
+}
+
+const char *confit_v2_snapshot_project_name(const ConfitV2Snapshot *snapshot) {
+  return snapshot != 0 ? snapshot->project_name : 0;
+}
+
+const char *confit_v2_snapshot_project_namespace(
+    const ConfitV2Snapshot *snapshot) {
+  return snapshot != 0 ? snapshot->project_namespace : 0;
+}
+
+const char *confit_v2_snapshot_project_version(
+    const ConfitV2Snapshot *snapshot) {
+  return snapshot != 0 ? snapshot->project_version : 0;
+}
+
+const char *confit_v2_snapshot_source_root(const ConfitV2Snapshot *snapshot) {
+  return snapshot != 0 ? snapshot->source_root : 0;
 }
 
 const char *confit_v2_snapshot_profile_name(const ConfitV2Snapshot *snapshot) {

@@ -7,7 +7,14 @@ WORK_DIR=$3
 
 SOURCE_DIR=$(CDPATH= cd -- "$SOURCE_DIR" && pwd)
 SCRIPT="$SOURCE_DIR/scripts/confit-cutover-dry-run.sh"
-OUT_DIR="$WORK_DIR/cutover"
+OUT_PARENT=$(mktemp -d "${TMPDIR:-/tmp}/confit-round16-cutover.XXXXXX")
+OUT_DIR="$OUT_PARENT/cutover"
+
+cleanup() {
+  rm -rf "$OUT_PARENT"
+}
+
+trap cleanup 0 HUP INT TERM
 
 rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR"
