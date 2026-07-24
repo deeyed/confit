@@ -1,0 +1,13 @@
+[project]
+name = "confit-v2-fixture"
+namespace = "confit"
+version = "0.2.0"
+schema_version = 2
+imports = [
+  "options/types.toml",
+  "menus/main.toml",
+  "constraints/build.toml",
+]
+profile_dirs = ["profiles"]
+target_dirs = ["targets"]
+selection_dirs = ["selection"]

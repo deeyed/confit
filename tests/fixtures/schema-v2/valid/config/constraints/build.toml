@@ -1,0 +1,5 @@
+[[constraint]]
+id = "confit.build.host"
+when = "confit.enum.arch == \"host\""
+require = "enabled(confit.console.host)"
+message = "host requires host console"

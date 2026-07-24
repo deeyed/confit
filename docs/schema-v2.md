@@ -2,7 +2,7 @@
 doc_type: language-spec
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
+implementation_status: partially-implemented
 last_verified: 2026-07-24
 ---
 
@@ -43,6 +43,11 @@ schema error다.
 TOML parsing은 [vendor-tomlc17.md](vendor-tomlc17.md)의 adapter 경계를 따른다.
 V2 loader는 table level을 직접 순회하고 TOML library의 merge 또는 multipart-key
 helper로 import, namespace, profile precedence를 구현하지 않는다.
+
+현재 v2 loader는 project metadata, explicit import, typed option/menu/choice/
+constraint source model과 source span까지 만든다. Expression의 parse/type check,
+reference link, profile/target assignment와 resolution은 후속 pipeline 단계가
+소유하며, 이 단계의 loader는 expression text를 평가하지 않는다.
 
 ## Project
 

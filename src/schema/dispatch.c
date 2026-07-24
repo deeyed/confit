@@ -16,6 +16,7 @@ struct ConfitProjectHandle {
   ConfitSchemaVersion schema_version;
   union {
     ConfitProject *v1;
+    ConfitV2Project *v2;
     void *opaque;
   } implementation;
 };
@@ -29,8 +30,6 @@ static const char kInvalidSchemaVersion[] =
     "[project].schema_version must be an integer";
 static const char kUnsupportedSchemaVersion[] =
     "unsupported [project].schema_version";
-static const char kV2NotImplemented[] =
-    "schema_version = 2 loader is not implemented";
 static const char kProjectAllocationFailed[] =
     "failed to allocate opaque project handle";
 
@@ -172,12 +171,35 @@ ConfitProjectHandle *confit_project_handle_create_v1(ConfitProject *project) {
   return handle;
 }
 
+ConfitProjectHandle *confit_project_handle_create_v2(ConfitV2Project *project) {
+  ConfitProjectHandle *handle;
+
+  if (project == 0) {
+    return 0;
+  }
+  handle = (ConfitProjectHandle *)calloc(1U, sizeof(*handle));
+  if (handle == 0) {
+    return 0;
+  }
+  handle->schema_version = CONFIT_SCHEMA_VERSION_V2;
+  handle->implementation.v2 = project;
+  return handle;
+}
+
 const ConfitProject *
 confit_project_handle_borrow_v1(const ConfitProjectHandle *project) {
   if (project == 0 || project->schema_version != CONFIT_SCHEMA_VERSION_V1) {
     return 0;
   }
   return project->implementation.v1;
+}
+
+const ConfitV2Project *
+confit_project_handle_borrow_v2(const ConfitProjectHandle *project) {
+  if (project == 0 || project->schema_version != CONFIT_SCHEMA_VERSION_V2) {
+    return 0;
+  }
+  return project->implementation.v2;
 }
 
 ConfitStatus confit_schema_v1_load_project_handle(
@@ -212,15 +234,30 @@ ConfitStatus confit_schema_v1_load_project_handle(
 ConfitStatus confit_schema_v2_load_project_handle(
     const char *project_root, ConfitProjectHandle **out_project,
     ConfitDiagnostic *diagnostic) {
+  ConfitV2Project *project;
+  ConfitProjectHandle *handle;
+  ConfitStatus status;
+
   if (out_project == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, project_root,
                           0, 0, kMissingProjectOutput);
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   *out_project = 0;
-  confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, project_root, 0, 0,
-                        kV2NotImplemented);
-  return CONFIT_ERR_UNSUPPORTED;
+  project = 0;
+  status = confit_v2_schema_load_project(project_root, &project, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  handle = confit_project_handle_create_v2(project);
+  if (handle == 0) {
+    confit_v2_project_free(project);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, project_root, 0, 0,
+                          kProjectAllocationFailed);
+    return CONFIT_ERR_INTERNAL;
+  }
+  *out_project = handle;
+  return CONFIT_OK;
 }
 
 ConfitStatus confit_project_load(const char *project_root,
@@ -262,6 +299,8 @@ void confit_project_handle_free(ConfitProjectHandle *project) {
   }
   if (project->schema_version == CONFIT_SCHEMA_VERSION_V1) {
     confit_project_free(project->implementation.v1);
+  } else if (project->schema_version == CONFIT_SCHEMA_VERSION_V2) {
+    confit_v2_project_free(project->implementation.v2);
   }
   free(project);
 }

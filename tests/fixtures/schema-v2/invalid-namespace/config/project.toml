@@ -1,0 +1,5 @@
+[project]
+name = "namespace"
+namespace = "confit"
+schema_version = 2
+imports = ["options/bad.toml"]

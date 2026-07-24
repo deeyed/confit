@@ -152,6 +152,40 @@ target_compile_features(confit_parser_v2 PUBLIC c_std_17)
 
 confit_target_warnings(confit_parser_v2)
 
+add_library(confit_model_v2 STATIC
+  src/model/v2/model.c
+)
+
+target_link_libraries(confit_model_v2 PUBLIC confit_core)
+
+target_include_directories(confit_model_v2
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/model/v2
+)
+
+target_compile_features(confit_model_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_model_v2)
+
+add_library(confit_schema_v2 STATIC
+  src/schema/v2/loader.c
+)
+
+target_link_libraries(confit_schema_v2
+  PUBLIC
+    confit_model_v2
+    confit_parser_v2
+)
+
+target_include_directories(confit_schema_v2
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/model/v2
+)
+
+target_compile_features(confit_schema_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_schema_v2)
+
 add_library(confit_schema STATIC
   src/schema/schema.c
 )
@@ -168,7 +202,7 @@ add_library(confit_schema_dispatch STATIC
 target_link_libraries(confit_schema_dispatch
   PUBLIC
     confit_schema
-    confit_parser_v2
+    confit_schema_v2
 )
 
 target_include_directories(confit_schema_dispatch
@@ -432,6 +466,22 @@ confit_target_warnings(confit_test_schema_dispatch)
 add_test(
   NAME confit.unit.schema_dispatch
   COMMAND confit_test_schema_dispatch
+)
+
+add_executable(confit_test_schema_v2_model
+  tests/unit/test_schema_v2_model.c
+)
+
+target_link_libraries(confit_test_schema_v2_model PRIVATE confit_schema_v2)
+target_compile_definitions(confit_test_schema_v2_model PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_schema_v2_model)
+
+add_test(
+  NAME confit.unit.schema_v2_model
+  COMMAND confit_test_schema_v2_model
 )
 
 add_executable(confit_test_graph_builder

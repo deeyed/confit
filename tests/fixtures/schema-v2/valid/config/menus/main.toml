@@ -1,0 +1,21 @@
+[menu."main"]
+prompt = "Main"
+order = 100
+visible_if = "true"
+
+[menu."main.features"]
+prompt = "Features"
+parent = "main"
+order = 200
+
+[choice."confit.console.backend"]
+member_type = "bool"
+members = ["confit.console.uart", "confit.console.host"]
+cardinality = "exactly-one"
+available_if = "true"
+visible_if = "true"
+
+[[choice."confit.console.backend".defaults]]
+when = "true"
+member = "confit.console.host"
+priority = 100

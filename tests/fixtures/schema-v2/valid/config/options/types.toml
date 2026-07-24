@@ -1,0 +1,162 @@
+[option."confit.bool.enabled"]
+type = "bool"
+default = true
+write_domain = "profile"
+user_override = true
+prompt = "Enable feature"
+help = "A boolean test option."
+menu = "main.features"
+tags = ["test", "bool"]
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+available_if = "true"
+visible_if = "true"
+
+[[option."confit.bool.enabled".suggestions]]
+when = "true"
+value = false
+message = "Disable this for the fixture."
+
+[option."confit.tristate.mode"]
+type = "tristate"
+default = "m"
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "experimental"
+
+[option."confit.int.offset"]
+type = "int"
+default = -8
+range = { min = -16, max = 16 }
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.uint.capacity"]
+type = "uint"
+default = 16
+range = { min = 1, max = 128 }
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.hex.base"]
+type = "hex"
+default = 0x08000000
+range = { min = 0x08000000, max = 0x080FFFFF }
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "internal"
+
+[option."confit.float.ratio"]
+type = "float"
+default = 0.25
+range = { min = 0.0, max = 1.0 }
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.string.name"]
+type = "string"
+default = "fixture"
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.enum.arch"]
+type = "enum"
+values = ["host", "armv7m", "aarch64"]
+default = "host"
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar", "selection"]
+
+[option."confit.path.linker"]
+type = "path"
+default = "linker/fixture.ld"
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.string_list.features"]
+type = "string_list"
+default = ["alpha", "beta", "alpha"]
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.path_list.includes"]
+type = "path_list"
+default = ["include", "src/board"]
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.enum_set.features"]
+type = "enum_set"
+values = ["alpha", "beta", "gamma"]
+default = ["gamma", "alpha"]
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.default.tick_hz"]
+type = "uint"
+required = true
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[[option."confit.default.tick_hz".defaults]]
+when = "confit.enum.arch == \"host\""
+value = 1000
+priority = 100
+
+[option."confit.computed.total"]
+type = "uint"
+write_domain = "computed"
+computed = "confit.uint.capacity * 2"
+owner = "confit"
+since = "0.2.0"
+stability = "internal"
+emit = ["selection"]
+
+[option."confit.console.uart"]
+type = "bool"
+default = false
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.console.host"]
+type = "bool"
+default = true
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"

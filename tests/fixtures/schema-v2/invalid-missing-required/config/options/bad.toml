@@ -1,0 +1,6 @@
+[option."confit.missing"]
+type = "bool"
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"

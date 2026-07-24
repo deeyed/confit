@@ -4,6 +4,7 @@
 #include "confit/host.h"
 #include "confit/project.h"
 #include "confit/resolver_v1.h"
+#include "confit/resolver_v2.h"
 #include "confit/schema_v1.h"
 #include "confit/snapshot.h"
 #include "confit/status.h"
@@ -99,6 +100,36 @@ static int expect_v1_adapter(void) {
   return 1;
 }
 
+static int expect_v2_handle(void) {
+  ConfitDiagnostic diagnostic;
+  ConfitProjectHandle *project;
+  ConfitSnapshotHandle *snapshot;
+  char path[512];
+
+  if (!join_fixture(path, sizeof(path), "tests/fixtures/schema-v2/valid")) {
+    return 0;
+  }
+  confit_diagnostic_init(&diagnostic);
+  project = 0;
+  snapshot = 0;
+  if (confit_project_load(path, &project, &diagnostic) != CONFIT_OK ||
+      project == 0 ||
+      confit_project_handle_schema_version(project) !=
+          CONFIT_SCHEMA_VERSION_V2 ||
+      confit_resolver_v1_resolve_handle(project, 0, 0, 0, 0U, &snapshot,
+                                        &diagnostic) != CONFIT_ERR_INVALID_ARGUMENT ||
+      snapshot != 0 ||
+      confit_resolver_v2_resolve_handle(project, &snapshot, &diagnostic) !=
+          CONFIT_ERR_UNSUPPORTED ||
+      snapshot != 0) {
+    confit_snapshot_handle_free(snapshot);
+    confit_project_handle_free(project);
+    return 0;
+  }
+  confit_project_handle_free(project);
+  return 1;
+}
+
 int main(void) {
   if (!expect_v1_handle_and_snapshot()) {
     return 2;
@@ -106,9 +137,7 @@ int main(void) {
   if (!expect_v1_adapter()) {
     return 3;
   }
-  if (!expect_project_status("tests/fixtures/schema-dispatch/v2",
-                             CONFIT_ERR_UNSUPPORTED,
-                             "schema_version = 2 loader is not implemented")) {
+  if (!expect_v2_handle()) {
     return 4;
   }
   if (!expect_project_status("tests/fixtures/schema-dispatch/missing-version",
