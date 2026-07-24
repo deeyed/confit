@@ -25,10 +25,16 @@ static const char kV2InvalidValue[] = "schema v2 field has an invalid value";
 static const char kV2DuplicateDefinition[] =
     "duplicate schema v2 semantic definition";
 static const char kV2InvalidImportPath[] = "invalid schema v2 import path";
+static const char kV2ImportEscapesConfigRoot[] =
+    "schema v2 import escapes project config root";
+static const char kV2DuplicateImport[] = "duplicate schema v2 canonical import";
+static const char kV2ImportCycle[] = "schema v2 import cycle";
 static const char kV2InvalidOptionId[] = "invalid schema v2 option id";
 static const char kV2InvalidNamespace[] = "option id is outside project namespace";
 static const char kV2UnsupportedProjectVersion[] =
     "project does not declare schema_version = 2";
+static const char kV2UnsupportedImportVersion[] =
+    "import source does not declare schema_version = 2";
 
 static void confit_v2_error(ConfitDiagnostic *diagnostic, ConfitStatus status,
                             const ConfitV2TomlValue *value,
@@ -223,6 +229,48 @@ static int confit_v2_is_logical_path(const char *path) {
       segment = cursor + 1;
     }
   }
+}
+
+static int confit_v2_is_host_path_separator(char value) {
+  return value == '/' || value == '\\';
+}
+
+static int confit_v2_path_is_within_root(const char *root, const char *path) {
+  const size_t root_size = strlen(root);
+
+  return strncmp(root, path, root_size) == 0 &&
+         (path[root_size] == '\0' || confit_v2_is_host_path_separator(path[root_size]));
+}
+
+static ConfitStatus confit_v2_canonicalize_import_path(
+    const char *config_root, const char *logical_path, char *out_canonical,
+    size_t out_canonical_size, const ConfitV2TomlValue *value,
+    ConfitDiagnostic *diagnostic) {
+  char joined_path[4096];
+  char canonical_root[4096];
+  ConfitStatus status;
+
+  status = confit_host_path_join(joined_path, sizeof(joined_path), config_root,
+                                 logical_path, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_path_canonicalize(out_canonical, out_canonical_size,
+                                          joined_path, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_path_canonicalize(canonical_root, sizeof(canonical_root),
+                                          config_root, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  if (!confit_v2_path_is_within_root(canonical_root, out_canonical)) {
+    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value,
+                    kV2ImportEscapesConfigRoot);
+    return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_v2_parse_string_list(
@@ -1450,14 +1498,26 @@ static ConfitStatus confit_v2_parse_constraint(ConfitV2Project *project,
   return status;
 }
 
+static ConfitStatus confit_v2_append_import(
+    ConfitV2Project *project, const char *config_root, char *path,
+    const ConfitV2TomlValue *value, size_t *out_index,
+    ConfitDiagnostic *diagnostic);
+
+static ConfitStatus confit_v2_visit_import(
+    ConfitV2Project *project, const char *config_root, size_t import_index,
+    ConfitDiagnostic *diagnostic);
+
 static ConfitStatus confit_v2_parse_import_document(
-    ConfitV2Project *project, const char *path, ConfitDiagnostic *diagnostic) {
-  static const char *const kRootFields[] = {"option", "menu", "choice",
-                                             "constraint"};
+    ConfitV2Project *project, const char *config_root, const char *path,
+    ConfitDiagnostic *diagnostic) {
+  static const char *const kRootFields[] = {"schema_version", "imports", "option",
+                                             "menu", "choice", "constraint"};
   ConfitV2TomlDocument *document;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *declarations;
+  const ConfitV2TomlValue *value;
   ConfitStatus status;
+  int64_t schema_version;
   size_t index;
 
   document = 0;
@@ -1472,6 +1532,53 @@ static ConfitStatus confit_v2_parse_import_document(
   if (status != CONFIT_OK) {
     confit_v2_toml_document_free(document);
     return status;
+  }
+  value = confit_v2_toml_table_find(root, "schema_version");
+  if (value == 0 || !confit_v2_toml_value_int64(value, &schema_version) ||
+      schema_version != 2) {
+    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value != 0 ? value : root,
+                    kV2UnsupportedImportVersion);
+    confit_v2_toml_document_free(document);
+    return CONFIT_ERR_SCHEMA;
+  }
+  value = confit_v2_toml_table_find(root, "imports");
+  if (value != 0) {
+    if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY) {
+      confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value, kV2WrongValueType);
+      confit_v2_toml_document_free(document);
+      return CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
+      const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+      char *import_path;
+      size_t import_index;
+
+      status = confit_v2_copy_string(project, item, &import_path, diagnostic);
+      if (status != CONFIT_OK) {
+        confit_v2_toml_document_free(document);
+        return status;
+      }
+      if (!confit_v2_is_logical_path(import_path)) {
+        confit_v2_deallocate(&project->allocator, import_path);
+        confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, item, kV2InvalidImportPath);
+        confit_v2_toml_document_free(document);
+        return CONFIT_ERR_SCHEMA;
+      }
+      status = confit_v2_append_import(project, config_root, import_path, item,
+                                        &import_index, diagnostic);
+      if (status != CONFIT_OK) {
+        confit_v2_deallocate(&project->allocator, import_path);
+        confit_v2_toml_document_free(document);
+        return status;
+      }
+      (void)import_index;
+      status = confit_v2_visit_import(project, config_root, import_index,
+                                      diagnostic);
+      if (status != CONFIT_OK) {
+        confit_v2_toml_document_free(document);
+        return status;
+      }
+    }
   }
   declarations = confit_v2_toml_table_find(root, "option");
   if (declarations != 0) {
@@ -1544,17 +1651,35 @@ static ConfitStatus confit_v2_parse_import_document(
   return CONFIT_OK;
 }
 
-static ConfitStatus confit_v2_append_import(ConfitV2Project *project,
-                                             char *path,
-                                             const ConfitV2TomlValue *value,
-                                             ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_v2_append_import(
+    ConfitV2Project *project, const char *config_root, char *path,
+    const ConfitV2TomlValue *value, size_t *out_index,
+    ConfitDiagnostic *diagnostic) {
   ConfitV2Import *grown;
   ConfitStatus status;
+  char canonical_path[4096];
+  char *canonical_copy;
   size_t index;
 
+  if (out_index == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, config_root,
+                          0, 0, "missing schema v2 import index output");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_index = 0U;
+  status = confit_v2_canonicalize_import_path(config_root, path, canonical_path,
+                                              sizeof(canonical_path), value,
+                                              diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
   for (index = 0U; index < project->import_count; ++index) {
-    if (strcmp(project->imports[index].path, path) == 0) {
-      confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value, kV2DuplicateDefinition);
+    if (strcmp(project->imports[index].canonical_path, canonical_path) == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value,
+                      project->imports[index].state ==
+                              CONFIT_V2_IMPORT_STATE_VISITING
+                          ? kV2ImportCycle
+                          : kV2DuplicateImport);
       return CONFIT_ERR_SCHEMA;
     }
   }
@@ -1572,15 +1697,56 @@ static ConfitStatus confit_v2_append_import(ConfitV2Project *project,
   project->imports = grown;
   memset(&project->imports[project->import_count], 0,
          sizeof(project->imports[project->import_count]));
+  canonical_copy = confit_v2_strdup(&project->allocator, canonical_path);
+  if (canonical_copy == 0) {
+    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+    return CONFIT_ERR_INTERNAL;
+  }
   project->imports[project->import_count].path = path;
+  project->imports[project->import_count].canonical_path = canonical_copy;
   status = confit_v2_copy_span(project, value, 0U,
                                &project->imports[project->import_count].span,
                                diagnostic);
   if (status != CONFIT_OK) {
     project->imports[project->import_count].path = 0;
+    confit_v2_deallocate(&project->allocator, canonical_copy);
+    project->imports[project->import_count].canonical_path = 0;
     return status;
   }
+  project->imports[project->import_count].state = CONFIT_V2_IMPORT_STATE_DECLARED;
+  *out_index = project->import_count;
   project->import_count += 1U;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_visit_import(
+    ConfitV2Project *project, const char *config_root, size_t import_index,
+    ConfitDiagnostic *diagnostic) {
+  ConfitV2Import *import;
+  ConfitStatus status;
+
+  if (import_index >= project->import_count) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, config_root, 0, 0,
+                          "schema v2 import index is invalid");
+    return CONFIT_ERR_INTERNAL;
+  }
+  import = &project->imports[import_index];
+  if (import->state == CONFIT_V2_IMPORT_STATE_COMPLETE) {
+    return CONFIT_OK;
+  }
+  if (import->state == CONFIT_V2_IMPORT_STATE_VISITING) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, import->span.path,
+                          import->span.line, import->span.column,
+                          kV2ImportCycle);
+    return CONFIT_ERR_SCHEMA;
+  }
+  import->state = CONFIT_V2_IMPORT_STATE_VISITING;
+  status = confit_v2_parse_import_document(project, config_root,
+                                            import->canonical_path, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  project->imports[import_index].state = CONFIT_V2_IMPORT_STATE_COMPLETE;
   return CONFIT_OK;
 }
 
@@ -1638,7 +1804,7 @@ static ConfitStatus confit_v2_find_config_root(
 }
 
 static ConfitStatus confit_v2_parse_project_document(
-    ConfitV2Project *project, const char *project_path,
+    ConfitV2Project *project, const char *config_root, const char *project_path,
     ConfitDiagnostic *diagnostic) {
   static const char *const kFields[] = {"name", "namespace", "version",
                                          "schema_version", "imports",
@@ -1750,6 +1916,7 @@ static ConfitStatus confit_v2_parse_project_document(
     for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
       const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
       char *import_path;
+      size_t import_index;
       status = confit_v2_copy_string(project, item, &import_path, diagnostic);
       if (status != CONFIT_OK) {
         confit_v2_toml_document_free(document);
@@ -1761,7 +1928,8 @@ static ConfitStatus confit_v2_parse_project_document(
         confit_v2_toml_document_free(document);
         return CONFIT_ERR_SCHEMA;
       }
-      status = confit_v2_append_import(project, import_path, item, diagnostic);
+      status = confit_v2_append_import(project, config_root, import_path, item,
+                                        &import_index, diagnostic);
       if (status != CONFIT_OK) {
         confit_v2_deallocate(&project->allocator, import_path);
         confit_v2_toml_document_free(document);
@@ -1778,6 +1946,7 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
     ConfitV2Project **out_project, ConfitDiagnostic *diagnostic) {
   char config_root[1024];
   char project_path[1024];
+  char canonical_config_root[4096];
   ConfitV2Project *project;
   ConfitStatus status;
   size_t index;
@@ -1791,6 +1960,24 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
   status = confit_v2_find_config_root(project_root, config_root,
                                       sizeof(config_root), project_path,
                                       sizeof(project_path), diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_host_path_canonicalize(canonical_config_root,
+                                          sizeof(canonical_config_root),
+                                          config_root, diagnostic);
+  if (status != CONFIT_OK ||
+      strlen(canonical_config_root) + 1U > sizeof(config_root)) {
+    if (status == CONFIT_OK) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, project_root,
+                            0, 0, "canonical config root is too long");
+      status = CONFIT_ERR_INVALID_ARGUMENT;
+    }
+    return status;
+  }
+  memcpy(config_root, canonical_config_root, strlen(canonical_config_root) + 1U);
+  status = confit_host_path_join(project_path, sizeof(project_path), config_root,
+                                 "project.toml", diagnostic);
   if (status != CONFIT_OK) {
     return status;
   }
@@ -1809,18 +1996,14 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
                           kV2AllocationFailed);
     return CONFIT_ERR_INTERNAL;
   }
-  status = confit_v2_parse_project_document(project, project_path, diagnostic);
+  status = confit_v2_parse_project_document(project, config_root, project_path,
+                                             diagnostic);
   if (status != CONFIT_OK) {
     confit_v2_project_free(project);
     return status;
   }
   for (index = 0U; index < project->import_count; ++index) {
-    char import_path[1024];
-    status = confit_host_path_join(import_path, sizeof(import_path), config_root,
-                                   project->imports[index].path, diagnostic);
-    if (status == CONFIT_OK) {
-      status = confit_v2_parse_import_document(project, import_path, diagnostic);
-    }
+    status = confit_v2_visit_import(project, config_root, index, diagnostic);
     if (status != CONFIT_OK) {
       confit_v2_project_free(project);
       return status;

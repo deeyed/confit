@@ -1,0 +1,5 @@
+[project]
+name = "import-traversal"
+namespace = "confit"
+schema_version = 2
+imports = ["../outside.toml"]

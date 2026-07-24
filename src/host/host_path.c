@@ -1,5 +1,10 @@
 #include "confit/host.h"
 
+#if !defined(_WIN32)
+#define _XOPEN_SOURCE 700
+#endif
+
+#include <stdlib.h>
 #include <string.h>
 
 char confit_host_path_separator(void) {
@@ -58,4 +63,45 @@ ConfitStatus confit_host_path_join(char *out, size_t out_size,
 
   out[offset] = '\0';
   return CONFIT_OK;
+}
+
+ConfitStatus confit_host_path_canonicalize(char *out, size_t out_size,
+                                           const char *path,
+                                           ConfitDiagnostic *diagnostic) {
+#if defined(_WIN32)
+  char *resolved;
+#else
+  char resolved[4096];
+#endif
+  size_t size;
+
+  if (out == 0 || out_size == 0U || path == 0 || path[0] == '\0') {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "invalid path canonicalize argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+#if defined(_WIN32)
+  resolved = _fullpath(out, path, out_size);
+  if (resolved == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, path, 0, 0,
+                          "failed to canonicalize path");
+    return CONFIT_ERR_PARSE;
+  }
+  return CONFIT_OK;
+#else
+  if (realpath(path, resolved) == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, path, 0, 0,
+                          "failed to canonicalize path");
+    return CONFIT_ERR_PARSE;
+  }
+  size = strlen(resolved);
+  if (size + 1U > out_size) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,
+                          "canonical path buffer is too small");
+    out[0] = '\0';
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  memcpy(out, resolved, size + 1U);
+  return CONFIT_OK;
+#endif
 }

@@ -39,6 +39,17 @@ ConfitStatus confit_host_path_join(char *out, size_t out_size,
                                    ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief existing host path를 symlink 해석 뒤의 canonical absolute path로 만든다.
+ *
+ * schema import loader처럼 host filesystem boundary 검증이 필요한 계층만 사용한다.
+ * 성공 결과는 native separator를 쓸 수 있으며, caller buffer는 결과 전체와 NUL을
+ * 담을 만큼 커야 한다.
+ */
+ConfitStatus confit_host_path_canonicalize(char *out, size_t out_size,
+                                           const char *path,
+                                           ConfitDiagnostic *diagnostic);
+
+/**
  * @brief UTF-8 또는 ASCII text file 전체를 memory buffer로 읽는다.
  *
  * 반환된 buffer는 NUL 종료된다. Binary file 여부는 이 layer에서 판정하지 않으며,

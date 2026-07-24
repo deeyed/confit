@@ -15,7 +15,7 @@ Confit expression lexer/parser가 typed AST로 compile한다.
 ## 기본 예
 
 ```toml
-available_if = 'delos.target.arch == "armv7m" && enabled(delos.driver.uart)'
+available_if = 'enum_name(delos.target.arch) == "armv7m" && enabled(delos.driver.uart)'
 visible_if = 'enabled(delos.debug.console)'
 computed = 'delos.memory.page_size * delos.memory.page_count'
 ```
@@ -23,9 +23,11 @@ computed = 'delos.memory.page_size * delos.memory.page_count'
 Expression은 runtime code가 아니다. Confit host tool이 build 전에 평가한다.
 
 현재 구현은 lexer/parser, source-local AST span, explicit binding environment를
-받는 static typecheck와 pure evaluator를 제공한다. Symbol linking과 evaluation DAG
-ordering은 후속 단계가 소유한다. parser는 유효한 identifier나 function name을
-semantic하게 승인하지 않으며, typecheck가 binding environment를 기준으로 승인한다.
+받는 static typecheck와 pure evaluator를 제공한다. V2 schema linker는 project의
+canonical option table을 이 environment로 바꾸어 모든 reference를 hard link한다.
+Evaluation DAG ordering은 후속 단계가 소유한다. Parser는 유효한 identifier나
+function name을 semantic하게 승인하지 않으며, typecheck가 binding environment를
+기준으로 승인한다.
 
 ## 구현 경계
 
@@ -35,8 +37,9 @@ type, effective value를 명시적으로 받는다. Typecheck는 이 environment
 값을 deep-copy하여 계산한다. 따라서 이 단계는 filesystem, 환경 변수, clock,
 terminal locale 또는 전역 mutable state를 읽지 않는다.
 
-다음 symbol linker 단계는 project의 canonical symbol table을 이 environment로
-변환한다. 이 분리는 expression module이 import traversal, profile ownership,
+`src/schema/v2/linker.c`는 project의 canonical symbol table을 이 environment로
+변환하고, source span을 보존한 reference link와 write-domain ownership 검증을
+소유한다. 이 분리는 expression module이 import traversal, profile ownership,
 evaluation DAG 순서를 임의로 결정하지 않게 한다.
 
 ## Lexical 규칙
@@ -180,7 +183,7 @@ Tristate ordering이 필요하면 `n`, `m`, `y`와 equality를 사용한다. Enu
 `value in list`에서 list element type은 value type과 같아야 한다.
 
 ```toml
-available_if = 'delos.target.arch in ["armv7m", "aarch64"]'
+available_if = 'enum_name(delos.target.arch) in ["armv7m", "aarch64"]'
 ```
 
 ### Arithmetic

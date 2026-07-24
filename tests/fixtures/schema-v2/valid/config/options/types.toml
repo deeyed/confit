@@ -1,3 +1,5 @@
+schema_version = 2
+
 [option."confit.bool.enabled"]
 type = "bool"
 default = true
@@ -130,14 +132,14 @@ since = "0.2.0"
 stability = "stable"
 
 [[option."confit.default.tick_hz".defaults]]
-when = "confit.enum.arch == \"host\""
+when = "enum_name(confit.enum.arch) == \"host\""
 value = 1000
 priority = 100
 
 [option."confit.computed.total"]
 type = "uint"
 write_domain = "computed"
-computed = "confit.uint.capacity * 2"
+computed = "confit.uint.capacity * 0x2"
 owner = "confit"
 since = "0.2.0"
 stability = "internal"

@@ -45,9 +45,11 @@ V2 loader는 table level을 직접 순회하고 TOML library의 merge 또는 mul
 helper로 import, namespace, profile precedence를 구현하지 않는다.
 
 현재 v2 loader는 project metadata, explicit import, typed option/menu/choice/
-constraint source model과 source span까지 만든다. Expression의 parse/type check,
-reference link, profile/target assignment와 resolution은 후속 pipeline 단계가
-소유하며, 이 단계의 loader는 expression text를 평가하지 않는다.
+constraint source model과 source span까지 만든다. Loader 직후의 linker는 canonical
+option namespace를 만들고, expression을 parse/typecheck한 뒤 모든 reference를
+symbol에 연결하며 write-domain ownership을 검증한다. Profile/target assignment의
+실제 병합과 expression evaluation/resolution은 그 다음 pipeline 단계가 소유한다.
+Loader와 linker 모두 expression text를 평가하지 않는다.
 
 ## Project
 
@@ -75,10 +77,28 @@ selection_dirs = ["selection"]
 - `name`, `namespace`, `schema_version`은 필수다.
 - `namespace`는 option id의 첫 segment와 일치해야 한다.
 - Import path는 project config root 상대 forward-slash path다.
-- Absolute path, `..`, symlink escape는 허용하지 않는다.
-- Import cycle과 같은 canonical file의 중복 import는 오류다.
+- Import 대상도 top-level `schema_version = 2`를 선언해야 하며 `imports`로 다시
+  declaration source를 가져올 수 있다. `project` table은 root `project.toml`에만
+  둔다.
+- Absolute path, 빈 segment, `..`, symlink escape는 허용하지 않는다.
+- Import cycle과 같은 canonical file의 중복 import는 오류다. Logical path 표기가
+  달라도 canonical file이 같으면 중복이다.
 - Glob, environment substitution, shell preprocessor를 제공하지 않는다.
 - 발견한 모든 source file은 `config.inputs.json`에 content hash와 함께 기록한다.
+
+가져온 declaration source의 최소 형식은 다음과 같다.
+
+```toml
+# config/options/trace.toml
+schema_version = 2
+
+[option."delos.trace.enabled"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "delos-observability"
+since = "0.2.0"
+```
 
 ## Option ID
 
@@ -289,7 +309,7 @@ Computed option에는 `default`, `required`, `user_override`, profile/target ass
 ## Availability와 Visibility
 
 ```toml
-available_if = 'delos.target.arch == "armv7m"'
+available_if = 'enum_name(delos.target.arch) == "armv7m"'
 visible_if = 'enabled(delos.debug.advanced_ui)'
 ```
 
@@ -368,7 +388,7 @@ available_if = 'true'
 visible_if = 'true'
 
 [[choice."delos.console.backend".defaults]]
-when = 'delos.target.arch == "host"'
+when = 'enum_name(delos.target.arch) == "host"'
 member = "delos.console.host_stdio"
 priority = 100
 ```
@@ -402,7 +422,7 @@ Simple string selection은 choice가 아니라 enum option을 사용한다.
 ```toml
 [[constraint]]
 id = "delos.armv7m.toolchain"
-when = 'delos.target.arch == "armv7m"'
+when = 'enum_name(delos.target.arch) == "armv7m"'
 require = 'delos.toolchain.kind == "arm-none-eabi"'
 message = "armv7m target에는 arm-none-eabi toolchain이 필요합니다."
 ```

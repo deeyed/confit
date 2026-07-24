@@ -249,6 +249,7 @@ void confit_v2_project_free(ConfitV2Project *project) {
   confit_v2_deallocate(allocator, project->version);
   for (index = 0U; index < project->import_count; ++index) {
     confit_v2_deallocate(allocator, project->imports[index].path);
+    confit_v2_deallocate(allocator, project->imports[index].canonical_path);
     confit_v2_source_span_clear(allocator, &project->imports[index].span);
   }
   confit_v2_deallocate(allocator, project->imports);

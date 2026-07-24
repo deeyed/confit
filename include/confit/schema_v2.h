@@ -235,10 +235,21 @@ typedef struct ConfitV2Constraint {
   ConfitV2SourceSpan span;
 } ConfitV2Constraint;
 
-/** @brief explicit project import path와 source span이다. */
+/** @brief import traversal state다. completed import만 linked project 입력이 된다. */
+typedef enum ConfitV2ImportState {
+  CONFIT_V2_IMPORT_STATE_DECLARED = 0,
+  CONFIT_V2_IMPORT_STATE_VISITING,
+  CONFIT_V2_IMPORT_STATE_COMPLETE,
+} ConfitV2ImportState;
+
+/** @brief explicit project import의 logical/canonical path와 source span이다. */
 typedef struct ConfitV2Import {
+  /** config root 기준 normalized forward-slash logical path. */
   char *path;
+  /** symlink까지 해석한 canonical host path. */
+  char *canonical_path;
   ConfitV2SourceSpan span;
+  ConfitV2ImportState state;
 } ConfitV2Import;
 
 /** @brief allocation ownership을 test/embedding caller가 제어하는 allocator다. */

@@ -1,6 +1,6 @@
 schema_version = 2
 
-[option."other.bad"]
+[option."confit.nested.flag"]
 type = "bool"
 default = true
 write_domain = "profile"

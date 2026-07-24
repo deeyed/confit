@@ -1,9 +1,10 @@
 schema_version = 2
 
-[option."other.bad"]
+[option."confit.flag"]
 type = "bool"
-default = true
+default = false
 write_domain = "profile"
 owner = "confit"
 since = "0.2.0"
 stability = "stable"
+available_if = "confit.flag == true"

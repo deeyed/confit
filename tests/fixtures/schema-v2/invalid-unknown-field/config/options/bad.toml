@@ -1,3 +1,5 @@
+schema_version = 2
+
 [option."confit.bad"]
 type = "bool"
 default = true
