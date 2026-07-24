@@ -363,13 +363,23 @@ prompt = "Console"
 parent = "debug"
 order = 100
 visible_if = 'true'
+
+# 다른 menu에는 read-only display만 추가할 수 있다.
+[menu."observability"]
+prompt = "Observability"
+order = 300
+references = [{ option = "delos.debug.ddc", read_only = true }]
 ```
 
 Option은 `menu = "debug.console"`로 배치한다. Menu parent cycle은 오류다.
 Dependency가 implicit submenu를 만들지 않는다.
 
-동일 order에서는 canonical id lexical order를 사용한다. 깊은 menu는 lint
-warning 대상일 수 있지만 resolver validity를 바꾸지 않는다.
+같은 parent 아래에서 `order`는 유일해야 한다. 동일 order를 canonical id lexical
+order로 조용히 해소하지 않으며 source span을 포함한 hard error로 처리한다. 동일
+option을 여러 menu에 표시하려면 primary `option.menu` 외의 모든 표시는
+`references`의 `read_only = true`여야 한다. 읽기 가능한 option 정의를 여러 menu에
+복제하거나 menu placement로 dependency/choice membership을 추론하지 않는다.
+깊은 menu는 lint warning 대상일 수 있지만 resolver validity를 바꾸지 않는다.
 
 ## Choice
 
@@ -406,6 +416,9 @@ one-or-more
 - 모든 member type은 `member_type`과 같아야 한다.
 - 모든 member는 같은 write domain이어야 한다.
 - Member를 menu adjacency로 추론하지 않는다.
+- Choice를 다른 choice의 member로 넣는 nesting은 허용하지 않는다.
+- Default member는 해당 choice의 `members` 안에 있어야 한다. 같은 `when`과
+  priority로 다른 member를 고르는 default는 structural hard error다.
 - `exactly-one`에서 선택이 없고 적용 가능한 default도 없으면 오류다.
 - 같은 최고 priority에서 다른 member가 default가 되면 ambiguity error다.
 - 첫 visible member 자동 선택은 하지 않는다.
@@ -427,8 +440,8 @@ require = 'delos.toolchain.kind == "arm-none-eabi"'
 message = "armv7m target에는 arm-none-eabi toolchain이 필요합니다."
 ```
 
-`id`, `when`, `require`, `message`는 필수다. `when`이 true이고 `require`가 false면
-hard error다.
+`id`, `when`, `require`, 비어 있지 않은 `message`는 필수다. `when`이 true이고
+`require`가 false면 hard error다.
 
 Constraint는 option 값을 변경하지 않는다. Conflict는 별도 mutation edge가
 아니라 명시적 부정 constraint로 쓴다.

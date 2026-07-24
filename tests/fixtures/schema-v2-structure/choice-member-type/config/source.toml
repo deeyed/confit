@@ -1,0 +1,14 @@
+schema_version = 2
+
+[option."confit.flag"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[choice."confit.mode"]
+member_type = "tristate"
+members = ["confit.flag"]
+cardinality = "exactly-one"

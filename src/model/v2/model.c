@@ -190,6 +190,8 @@ static void confit_v2_symbol_clear(const ConfitV2Allocator *allocator,
 
 static void confit_v2_menu_clear(const ConfitV2Allocator *allocator,
                                  ConfitV2MenuNode *menu) {
+  size_t index;
+
   if (menu == 0) {
     return;
   }
@@ -197,6 +199,11 @@ static void confit_v2_menu_clear(const ConfitV2Allocator *allocator,
   confit_v2_deallocate(allocator, menu->prompt);
   confit_v2_deallocate(allocator, menu->parent);
   confit_v2_expression_clear(allocator, &menu->visible_if);
+  for (index = 0U; index < menu->reference_count; ++index) {
+    confit_v2_deallocate(allocator, menu->references[index].option_id);
+    confit_v2_source_span_clear(allocator, &menu->references[index].span);
+  }
+  confit_v2_deallocate(allocator, menu->references);
   confit_v2_source_span_clear(allocator, &menu->span);
   memset(menu, 0, sizeof(*menu));
 }

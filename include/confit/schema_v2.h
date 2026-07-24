@@ -203,6 +203,16 @@ typedef struct ConfitV2Symbol {
   ConfitV2SourceSpan span;
 } ConfitV2Symbol;
 
+/** @brief menu 안의 read-only option 표시 source다. */
+typedef struct ConfitV2MenuReference {
+  /** canonical option id다. */
+  char *option_id;
+  /** v2에서는 duplicate menu display가 항상 read-only여야 한다. */
+  int read_only;
+  /** reference inline table의 source position이다. */
+  ConfitV2SourceSpan span;
+} ConfitV2MenuReference;
+
 /** @brief explicit menu declaration이다. menu는 UI hierarchy만 나타낸다. */
 typedef struct ConfitV2MenuNode {
   char *id;
@@ -210,6 +220,9 @@ typedef struct ConfitV2MenuNode {
   char *parent;
   int32_t order;
   ConfitV2ExpressionText visible_if;
+  /** primary `option.menu` placement 외의 read-only display references다. */
+  ConfitV2MenuReference *references;
+  size_t reference_count;
   ConfitV2SourceSpan span;
 } ConfitV2MenuNode;
 

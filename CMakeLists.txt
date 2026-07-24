@@ -218,6 +218,21 @@ target_compile_features(confit_schema_link_v2 PUBLIC c_std_17)
 
 confit_target_warnings(confit_schema_link_v2)
 
+add_library(confit_constraint_v2 STATIC
+  src/schema/v2/validate.c
+  src/constraint/v2/choice.c
+  src/constraint/v2/graph.c
+)
+
+target_link_libraries(confit_constraint_v2
+  PUBLIC
+    confit_schema_link_v2
+)
+
+target_compile_features(confit_constraint_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_constraint_v2)
+
 add_library(confit_schema STATIC
   src/schema/schema.c
 )
@@ -532,6 +547,24 @@ confit_target_warnings(confit_test_schema_v2_linker)
 add_test(
   NAME confit.unit.schema_v2_linker
   COMMAND confit_test_schema_v2_linker
+)
+
+add_executable(confit_test_constraint_v2
+  tests/unit/test_constraint_v2.c
+)
+
+target_link_libraries(confit_test_constraint_v2 PRIVATE
+  confit_constraint_v2
+)
+target_compile_definitions(confit_test_constraint_v2 PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_constraint_v2)
+
+add_test(
+  NAME confit.unit.constraint_v2
+  COMMAND confit_test_constraint_v2
 )
 
 add_executable(confit_test_expression_v2

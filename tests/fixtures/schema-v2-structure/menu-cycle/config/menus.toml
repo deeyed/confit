@@ -1,0 +1,11 @@
+schema_version = 2
+
+[menu."confit.first"]
+prompt = "First"
+parent = "confit.second"
+order = 1
+
+[menu."confit.second"]
+prompt = "Second"
+parent = "confit.first"
+order = 2

@@ -1,0 +1,9 @@
+schema_version = 2
+
+[menu."confit.first"]
+prompt = "First"
+order = 10
+
+[menu."confit.second"]
+prompt = "Second"
+order = 10

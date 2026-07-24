@@ -1142,12 +1142,73 @@ static int confit_v2_project_has_menu(const ConfitV2Project *project,
   return 0;
 }
 
+static ConfitStatus confit_v2_parse_menu_references(
+    ConfitV2Project *project, ConfitV2MenuNode *menu,
+    const ConfitV2TomlValue *value, ConfitDiagnostic *diagnostic) {
+  static const char *const kFields[] = {"option", "read_only"};
+  size_t index;
+
+  if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY) {
+    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value, kV2WrongValueType);
+    return CONFIT_ERR_SCHEMA;
+  }
+  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
+    const ConfitV2TomlValue *entry = confit_v2_toml_array_at(value, index);
+    const ConfitV2TomlValue *option;
+    const ConfitV2TomlValue *read_only;
+    ConfitV2MenuReference *grown;
+    ConfitV2MenuReference *reference;
+    ConfitStatus status;
+
+    status = confit_v2_check_table_keys(
+        entry, kFields, sizeof(kFields) / sizeof(kFields[0]),
+        kV2UnknownMenuField, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    option = confit_v2_toml_table_find(entry, "option");
+    read_only = confit_v2_toml_table_find(entry, "read_only");
+    if (option == 0 || read_only == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, entry, kV2MissingField);
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (menu->reference_count == SIZE_MAX / sizeof(*menu->references)) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, entry, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2MenuReference *)confit_v2_reallocate(
+        &project->allocator, menu->references,
+        (menu->reference_count + 1U) * sizeof(*menu->references));
+    if (grown == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, entry, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    menu->references = grown;
+    reference = &menu->references[menu->reference_count];
+    memset(reference, 0, sizeof(*reference));
+    menu->reference_count += 1U;
+    status = confit_v2_copy_string(project, option, &reference->option_id,
+                                   diagnostic);
+    if (status == CONFIT_OK) {
+      status = confit_v2_parse_bool(read_only, &reference->read_only, diagnostic);
+    }
+    if (status == CONFIT_OK) {
+      status = confit_v2_copy_span(project, entry, 0U, &reference->span,
+                                   diagnostic);
+    }
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_v2_parse_menu(ConfitV2Project *project,
                                           const char *id,
                                           const ConfitV2TomlValue *table,
                                           ConfitDiagnostic *diagnostic) {
   static const char *const kFields[] = {"prompt", "parent", "order",
-                                         "visible_if"};
+                                         "visible_if", "references"};
   const ConfitV2TomlValue *value;
   ConfitV2MenuNode *menu;
   ConfitStatus status;
@@ -1202,6 +1263,10 @@ static ConfitStatus confit_v2_parse_menu(ConfitV2Project *project,
   if (status == CONFIT_OK && value != 0) {
     status = confit_v2_parse_expression(project, value, &menu->visible_if,
                                         diagnostic);
+  }
+  value = confit_v2_toml_table_find(table, "references");
+  if (status == CONFIT_OK && value != 0) {
+    status = confit_v2_parse_menu_references(project, menu, value, diagnostic);
   }
   return status;
 }

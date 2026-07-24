@@ -1,0 +1,142 @@
+schema_version = 2
+
+[menu."confit.menu00"]
+prompt = "Menu 00"
+order = 1
+
+[menu."confit.menu01"]
+prompt = "Menu 01"
+parent = "confit.menu00"
+order = 1
+
+[menu."confit.menu02"]
+prompt = "Menu 02"
+parent = "confit.menu01"
+order = 1
+
+[menu."confit.menu03"]
+prompt = "Menu 03"
+parent = "confit.menu02"
+order = 1
+
+[menu."confit.menu04"]
+prompt = "Menu 04"
+parent = "confit.menu03"
+order = 1
+
+[menu."confit.menu05"]
+prompt = "Menu 05"
+parent = "confit.menu04"
+order = 1
+
+[menu."confit.menu06"]
+prompt = "Menu 06"
+parent = "confit.menu05"
+order = 1
+
+[menu."confit.menu07"]
+prompt = "Menu 07"
+parent = "confit.menu06"
+order = 1
+
+[menu."confit.menu08"]
+prompt = "Menu 08"
+parent = "confit.menu07"
+order = 1
+
+[menu."confit.menu09"]
+prompt = "Menu 09"
+parent = "confit.menu08"
+order = 1
+
+[menu."confit.menu10"]
+prompt = "Menu 10"
+parent = "confit.menu09"
+order = 1
+
+[menu."confit.menu11"]
+prompt = "Menu 11"
+parent = "confit.menu10"
+order = 1
+
+[menu."confit.menu12"]
+prompt = "Menu 12"
+parent = "confit.menu11"
+order = 1
+
+[menu."confit.menu13"]
+prompt = "Menu 13"
+parent = "confit.menu12"
+order = 1
+
+[menu."confit.menu14"]
+prompt = "Menu 14"
+parent = "confit.menu13"
+order = 1
+
+[menu."confit.menu15"]
+prompt = "Menu 15"
+parent = "confit.menu14"
+order = 1
+
+[menu."confit.menu16"]
+prompt = "Menu 16"
+parent = "confit.menu15"
+order = 1
+
+[menu."confit.menu17"]
+prompt = "Menu 17"
+parent = "confit.menu16"
+order = 1
+
+[menu."confit.menu18"]
+prompt = "Menu 18"
+parent = "confit.menu17"
+order = 1
+
+[menu."confit.menu19"]
+prompt = "Menu 19"
+parent = "confit.menu18"
+order = 1
+
+[menu."confit.menu20"]
+prompt = "Menu 20"
+parent = "confit.menu19"
+order = 1
+
+[menu."confit.menu21"]
+prompt = "Menu 21"
+parent = "confit.menu20"
+order = 1
+
+[menu."confit.menu22"]
+prompt = "Menu 22"
+parent = "confit.menu21"
+order = 1
+
+[menu."confit.menu23"]
+prompt = "Menu 23"
+parent = "confit.menu22"
+order = 1
+
+[option."confit.large.first"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+menu = "confit.menu23"
+
+[option."confit.large.second"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[choice."confit.large.mode"]
+member_type = "bool"
+members = ["confit.large.first", "confit.large.second"]
+cardinality = "zero-or-one"

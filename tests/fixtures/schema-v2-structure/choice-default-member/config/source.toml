@@ -1,0 +1,27 @@
+schema_version = 2
+
+[option."confit.first"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."confit.second"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[choice."confit.mode"]
+member_type = "bool"
+members = ["confit.first"]
+cardinality = "exactly-one"
+
+[[choice."confit.mode".defaults]]
+when = "true"
+member = "confit.second"
+priority = 1
