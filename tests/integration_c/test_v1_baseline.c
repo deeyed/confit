@@ -343,6 +343,26 @@ static void test_strict_v1_semantics(ConfitV1BaselineContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static int test_host_path_contains(const char *text, const char *logical_path) {
+  char native_path[512];
+  size_t index;
+  size_t size;
+
+  if (text == 0 || logical_path == 0) {
+    return 0;
+  }
+  size = strlen(logical_path);
+  if (size + 1U > sizeof(native_path)) {
+    return 0;
+  }
+  for (index = 0U; index < size; ++index) {
+    native_path[index] =
+        logical_path[index] == '/' ? confit_test_fs_separator() : logical_path[index];
+  }
+  native_path[size] = '\0';
+  return strstr(text, native_path) != 0;
+}
+
 static void test_schema_diagnostic(ConfitV1BaselineContext *context,
                                    const char *fixture_name,
                                    const char *source_name,
@@ -358,7 +378,7 @@ static void test_schema_diagnostic(ConfitV1BaselineContext *context,
   argv[3] = fixture_dir;
   test_run(context, argv, &result);
   CONFIT_TEST_ASSERT_EQ_INT(3, result.exit_code);
-  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, source_name);
+  CONFIT_TEST_ASSERT(test_host_path_contains(result.stderr_text, source_name));
   CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "schema error:");
   CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, message);
   confit_test_process_result_clear(&result);
