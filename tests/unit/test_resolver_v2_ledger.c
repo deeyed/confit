@@ -223,6 +223,44 @@ static int expect_user_override_errors(void) {
   return result;
 }
 
+static int expect_profile_transaction_override(void) {
+  ConfitV2Project *project;
+  ConfitV2LinkedProject *linked;
+  ConfitV2CompiledStructure *compiled;
+  ConfitV2AssignmentLedger *ledger = 0;
+  ConfitV2ProfileOverride override;
+  ConfitV2LedgerOptions options;
+  const ConfitV2LedgerEntry *entry;
+  ConfitDiagnostic diagnostic;
+  int result;
+
+  confit_diagnostic_init(&diagnostic);
+  if (load_compiled("tests/fixtures/schema-v2-ledger/valid", &project, &linked,
+                    &compiled, &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+  memset(&override, 0, sizeof(override));
+  override.option_id = "ledger.profile.value";
+  override.value_text = "7";
+  override.span.path = "test profile transaction";
+  override.span.line = 1U;
+  memset(&options, 0, sizeof(options));
+  options.profile_name = "debug";
+  options.profile_overrides = &override;
+  options.profile_override_count = 1U;
+  result = confit_v2_assignment_ledger_build(compiled, &options, &ledger,
+                                              &diagnostic) == CONFIT_OK;
+  entry = confit_v2_assignment_ledger_requested(ledger, "ledger.profile.value");
+  result = result && entry != 0 && entry->wins &&
+           entry->origin == CONFIT_V2_ASSIGNMENT_ORIGIN_PROFILE &&
+           entry->value.kind == CONFIT_V2_VALUE_UINT &&
+           entry->value.as.uint_value == 7U &&
+           strcmp(entry->source_path, "test profile transaction") == 0;
+  confit_v2_assignment_ledger_free(ledger);
+  free_compiled(project, linked, compiled);
+  return result;
+}
+
 int main(void) {
   if (!expect_positive_ledger()) {
     return 2;
@@ -242,6 +280,9 @@ int main(void) {
   }
   if (!expect_user_override_errors()) {
     return 6;
+  }
+  if (!expect_profile_transaction_override()) {
+    return 7;
   }
   return 0;
 }

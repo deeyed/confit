@@ -132,5 +132,9 @@ ConfitStatus confit_tui_run_profile_editor(const ConfitTuiOptions *options,
                                            ConfitDiagnostic *diagnostic);
 ConfitStatus confit_tui_run_schema_editor(const ConfitTuiOptions *options,
                                           ConfitDiagnostic *diagnostic);
+ConfitStatus confit_tui_run_profile_editor_v2(const ConfitTuiOptions *options,
+                                              ConfitDiagnostic *diagnostic);
+ConfitStatus confit_tui_run_schema_editor_v2(const ConfitTuiOptions *options,
+                                             ConfitDiagnostic *diagnostic);
 
 #endif /* CONFIT_TUI_INTERNAL_H */

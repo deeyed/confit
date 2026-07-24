@@ -441,6 +441,30 @@ schema ?          keymap/status
 schema h          선택 option help field 수정
 s                 저장
 .EE
+.SH SCHEMA V2 TUI
+schema_version 2 project의 profile editor는 explicit menu tree와 immutable V2
+snapshot을 사용한다. option의 requested value와 effective value는 다를 수 있으며,
+verbose inspector는 각각의 origin과 source를 분리해 표시한다.
+.PP
+V2 profile edit는 memory transaction에만 기록된다. bool은 즉시 toggle되고,
+tristate와 enum은 choice dialog를 사용하며, numeric/string/path/list/set은 value
+dialog에서 type, range, availability, choice, named constraint를 검증한다.
+.PP
+저장 시 Confit은 full resolve, constraint validation, artifact input generation,
+candidate TOML reparse를 끝낸 뒤에만 profile TOML을 atomic replace한다. 실패하면
+원본 profile TOML은 바뀌지 않는다. profile-domain option만 profile TUI에서
+편집할 수 있다.
+.PP
+schema_version 2의
+.B tui --schema-edit
+는 항상
+.B SCHEMA EDIT MODE - guarded
+를 표시하는 guarded 정보 화면이다. V2 schema source mutation은 TUI로 저장하지
+않는다. reviewed TOML edit 뒤
+.B confit check --strict
+와
+.B confit graph
+를 사용한다.
 .SH TUI COMMAND ROW
 TUI의 맨 아래 한 줄은 command row로 예약된다.
 Normal mode에서는 이 줄을 완전히 비워 둔다.

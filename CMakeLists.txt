@@ -400,6 +400,7 @@ confit_target_warnings(confit_migration_v2)
 if(CONFIT_ENABLE_TUI)
   add_library(confit_tui STATIC
     src/tui/curses_frontend.c
+    src/tui/model_adapter_v2.c
     src/tui/profile_editor.c
     src/tui/schema_editor.c
     src/tui/tui.c
@@ -409,7 +410,9 @@ if(CONFIT_ENABLE_TUI)
   target_link_libraries(confit_tui
     PUBLIC
       confit_schema
+      confit_schema_dispatch
     PRIVATE
+      confit_generator_v2
       confit_graph
       confit_resolver
       ${CURSES_LIBRARIES}
@@ -1085,6 +1088,15 @@ if(UNIX AND NOT WIN32 AND CONFIT_ENABLE_TUI)
             $<TARGET_FILE:confit>
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/round17-tui
+  )
+
+  add_test(
+    NAME confit.cli.tui_v2
+    COMMAND /bin/sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/round17_tui_v2.sh
+            $<TARGET_FILE:confit>
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/round17-tui-v2
   )
 
   add_test(

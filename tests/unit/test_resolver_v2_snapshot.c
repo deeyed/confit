@@ -156,7 +156,7 @@ static int expect_invalidation_and_reconcile(void) {
   ConfitV2Snapshot *full = 0;
   ConfitV2InvalidationSet *affected = 0;
   ConfitV2InvalidationSet *missing = 0;
-  ConfitV2UserOverride override;
+  ConfitV2ProfileOverride override;
   ConfitV2LedgerOptions options;
   ConfitDiagnostic diagnostic;
   int result;
@@ -173,8 +173,8 @@ static int expect_invalidation_and_reconcile(void) {
   memset(&override, 0, sizeof(override));
   override.option_id = "eval.requested";
   override.value_text = "7";
-  options.user_overrides = &override;
-  options.user_override_count = 1U;
+  options.profile_overrides = &override;
+  options.profile_override_count = 1U;
   result = result && confit_v2_snapshot_reconcile_edit(
                          base, compiled, &options, "eval.requested",
                          &incremental, &affected, &diagnostic) == CONFIT_OK &&

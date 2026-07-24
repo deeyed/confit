@@ -30,6 +30,16 @@ typedef struct ConfitV2UserOverride {
   ConfitV2SourceSpan span;
 } ConfitV2UserOverride;
 
+/** @brief TUI 같은 profile writer가 transaction 안에서 제공하는 raw override다. */
+typedef struct ConfitV2ProfileOverride {
+  /** canonical option id다. */
+  const char *option_id;
+  /** type별 TOML-compatible literal이다. string/path/enum은 unquoted text도 허용한다. */
+  const char *value_text;
+  /** caller가 제공하는 transaction source 위치다. */
+  ConfitV2SourceSpan span;
+} ConfitV2ProfileOverride;
+
 /** @brief v2 ledger build 요청이다. 모든 pointer는 호출 동안 유효해야 한다. */
 typedef struct ConfitV2LedgerOptions {
   /** selected leaf profile name. 없으면 profile lane을 읽지 않는다. */
@@ -38,6 +48,9 @@ typedef struct ConfitV2LedgerOptions {
   const char *target_name;
   /** explicit target 선택 source다. 비어 있으면 `cli --target`으로 기록한다. */
   ConfitV2SourceSpan target_span;
+  /** profile document보다 높은 우선순위로 preview하는 mutable profile transaction이다. */
+  const ConfitV2ProfileOverride *profile_overrides;
+  size_t profile_override_count;
   /** typed parse 전의 user override text 목록이다. */
   const ConfitV2UserOverride *user_overrides;
   size_t user_override_count;
@@ -127,7 +140,7 @@ typedef struct ConfitV2ChoiceResolution {
 typedef struct ConfitV2Evaluation ConfitV2Evaluation;
 
 /**
- * @brief v2 profile/target/user request를 typed deterministic ledger로 수집한다.
+ * @brief v2 profile/target/profile transaction/user request를 typed deterministic ledger로 수집한다.
  *
  * Conditional default, computed evaluation, availability, choice, constraint는
  * 수행하지 않는다. 모든 source assignment와 schema default를 보존하며 winning

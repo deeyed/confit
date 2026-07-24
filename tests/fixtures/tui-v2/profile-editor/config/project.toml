@@ -1,0 +1,8 @@
+[project]
+name = "v2-tui-editor"
+namespace = "v2tui"
+version = "0.2.0"
+schema_version = 2
+imports = ["options.toml"]
+profile_dirs = ["profiles"]
+

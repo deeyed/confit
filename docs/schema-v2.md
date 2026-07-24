@@ -534,9 +534,12 @@ value merge를 혼동하지 않는다.
 
 ## User Override
 
-CLI `--set`과 TUI unsaved edit는 user override request다.
+CLI `--set`은 user override request다. V2 profile TUI의 unsaved edit는 profile
+transaction request이며 selected profile chain보다 높은 preview priority를 갖는다.
 
-- option의 `user_override`가 true여야 한다.
+- CLI `--set`에는 option의 `user_override`가 true여야 한다.
+- TUI profile transaction은 profile-domain option만 쓸 수 있으며
+  `user_override` flag를 요구하지 않는다.
 - Profile/target write domain을 바꾸지 않는다.
 - Computed/schema option을 덮어쓸 수 없다.
 - Type/range/enum/availability 검증을 즉시 수행한다.

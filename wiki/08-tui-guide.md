@@ -312,6 +312,29 @@ binary DB는 없다.
 `config/options/tui-schema.toml`에 저장한다. 저장 후에는 project를 reload하고
 graph validation을 다시 수행한다.
 
+## Schema V2 TUI
+
+`schema_version = 2` project는 V1 category path가 아니라 explicit menu tree와
+immutable V2 snapshot을 사용한다. 기본 진입은 같다.
+
+```sh
+confit tui --project config/my-project --profile debug
+```
+
+V2 화면의 unavailable/hidden/computed/read-only 표시는 resolver 결과다. 하단
+inspector의 `v` 또는 `:verbose`는 requested value와 effective value, 그리고 각
+source를 분리해 보여 준다. profile-domain option만 편집할 수 있고 bool은 즉시
+toggle, enum/tristate는 popup, 나머지 타입과 list/set은 dialog에서 검증한다.
+
+V2 edit는 memory transaction에만 기록된다. `s` 또는 dirty exit의 Save는 full
+resolve, constraint, artifact input, TOML reparse를 모두 통과한 뒤에만 profile
+TOML을 atomic replace한다. full snapshot을 profile에 저장하지 않는다.
+
+V2 schema editor는 `SCHEMA EDIT MODE - guarded` 정보 화면이다. V2 schema source
+mutation은 TUI에서 저장하지 않으며, reviewed TOML edit 뒤 `confit check --strict`와
+`confit graph`를 사용한다. 자세한 계약은
+[docs/tui-v2.md](../docs/tui-v2.md)를 따른다.
+
 ## TUI 사용 원칙
 
 - Profile 값 변경은 TUI로 해도 된다.

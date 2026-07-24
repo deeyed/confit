@@ -8,6 +8,8 @@ static const char kInvalidLedgerArgument[] =
     "invalid schema v2 assignment ledger argument";
 static const char kDuplicateUserAssignment[] =
     "duplicate schema v2 user override";
+static const char kDuplicateProfileTransactionAssignment[] =
+    "duplicate schema v2 profile transaction assignment";
 static const char kBaseProfileTarget[] =
     "schema v2 base profile cannot select target";
 static const char kAmbiguousAssignment[] =
@@ -16,7 +18,8 @@ static const char kAmbiguousAssignment[] =
 enum {
   CONFIT_V2_LEDGER_PRECEDENCE_SCHEMA_DEFAULT = 0,
   CONFIT_V2_LEDGER_PRECEDENCE_DOMAIN = 1,
-  CONFIT_V2_LEDGER_PRECEDENCE_USER = 2,
+  CONFIT_V2_LEDGER_PRECEDENCE_PROFILE_TRANSACTION = 2,
+  CONFIT_V2_LEDGER_PRECEDENCE_USER = 3,
 };
 
 static int confit_v2_ledger_entry_compare(const void *left, const void *right) {
@@ -281,6 +284,72 @@ static ConfitStatus confit_v2_ledger_add_user_overrides(
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_v2_ledger_add_profile_overrides(
+    const ConfitV2LinkedProject *linked, const ConfitV2LedgerOptions *options,
+    ConfitV2AssignmentLedger *ledger, ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  if (options == 0) {
+    return CONFIT_OK;
+  }
+  for (index = 0U; index < options->profile_override_count; ++index) {
+    const ConfitV2ProfileOverride *override = &options->profile_overrides[index];
+    const ConfitV2Symbol *symbol;
+    ConfitV2WriteRequest request;
+    ConfitV2Value value;
+    const char *path;
+    size_t earlier;
+    ConfitStatus status;
+
+    if (override->option_id == 0 || override->option_id[0] == '\0' ||
+        override->value_text == 0) {
+      confit_v2_ledger_diagnostic(0, 0U, 0U, CONFIT_ERR_INVALID_ARGUMENT,
+                                  kInvalidLedgerArgument, diagnostic);
+      return CONFIT_ERR_INVALID_ARGUMENT;
+    }
+    for (earlier = 0U; earlier < index; ++earlier) {
+      if (options->profile_overrides[earlier].option_id != 0 &&
+          strcmp(options->profile_overrides[earlier].option_id,
+                 override->option_id) == 0) {
+        confit_v2_ledger_diagnostic(override->span.path, override->span.line,
+                                    override->span.column, CONFIT_ERR_SCHEMA,
+                                    kDuplicateProfileTransactionAssignment,
+                                    diagnostic);
+        return CONFIT_ERR_SCHEMA;
+      }
+    }
+    symbol = confit_v2_linked_project_find_symbol(linked, override->option_id);
+    memset(&request, 0, sizeof(request));
+    request.option_id = override->option_id;
+    request.writer = CONFIT_V2_ASSIGNMENT_WRITER_PROFILE;
+    request.span = override->span;
+    status = confit_v2_linked_project_validate_write(linked, &request,
+                                                      diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (symbol == 0) {
+      return CONFIT_ERR_SCHEMA;
+    }
+    memset(&value, 0, sizeof(value));
+    status = confit_v2_ledger_parse_user_value(symbol, override->value_text,
+                                                &value, diagnostic);
+    if (status == CONFIT_OK) {
+      path = override->span.path != 0 ? override->span.path
+                                      : "tui profile transaction";
+      status = confit_v2_ledger_append(
+          ledger, symbol, &value, CONFIT_V2_ASSIGNMENT_ORIGIN_PROFILE, 0,
+          CONFIT_V2_LEDGER_PRECEDENCE_PROFILE_TRANSACTION, index, path,
+          override->span.line, override->span.column, diagnostic);
+    }
+    confit_v2_ledger_value_clear(&value);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_v2_ledger_mark_winners(
     ConfitV2AssignmentLedger *ledger, ConfitDiagnostic *diagnostic) {
   size_t begin = 0U;
@@ -346,6 +415,8 @@ ConfitStatus confit_v2_assignment_ledger_build(
   }
   *out_ledger = 0;
   if (compiled == 0 ||
+      (options != 0 && options->profile_override_count > 0U &&
+       options->profile_overrides == 0) ||
       (options != 0 && options->user_override_count > 0U &&
        options->user_overrides == 0)) {
     confit_v2_ledger_diagnostic(0, 0U, 0U, CONFIT_ERR_INVALID_ARGUMENT,
@@ -440,6 +511,10 @@ ConfitStatus confit_v2_assignment_ledger_build(
     status = confit_v2_ledger_add_input_chain(
         profile_chain, profile_count, CONFIT_V2_ASSIGNMENT_ORIGIN_PROFILE, ledger,
         diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v2_ledger_add_profile_overrides(linked, options, ledger,
+                                                     diagnostic);
   }
   if (status == CONFIT_OK) {
     status = confit_v2_ledger_add_user_overrides(linked, options, ledger,

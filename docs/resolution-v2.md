@@ -28,6 +28,7 @@ Resolution 입력은 다음과 같다.
 compiled v2 project
 selected profile name 또는 없음
 selected target name 또는 없음
+typed profile transaction override 목록 또는 없음
 typed user override 목록
 strict lint policy
 ```
@@ -84,6 +85,7 @@ target base chain
 ```text
 profile base chain
 -> selected profile
+-> profile transaction override
 -> user override, user_override=true인 경우
 ```
 
@@ -314,7 +316,7 @@ snapshot을 만든 뒤 project, linked project, ledger, evaluation, constraint r
 Hash는 역할을 섞지 않는다.
 
 - source semantic hash: option/choice/constraint 선언 의미를 나타낸다.
-- selected input hash: profile, target, user override와 winning request 입력을
+- selected input hash: profile, target, profile transaction, user override와 winning request 입력을
   나타낸다.
 - final semantic hash: effective value, availability/visibility, choice와 constraint
   outcome을 나타낸다.

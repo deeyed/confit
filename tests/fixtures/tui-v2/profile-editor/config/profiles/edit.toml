@@ -1,0 +1,10 @@
+[profile]
+name = "edit"
+schema_version = 2
+
+[values]
+"v2tui.enabled" = false
+"v2tui.mode" = "sim"
+"v2tui.capacity" = 4
+"v2tui.paths" = ["src", "include"]
+

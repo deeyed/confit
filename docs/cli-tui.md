@@ -17,10 +17,11 @@ CLI command, option, exit-code, installation contract는
 
 ## Schema Version 범위
 
-이 문서의 현재 TUI 동작은 `schema_version = 1` model adapter를 설명한다.
-V2 TUI는 renderer/keymap을 공유할 수 있지만 assignability, requested/effective
-value, choice, constraint를 자체 계산하지 않고
-[architecture-v2.md](architecture-v2.md)의 snapshot adapter를 사용해야 한다.
+이 문서의 keymap과 layout 기본 규칙은 `schema_version = 1` model adapter를
+설명한다. V2 profile editor는 같은 ncurses renderer/keymap을 공유하지만
+assignability, requested/effective value, choice, constraint를 자체 계산하지 않고
+[architecture-v2.md](architecture-v2.md)의 snapshot adapter를 사용한다. V2의
+구체적인 edit/save/schema guard 계약은 [tui-v2.md](tui-v2.md)가 정본이다.
 V1의 `forces/recommends/visible_if` 설명을 v2 의미론으로 읽으면 안 된다.
 
 ## TUI 목표
