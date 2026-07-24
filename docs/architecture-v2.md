@@ -2,7 +2,7 @@
 doc_type: architecture-contract
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
+implementation_status: partially-implemented
 last_verified: 2026-07-24
 ---
 
@@ -104,9 +104,12 @@ src/tui/
   ...                       # curses renderer와 input은 공유 가능
 ```
 
-현재 파일을 한 번에 이동하지 않는다. 먼저 version-tagged dispatch API와 v1
-regression gate를 만든 뒤, v1 코드를 기계적으로 이동하고 결과가 동일함을
-확인한다. 그 다음 v2 module을 추가한다.
+현재 파일을 한 번에 이동하지 않는다. `src/schema/dispatch.c`와
+`src/resolver/dispatch.c`는 먼저 도입되어 `[project].schema_version`을 strict
+TOML bootstrap으로 읽고 version-tagged opaque handle을 만든다. v1은 기존 loader와
+resolver를 adapter로 호출하며, v2는 loader/model이 준비될 때까지 명시적으로
+`CONFIT_ERR_UNSUPPORTED`를 반환한다. 이후 v1 코드를 기계적으로 이동하고 결과가
+동일함을 확인한 뒤 v2 module을 추가한다.
 
 ## Public Handle
 

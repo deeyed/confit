@@ -11,6 +11,20 @@ static ConfitStatus confit_host_file_error(ConfitDiagnostic *diagnostic,
   return CONFIT_ERR_PARSE;
 }
 
+int confit_host_file_exists(const char *path) {
+  FILE *file;
+
+  if (path == 0 || path[0] == '\0') {
+    return 0;
+  }
+  file = fopen(path, "rb");
+  if (file == 0) {
+    return 0;
+  }
+  (void)fclose(file);
+  return 1;
+}
+
 ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
                                         size_t *out_size,
                                         ConfitDiagnostic *diagnostic) {

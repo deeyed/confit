@@ -93,6 +93,11 @@ int main(void) {
                             &diagnostic) != CONFIT_OK) {
     return 8;
   }
+  if (!confit_host_file_exists(fixture_path) ||
+      confit_host_file_exists("") ||
+      confit_host_file_exists("tests/fixtures/host/does-not-exist.txt")) {
+    return 26;
+  }
 
   text = 0;
   text_size = 0U;

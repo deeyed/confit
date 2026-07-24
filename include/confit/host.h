@@ -56,6 +56,18 @@ ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
                                         ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief host filesystem에 regular file이 존재하는지 확인한다.
+ *
+ * 이 helper는 loader bootstrap이 project root와 config root를 판별할 때만 쓴다.
+ * 권한 오류와 존재하지 않는 path는 모두 0으로 처리한다. 상세 I/O diagnostic이
+ * 필요한 호출자는 `confit_host_read_text_file()`를 사용해야 한다.
+ *
+ * @param path 검사할 host path.
+ * @return 읽기 가능한 regular file이면 1, 그 밖에는 0.
+ */
+int confit_host_file_exists(const char *path);
+
+/**
  * @brief UTF-8 또는 ASCII text file을 host filesystem에 쓴다.
  *
  * Parent directory는 caller가 먼저 만들어야 한다. 이 API는 host layer가 파일
