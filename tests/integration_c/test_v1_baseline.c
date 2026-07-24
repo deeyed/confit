@@ -344,23 +344,28 @@ static void test_strict_v1_semantics(ConfitV1BaselineContext *context) {
 }
 
 static int test_host_path_contains(const char *text, const char *logical_path) {
-  char native_path[512];
-  size_t index;
-  size_t size;
+  const char *candidate;
 
   if (text == 0 || logical_path == 0) {
     return 0;
   }
-  size = strlen(logical_path);
-  if (size + 1U > sizeof(native_path)) {
-    return 0;
+  for (candidate = text; *candidate != '\0'; ++candidate) {
+    const char *path_cursor = logical_path;
+    const char *text_cursor = candidate;
+
+    while (*path_cursor != '\0') {
+      if ((*path_cursor == '/' && *text_cursor != '/' && *text_cursor != '\\') ||
+          (*path_cursor != '/' && *text_cursor != *path_cursor)) {
+        break;
+      }
+      ++path_cursor;
+      ++text_cursor;
+    }
+    if (*path_cursor == '\0') {
+      return 1;
+    }
   }
-  for (index = 0U; index < size; ++index) {
-    native_path[index] =
-        logical_path[index] == '/' ? confit_test_fs_separator() : logical_path[index];
-  }
-  native_path[size] = '\0';
-  return strstr(text, native_path) != 0;
+  return 0;
 }
 
 static void test_schema_diagnostic(ConfitV1BaselineContext *context,
