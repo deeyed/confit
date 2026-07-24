@@ -77,6 +77,30 @@ typedef struct ConfitV2LedgerEntry {
 /** @brief effective calculation 이전 requested assignment ledger다. */
 typedef struct ConfitV2AssignmentLedger ConfitV2AssignmentLedger;
 
+/** @brief effective value가 선택된 semantic source다. */
+typedef enum ConfitV2EffectiveValueOrigin {
+  CONFIT_V2_EFFECTIVE_VALUE_REQUESTED = 1,
+  CONFIT_V2_EFFECTIVE_VALUE_CONDITIONAL_DEFAULT,
+  CONFIT_V2_EFFECTIVE_VALUE_DEFAULT,
+  CONFIT_V2_EFFECTIVE_VALUE_COMPUTED,
+  CONFIT_V2_EFFECTIVE_VALUE_UNSET,
+} ConfitV2EffectiveValueOrigin;
+
+/** @brief one option의 immutable effective candidate와 provenance다. */
+typedef struct ConfitV2EffectiveValue {
+  const ConfitV2Symbol *symbol;
+  ConfitV2Value value;
+  int is_set;
+  ConfitV2EffectiveValueOrigin origin;
+  const ConfitV2LedgerEntry *requested;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitV2EffectiveValue;
+
+/** @brief requested ledger를 계산한 v2 effective-value handle이다. */
+typedef struct ConfitV2Evaluation ConfitV2Evaluation;
+
 /**
  * @brief v2 profile/target/user request를 typed deterministic ledger로 수집한다.
  *
@@ -124,6 +148,39 @@ const ConfitV2TargetSelection *confit_v2_assignment_ledger_target_selection(
 /** @brief ordered ledger의 deterministic FNV-1a hash를 계산한다. */
 ConfitStatus confit_v2_assignment_ledger_hash(
     const ConfitV2AssignmentLedger *ledger, uint64_t *out_hash);
+
+/**
+ * @brief requested ledger를 conditional default/computed DAG 순서로 계산한다.
+ *
+ * Availability, visibility, choice, named constraint와 snapshot freeze는 이 API의
+ * 범위 밖이다. 실패하면 partial evaluation을 반환하지 않는다. `ledger`는 반환된
+ * evaluation보다 오래 유지해야 한다.
+ */
+ConfitStatus confit_v2_evaluation_build(const ConfitV2AssignmentLedger *ledger,
+                                         ConfitV2Evaluation **out_evaluation,
+                                         ConfitDiagnostic *diagnostic);
+
+/** @brief effective value handle과 owned payload를 해제한다. */
+void confit_v2_evaluation_free(ConfitV2Evaluation *evaluation);
+
+/** @brief evaluation이 borrow하는 requested ledger를 반환한다. */
+const ConfitV2AssignmentLedger *confit_v2_evaluation_source(
+    const ConfitV2Evaluation *evaluation);
+
+/** @brief canonical option id lexical order의 effective value 개수다. */
+size_t confit_v2_evaluation_value_count(const ConfitV2Evaluation *evaluation);
+
+/** @brief canonical effective-value index를 반환한다. */
+const ConfitV2EffectiveValue *confit_v2_evaluation_value_at(
+    const ConfitV2Evaluation *evaluation, size_t index);
+
+/** @brief canonical option id의 effective value를 반환한다. */
+const ConfitV2EffectiveValue *confit_v2_evaluation_find(
+    const ConfitV2Evaluation *evaluation, const char *option_id);
+
+/** @brief deterministic effective-value hash를 계산한다. */
+ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,
+                                        uint64_t *out_hash);
 
 /**
  * @brief v2 resolver skeleton을 호출한다.

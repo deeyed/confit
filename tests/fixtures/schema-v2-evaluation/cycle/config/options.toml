@@ -1,0 +1,17 @@
+schema_version = 2
+
+[option."eval.first"]
+type = "uint"
+write_domain = "computed"
+computed = "eval.second + 0x1"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."eval.second"]
+type = "uint"
+write_domain = "computed"
+computed = "eval.first + 0x1"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"

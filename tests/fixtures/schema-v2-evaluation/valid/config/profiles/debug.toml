@@ -1,0 +1,6 @@
+[profile]
+name = "debug"
+schema_version = 2
+
+[values]
+"eval.requested" = 4

@@ -158,7 +158,7 @@ static int confit_v2_ledger_range_contains(const ConfitV2Symbol *symbol,
   return 0;
 }
 
-static ConfitStatus confit_v2_ledger_validate_value(
+ConfitStatus confit_v2_ledger_validate_value(
     const ConfitV2Symbol *symbol, ConfitV2Value *value,
     const char *path, size_t line, size_t column, ConfitDiagnostic *diagnostic) {
   size_t index;

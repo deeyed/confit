@@ -147,6 +147,64 @@ int confit_test_fs_make_dirs(const char *path) {
   return 1;
 }
 
+int confit_test_fs_make_temp_dir(char *out, size_t out_size, const char *prefix) {
+#if defined(_WIN32)
+  char directory[MAX_PATH];
+  char temporary[MAX_PATH];
+  const char *effective_prefix =
+      prefix != 0 && strlen(prefix) >= 3U ? prefix : "cft";
+
+  if (out == 0 || out_size == 0U || GetTempPathA(sizeof(directory), directory) ==
+                                        0U ||
+      GetTempFileNameA(directory, effective_prefix, 0U, temporary) == 0U ||
+      DeleteFileA(temporary) == 0 || CreateDirectoryA(temporary, 0) == 0 ||
+      strlen(temporary) + 1U > out_size) {
+    return 0;
+  }
+  memcpy(out, temporary, strlen(temporary) + 1U);
+  return 1;
+#else
+  static unsigned long sequence;
+  const char *effective_prefix = prefix != 0 && prefix[0] != '\0' ? prefix : "confit";
+  unsigned long attempt;
+
+  if (out == 0 || out_size == 0U) {
+    return 0;
+  }
+  for (attempt = 0U; attempt < 128U; ++attempt) {
+    const unsigned long suffix = sequence++;
+    const int written = snprintf(out, out_size, "/tmp/%s-%ld-%lu", effective_prefix,
+                                 (long)getpid(), suffix);
+    if (written < 0 || (size_t)written >= out_size) {
+      return 0;
+    }
+    if (mkdir(out, 0700) == 0) {
+      return 1;
+    }
+    if (errno != EEXIST) {
+      return 0;
+    }
+  }
+  return 0;
+#endif
+}
+
+int confit_test_fs_write_file(const char *path, const char *text) {
+  FILE *file;
+
+  if (path == 0 || text == 0) {
+    return 0;
+  }
+  file = fopen(path, "wb");
+  if (file == 0) {
+    return 0;
+  }
+  if (fputs(text, file) == EOF || fclose(file) != 0) {
+    return 0;
+  }
+  return 1;
+}
+
 int confit_test_fs_file_exists(const char *path) {
 #if defined(_WIN32)
   const DWORD attributes = GetFileAttributesA(path);

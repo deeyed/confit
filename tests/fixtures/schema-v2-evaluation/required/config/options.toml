@@ -1,0 +1,9 @@
+schema_version = 2
+
+[option."eval.required"]
+type = "uint"
+required = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"

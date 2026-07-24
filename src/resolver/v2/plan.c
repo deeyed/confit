@@ -503,14 +503,27 @@ const ConfitV2LedgerEntry *confit_v2_assignment_ledger_entry_at(
 
 const ConfitV2LedgerEntry *confit_v2_assignment_ledger_requested(
     const ConfitV2AssignmentLedger *ledger, const char *option_id) {
+  size_t low = 0U;
+  size_t high;
   size_t index;
 
   if (ledger == 0 || option_id == 0) {
     return 0;
   }
-  for (index = 0U; index < ledger->entry_count; ++index) {
-    if (ledger->entries[index].wins &&
-        strcmp(ledger->entries[index].symbol->id, option_id) == 0) {
+  high = ledger->entry_count;
+  while (low < high) {
+    const size_t middle = low + (high - low) / 2U;
+    if (strcmp(ledger->entries[middle].symbol->id, option_id) < 0) {
+      low = middle + 1U;
+    } else {
+      high = middle;
+    }
+  }
+  for (index = low;
+       index < ledger->entry_count &&
+       strcmp(ledger->entries[index].symbol->id, option_id) == 0;
+       ++index) {
+    if (ledger->entries[index].wins) {
       return &ledger->entries[index];
     }
   }

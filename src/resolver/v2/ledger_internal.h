@@ -44,6 +44,12 @@ struct ConfitV2AssignmentLedger {
   size_t entry_count;
 };
 
+struct ConfitV2Evaluation {
+  const ConfitV2AssignmentLedger *ledger;
+  ConfitV2EffectiveValue *values;
+  size_t value_count;
+};
+
 char *confit_v2_ledger_strdup(const char *text);
 void confit_v2_ledger_value_clear(ConfitV2Value *value);
 ConfitStatus confit_v2_ledger_value_copy(ConfitV2Value *out,
@@ -54,6 +60,9 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
 ConfitStatus confit_v2_ledger_parse_user_value(
     const ConfitV2Symbol *symbol, const char *text, ConfitV2Value *out,
     ConfitDiagnostic *diagnostic);
+ConfitStatus confit_v2_ledger_validate_value(
+    const ConfitV2Symbol *symbol, ConfitV2Value *value, const char *path,
+    size_t line, size_t column, ConfitDiagnostic *diagnostic);
 ConfitStatus confit_v2_input_catalog_load(
     const ConfitV2CompiledStructure *compiled, ConfitV2InputKind kind,
     ConfitV2InputCatalog *out_catalog, ConfitDiagnostic *diagnostic);
