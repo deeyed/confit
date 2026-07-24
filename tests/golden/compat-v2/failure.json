@@ -1,0 +1,11 @@
+# Typed V2 compatibility failure causal-slice golden fragments.
+"schema": "confit-compat-report-v2"
+"id": "parus-delos.cpu"
+"state": "fail"
+"alias": "delos"
+"option": "delos.target.cpu"
+"value": "cortex-m4"
+"alias": "parus"
+"option": "parus.target.cpu"
+"value": "cortex-m7"
+"provenance": "default"

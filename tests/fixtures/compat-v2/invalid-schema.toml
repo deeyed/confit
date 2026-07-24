@@ -1,0 +1,11 @@
+[compat]
+name = "invalid"
+schema_version = 1
+
+[projects]
+parus = "../parus"
+
+[[constraint]]
+id = "invalid.version"
+require = "true"
+message = "invalid"

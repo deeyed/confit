@@ -2,7 +2,7 @@
 doc_type: compatibility-contract
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
+implementation_status: implemented-library
 last_verified: 2026-07-24
 ---
 
@@ -40,7 +40,15 @@ message = "Parus Delos executor에는 Delos DCG가 필요합니다."
 ```
 
 `projects` key는 expression에서 사용하는 local alias다. `::` 왼쪽은 alias,
-오른쪽은 해당 project의 canonical option id다.
+오른쪽은 해당 project의 canonical option id다. alias는 소문자로 시작하고
+소문자, 숫자, `_`만 쓴다. Compatibility loader는 declaration과 runtime snapshot
+alias가 정확히 같은지, 모든 snapshot이 `schema_version = 2`와
+`confit-artifact-v2` ABI인지 먼저 hard error로 검사한다.
+
+Embedding caller는 snapshot view에 canonical config root, source hash, snapshot
+hash를 optional expected identity로 함께 넘길 수 있다. 하나라도 현재 immutable
+snapshot과 다르면 stale/path identity mismatch로 hard error다. 이 precondition은
+compatibility source가 project를 자동 reload하거나 값을 갱신하지 않게 한다.
 
 ## Project Selection
 
@@ -85,6 +93,18 @@ require = '''
     == delos::delos.compat.arch
 '''
 message = "Parus와 Delos의 compatibility architecture가 일치해야 합니다."
+```
+
+`when`은 생략하면 `true`다. action은 `require` 또는 `forbid` 중 정확히 하나여야
+한다. `require`는 action expression이 true일 때 통과하고, `forbid`는 false일 때
+통과한다.
+
+```toml
+[[constraint]]
+id = "parus-delos.debug-forbid"
+when = 'enabled(parus::parus.debug.enabled)'
+forbid = 'enabled(delos::delos.release.only_driver)'
+message = "Parus debug profile은 Delos release-only driver를 선택할 수 없습니다."
 ```
 
 긴 expression은 TOML multi-line literal string을 사용할 수 있다. Whitespace는
@@ -132,6 +152,12 @@ project provenance reference
 ```
 
 Report order는 alias, constraint id lexical order다.
+
+각 causal value는 alias, option id, declared type, effective value, effective
+provenance, source file/line/column을 보존한다. 따라서 실패 report만으로도 두
+project의 어떤 effective 값이 비교되었는지 확인할 수 있다. `when`이 false인
+constraint는 `not_applicable`으로 report에 남고 action expression은 평가하지
+않는다.
 
 ## Error
 

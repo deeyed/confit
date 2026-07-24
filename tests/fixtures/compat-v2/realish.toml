@@ -1,0 +1,37 @@
+[compat]
+name = "parus-delos-realish"
+schema_version = 2
+
+[projects]
+parus = "../parus"
+delos = "../delos"
+
+[[constraint]]
+id = "parus-delos.board"
+when = "enabled(parus::parus.driver.delos_link)"
+require = "parus::parus.target.board == delos::delos.target.board"
+message = "Parus와 Delos의 target board가 일치해야 합니다."
+
+[[constraint]]
+id = "parus-delos.capacity"
+when = "enabled(parus::parus.driver.delos_link)"
+require = "parus::parus.compat.capacity == delos::delos.memory.capacity"
+message = "Parus와 Delos의 shared capacity가 일치해야 합니다."
+
+[[constraint]]
+id = "parus-delos.cpu"
+when = "enabled(parus::parus.driver.delos_link)"
+require = "parus::parus.target.cpu == delos::delos.target.cpu"
+message = "Parus와 Delos의 target CPU가 일치해야 합니다."
+
+[[constraint]]
+id = "parus-delos.driver"
+when = "enabled(parus::parus.driver.delos_link)"
+require = "enabled(delos::delos.driver.transport)"
+message = "Parus Delos link에는 Delos transport driver가 필요합니다."
+
+[[constraint]]
+id = "parus-delos.linker"
+when = "enabled(parus::parus.driver.delos_link)"
+require = "parus::parus.linker.kind == delos::delos.linker.kind"
+message = "Parus와 Delos의 linker kind가 일치해야 합니다."

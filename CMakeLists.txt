@@ -366,6 +366,23 @@ target_compile_features(confit_compat PUBLIC c_std_17)
 
 confit_target_warnings(confit_compat)
 
+# V2 compatibility consumes immutable V2 snapshots only.  It deliberately
+# remains separate from the legacy V1 checker until the dispatch cutover.
+add_library(confit_compat_v2 STATIC
+  src/compat/v2/compat.c
+)
+
+target_link_libraries(confit_compat_v2
+  PUBLIC
+    confit_expression_v2
+    confit_parser_v2
+    confit_resolver_v2
+)
+
+target_compile_features(confit_compat_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_compat_v2)
+
 if(CONFIT_ENABLE_TUI)
   add_library(confit_tui STATIC
     src/tui/curses_frontend.c
@@ -703,6 +720,25 @@ confit_target_warnings(confit_test_generator_v2)
 add_test(
   NAME confit.unit.generator_v2
   COMMAND confit_test_generator_v2
+)
+
+add_executable(confit_test_compat_v2
+  tests/unit/test_compat_v2.c
+)
+
+target_link_libraries(confit_test_compat_v2 PRIVATE
+  confit_compat_v2
+  confit_test_support
+)
+target_compile_definitions(confit_test_compat_v2 PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_compat_v2)
+
+add_test(
+  NAME confit.unit.compat_v2
+  COMMAND confit_test_compat_v2
 )
 
 add_executable(confit_test_expression_v2
