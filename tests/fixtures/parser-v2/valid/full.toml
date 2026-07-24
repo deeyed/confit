@@ -1,0 +1,17 @@
+title = "Confit parser v2"
+enabled = true
+count = 42
+ratio = 3.125
+when = 1979-05-27T07:32:00Z
+items = ["one", "two"]
+inline = { color = "green", retries = 3 }
+
+[project]
+name = "delos"
+schema_version = 2
+
+[[board]]
+id = "host-sim"
+
+[[board]]
+id = "qemu-mps2-an500"

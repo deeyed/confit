@@ -63,6 +63,14 @@ src/schema/
     typecheck.c
     validate.c
 
+src/parser/
+  v1/                       # 현재 first-party scanner와 v1 parser adapter
+  v2/
+    tomlc17_adapter.c        # vendor TOML tree를 Confit read-only view로 격리
+
+vendor/
+  tomlc17/                   # unmodified TOML v1.1 amalgamation과 MIT license
+
 src/resolver/
   v1/                       # 현재 merge/active semantics 보존
   v2/

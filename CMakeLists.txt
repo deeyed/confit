@@ -116,6 +116,42 @@ target_compile_features(confit_parser PUBLIC c_std_17)
 
 confit_target_warnings(confit_parser)
 
+# Upstream tomlc17 is an unmodified amalgamation. Confit warning policy applies
+# to the adapter target below, not to third-party implementation source.
+add_library(confit_tomlc17 STATIC
+  vendor/tomlc17/tomlc17.c
+)
+
+target_include_directories(confit_tomlc17
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tomlc17
+)
+
+target_compile_features(confit_tomlc17 PUBLIC c_std_17)
+
+if(NOT MSVC)
+  target_compile_options(confit_tomlc17 PRIVATE -w)
+endif()
+
+add_library(confit_parser_v2 STATIC
+  src/parser/v2/tomlc17_adapter.c
+)
+
+target_link_libraries(confit_parser_v2
+  PUBLIC
+    confit_host
+    confit_tomlc17
+)
+
+target_include_directories(confit_parser_v2
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tomlc17
+)
+
+target_compile_features(confit_parser_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_parser_v2)
+
 add_library(confit_schema STATIC
   src/schema/schema.c
 )
@@ -308,6 +344,22 @@ confit_target_warnings(confit_test_parser_adapter)
 add_test(
   NAME confit.unit.parser_adapter
   COMMAND confit_test_parser_adapter
+)
+
+add_executable(confit_test_parser_v2_adapter
+  tests/unit/test_parser_v2_adapter.c
+)
+
+target_link_libraries(confit_test_parser_v2_adapter PRIVATE confit_parser_v2)
+target_compile_definitions(confit_test_parser_v2_adapter PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_parser_v2_adapter)
+
+add_test(
+  NAME confit.unit.parser_v2_adapter
+  COMMAND confit_test_parser_v2_adapter
 )
 
 add_executable(confit_test_schema_loader

@@ -32,6 +32,18 @@ config/
 Option, menu, constraint는 `project.toml`의 explicit import로 읽는다. Profile과
 target은 project가 선언한 directory에서 filename lexical order로 발견한다.
 
+## TOML Syntax Boundary
+
+V2 source는 TOML 1.1 strict syntax parser로 읽는다. 이 parser는 string, array,
+inline table, array-of-tables, date/time value를 syntax tree로 보존한다. 그러나
+Confit field가 모든 TOML value type을 그대로 받는 것은 아니다. 각 field가 허용하는
+type과 value shape는 이 문서의 개별 field 규칙이 정하며, 문서화되지 않은 type은
+schema error다.
+
+TOML parsing은 [vendor-tomlc17.md](vendor-tomlc17.md)의 adapter 경계를 따른다.
+V2 loader는 table level을 직접 순회하고 TOML library의 merge 또는 multipart-key
+helper로 import, namespace, profile precedence를 구현하지 않는다.
+
 ## Project
 
 ```toml
