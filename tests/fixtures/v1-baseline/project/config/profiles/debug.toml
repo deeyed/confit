@@ -1,0 +1,7 @@
+[profile]
+name = "debug"
+schema_version = 1
+
+[values]
+"delos.debug.ddc" = true
+"delos.output.name" = "delos-debug"

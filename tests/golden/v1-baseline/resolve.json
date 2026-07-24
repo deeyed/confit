@@ -1,0 +1,13 @@
+{
+  "schema": "confit-resolved-v1",
+  "values": [
+    {"id": "delos.debug.ddc", "value": true, "source": "profiles/debug.toml"},
+    {"id": "delos.internal.debug_gate", "value": false, "source": "default"},
+    {"id": "delos.memory.flash_base", "value": 134217728, "source": "default"},
+    {"id": "delos.output.name", "value": "delos-host-sim", "source": "targets/host-sim.toml"},
+    {"id": "delos.paths.config_root", "value": "build/generated/config/delos/sim-dsh", "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.scheduler.task_slots", "value": 32, "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.sim.default_gain", "value": 0.25, "source": "profiles/sim-dsh.toml"},
+    {"id": "delos.target.board", "value": "host-sim", "source": "profiles/sim-dsh.toml"}
+  ]
+}

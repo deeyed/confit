@@ -31,7 +31,7 @@ int main(void) {
 
   confit_diagnostic_init(&diagnostic);
   if (!join_fixture(path, sizeof(path),
-                    "tests/fixtures/toml/valid/project.toml")) {
+                    "tests/fixtures/v1-baseline/toml/valid/project.toml")) {
     return 1;
   }
 
@@ -76,7 +76,7 @@ int main(void) {
   confit_parser_document_free(document);
 
   if (!join_fixture(path, sizeof(path),
-                    "tests/fixtures/toml/invalid/unclosed-string.toml")) {
+                    "tests/fixtures/v1-baseline/toml/invalid/unclosed-string.toml")) {
     return 10;
   }
   document = 0;
@@ -91,7 +91,7 @@ int main(void) {
   }
 
   if (!join_fixture(path, sizeof(path),
-                    "tests/fixtures/toml/invalid/missing-equals.toml")) {
+                    "tests/fixtures/v1-baseline/toml/invalid/missing-equals.toml")) {
     return 13;
   }
   document = 0;
@@ -105,7 +105,7 @@ int main(void) {
   }
 
   if (!join_fixture(path, sizeof(path),
-                    "tests/fixtures/toml/invalid/unterminated-array.toml")) {
+                    "tests/fixtures/v1-baseline/toml/invalid/unterminated-array.toml")) {
     return 16;
   }
   document = 0;

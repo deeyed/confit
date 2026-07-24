@@ -1,0 +1,3 @@
+[option."delos.debug.ddc"]
+type = "bool"
+default = true

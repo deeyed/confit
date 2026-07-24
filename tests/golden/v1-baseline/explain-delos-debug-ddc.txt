@@ -1,0 +1,32 @@
+option: delos.debug.ddc
+state: enabled
+value: true
+set by: profiles/debug.toml
+
+why:
+  enabled because resolved bool is true
+  value comes from profiles/debug.toml
+
+requires:
+  none
+
+conflicts:
+  none
+
+recommends:
+  delos.internal.debug_gate = false (inactive)
+
+forces:
+  delos.internal.debug_gate = false (inactive)
+
+required by:
+  delos.target.board = host-sim (active)
+
+conflicted by:
+  none
+
+recommended by:
+  none
+
+forced by:
+  none

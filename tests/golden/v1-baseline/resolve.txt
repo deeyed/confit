@@ -1,0 +1,8 @@
+delos.debug.ddc = true (source: profiles/debug.toml)
+delos.internal.debug_gate = false (source: default)
+delos.memory.flash_base = 134217728 (source: default)
+delos.output.name = "delos-host-sim" (source: targets/host-sim.toml)
+delos.paths.config_root = "build/generated/config/delos/sim-dsh" (source: profiles/sim-dsh.toml)
+delos.scheduler.task_slots = 32 (source: profiles/sim-dsh.toml)
+delos.sim.default_gain = 0.25 (source: profiles/sim-dsh.toml)
+delos.target.board = "host-sim" (source: profiles/sim-dsh.toml)

@@ -558,6 +558,25 @@ add_test(
           ${CMAKE_CURRENT_BINARY_DIR}/round4-cli-c
 )
 
+add_executable(confit_test_v1_baseline
+  tests/integration_c/test_v1_baseline.c
+)
+
+target_link_libraries(confit_test_v1_baseline PRIVATE confit_test_support)
+target_compile_definitions(confit_test_v1_baseline PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_v1_baseline)
+
+add_test(
+  NAME confit.regression.v1_baseline
+  COMMAND confit_test_v1_baseline
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round1-v1-baseline
+)
+
 if(UNIX AND NOT WIN32 AND CONFIT_ENABLE_TUI)
   add_test(
     NAME confit.cli.tui
