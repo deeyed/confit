@@ -1,0 +1,6 @@
+[profile]
+name = "base"
+schema_version = 2
+
+[values]
+"parus.compat.capacity" = 2048

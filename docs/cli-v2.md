@@ -1,183 +1,147 @@
 ---
 doc_type: cli-contract
-status: accepted-design
 authority: normative
-implementation_status: not-implemented
-last_verified: 2026-07-24
 ---
 
 # Confit V2 CLI 동작
 
-이 문서는 기존 top-level CLI가 `schema_version = 2` project를 처리할 때 추가로
-지켜야 할 동작을 정의한다. Command 이름과 공통 exit code는
-[cli-contract.md](cli-contract.md)를 유지한다.
+이 문서는 `schema_version = 2` project에 적용되는 Confit command 계약이다.
+명령 이름과 exit code는 [cli-contract.md](cli-contract.md)를 따른다. V1과 V2는
+같은 top-level command를 공유하지만, source가 선언한 schema version으로만
+dispatch한다.
 
 ## Version Dispatch
 
-```text
-confit check --project <root>
+```sh
+confit check --project path/to/project
 ```
 
-CLI는 `project.toml`의 `schema_version`을 읽고 v1 또는 v2 pipeline으로
-dispatch한다.
+`config/project.toml`의 `[project].schema_version`이 `2`이면 V2
+load -> link -> compile -> snapshot resolve pipeline을 사용한다. `1`이면 기존 V1
+pipeline을 그대로 사용한다. `--schema-version`, `--legacy`, `--v1-fallback`처럼
+command line이 source version을 바꾸는 option은 없다.
 
-금지:
+V2 project 안에 V1 import, profile, target을 넣거나 V1/V2 project를 `compat`에
+섞는 것은 hard error다.
 
-```text
---schema-version 2
---legacy
---v1-fallback
+## 공통 입력과 diagnostic
+
+V2 project를 처리하는 `check`, `resolve`, `gen`, `explain`, `list`, `graph`,
+`diff`, `compat`는 `--project`, `--profile`, `--target`, `--set id=value`를
+해석한다. profile과 target은 schema가 선언한 경우에만 선택한다. 따라서 default
+assignment만 가진 V2 project는 `--profile` 없이 resolve할 수 있다.
+
+`--set`은 in-memory user request이며 source TOML을 쓰지 않는다. option의
+write-domain과 `user_override` 정책을 통과해야 한다.
+
+```sh
+confit resolve --project fixtures/delos-v2 \
+  --set 'delos.target.cpu=cortex-m7' --format json
 ```
 
-Source가 선언한 major version을 command line으로 바꾸지 않는다.
+V2 CLI error에 `--diagnostic-format json`을 붙이면 stderr에 다음처럼
+machine-readable error 하나만 출력한다.
 
-## Check
-
-```text
-confit check \
-  --project <root> \
-  --profile <name> \
-  --target <name> \
-  [--set <id>=<value>] \
-  [--unset <id>] \
-  [--strict]
+```json
+{
+  "schema": "confit-diagnostic-v2",
+  "status": "invalid-argument",
+  "message": "...",
+  "path": "...",
+  "line": 0,
+  "column": 0
+}
 ```
 
-V2 check는 parse/link/type/ownership/evaluation/availability/choice/constraint/output
-encoding을 모두 검증한다. 기본 동작은 가능한 독립 오류를 deterministic order로
-모은다.
+## Check와 Resolve
 
-`--strict`는 lint warning을 오류로 승격하지만 suggestion 미적용을 오류로 만들지
-않는다.
-
-## Set과 Unset
-
-`--set` value는 option type으로 parse한다. String/enum/path는 shell quoting과
-상관없이 Confit value parser가 정확히 하나의 typed value를 만들어야 한다.
-
-`--unset`은 optional non-computed option에만 사용할 수 있다. Required,
-schema-domain, computed option은 unset할 수 없다.
-
-Option의 `user_override`가 false면 두 option 모두 ownership error다.
-
-## Resolve
-
-```text
-confit resolve \
-  --project <root> \
-  --profile <name> \
-  --target <name> \
-  --format text|json|toml
+```sh
+confit check --project fixtures/delos-v2 --profile release
+confit resolve --project fixtures/delos-v2 --profile release --format json
 ```
 
-V2 JSON/TOML은 requested와 effective를 구분한다. `--effective-only` view를
-추가할 수 있지만 정본 report에서 requested/provenance를 제거하지 않는다.
+`check`는 parse, import, link, static type, ownership, expression,
+choice/constraint, requested/effective snapshot resolve를 검증한다. 성공하면
+`check ok`를 출력한다. `--strict`은 V2에서 제공되는 warning을 failure로
+승격한다.
+
+`resolve --format text|json|toml`은 option의 type, requested 존재 여부,
+effective value와 origin을 출력한다. JSON의 schema는
+`confit-resolved-v2`이다. output은 deterministic order이며 source TOML을
+수정하지 않는다.
 
 ## Gen
 
-```text
-confit gen \
-  --project <root> \
-  --profile <name> \
-  --target <name> \
-  --out <dir> \
-  --artifact header|reports|cmake|qstar|build-selection|changes|all
+```sh
+confit gen --project fixtures/delos-v2 --profile release \
+  --out build/generated/delos/release --artifact all
 ```
 
-`changes`는 [artifacts-v2.md](artifacts-v2.md)의 semantic digest manifest다.
-V2 artifact를 v1 schema id로 생성하는 option은 없다.
+V2 generator는 immutable snapshot 하나에서 canonical full bundle을 만든다.
+현재 V2 CLI에서 허용하는 artifact selector는 `--artifact all`뿐이다. 부분
+artifact selector는 unsupported error로 거부하여 서로 다른 partial bundle이
+생기지 않게 한다. `--dry-run`은 snapshot과 bundle serialization만 검증하고
+file을 쓰지 않는다.
 
-`--dry-run`은 file을 쓰지 않고 output plan, snapshot hash, 변경 예정 artifact를
-출력한다.
+생성되는 파일은 `config.h`, `config.report.json`, `config.explain.txt`,
+`config.graph.json`, `config.inputs.json`, `config.changes.json`,
+`config.cmake`, `config/config.qsm`, `build_selection/build_selection.qsm`이다.
+각 file은 write-if-changed atomic publish를 사용하며 timestamp나 absolute host
+path를 넣지 않는다.
 
-## Explain
+## Explain, List, Graph, Diff
 
-```text
-confit explain ... <option-id>
-confit explain ... --constraint <constraint-id>
-confit explain ... --choice <choice-id>
+```sh
+confit explain --project fixtures/delos-v2 --profile release delos.debug.trace
+confit list --project fixtures/delos-v2 --kind options --tag debug
+confit graph --project fixtures/delos-v2 --format json
+confit diff --project fixtures/delos-v2 --base base --profile release --format json
 ```
 
-Option explain은 requested chain, effective value, default/computed expression,
-availability, choice, constraint causal slice를 출력한다.
+`explain`은 type, availability, visibility, value, effective origin, source
+span, requested 상태를 보여준다. `list`는 options, categories, tags와 schema가
+선언한 profile/target directory를 조회한다. options에는 category/tag/query
+filter를 적용할 수 있다.
 
-## Graph
-
-```text
-confit graph ... --kind evaluation|choice|constraint|visibility|provenance
-```
-
-모든 graph를 하나의 dependency edge로 평탄화하지 않는다. JSON/DOT output은
-graph kind와 schema id를 포함한다.
-
-## Diff
-
-V2 diff는 단순 text value뿐 아니라 다음 class를 제공한다.
-
-```text
-requested
-effective
-availability
-choice
-constraint
-provenance
-build-output
-```
-
-기본 diff는 semantic value와 build output 차이를 먼저 보여주고 provenance-only
-변화는 별도 section에 둔다.
+`graph --format json|dot`은 evaluation, visibility, choice, constraint edge를
+kind와 함께 출력한다. `diff`는 `--base`와 `--profile` snapshot의 effective
+values를 결정적으로 비교한다. JSON schema는 각각 `confit-graph-v2`와
+`confit-diff-v2`이다.
 
 ## Compat
 
-V2 compatibility CLI는 [compat-v2.md](compat-v2.md)의 alias별 project/profile/
-target mapping을 사용한다. 기존 `--parus`, `--delos` shorthand는 v1 command
-surface로 유지할 수 있지만 v2 정본은 project alias 일반형이다.
-
-## Profile
-
-Profile command는 write domain을 검사한다.
-
-- profile-domain option만 profile TOML에 저장
-- target-domain edit는 target source 또는 ephemeral user override
-- computed/schema option edit 거부
-- sparse `[values]`/`[unset]` 유지
-- save 전에 full v2 resolve
-
-## TUI
-
-V2 TUI는 normal edit 요청을 incremental resolver에 전달한다.
-
-- Row에는 effective value를 표시한다.
-- Inspector는 requested/effective/provenance를 구분한다.
-- Unavailable edit는 dialog에서 causal diagnostic을 보여준다.
-- Suggestion은 사용자가 명시 수락할 때만 user request가 된다.
-- Choice cardinality는 renderer가 아니라 resolver가 판정한다.
-- Save는 full validation 성공 뒤에만 atomic하게 수행한다.
-
-## Migrate
-
-```text
-confit migrate schema \
-  --project <v1-root> \
-  --to 2 \
-  --out <candidate-root> \
-  --report <migration-report.json>
+```sh
+confit compat \
+  --parus fixtures/parus-v2 \
+  --delos fixtures/delos-v2 \
+  --compat fixtures/parus-delos.toml \
+  --format json
 ```
 
-Migration은 in-place가 아니며 v2 runtime compatibility가 아니다. 자세한 계약은
-[migration-v1-v2.md](migration-v1-v2.md)를 따른다.
+`compat`는 두 root가 모두 V2일 때만 V2 compatibility suite를 실행한다. 하나만
+V2인 mixed input은 명시적인 schema error다. 결과는 text 또는
+`confit-compat-report-v2` JSON이며, compatibility violation은 exit code `5`를
+유지한다.
 
-## Doctor
+## V1 Candidate Migration
 
-`confit doctor`는 다음을 출력한다.
-
-```text
-supported schema versions
-v1/v2 resolver ABI
-artifact ABI
-source revision
-platform/TUI lane
+```sh
+confit migrate --project path/to/v1-project --out /tmp/project-v2-candidate
 ```
 
-Project가 지정되면 installed binary가 해당 schema와 artifact ABI를 지원하는지
-검사한다.
+`migrate`는 V1 source tree를 read-only로 읽고, 반드시 별도 `--out` root에
+candidate만 쓴다. source root와 같은 output은 error다. 결과는 다음이다.
+
+```text
+<out>/config/project.toml
+<out>/config/options.toml
+<out>/migration-report.json
+<out>/migration-inputs.json
+```
+
+자동 변환 대상은 V1 option type/default/range/enum candidate/prompt/help/tag
+metadata다. V2 namespace는 V1 option id의 첫 segment에서 결정한다. dependency,
+category menu, profile, target, `forces`, writer conflict처럼 의미 결정을 요구하는
+요소는 candidate에 추측해 넣지 않고 `migration-report.json`의 TODO로 남긴다.
+Candidate가 load된다고 실제 project migration이 승인된 것은 아니다. 전체
+profile/target matrix와 generated artifact를 별도로 검토해야 한다.

@@ -18,6 +18,8 @@
 #include "confit/tui.h"
 #include "confit/version.h"
 
+#include "v2_workflow.h"
+
 typedef struct ConfitCliProjectArgs {
   const char *project_root;
   const char *profile_name;
@@ -172,6 +174,7 @@ static int confit_cli_run_compat(int argc, char **argv);
 static int confit_cli_run_list(int argc, char **argv);
 static int confit_cli_run_graph(int argc, char **argv);
 static int confit_cli_run_diff(int argc, char **argv);
+static int confit_cli_run_migrate(int argc, char **argv);
 static int confit_cli_run_profile(int argc, char **argv);
 static int confit_cli_run_completion(int argc, char **argv);
 static int confit_cli_run_tui(int argc, char **argv);
@@ -251,6 +254,9 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "--project <path>\n  --profile <name>\n  --base <profile>\n  "
      "--target <name>\n  --format text|json",
      confit_cli_run_diff},
+    {"migrate", "Create a schema v2 candidate without changing a v1 project.",
+     "confit migrate --project <path> --out <path>",
+     "--project <path>\n  --out <path>", confit_cli_run_migrate},
     {"compat", "Check compatibility assertions across project roots.",
      "confit compat --parus <path> --delos <path> --profile <name> "
      "[--target <name>] [--compat <path>] [--format text|json]",
@@ -5608,6 +5614,13 @@ static int confit_cli_run_diff(int argc, char **argv) {
   return confit_status_exit_code(CONFIT_OK);
 }
 
+static int confit_cli_run_migrate(int argc, char **argv) {
+  int handled = 0;
+  int exit_code = confit_cli_v2_try_run("migrate", argc, argv, &handled);
+
+  return handled != 0 ? exit_code : confit_status_exit_code(CONFIT_ERR_INTERNAL);
+}
+
 static ConfitStatus confit_cli_completion_append_command_words(
     ConfitCliTextBuilder *builder) {
   ConfitStatus status;
@@ -5775,7 +5788,7 @@ static ConfitStatus confit_cli_completion_fish(char **out_text) {
   CONFIT_FISH_APPEND("# confit fish completion\n");
   CONFIT_FISH_APPEND("complete -c confit -f\n");
   CONFIT_FISH_APPEND(
-      "complete -c confit -n '__fish_use_subcommand' -a 'help doctor init check resolve gen explain list graph diff compat profile tui completion'\n");
+      "complete -c confit -n '__fish_use_subcommand' -a 'help doctor init check resolve gen explain list graph diff migrate compat profile tui completion'\n");
   CONFIT_FISH_APPEND("complete -c confit -l help -d 'Show help'\n");
   CONFIT_FISH_APPEND("complete -c confit -l version -d 'Show version'\n");
   CONFIT_FISH_APPEND(
@@ -5995,6 +6008,15 @@ int main(int argc, char **argv) {
     if (command->handler == 0) {
       exit_code = confit_cli_run_unsupported_command(command);
       goto cleanup;
+    }
+    {
+      int v2_handled = 0;
+      int v2_exit = confit_cli_v2_try_run(command->name, normalized_argc,
+                                          normalized_argv, &v2_handled);
+      if (v2_handled != 0) {
+        exit_code = v2_exit;
+        goto cleanup;
+      }
     }
     exit_code = command->handler(normalized_argc, normalized_argv);
     goto cleanup;

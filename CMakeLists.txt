@@ -383,6 +383,20 @@ target_compile_features(confit_compat_v2 PUBLIC c_std_17)
 
 confit_target_warnings(confit_compat_v2)
 
+add_library(confit_migration_v2 STATIC
+  src/migration/v1_to_v2.c
+)
+
+target_link_libraries(confit_migration_v2
+  PUBLIC
+    confit_schema
+    confit_host
+)
+
+target_compile_features(confit_migration_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_migration_v2)
+
 if(CONFIT_ENABLE_TUI)
   add_library(confit_tui STATIC
     src/tui/curses_frontend.c
@@ -419,12 +433,17 @@ confit_target_warnings(confit_tui)
 
 add_executable(confit
   src/cli/main.c
+  src/cli/v2_workflow.c
 )
 
 target_link_libraries(confit PRIVATE
   confit_compat
   confit_explain
   confit_generator
+  confit_generator_v2
+  confit_compat_v2
+  confit_migration_v2
+  confit_schema_dispatch
   confit_tui
 )
 
@@ -1018,6 +1037,25 @@ add_test(
           $<TARGET_FILE:confit>
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round4-cli-c
+)
+
+add_executable(confit_test_cli_v2_workflow
+  tests/integration_c/test_cli_v2_workflow.c
+)
+
+target_link_libraries(confit_test_cli_v2_workflow PRIVATE confit_test_support)
+target_compile_definitions(confit_test_cli_v2_workflow PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_cli_v2_workflow)
+
+add_test(
+  NAME confit.cli.v2_workflow_c
+  COMMAND confit_test_cli_v2_workflow
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round16-cli-v2
 )
 
 add_executable(confit_test_v1_baseline

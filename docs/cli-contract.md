@@ -16,14 +16,15 @@ It is not an implementation progress log.
 
 ## Schema Version 범위
 
-현재 구현된 command는 `schema_version = 1` project를 처리한다. V2가 구현되면
-동일한 top-level command가 `project.toml`의 version을 자동 dispatch하지만,
-CLI option으로 v1 source를 v2로 강제 해석하지 않는다. 구현 전까지 이 문서의
-command 존재가 v2 지원을 의미하지 않는다.
+동일한 top-level command는 `project.toml`의 version을 자동 dispatch한다.
+`schema_version = 1`은 V1 pipeline을, `schema_version = 2`는 V2
+parse/link/compile/snapshot pipeline을 사용한다. CLI option으로 source를 다른
+version으로 강제 해석하지 않는다. V1/V2 import, profile, target, compatibility
+input을 섞는 것은 허용하지 않는다.
 
 ## Command Set
 
-Confit has thirteen operational top-level commands plus the `help` command.
+Confit has fourteen operational top-level commands plus the `help` command.
 `--version` is a global option, not a command.
 
 | Command | Contract |
@@ -38,6 +39,7 @@ Confit has thirteen operational top-level commands plus the `help` command.
 | `list` | List schema entities such as options, profiles, targets, categories, and tags. |
 | `graph` | Emit the option dependency graph as JSON or DOT. |
 | `diff` | Compare resolved configuration results between two profiles or targets. |
+| `migrate` | Create a separate schema V2 candidate from a schema V1 project without editing the source tree. |
 | `compat` | Check compatibility assertions across project roots. |
 | `profile` | Manage profile TOML without opening the TUI. |
 | `tui` | Open the terminal UI where supported by the host platform. |
@@ -80,6 +82,7 @@ additional execution context to stderr and must not alter stdout payloads.
 | `--target <name>` | Select a target by name. |
 | `--set <option-id=value>` | Apply a transient override for the current command. |
 | `--format text|json|toml|dot` | Select output format where a command supports multiple formats. |
+| `--diagnostic-format json` | Emit a V2 CLI error as one deterministic JSON diagnostic on stderr. |
 
 `--set` must not edit profile TOML. Persistent profile changes belong to
 `confit profile` or `confit tui`.
@@ -131,6 +134,17 @@ not discover or modify sibling repositories implicitly.
 Schema editing is a guarded workflow. It writes human-readable TOML and must
 perform validation before saving.
 
+## Migration Options
+
+```text
+confit migrate --project <v1-project> --out <v2-candidate-root>
+```
+
+`migrate`는 write command이지만 명시적인 `--out` root 아래에만 persistent
+write를 허용한다. output은 `--project`와 달라야 한다. candidate
+`config/project.toml`, `config/options.toml`, `migration-report.json`,
+`migration-inputs.json`을 쓰며 source V1 tree는 절대 수정하지 않는다.
+
 ## Profile Subcommands
 
 `confit profile` provides non-interactive profile TOML management:
@@ -161,6 +175,7 @@ confit explain --project config/confit --profile sim-dsh delos.debug.dsh
 confit list --project config/confit --kind options --category debug
 confit graph --project config/confit --profile sim-dsh --format dot
 confit diff --project config/confit --profile sim-dsh --base hw-debug
+confit migrate --project config/confit-v1 --out /tmp/confit-v2-candidate
 confit compat --parus ../parus/config/confit --delos config/confit --profile parus-delos-debug --compat config/compat
 confit profile list --project config/confit
 confit profile show --project config/confit sim-dsh
@@ -203,6 +218,7 @@ confit init       project skeleton TOML
 confit gen        generated artifacts under --out
 confit profile    profile TOML
 confit tui        profile TOML, or guarded schema TOML in --schema-edit mode
+confit migrate    v2 candidate TOML and reports under --out only
 ```
 
 Forbidden implicit writes:

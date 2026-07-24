@@ -129,6 +129,13 @@ JSON 또는 DOT 형식으로
 profile review에서
 무엇이 바뀌는지 확인할 때 사용한다.
 .TP
+.B migrate --project path --out path
+schema_version 1 project를 read-only로 분석하고,
+별도 output 아래에 schema_version 2 candidate와 migration report를 만든다.
+source project root와 같은 output은 거부한다.
+candidate의 dependency, menu, profile, target, force, writer conflict TODO는
+검토 후 명시적으로 V2 semantics로 작성해야 한다.
+.TP
 .B compat --parus path --delos path --profile name [--target name] [--compat path] [--format text|json]
 Parus/Delos-style project root 사이의
 compatibility assertion을
@@ -184,6 +191,9 @@ JSON payload나 error는
 .TP
 .B --verbose
 추가 실행 context를 stderr에 출력한다.
+.TP
+.B --diagnostic-format json
+V2 command가 실패하면 stderr에 deterministic JSON diagnostic을 출력한다.
 .SH 자주 쓰는 흐름
 .SS Project 검사
 .EX
@@ -211,6 +221,12 @@ confit diff \\
   --project tools/confit/tests/fixtures/realish/delos \\
   --profile sim-dsh \\
   --base debug
+.EE
+.SS V1 candidate migration
+.EX
+confit migrate \\
+  --project legacy/config/confit \\
+  --out /tmp/confit-v2-candidate
 .EE
 .SS Artifact 생성
 .EX
@@ -327,6 +343,11 @@ project path 또는 output path를
 은 반드시
 .B --out
 아래에만 generated artifact를 쓴다.
+.IP \(bu 2
+.B migrate
+는 source project를 수정하지 않고 별도
+.B --out
+candidate root에만 쓴다.
 .IP \(bu 2
 설치 과정은 project
 .I config/
