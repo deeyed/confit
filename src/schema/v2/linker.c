@@ -10,6 +10,8 @@ struct ConfitV2LinkedProject {
   size_t symbol_count;
   ConfitV2LinkedExpression *expressions;
   size_t expression_count;
+  size_t expression_capacity;
+  const ConfitV2LinkedExpression **expression_index;
 };
 
 static const char kInvalidLinkArgument[] = "invalid schema v2 linker argument";
@@ -64,6 +66,29 @@ static int confit_v2_link_symbol_compare(const void *left, const void *right) {
   const ConfitV2Symbol *const *right_symbol = (const ConfitV2Symbol *const *)right;
 
   return strcmp((*left_symbol)->id, (*right_symbol)->id);
+}
+
+static int confit_v2_link_expression_compare(const void *left,
+                                              const void *right) {
+  const ConfitV2LinkedExpression *const *left_expression =
+      (const ConfitV2LinkedExpression *const *)left;
+  const ConfitV2LinkedExpression *const *right_expression =
+      (const ConfitV2LinkedExpression *const *)right;
+  int comparison;
+
+  if ((*left_expression)->role != (*right_expression)->role) {
+    return (*left_expression)->role < (*right_expression)->role ? -1 : 1;
+  }
+  comparison = strcmp((*left_expression)->owner_id, (*right_expression)->owner_id);
+  if (comparison != 0) {
+    return comparison;
+  }
+  if ((*left_expression)->source_order == (*right_expression)->source_order) {
+    return 0;
+  }
+  return (*left_expression)->source_order < (*right_expression)->source_order
+             ? -1
+             : 1;
 }
 
 static int confit_v2_link_symbol_is_owned_by_namespace(
@@ -222,12 +247,6 @@ static ConfitStatus confit_v2_link_append_expression(
     return CONFIT_OK;
   }
   count = linked->expression_count;
-  if (count == SIZE_MAX / sizeof(*grown)) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source->span.path,
-                          source->span.line, source->span.column,
-                          kLinkAllocationFailed);
-    return CONFIT_ERR_INTERNAL;
-  }
   status = confit_v2_expression_parse(source, 0, &parsed, diagnostic);
   if (status != CONFIT_OK) {
     return status;
@@ -247,21 +266,36 @@ static ConfitStatus confit_v2_link_append_expression(
     confit_v2_expression_free(parsed);
     return CONFIT_ERR_SCHEMA;
   }
-  grown = (ConfitV2LinkedExpression *)realloc(
-      linked->expressions, (count + 1U) * sizeof(*grown));
-  if (grown == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source->span.path,
-                          source->span.line, source->span.column,
-                          kLinkAllocationFailed);
-    confit_v2_typed_expression_free(typed);
-    confit_v2_expression_free(parsed);
-    return CONFIT_ERR_INTERNAL;
+  if (count == linked->expression_capacity) {
+    size_t capacity = linked->expression_capacity == 0U
+                          ? 16U
+                          : linked->expression_capacity * 2U;
+
+    if (capacity < linked->expression_capacity ||
+        capacity > SIZE_MAX / sizeof(*grown)) {
+      confit_v2_link_diagnostic(parsed, parsed->root, CONFIT_ERR_INTERNAL,
+                                kLinkAllocationFailed, diagnostic);
+      confit_v2_typed_expression_free(typed);
+      confit_v2_expression_free(parsed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2LinkedExpression *)realloc(
+        linked->expressions, capacity * sizeof(*grown));
+    if (grown == 0) {
+      confit_v2_link_diagnostic(parsed, parsed->root, CONFIT_ERR_INTERNAL,
+                                kLinkAllocationFailed, diagnostic);
+      confit_v2_typed_expression_free(typed);
+      confit_v2_expression_free(parsed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    linked->expressions = grown;
+    linked->expression_capacity = capacity;
   }
-  linked->expressions = grown;
   record = &linked->expressions[count];
   memset(record, 0, sizeof(*record));
   record->role = role;
   record->owner_id = owner_id;
+  record->source_order = count;
   record->expression = parsed;
   record->typed = typed;
   status = confit_v2_link_collect_references(linked, record, parsed->root,
@@ -274,6 +308,29 @@ static ConfitStatus confit_v2_link_append_expression(
     return status;
   }
   linked->expression_count = count + 1U;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_link_build_expression_index(
+    ConfitV2LinkedProject *linked, ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  if (linked->expression_count == 0U) {
+    return CONFIT_OK;
+  }
+  linked->expression_index = (const ConfitV2LinkedExpression **)calloc(
+      linked->expression_count, sizeof(*linked->expression_index));
+  if (linked->expression_index == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL,
+                          linked->project->config_root, 0U, 0U,
+                          kLinkAllocationFailed);
+    return CONFIT_ERR_INTERNAL;
+  }
+  for (index = 0U; index < linked->expression_count; ++index) {
+    linked->expression_index[index] = &linked->expressions[index];
+  }
+  qsort(linked->expression_index, linked->expression_count,
+        sizeof(*linked->expression_index), confit_v2_link_expression_compare);
   return CONFIT_OK;
 }
 
@@ -467,6 +524,11 @@ ConfitStatus confit_v2_schema_link_project(
     confit_v2_linked_project_free(linked);
     return status;
   }
+  status = confit_v2_link_build_expression_index(linked, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_v2_linked_project_free(linked);
+    return status;
+  }
   *out_linked = linked;
   return CONFIT_OK;
 }
@@ -485,6 +547,7 @@ void confit_v2_linked_project_free(ConfitV2LinkedProject *linked) {
         (ConfitV2Expression *)linked->expressions[index].expression);
   }
   free(linked->expressions);
+  free(linked->expression_index);
   free(linked->bindings);
   free(linked->symbols);
   free(linked);
@@ -515,6 +578,45 @@ const ConfitV2LinkedExpression *confit_v2_linked_project_expression_at(
     return 0;
   }
   return &linked->expressions[index];
+}
+
+const ConfitV2LinkedExpression *confit_v2_linked_project_find_expression(
+    const ConfitV2LinkedProject *linked, ConfitV2LinkedExpressionRole role,
+    const char *owner_id, size_t occurrence) {
+  size_t low;
+  size_t high;
+
+  if (linked == 0 || owner_id == 0 || linked->expression_index == 0) {
+    return 0;
+  }
+  low = 0U;
+  high = linked->expression_count;
+  while (low < high) {
+    const size_t middle = low + (high - low) / 2U;
+    const ConfitV2LinkedExpression *expression = linked->expression_index[middle];
+    const int comparison = expression->role == role
+                               ? strcmp(expression->owner_id, owner_id)
+                               : (expression->role < role ? -1 : 1);
+
+    if (comparison < 0) {
+      low = middle + 1U;
+    } else {
+      high = middle;
+    }
+  }
+  while (low < linked->expression_count) {
+    const ConfitV2LinkedExpression *expression = linked->expression_index[low];
+
+    if (expression->role != role || strcmp(expression->owner_id, owner_id) != 0) {
+      return 0;
+    }
+    if (occurrence == 0U) {
+      return expression;
+    }
+    occurrence -= 1U;
+    low += 1U;
+  }
+  return 0;
 }
 
 ConfitStatus confit_v2_linked_project_validate_write(

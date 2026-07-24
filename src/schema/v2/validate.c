@@ -34,24 +34,8 @@ void confit_v2_structure_diagnostic(const ConfitV2SourceSpan *span,
 const ConfitV2LinkedExpression *confit_v2_structure_find_expression(
     const ConfitV2LinkedProject *linked, ConfitV2LinkedExpressionRole role,
     const char *owner_id, size_t occurrence) {
-  size_t index;
-
-  if (linked == 0 || owner_id == 0) {
-    return 0;
-  }
-  for (index = 0U; index < confit_v2_linked_project_expression_count(linked);
-       ++index) {
-    const ConfitV2LinkedExpression *expression =
-        confit_v2_linked_project_expression_at(linked, index);
-    if (expression != 0 && expression->role == role &&
-        strcmp(expression->owner_id, owner_id) == 0) {
-      if (occurrence == 0U) {
-        return expression;
-      }
-      occurrence -= 1U;
-    }
-  }
-  return 0;
+  return confit_v2_linked_project_find_expression(linked, role, owner_id,
+                                                   occurrence);
 }
 
 static int confit_v2_compiled_menu_compare(const void *left, const void *right) {

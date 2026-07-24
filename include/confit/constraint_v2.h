@@ -30,6 +30,8 @@ typedef struct ConfitV2CompiledGraph {
   ConfitV2CompiledGraphKind kind;
   ConfitV2CompiledGraphEdge *edges;
   size_t edge_count;
+  /** internal growth capacity; serialized graph semantics에는 포함하지 않는다. */
+  size_t edge_capacity;
 } ConfitV2CompiledGraph;
 
 /** @brief parent link와 linked visibility를 가진 compiled menu node다. */

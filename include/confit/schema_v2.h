@@ -59,6 +59,18 @@ typedef struct ConfitV2StringList {
   size_t count;
 } ConfitV2StringList;
 
+/**
+ * @brief schema load 동안 semantic identifier의 uniqueness를 확인하는 owned index다.
+ *
+ * slot은 project가 소유하는 immutable identifier string을 borrow한다. 이 index는
+ * linked project의 lookup table과 별개이며 source declaration 순서를 바꾸지 않는다.
+ */
+typedef struct ConfitV2IdentifierIndex {
+  const char **slots;
+  size_t capacity;
+  size_t count;
+} ConfitV2IdentifierIndex;
+
 /** @brief typed v2 value다. string/list payload는 value가 소유한다. */
 typedef struct ConfitV2Value {
   /** payload kind. UNSET은 값이 없음을 뜻한다. */
@@ -291,17 +303,26 @@ typedef struct ConfitV2Project {
   ConfitV2SourceSpan default_target_span;
   ConfitV2Import *imports;
   size_t import_count;
+  size_t import_capacity;
   ConfitV2StringList profile_dirs;
   ConfitV2StringList target_dirs;
   ConfitV2StringList selection_dirs;
   ConfitV2Symbol *symbols;
   size_t symbol_count;
+  size_t symbol_capacity;
   ConfitV2MenuNode *menus;
   size_t menu_count;
+  size_t menu_capacity;
   ConfitV2Choice *choices;
   size_t choice_count;
+  size_t choice_capacity;
   ConfitV2Constraint *constraints;
   size_t constraint_count;
+  size_t constraint_capacity;
+  ConfitV2IdentifierIndex symbol_identifiers;
+  ConfitV2IdentifierIndex menu_identifiers;
+  ConfitV2IdentifierIndex choice_identifiers;
+  ConfitV2IdentifierIndex constraint_identifiers;
   ConfitV2SourceSpan span;
 } ConfitV2Project;
 

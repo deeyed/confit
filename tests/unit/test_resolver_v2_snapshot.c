@@ -192,11 +192,48 @@ static int expect_invalidation_and_reconcile(void) {
                                  "eval.requested") &&
            confit_v2_snapshot_invalidate(base, "missing.option", &missing,
                                          &diagnostic) == CONFIT_ERR_INVALID_ARGUMENT;
+  for (size_t index = 0U; result && index < 1000U; ++index) {
+    ConfitV2Snapshot *repeated = 0;
+    ConfitV2InvalidationSet *repeated_affected = 0;
+
+    override.value_text = (index & 1U) == 0U ? "7" : "8";
+    result = confit_v2_snapshot_reconcile_edit(
+                 base, compiled, &options, "eval.requested", &repeated,
+                 &repeated_affected, &diagnostic) == CONFIT_OK &&
+             repeated != 0 && repeated_affected != 0 &&
+             invalidation_contains(repeated_affected,
+                                   CONFIT_V2_INVALIDATION_OPTION,
+                                   "eval.requested");
+    confit_v2_invalidation_set_free(repeated_affected);
+    confit_v2_snapshot_free(repeated);
+  }
   confit_v2_invalidation_set_free(missing);
   confit_v2_invalidation_set_free(affected);
   confit_v2_snapshot_free(full);
   confit_v2_snapshot_free(incremental);
   confit_v2_snapshot_free(base);
+  free_compiled(project, linked, compiled);
+  return result;
+}
+
+static int expect_menu_lookup_scale(void) {
+  ConfitV2Project *project;
+  ConfitV2LinkedProject *linked;
+  ConfitV2CompiledStructure *compiled;
+  ConfitDiagnostic diagnostic;
+  size_t index;
+  int result;
+
+  confit_diagnostic_init(&diagnostic);
+  if (load_compiled("tests/fixtures/schema-v2/valid", &project, &linked,
+                    &compiled, &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+  result = 1;
+  for (index = 0U; index < 100U; ++index) {
+    result = result && confit_v2_compiled_structure_find_menu(
+                           compiled, index & 1U ? "main" : "main.features") != 0;
+  }
   free_compiled(project, linked, compiled);
   return result;
 }
@@ -237,6 +274,9 @@ int main(void) {
   }
   if (!expect_constraint_publish_gate()) {
     return 4;
+  }
+  if (!expect_menu_lookup_scale()) {
+    return 5;
   }
   return 0;
 }

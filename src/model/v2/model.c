@@ -115,6 +115,97 @@ void confit_v2_string_list_clear(const ConfitV2Allocator *allocator,
   memset(list, 0, sizeof(*list));
 }
 
+static uint64_t confit_v2_identifier_hash(const char *identifier) {
+  uint64_t hash = UINT64_C(1469598103934665603);
+
+  while (*identifier != '\0') {
+    hash ^= (unsigned char)*identifier;
+    hash *= UINT64_C(1099511628211);
+    identifier += 1;
+  }
+  return hash;
+}
+
+void confit_v2_identifier_index_clear(const ConfitV2Allocator *allocator,
+                                      ConfitV2IdentifierIndex *index) {
+  if (index == 0) {
+    return;
+  }
+  confit_v2_deallocate(allocator, index->slots);
+  memset(index, 0, sizeof(*index));
+}
+
+static ConfitStatus confit_v2_identifier_index_rehash(
+    const ConfitV2Allocator *allocator, ConfitV2IdentifierIndex *index,
+    size_t capacity) {
+  const char **slots;
+  size_t cursor;
+  size_t source_index;
+
+  if (capacity == 0U || (capacity & (capacity - 1U)) != 0U ||
+      capacity > SIZE_MAX / sizeof(*slots)) {
+    return CONFIT_ERR_INTERNAL;
+  }
+  slots = (const char **)confit_v2_allocate(allocator, capacity * sizeof(*slots));
+  if (slots == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+  memset(slots, 0, capacity * sizeof(*slots));
+  for (source_index = 0U; source_index < index->capacity; ++source_index) {
+    const char *identifier = index->slots[source_index];
+
+    if (identifier == 0) {
+      continue;
+    }
+    cursor = (size_t)(confit_v2_identifier_hash(identifier) & (capacity - 1U));
+    while (slots[cursor] != 0) {
+      cursor = (cursor + 1U) & (capacity - 1U);
+    }
+    slots[cursor] = identifier;
+  }
+  confit_v2_deallocate(allocator, index->slots);
+  index->slots = slots;
+  index->capacity = capacity;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_v2_identifier_index_insert(
+    const ConfitV2Allocator *allocator, ConfitV2IdentifierIndex *index,
+    const char *identifier, int *out_duplicate) {
+  size_t cursor;
+  ConfitStatus status;
+
+  if (!confit_v2_allocator_is_valid(allocator) || index == 0 ||
+      identifier == 0 || out_duplicate == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_duplicate = 0;
+  if (index->capacity == 0U ||
+      index->count + 1U > index->capacity - index->capacity / 4U) {
+    size_t capacity = index->capacity == 0U ? 16U : index->capacity * 2U;
+
+    if (capacity < index->capacity || capacity > SIZE_MAX / sizeof(*index->slots)) {
+      return CONFIT_ERR_INTERNAL;
+    }
+    status = confit_v2_identifier_index_rehash(allocator, index, capacity);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  cursor = (size_t)(confit_v2_identifier_hash(identifier) &
+                    (index->capacity - 1U));
+  while (index->slots[cursor] != 0) {
+    if (strcmp(index->slots[cursor], identifier) == 0) {
+      *out_duplicate = 1;
+      return CONFIT_OK;
+    }
+    cursor = (cursor + 1U) & (index->capacity - 1U);
+  }
+  index->slots[cursor] = identifier;
+  index->count += 1U;
+  return CONFIT_OK;
+}
+
 void confit_v2_value_clear(const ConfitV2Allocator *allocator,
                            ConfitV2Value *value) {
   if (value == 0) {
@@ -281,6 +372,11 @@ void confit_v2_project_free(ConfitV2Project *project) {
     confit_v2_constraint_clear(allocator, &project->constraints[index]);
   }
   confit_v2_deallocate(allocator, project->constraints);
+  confit_v2_identifier_index_clear(allocator, &project->symbol_identifiers);
+  confit_v2_identifier_index_clear(allocator, &project->menu_identifiers);
+  confit_v2_identifier_index_clear(allocator, &project->choice_identifiers);
+  confit_v2_identifier_index_clear(allocator,
+                                   &project->constraint_identifiers);
   confit_v2_source_span_clear(allocator, &project->span);
   confit_v2_deallocate(allocator, project);
 }

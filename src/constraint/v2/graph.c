@@ -26,19 +26,25 @@ static ConfitStatus confit_v2_graph_append(
     ConfitDiagnostic *diagnostic) {
   ConfitV2CompiledGraphEdge *grown;
 
-  if (graph->edge_count == SIZE_MAX / sizeof(*graph->edges)) {
-    confit_v2_structure_diagnostic(span, CONFIT_ERR_INTERNAL, kAllocationFailed,
-                                   diagnostic);
-    return CONFIT_ERR_INTERNAL;
+  if (graph->edge_count == graph->edge_capacity) {
+    size_t capacity = graph->edge_capacity == 0U ? 16U : graph->edge_capacity * 2U;
+
+    if (capacity < graph->edge_capacity ||
+        capacity > SIZE_MAX / sizeof(*graph->edges)) {
+      confit_v2_structure_diagnostic(span, CONFIT_ERR_INTERNAL, kAllocationFailed,
+                                     diagnostic);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2CompiledGraphEdge *)realloc(
+        graph->edges, capacity * sizeof(*graph->edges));
+    if (grown == 0) {
+      confit_v2_structure_diagnostic(span, CONFIT_ERR_INTERNAL, kAllocationFailed,
+                                     diagnostic);
+      return CONFIT_ERR_INTERNAL;
+    }
+    graph->edges = grown;
+    graph->edge_capacity = capacity;
   }
-  grown = (ConfitV2CompiledGraphEdge *)realloc(
-      graph->edges, (graph->edge_count + 1U) * sizeof(*graph->edges));
-  if (grown == 0) {
-    confit_v2_structure_diagnostic(span, CONFIT_ERR_INTERNAL, kAllocationFailed,
-                                   diagnostic);
-    return CONFIT_ERR_INTERNAL;
-  }
-  graph->edges = grown;
   graph->edges[graph->edge_count].owner_id = owner_id;
   graph->edges[graph->edge_count].target = target;
   graph->edges[graph->edge_count].span = span;
@@ -142,6 +148,7 @@ void confit_v2_structure_graphs_clear(ConfitV2CompiledStructure *compiled) {
     free(compiled->graphs[index].edges);
     compiled->graphs[index].edges = 0;
     compiled->graphs[index].edge_count = 0U;
+    compiled->graphs[index].edge_capacity = 0U;
   }
 }
 

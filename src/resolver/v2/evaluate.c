@@ -165,20 +165,8 @@ static int confit_v2_evaluation_role_affects_value(
 static const ConfitV2LinkedExpression *confit_v2_evaluation_find_expression(
     const ConfitV2LinkedProject *linked, ConfitV2LinkedExpressionRole role,
     const char *owner_id, size_t occurrence) {
-  size_t index;
-
-  for (index = 0U; index < confit_v2_linked_project_expression_count(linked);
-       ++index) {
-    const ConfitV2LinkedExpression *expression =
-        confit_v2_linked_project_expression_at(linked, index);
-    if (expression->role == role && strcmp(expression->owner_id, owner_id) == 0) {
-      if (occurrence == 0U) {
-        return expression;
-      }
-      occurrence -= 1U;
-    }
-  }
-  return 0;
+  return confit_v2_linked_project_find_expression(linked, role, owner_id,
+                                                   occurrence);
 }
 
 static ConfitStatus confit_v2_evaluation_append_dependency(

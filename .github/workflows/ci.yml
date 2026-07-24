@@ -122,3 +122,27 @@ jobs:
           cmake --install build-windows-ci --prefix install-windows-ci
           test -s install-windows-ci/bin/confit.exe
           install-windows-ci/bin/confit.exe doctor
+
+  sanitizer:
+    name: ubuntu-asan-ubsan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libncurses-dev
+
+      - name: Build and test with sanitizers
+        run: |
+          cmake -S . -B build-sanitizer \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCONFIT_ENABLE_SANITIZERS=ON
+          cmake --build build-sanitizer --parallel
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+          UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+          ctest --test-dir build-sanitizer --output-on-failure \
+            -LE 'scale|sanitizer-exclude'

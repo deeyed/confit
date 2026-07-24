@@ -209,6 +209,9 @@ static ConfitStatus confit_v2_compile_constraints(
     ConfitV2CompiledStructure *compiled, ConfitDiagnostic *diagnostic) {
   const ConfitV2Project *project =
       confit_v2_linked_project_source(compiled->linked);
+  const size_t expression_count =
+      confit_v2_linked_project_expression_count(compiled->linked);
+  size_t expression_base;
   size_t index;
 
   compiled->constraint_count = project->constraint_count;
@@ -221,22 +224,35 @@ static ConfitStatus confit_v2_compile_constraints(
       return CONFIT_ERR_INTERNAL;
     }
   }
+  if (compiled->constraint_count > expression_count / 2U) {
+    confit_v2_structure_diagnostic(&project->span, CONFIT_ERR_INTERNAL,
+                                   kMissingLinkedExpression, diagnostic);
+    return CONFIT_ERR_INTERNAL;
+  }
+  /* Linker appends each required constraint pair after every other expression. */
+  expression_base = expression_count - compiled->constraint_count * 2U;
   for (index = 0U; index < compiled->constraint_count; ++index) {
     const ConfitV2Constraint *source = &project->constraints[index];
+    const ConfitV2LinkedExpression *when =
+        confit_v2_linked_project_expression_at(compiled->linked,
+                                                expression_base + index * 2U);
+    const ConfitV2LinkedExpression *require =
+        confit_v2_linked_project_expression_at(compiled->linked,
+                                                expression_base + index * 2U + 1U);
+
     compiled->constraints[index].source = source;
     if (source->message == 0 || source->message[0] == '\0') {
       confit_v2_structure_diagnostic(&source->span, CONFIT_ERR_SCHEMA,
                                      kConstraintMessage, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
-    compiled->constraints[index].when = confit_v2_structure_find_expression(
-        compiled->linked, CONFIT_V2_LINKED_EXPRESSION_CONSTRAINT_WHEN,
-        source->id, 0U);
-    compiled->constraints[index].require = confit_v2_structure_find_expression(
-        compiled->linked, CONFIT_V2_LINKED_EXPRESSION_CONSTRAINT_REQUIRE,
-        source->id, 0U);
-    if (compiled->constraints[index].when == 0 ||
-        compiled->constraints[index].require == 0) {
+    compiled->constraints[index].when = when;
+    compiled->constraints[index].require = require;
+    if (when == 0 || require == 0 ||
+        when->role != CONFIT_V2_LINKED_EXPRESSION_CONSTRAINT_WHEN ||
+        require->role != CONFIT_V2_LINKED_EXPRESSION_CONSTRAINT_REQUIRE ||
+        strcmp(when->owner_id, source->id) != 0 ||
+        strcmp(require->owner_id, source->id) != 0) {
       confit_v2_structure_diagnostic(&source->span, CONFIT_ERR_INTERNAL,
                                      kMissingLinkedExpression, diagnostic);
       return CONFIT_ERR_INTERNAL;

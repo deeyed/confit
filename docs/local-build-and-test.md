@@ -67,6 +67,11 @@ tools/confit/tests/run_tests.sh
 CTest에는 synthetic scale gate도 포함된다. 이 gate는 build directory 안에 5,000개 option을 가진 임시
 project를 생성하고 `check`, `list`, `graph`, `gen`을 순서대로 실행한다.
 
+Schema V2의 bounded fuzz, import depth, incremental reconcile, sanitizer 실행
+방법과 release-size stress 범위는 [v2-hardening.md](v2-hardening.md)를 정본으로
+따른다. 기본 CTest의 빠른 regression 규모와 dedicated high-memory release stress
+규모를 같은 보장으로 취급하면 안 된다.
+
 Windows CTest lane에서는 POSIX shell integration tests를 등록하지 않는다. 대신 C 기반
 `confit_test_cli_workflow`가 child process로 CLI command를 실행하고, `doctor`가 Windows clang-only
 CLI lane을 보고하는지와 `confit tui`가 exit code `8`로 실패하는지를 검증한다.

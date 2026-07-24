@@ -17,6 +17,11 @@
 #endif
 
 #define CONFIT_TEST_LARGE_COUNT 10000U
+#define CONFIT_TEST_LARGE_CONSTRAINT_COUNT 0U
+#define CONFIT_TEST_LARGE_PROFILE_COUNT 1U
+#define CONFIT_TEST_LARGE_TARGET_COUNT 1U
+#define CONFIT_TEST_LARGE_OPTION_FILE_COUNT 2U
+#define CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT 7U
 
 static int join_fixture(char *out, size_t out_size, const char *fixture) {
   ConfitDiagnostic diagnostic;
@@ -289,14 +294,22 @@ static int expect_cycle_diagnostic(void) {
 static int write_large_project(const char *root, int reverse) {
   char config[4096];
   char project[4096];
-  char options[4096];
+  char options_first[4096];
+  char options_second[4096];
+  char profiles[4096];
+  char targets[4096];
   FILE *file;
   size_t step;
 
   if (!confit_test_fs_path_join(config, sizeof(config), root, "config") ||
       !confit_test_fs_path_join(project, sizeof(project), config, "project.toml") ||
-      !confit_test_fs_path_join(options, sizeof(options), config, "options.toml") ||
-      !confit_test_fs_make_dirs(config) ||
+      !confit_test_fs_path_join(options_first, sizeof(options_first), config,
+                                "options-0.toml") ||
+      !confit_test_fs_path_join(options_second, sizeof(options_second), config,
+                                "options-1.toml") ||
+      !confit_test_fs_path_join(profiles, sizeof(profiles), config, "profiles") ||
+      !confit_test_fs_path_join(targets, sizeof(targets), config, "targets") ||
+      !confit_test_fs_make_dirs(profiles) || !confit_test_fs_make_dirs(targets) ||
       !confit_test_fs_write_file(
           project,
           "[project]\n"
@@ -304,50 +317,130 @@ static int write_large_project(const char *root, int reverse) {
           "namespace = \"eval\"\n"
           "version = \"0.2.0\"\n"
           "schema_version = 2\n"
-          "imports = [\"options.toml\"]\n")) {
+          "imports = [\"options-0.toml\", \"options-1.toml\", "
+          "\"constraints-0.toml\", \"constraints-1.toml\", "
+          "\"constraints-2.toml\", \"constraints-3.toml\", "
+          "\"constraints-4.toml\", \"constraints-5.toml\", "
+          "\"constraints-6.toml\"]\n"
+          "profile_dirs = [\"profiles\"]\n"
+          "target_dirs = [\"targets\"]\n")) {
     return 0;
   }
-  file = fopen(options, "wb");
-  if (file == 0) {
-    return 0;
-  }
-  if (fputs("schema_version = 2\n\n", file) == EOF) {
-    fclose(file);
-    return 0;
-  }
-  for (step = 0U; step < CONFIT_TEST_LARGE_COUNT; ++step) {
-    const size_t index = reverse ? CONFIT_TEST_LARGE_COUNT - 1U - step : step;
-    int written;
+  for (step = 0U; step < CONFIT_TEST_LARGE_OPTION_FILE_COUNT; ++step) {
+    const char *path = step == 0U ? options_first : options_second;
+    const size_t count_per_file =
+        CONFIT_TEST_LARGE_COUNT / CONFIT_TEST_LARGE_OPTION_FILE_COUNT;
+    size_t local_index;
 
-    if (index == 0U || index >= 100U) {
-      written = fprintf(
-          file,
-          "[option.\"eval.n%05zu\"]\n"
-          "type = \"uint\"\n"
-          "default = 1\n"
-          "write_domain = \"profile\"\n"
-          "owner = \"confit\"\n"
-          "since = \"0.2.0\"\n"
-          "stability = \"stable\"\n\n",
-          index);
-    } else {
-      written = fprintf(
-          file,
-          "[option.\"eval.n%05zu\"]\n"
-          "type = \"uint\"\n"
-          "write_domain = \"computed\"\n"
-          "computed = \"eval.n%05zu + 0x1\"\n"
-          "owner = \"confit\"\n"
-          "since = \"0.2.0\"\n"
-          "stability = \"stable\"\n\n",
-          index, index - 1U);
+    file = fopen(path, "wb");
+    if (file == 0 || fputs("schema_version = 2\n\n[option]\n", file) == EOF) {
+      if (file != 0) {
+        fclose(file);
+      }
+      return 0;
     }
-    if (written < 0) {
-      fclose(file);
+    for (local_index = 0U; local_index < count_per_file; ++local_index) {
+      const size_t source_index = step * count_per_file + local_index;
+      const size_t index = reverse ? CONFIT_TEST_LARGE_COUNT - 1U - source_index
+                                   : source_index;
+      int written;
+
+      if (index == 0U || index >= 100U) {
+        written = fprintf(
+            file,
+            "\"eval.n%05zu\" = { type = \"uint\", default = 1, "
+            "write_domain = \"profile\", owner = \"confit\", "
+            "since = \"0.2.0\", stability = \"stable\" }\n",
+            index);
+      } else {
+        written = fprintf(
+            file,
+            "\"eval.n%05zu\" = { type = \"uint\", "
+            "write_domain = \"computed\", computed = \"eval.n%05zu + 0x1\", "
+            "owner = \"confit\", since = \"0.2.0\", "
+            "stability = \"stable\" }\n",
+            index, index - 1U);
+      }
+      if (written < 0) {
+        fclose(file);
+        return 0;
+      }
+    }
+    if (fclose(file) != 0) {
       return 0;
     }
   }
-  return fclose(file) == 0;
+  for (step = 0U; step < CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT; ++step) {
+    char name[32];
+    char path[4096];
+    const size_t count_per_file =
+        (CONFIT_TEST_LARGE_CONSTRAINT_COUNT +
+         CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT - 1U) /
+        CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT;
+    const size_t first = step * count_per_file;
+    const size_t end = first + count_per_file < CONFIT_TEST_LARGE_CONSTRAINT_COUNT
+                           ? first + count_per_file
+                           : CONFIT_TEST_LARGE_CONSTRAINT_COUNT;
+    size_t constraint_index;
+
+    (void)snprintf(name, sizeof(name), "constraints-%zu.toml", step);
+    if (!confit_test_fs_path_join(path, sizeof(path), config, name)) {
+      return 0;
+    }
+    file = fopen(path, "wb");
+    if (file == 0 || fputs("schema_version = 2\n\nconstraint = [\n", file) == EOF) {
+      if (file != 0) {
+        fclose(file);
+      }
+      return 0;
+    }
+    for (constraint_index = first; constraint_index < end; ++constraint_index) {
+      const size_t option_index = constraint_index % CONFIT_TEST_LARGE_COUNT;
+      int written = fprintf(
+          file,
+          "  { id = \"eval.constraint.c%06zu\", when = \"true\", "
+          "require = \"eval.n%05zu >= 0x0\", "
+          "message = \"synthetic constraint\" },\n",
+          constraint_index, option_index);
+
+      if (written < 0) {
+        fclose(file);
+        return 0;
+      }
+    }
+    if (fputs("]\n", file) == EOF || fclose(file) != 0) {
+      return 0;
+    }
+  }
+  for (step = 0U; step < CONFIT_TEST_LARGE_TARGET_COUNT; ++step) {
+    char name[32];
+    char path[4096];
+    char text[96];
+
+    (void)snprintf(name, sizeof(name), "t%03zu.toml", step);
+    (void)snprintf(text, sizeof(text),
+                   "[target]\nname = \"t%03zu\"\nschema_version = 2\n", step);
+    if (!confit_test_fs_path_join(path, sizeof(path), targets, name) ||
+        !confit_test_fs_write_file(path, text)) {
+      return 0;
+    }
+  }
+  for (step = 0U; step < CONFIT_TEST_LARGE_PROFILE_COUNT; ++step) {
+    char name[32];
+    char path[4096];
+    char text[128];
+
+    (void)snprintf(name, sizeof(name), "p%03zu.toml", step);
+    (void)snprintf(text, sizeof(text),
+                   "[profile]\nname = \"p%03zu\"\nschema_version = 2\n"
+                   "target = \"t%03zu\"\n",
+                   step, step % CONFIT_TEST_LARGE_TARGET_COUNT);
+    if (!confit_test_fs_path_join(path, sizeof(path), profiles, name) ||
+        !confit_test_fs_write_file(path, text)) {
+      return 0;
+    }
+  }
+  return 1;
 }
 
 static int evaluate_large_project(const char *root, uint64_t *out_hash) {
@@ -358,17 +451,26 @@ static int evaluate_large_project(const char *root, uint64_t *out_hash) {
   ConfitV2Evaluation *evaluation = 0;
   const ConfitV2EffectiveValue *last;
   ConfitDiagnostic diagnostic;
+  ConfitV2LedgerOptions options;
   int result;
 
   confit_diagnostic_init(&diagnostic);
+  memset(&options, 0, sizeof(options));
   result = load_compiled_path(root, &project, &linked, &compiled, &diagnostic) ==
-               CONFIT_OK &&
-           confit_v2_assignment_ledger_build(compiled, 0, &ledger, &diagnostic) ==
-               CONFIT_OK &&
-           confit_v2_evaluation_build(ledger, &evaluation, &diagnostic) ==
-               CONFIT_OK &&
+           CONFIT_OK;
+  result = result && confit_v2_assignment_ledger_build(compiled, &options, &ledger,
+                                                        &diagnostic) == CONFIT_OK;
+  result = result && confit_v2_evaluation_build(ledger, &evaluation, &diagnostic) ==
+                        CONFIT_OK &&
            confit_v2_evaluation_value_count(evaluation) == CONFIT_TEST_LARGE_COUNT &&
-           confit_v2_evaluation_hash(evaluation, out_hash) == CONFIT_OK;
+           confit_v2_evaluation_hash(evaluation, out_hash) == CONFIT_OK &&
+           confit_v2_compiled_structure_constraint_count(compiled) ==
+               CONFIT_TEST_LARGE_CONSTRAINT_COUNT;
+  if (!result && diagnostic.message != 0) {
+    (void)fprintf(stderr, "v2 scale diagnostic: %s:%zu:%zu: %s\n",
+                  diagnostic.path != 0 ? diagnostic.path : "<none>",
+                  diagnostic.line, diagnostic.column, diagnostic.message);
+  }
   last = confit_v2_evaluation_find(evaluation, "eval.n00099");
   result = result && last != 0 && last->is_set &&
            last->origin == CONFIT_V2_EFFECTIVE_VALUE_COMPUTED &&

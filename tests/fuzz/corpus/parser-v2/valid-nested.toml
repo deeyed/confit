@@ -1,0 +1,6 @@
+[project]
+name = "nested"
+
+[option."demo.enabled"]
+type = "bool"
+tags = ["runtime", "trace"]

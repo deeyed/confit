@@ -17,5 +17,10 @@ void confit_v2_value_clear(const ConfitV2Allocator *allocator,
                            ConfitV2Value *value);
 void confit_v2_string_list_clear(const ConfitV2Allocator *allocator,
                                  ConfitV2StringList *list);
+void confit_v2_identifier_index_clear(const ConfitV2Allocator *allocator,
+                                      ConfitV2IdentifierIndex *index);
+ConfitStatus confit_v2_identifier_index_insert(
+    const ConfitV2Allocator *allocator, ConfitV2IdentifierIndex *index,
+    const char *identifier, int *out_duplicate);
 
 #endif /* CONFIT_MODEL_V2_INTERNAL_H */

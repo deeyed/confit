@@ -40,6 +40,8 @@ typedef struct ConfitV2LinkedExpression {
   const ConfitV2TypedExpression *typed;
   const ConfitV2LinkedReference *references;
   size_t reference_count;
+  /** source declaration order. 동일 role/owner expression의 stable occurrence다. */
+  size_t source_order;
 } ConfitV2LinkedExpression;
 
 /** @brief immutable linked v2 project handle이다. */
@@ -94,6 +96,16 @@ size_t confit_v2_linked_project_expression_count(
 /** @brief index 순서 linked expression record를 반환한다. */
 const ConfitV2LinkedExpression *confit_v2_linked_project_expression_at(
     const ConfitV2LinkedProject *linked, size_t index);
+
+/**
+ * @brief role, owner id, stable occurrence로 linked expression을 logarithmic lookup한다.
+ *
+ * `occurrence`은 같은 role/owner의 conditional default 같은 source-order sequence를
+ * 뜻한다. 존재하지 않으면 NULL을 반환한다.
+ */
+const ConfitV2LinkedExpression *confit_v2_linked_project_find_expression(
+    const ConfitV2LinkedProject *linked, ConfitV2LinkedExpressionRole role,
+    const char *owner_id, size_t occurrence);
 
 /**
  * @brief one requested assignment의 write-domain ownership을 검증한다.

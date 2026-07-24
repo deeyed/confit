@@ -27,6 +27,19 @@ if(WIN32 AND NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
 endif()
 
 option(CONFIT_ENABLE_TUI "Build the ncurses TUI frontend on supported hosts" ON)
+option(CONFIT_ENABLE_FUZZ_TARGETS
+  "Build bounded deterministic parser and expression fuzz regression targets" ON)
+option(CONFIT_ENABLE_SANITIZERS
+  "Enable AddressSanitizer and UndefinedBehaviorSanitizer on supported hosts" OFF)
+
+if(CONFIT_ENABLE_SANITIZERS)
+  if(WIN32 OR NOT CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+    message(FATAL_ERROR
+      "CONFIT_ENABLE_SANITIZERS requires a non-Windows GNU-style Clang or GCC build")
+  endif()
+  add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
 
 if(WIN32)
   if(CONFIT_ENABLE_TUI)
@@ -596,7 +609,10 @@ add_executable(confit_test_schema_v2_model
   tests/unit/test_schema_v2_model.c
 )
 
-target_link_libraries(confit_test_schema_v2_model PRIVATE confit_schema_v2)
+target_link_libraries(confit_test_schema_v2_model PRIVATE
+  confit_schema_v2
+  confit_test_support
+)
 target_compile_definitions(confit_test_schema_v2_model PRIVATE
   CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
@@ -698,6 +714,7 @@ add_test(
   NAME confit.unit.resolver_v2_evaluate
   COMMAND confit_test_resolver_v2_evaluate
 )
+set_tests_properties(confit.unit.resolver_v2_evaluate PROPERTIES LABELS "scale")
 
 add_executable(confit_test_resolver_v2_snapshot
   tests/unit/test_resolver_v2_snapshot.c
@@ -782,18 +799,41 @@ add_test(
   COMMAND confit_test_expression_v2
 )
 
-add_executable(confit_test_expression_v2_fuzz
-  tests/fuzz/test_expression_v2_fuzz.c
-)
+if(CONFIT_ENABLE_FUZZ_TARGETS)
+  add_executable(confit_test_expression_v2_fuzz
+    tests/fuzz/test_expression_v2_fuzz.c
+  )
 
-target_link_libraries(confit_test_expression_v2_fuzz PRIVATE confit_expression_v2)
+  target_link_libraries(confit_test_expression_v2_fuzz PRIVATE confit_expression_v2)
 
-confit_target_warnings(confit_test_expression_v2_fuzz)
+  confit_target_warnings(confit_test_expression_v2_fuzz)
 
-add_test(
-  NAME confit.fuzz.expression_v2_bounded
-  COMMAND confit_test_expression_v2_fuzz
-)
+  add_test(
+    NAME confit.fuzz.expression_v2_bounded
+    COMMAND confit_test_expression_v2_fuzz
+  )
+  set_tests_properties(confit.fuzz.expression_v2_bounded PROPERTIES LABELS "fuzz")
+
+  add_executable(confit_test_parser_v2_fuzz
+    tests/fuzz/test_parser_v2_fuzz.c
+  )
+
+  target_link_libraries(confit_test_parser_v2_fuzz PRIVATE
+    confit_parser_v2
+    confit_test_support
+  )
+  target_compile_definitions(confit_test_parser_v2_fuzz PRIVATE
+    CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+
+  confit_target_warnings(confit_test_parser_v2_fuzz)
+
+  add_test(
+    NAME confit.fuzz.parser_v2_bounded
+    COMMAND confit_test_parser_v2_fuzz
+  )
+  set_tests_properties(confit.fuzz.parser_v2_bounded PROPERTIES LABELS "fuzz")
+endif()
 
 add_executable(confit_test_expression_v2_semantics
   tests/unit/test_expression_v2_semantics.c
@@ -1078,6 +1118,12 @@ add_test(
           $<TARGET_FILE:confit>
           ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_BINARY_DIR}/round1-v1-baseline
+)
+set_tests_properties(
+  confit.cli.workflow_c
+  confit.cli.v2_workflow_c
+  confit.regression.v1_baseline
+  PROPERTIES LABELS "sanitizer-exclude"
 )
 
 if(UNIX AND NOT WIN32 AND CONFIT_ENABLE_TUI)

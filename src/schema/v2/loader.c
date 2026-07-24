@@ -29,12 +29,16 @@ static const char kV2ImportEscapesConfigRoot[] =
     "schema v2 import escapes project config root";
 static const char kV2DuplicateImport[] = "duplicate schema v2 canonical import";
 static const char kV2ImportCycle[] = "schema v2 import cycle";
+static const char kV2ImportDepthExceeded[] =
+    "schema v2 import depth exceeds the supported limit";
 static const char kV2InvalidOptionId[] = "invalid schema v2 option id";
 static const char kV2InvalidNamespace[] = "option id is outside project namespace";
 static const char kV2UnsupportedProjectVersion[] =
     "project does not declare schema_version = 2";
 static const char kV2UnsupportedImportVersion[] =
     "import source does not declare schema_version = 2";
+
+#define CONFIT_V2_MAX_IMPORT_DEPTH 128U
 
 static void confit_v2_error(ConfitDiagnostic *diagnostic, ConfitStatus status,
                             const ConfitV2TomlValue *value,
@@ -670,34 +674,51 @@ static ConfitStatus confit_v2_append_symbol(ConfitV2Project *project,
                                              const ConfitV2TomlValue *value,
                                              ConfitDiagnostic *diagnostic) {
   ConfitV2Symbol *grown;
+  size_t capacity;
 
-  if (project->symbol_count == SIZE_MAX / sizeof(*project->symbols)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
+  if (project->symbol_count == project->symbol_capacity) {
+    capacity = project->symbol_capacity == 0U ? 16U
+                                              : project->symbol_capacity * 2U;
+    if (capacity < project->symbol_capacity ||
+        capacity > SIZE_MAX / sizeof(*project->symbols)) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2Symbol *)confit_v2_reallocate(
+        &project->allocator, project->symbols,
+        capacity * sizeof(*project->symbols));
+    if (grown == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    project->symbols = grown;
+    project->symbol_capacity = capacity;
   }
-  grown = (ConfitV2Symbol *)confit_v2_reallocate(
-      &project->allocator, project->symbols,
-      (project->symbol_count + 1U) * sizeof(*project->symbols));
-  if (grown == 0) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
-  }
-  project->symbols = grown;
   *out = &project->symbols[project->symbol_count];
   memset(*out, 0, sizeof(**out));
   project->symbol_count += 1U;
   return CONFIT_OK;
 }
 
-static int confit_v2_project_has_symbol(const ConfitV2Project *project,
-                                        const char *id) {
-  size_t index;
-  for (index = 0U; index + 1U < project->symbol_count; ++index) {
-    if (strcmp(project->symbols[index].id, id) == 0) {
-      return 1;
-    }
+static ConfitStatus confit_v2_register_identifier(
+    ConfitV2Project *project, ConfitV2IdentifierIndex *index,
+    const char *identifier, const ConfitV2TomlValue *value,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  int duplicate;
+
+  duplicate = 0;
+  status = confit_v2_identifier_index_insert(&project->allocator, index,
+                                              identifier, &duplicate);
+  if (status != CONFIT_OK) {
+    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+    return CONFIT_ERR_INTERNAL;
   }
-  return 0;
+  if (duplicate) {
+    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, value, kV2DuplicateDefinition);
+    return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_v2_parse_defaults(ConfitV2Project *project,
@@ -946,9 +967,10 @@ static ConfitStatus confit_v2_parse_symbol(ConfitV2Project *project,
     confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, table, kV2AllocationFailed);
     return CONFIT_ERR_INTERNAL;
   }
-  if (confit_v2_project_has_symbol(project, id)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, table, kV2DuplicateDefinition);
-    return CONFIT_ERR_SCHEMA;
+  status = confit_v2_register_identifier(project, &project->symbol_identifiers,
+                                          symbol->id, table, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
   }
   status = confit_v2_parse_type(type_value, &symbol->type, diagnostic);
   if (status == CONFIT_OK) {
@@ -1114,33 +1136,28 @@ static ConfitStatus confit_v2_append_menu(ConfitV2Project *project,
                                            const ConfitV2TomlValue *value,
                                            ConfitDiagnostic *diagnostic) {
   ConfitV2MenuNode *grown;
-  if (project->menu_count == SIZE_MAX / sizeof(*project->menus)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
+  size_t capacity;
+
+  if (project->menu_count == project->menu_capacity) {
+    capacity = project->menu_capacity == 0U ? 16U : project->menu_capacity * 2U;
+    if (capacity < project->menu_capacity ||
+        capacity > SIZE_MAX / sizeof(*project->menus)) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2MenuNode *)confit_v2_reallocate(
+        &project->allocator, project->menus, capacity * sizeof(*project->menus));
+    if (grown == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    project->menus = grown;
+    project->menu_capacity = capacity;
   }
-  grown = (ConfitV2MenuNode *)confit_v2_reallocate(
-      &project->allocator, project->menus,
-      (project->menu_count + 1U) * sizeof(*project->menus));
-  if (grown == 0) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
-  }
-  project->menus = grown;
   *out = &project->menus[project->menu_count];
   memset(*out, 0, sizeof(**out));
   project->menu_count += 1U;
   return CONFIT_OK;
-}
-
-static int confit_v2_project_has_menu(const ConfitV2Project *project,
-                                      const char *id) {
-  size_t index;
-  for (index = 0U; index + 1U < project->menu_count; ++index) {
-    if (strcmp(project->menus[index].id, id) == 0) {
-      return 1;
-    }
-  }
-  return 0;
 }
 
 static ConfitStatus confit_v2_parse_menu_references(
@@ -1239,9 +1256,10 @@ static ConfitStatus confit_v2_parse_menu(ConfitV2Project *project,
     confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, table, kV2AllocationFailed);
     return CONFIT_ERR_INTERNAL;
   }
-  if (confit_v2_project_has_menu(project, id)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, table, kV2DuplicateDefinition);
-    return CONFIT_ERR_SCHEMA;
+  status = confit_v2_register_identifier(project, &project->menu_identifiers,
+                                          menu->id, table, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
   }
   status = confit_v2_copy_string(project, value, &menu->prompt, diagnostic);
   if (status == CONFIT_OK) {
@@ -1277,33 +1295,30 @@ static ConfitStatus confit_v2_append_choice(ConfitV2Project *project,
                                              const ConfitV2TomlValue *value,
                                              ConfitDiagnostic *diagnostic) {
   ConfitV2Choice *grown;
-  if (project->choice_count == SIZE_MAX / sizeof(*project->choices)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
+  size_t capacity;
+
+  if (project->choice_count == project->choice_capacity) {
+    capacity = project->choice_capacity == 0U ? 16U
+                                              : project->choice_capacity * 2U;
+    if (capacity < project->choice_capacity ||
+        capacity > SIZE_MAX / sizeof(*project->choices)) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2Choice *)confit_v2_reallocate(
+        &project->allocator, project->choices,
+        capacity * sizeof(*project->choices));
+    if (grown == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    project->choices = grown;
+    project->choice_capacity = capacity;
   }
-  grown = (ConfitV2Choice *)confit_v2_reallocate(
-      &project->allocator, project->choices,
-      (project->choice_count + 1U) * sizeof(*project->choices));
-  if (grown == 0) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
-  }
-  project->choices = grown;
   *out = &project->choices[project->choice_count];
   memset(*out, 0, sizeof(**out));
   project->choice_count += 1U;
   return CONFIT_OK;
-}
-
-static int confit_v2_project_has_choice(const ConfitV2Project *project,
-                                        const char *id) {
-  size_t index;
-  for (index = 0U; index + 1U < project->choice_count; ++index) {
-    if (strcmp(project->choices[index].id, id) == 0) {
-      return 1;
-    }
-  }
-  return 0;
 }
 
 static ConfitStatus confit_v2_parse_choice_defaults(
@@ -1415,9 +1430,10 @@ static ConfitStatus confit_v2_parse_choice(ConfitV2Project *project,
     confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, table, kV2AllocationFailed);
     return CONFIT_ERR_INTERNAL;
   }
-  if (confit_v2_project_has_choice(project, id)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, table, kV2DuplicateDefinition);
-    return CONFIT_ERR_SCHEMA;
+  status = confit_v2_register_identifier(project, &project->choice_identifiers,
+                                          choice->id, table, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
   }
   status = confit_v2_parse_type(member_type, &choice->member_type, diagnostic);
   if (status != CONFIT_OK || (choice->member_type != CONFIT_V2_OPTION_TYPE_BOOL &&
@@ -1477,33 +1493,31 @@ static ConfitStatus confit_v2_append_constraint(
     ConfitV2Project *project, ConfitV2Constraint **out,
     const ConfitV2TomlValue *value, ConfitDiagnostic *diagnostic) {
   ConfitV2Constraint *grown;
-  if (project->constraint_count == SIZE_MAX / sizeof(*project->constraints)) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
+  size_t capacity;
+
+  if (project->constraint_count == project->constraint_capacity) {
+    capacity = project->constraint_capacity == 0U
+                   ? 16U
+                   : project->constraint_capacity * 2U;
+    if (capacity < project->constraint_capacity ||
+        capacity > SIZE_MAX / sizeof(*project->constraints)) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    grown = (ConfitV2Constraint *)confit_v2_reallocate(
+        &project->allocator, project->constraints,
+        capacity * sizeof(*project->constraints));
+    if (grown == 0) {
+      confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
+      return CONFIT_ERR_INTERNAL;
+    }
+    project->constraints = grown;
+    project->constraint_capacity = capacity;
   }
-  grown = (ConfitV2Constraint *)confit_v2_reallocate(
-      &project->allocator, project->constraints,
-      (project->constraint_count + 1U) * sizeof(*project->constraints));
-  if (grown == 0) {
-    confit_v2_error(diagnostic, CONFIT_ERR_INTERNAL, value, kV2AllocationFailed);
-    return CONFIT_ERR_INTERNAL;
-  }
-  project->constraints = grown;
   *out = &project->constraints[project->constraint_count];
   memset(*out, 0, sizeof(**out));
   project->constraint_count += 1U;
   return CONFIT_OK;
-}
-
-static int confit_v2_project_has_constraint(const ConfitV2Project *project,
-                                            const char *id) {
-  size_t index;
-  for (index = 0U; index + 1U < project->constraint_count; ++index) {
-    if (strcmp(project->constraints[index].id, id) == 0) {
-      return 1;
-    }
-  }
-  return 0;
 }
 
 static ConfitStatus confit_v2_parse_constraint(ConfitV2Project *project,
@@ -1536,14 +1550,14 @@ static ConfitStatus confit_v2_parse_constraint(ConfitV2Project *project,
     return status;
   }
   status = confit_v2_copy_string(project, id, &constraint->id, diagnostic);
-  if (status == CONFIT_OK &&
-      (!confit_v2_is_dotted_identifier(constraint->id) ||
-       confit_v2_project_has_constraint(project, constraint->id))) {
-    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, id,
-                    confit_v2_project_has_constraint(project, constraint->id)
-                        ? kV2DuplicateDefinition
-                        : kV2InvalidValue);
+  if (status == CONFIT_OK && !confit_v2_is_dotted_identifier(constraint->id)) {
+    confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, id, kV2InvalidValue);
     return CONFIT_ERR_SCHEMA;
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v2_register_identifier(project,
+                                            &project->constraint_identifiers,
+                                            constraint->id, id, diagnostic);
   }
   if (status == CONFIT_OK) {
     status = confit_v2_parse_expression(project, when, &constraint->when,
@@ -1571,11 +1585,11 @@ static ConfitStatus confit_v2_append_import(
 
 static ConfitStatus confit_v2_visit_import(
     ConfitV2Project *project, const char *config_root, size_t import_index,
-    ConfitDiagnostic *diagnostic);
+    size_t import_depth, ConfitDiagnostic *diagnostic);
 
 static ConfitStatus confit_v2_parse_import_document(
     ConfitV2Project *project, const char *config_root, const char *path,
-    ConfitDiagnostic *diagnostic) {
+    size_t import_depth, ConfitDiagnostic *diagnostic) {
   static const char *const kRootFields[] = {"schema_version", "imports", "option",
                                              "menu", "choice", "constraint"};
   ConfitV2TomlDocument *document;
@@ -1639,7 +1653,7 @@ static ConfitStatus confit_v2_parse_import_document(
       }
       (void)import_index;
       status = confit_v2_visit_import(project, config_root, import_index,
-                                      diagnostic);
+                                      import_depth + 1U, diagnostic);
       if (status != CONFIT_OK) {
         confit_v2_toml_document_free(document);
         return status;
@@ -1787,7 +1801,7 @@ static ConfitStatus confit_v2_append_import(
 
 static ConfitStatus confit_v2_visit_import(
     ConfitV2Project *project, const char *config_root, size_t import_index,
-    ConfitDiagnostic *diagnostic) {
+    size_t import_depth, ConfitDiagnostic *diagnostic) {
   ConfitV2Import *import;
   ConfitStatus status;
 
@@ -1797,6 +1811,12 @@ static ConfitStatus confit_v2_visit_import(
     return CONFIT_ERR_INTERNAL;
   }
   import = &project->imports[import_index];
+  if (import_depth > CONFIT_V2_MAX_IMPORT_DEPTH) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, import->span.path,
+                          import->span.line, import->span.column,
+                          kV2ImportDepthExceeded);
+    return CONFIT_ERR_SCHEMA;
+  }
   if (import->state == CONFIT_V2_IMPORT_STATE_COMPLETE) {
     return CONFIT_OK;
   }
@@ -1808,7 +1828,8 @@ static ConfitStatus confit_v2_visit_import(
   }
   import->state = CONFIT_V2_IMPORT_STATE_VISITING;
   status = confit_v2_parse_import_document(project, config_root,
-                                            import->canonical_path, diagnostic);
+                                            import->canonical_path, import_depth,
+                                            diagnostic);
   if (status != CONFIT_OK) {
     return status;
   }
@@ -2083,7 +2104,8 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
     return status;
   }
   for (index = 0U; index < project->import_count; ++index) {
-    status = confit_v2_visit_import(project, config_root, index, diagnostic);
+    status = confit_v2_visit_import(project, config_root, index, 1U,
+                                    diagnostic);
     if (status != CONFIT_OK) {
       confit_v2_project_free(project);
       return status;
