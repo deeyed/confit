@@ -25,7 +25,12 @@ release-candidate이며, 실제 source tree adoption은 별도 integration 작�
 tools/confit/tests/fixtures/realish/delos
 tools/confit/tests/fixtures/realish/parus
 tools/confit/tests/fixtures/realish/compat
+tools/confit/tests/fixtures/realish-v2/delos
+tools/confit/tests/fixtures/realish-v2/parus
 ```
+
+`realish/`는 동결한 V1 mirror이고 `realish-v2/`는 명시적으로 검토한 V2 candidate다.
+둘 다 fixture일 뿐이며 실제 Parus/Delos `config/` source tree가 아니다.
 
 검증:
 
@@ -38,6 +43,19 @@ confit compat \
   --profile parus-delos-debug \
   --compat tools/confit/tests/fixtures/realish/compat
 ```
+
+V1/V2 shadow rehearsal은 build tree에서 실행한다.
+
+```sh
+ctest --test-dir build --output-on-failure \
+  -R '^confit\.integration\.v2_migration_shadow$'
+```
+
+이 gate는 선언된 profile/target selection마다 effective value가 같은지와
+artifact bundle 생성 여부를 검사한다. V1에는 requested assignment ledger ABI가
+없으므로 requested/provenance byte parity까지 주장하지 않는다. generated file의
+header, report, CMake, QSM은 ABI가 달라 byte diff가 아니라 effective value와
+artifact contract를 검토한다.
 
 ## 2단계: 실제 config source tree 추가
 

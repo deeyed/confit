@@ -11,6 +11,8 @@
 - `compat/rules/`: compatibility rule positive/negative fixtures.
 - `realish/delos/`: 실제 Delos migration을 준비하기 위한 Delos schema mirror fixture.
 - `realish/parus/`: 실제 Parus migration을 준비하기 위한 Parus schema mirror fixture.
+- `realish-v2/delos/`, `realish-v2/parus/`: `realish/` V1 mirror와 semantic shadow
+  비교하는 명시적 V2 candidate fixture. 실제 project source tree가 아니다.
 - `realish/compat/`: realish Parus/Delos mirror를 함께 검사하는 compatibility rule fixture.
 - `realish/compat-negative/`: realish compatibility failure reporting fixtures.
 - `tui/`: scripted TUI profile/schema editing fixtures.

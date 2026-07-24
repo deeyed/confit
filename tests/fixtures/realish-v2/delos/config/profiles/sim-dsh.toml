@@ -1,0 +1,25 @@
+[profile]
+name = "sim-dsh"
+schema_version = 2
+base = "debug"
+
+[values]
+"delos.debug.dsh" = true
+"delos.sim.hosted_stdio" = true
+"delos.target.kind" = "sim:dsh"
+"delos.target.arch" = "host"
+"delos.target.board" = "host-sim"
+"delos.target.cpu" = "host"
+"delos.target.output_name" = "delos-sim"
+"delos.target.artifact_entry" = "build/target/delos-sim"
+"delos.target.claim_level" = "host-simulator"
+"delos.toolchain.id" = "host"
+"delos.board.family" = "host"
+"delos.board.objects" = "//src/board/host/sim:board_objects"
+"delos.board.include_dirs" = "src/board/host/sim"
+"delos.board.linker_script" = "linker/host-sim.ld"
+"delos.memory.flash_origin" = 0x00000000
+"delos.build.output_root" = "build/target"
+"delos.generated.config_root" = "build/generated/config/delos/sim-dsh"
+"delos.scheduler.task_slots" = 1
+"delos.trace.capacity" = 4

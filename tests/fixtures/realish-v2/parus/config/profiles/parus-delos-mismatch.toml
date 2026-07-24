@@ -1,0 +1,7 @@
+[profile]
+name = "parus-delos-mismatch"
+schema_version = 2
+base = "parus-delos-debug"
+
+[values]
+"parus.executor.delos_target" = true

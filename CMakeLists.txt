@@ -1101,6 +1101,25 @@ add_test(
           ${CMAKE_CURRENT_BINARY_DIR}/round16-cli-v2
 )
 
+add_executable(confit_test_v2_migration_shadow
+  tests/integration_c/test_v2_migration_shadow.c
+)
+
+target_link_libraries(confit_test_v2_migration_shadow PRIVATE confit_test_support)
+target_compile_definitions(confit_test_v2_migration_shadow PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_v2_migration_shadow)
+
+add_test(
+  NAME confit.integration.v2_migration_shadow
+  COMMAND confit_test_v2_migration_shadow
+          $<TARGET_FILE:confit>
+          ${CMAKE_CURRENT_SOURCE_DIR}
+          ${CMAKE_CURRENT_BINARY_DIR}/round19-migration-shadow
+)
+
 add_executable(confit_test_v1_baseline
   tests/integration_c/test_v1_baseline.c
 )
@@ -1122,6 +1141,7 @@ add_test(
 set_tests_properties(
   confit.cli.workflow_c
   confit.cli.v2_workflow_c
+  confit.integration.v2_migration_shadow
   confit.regression.v1_baseline
   PROPERTIES LABELS "sanitizer-exclude"
 )

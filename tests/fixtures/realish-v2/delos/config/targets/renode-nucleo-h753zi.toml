@@ -1,0 +1,3 @@
+[target]
+name = "renode-nucleo-h753zi"
+schema_version = 2

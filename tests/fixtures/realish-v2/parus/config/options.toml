@@ -1,0 +1,404 @@
+schema_version = 2
+
+[option."parus.policy.hardware_first"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Hardware-first policy"
+help = "Keep RPi5 hardware and QEMU AArch64 as first-class validation lanes."
+tags = ["policy", "hardware"]
+
+[option."parus.policy.keep_v1_reference_only"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Keep Kairon v1 reference-only"
+help = "Treat Kairon v1 as reference material rather than active source."
+tags = ["policy", "migration"]
+
+[option."parus.boot.path"]
+type = "enum"
+default = "direct-dtb"
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Boot handoff path"
+help = "Primary handoff source that xibalba validates."
+tags = ["boot", "handoff"]
+values = ["direct-dtb", "ribon-lbpb", "firmware-direct"]
+
+[option."parus.boot.direct_dtb"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Direct DTB handoff"
+help = "Primary handoff pointer is a DTB blob candidate."
+tags = ["boot", "dtb"]
+
+[option."parus.boot.ribon_lbpb"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Ribon LBPB handoff"
+help = "Primary handoff pointer is a Ribon LBPB candidate."
+tags = ["boot", "ribon", "lbpb"]
+
+[option."parus.boot.allow_direct_dtb_fallback"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Allow direct DTB fallback"
+help = "Allow independently supplied DTB fallback when the primary path is Ribon LBPB."
+tags = ["boot", "dtb", "fallback"]
+
+[option."parus.boot.early_serial"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Early serial diagnostics"
+help = "Plan early UART marker diagnostics during bring-up."
+tags = ["boot", "serial", "diagnostics"]
+
+[option."parus.boot.stage_limit"]
+type = "enum"
+default = "eb2"
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "Validated boot stage limit"
+help = "Highest expected smoke-test marker for this profile."
+tags = ["boot", "smoke"]
+values = ["xibalba", "eb2", "kernel-main", "idle"]
+
+[option."parus.boot.image_load_address"]
+type = "hex"
+default = 524288
+write_domain = "profile"
+owner = "parus-boot"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Image load address"
+help = "Raw AArch64 image load address used by the selected lane."
+tags = ["boot", "image"]
+range = { min = 0, max = 4294967295 }
+
+[option."parus.config.profile"]
+type = "enum"
+default = "qemu-virt-aarch64"
+write_domain = "profile"
+owner = "parus-config"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Config profile"
+help = "Board profile that selects Parus source config inputs."
+tags = ["config", "profile"]
+values = ["qemu-virt-aarch64", "rpi5", "qemu-amd64"]
+
+[option."parus.config.defconfig"]
+type = "path"
+default = "configs/boards/qemu-virt-aarch64/defconfig"
+write_domain = "profile"
+owner = "parus-config"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Defconfig"
+help = "Hand-written board defconfig consumed by the resolver."
+tags = ["config", "defconfig"]
+
+[option."parus.config.output_dir"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/config"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Resolved config output"
+help = "Build-tree directory for resolved .config state."
+tags = ["config", "generated"]
+
+[option."parus.generated.include_root"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/generated/include"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Generated include root"
+help = "Build-tree include root that contains parus/autoconf.h."
+tags = ["generated", "header"]
+
+[option."parus.generated.config_dir"]
+type = "path"
+default = "build/work/cmake/qemu-aarch64/generated/config"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Generated config dir"
+help = "Build-tree directory for generated config.cmake and config JSON."
+tags = ["generated", "config"]
+
+[option."parus.generated.autoconf_header"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Generate autoconf.h"
+help = "Emit the C/ASM generated configuration header."
+tags = ["generated", "header"]
+
+[option."parus.generated.cmake"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Generate config.cmake"
+help = "Emit the CMake config fragment consumed by the build graph."
+tags = ["generated", "cmake"]
+
+[option."parus.generated.qstar_manifest"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "Generate QStar manifest"
+help = "Emit the QStar-readable generated config manifest."
+tags = ["generated", "qstar"]
+
+[option."parus.kcg.core_model"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "KCG core model"
+help = "Enable compile-time surfaces for the KCG command substrate."
+tags = ["executor", "kcg"]
+
+[option."parus.kcg.capability_binding"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "KCG capability binding"
+help = "Model capability-backed runtime binding for KCG invocations."
+tags = ["executor", "kcg", "capability"]
+
+[option."parus.executor.rt_executor"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "RT executor domain"
+help = "Enable the RT Executor domain candidate that may lower KCG intent to Delos DCG."
+tags = ["executor", "rt", "delos"]
+
+[option."parus.executor.delos_target"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-executor"
+since = "0.1.0"
+stability = "experimental"
+emit = ["header", "cmake", "qstar"]
+prompt = "Delos RT target"
+help = "Treat Delos as an RT execution substrate candidate. This is not a fabric ABI."
+tags = ["executor", "delos", "dcg"]
+
+[option."parus.arch.arm64"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "AArch64 architecture"
+help = "Build the arm64 Parus entry lane."
+tags = ["target", "arch"]
+
+[option."parus.arch.amd64"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "AMD64 architecture"
+help = "Build the AMD64 UEFI Parus entry lane."
+tags = ["target", "arch"]
+
+[option."parus.board.qemu_virt_aarch64"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "QEMU virt AArch64 board"
+help = "Select the QEMU virt AArch64 bring-up lane."
+tags = ["target", "board", "qemu"]
+
+[option."parus.board.rpi5"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Raspberry Pi 5 board"
+help = "Select the Raspberry Pi 5 bring-up lane."
+tags = ["target", "board", "rpi5"]
+
+[option."parus.board.qemu_amd64"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "QEMU AMD64 board"
+help = "Select the QEMU AMD64 smoke lane."
+tags = ["target", "board", "qemu"]
+
+[option."parus.target.board"]
+type = "enum"
+default = "qemu-virt-aarch64"
+write_domain = "profile"
+owner = "parus-board"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Target board"
+help = "Selected Parus board profile."
+tags = ["target", "board"]
+values = ["qemu-virt-aarch64", "rpi5", "qemu-amd64"]
+
+[option."parus.target.arch"]
+type = "enum"
+default = "arm64"
+write_domain = "profile"
+owner = "parus-arch"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Target architecture"
+help = "Selected Parus architecture."
+tags = ["target", "arch"]
+values = ["arm64", "amd64"]
+
+[option."parus.target.output_name"]
+type = "string"
+default = "parus-qemu-virt-aarch64-entry"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Output name"
+help = "Primary target artifact stem."
+tags = ["target", "artifact"]
+
+[option."parus.target.image_path"]
+type = "path"
+default = "build/target/debug/arm64/qemu-virt-aarch64/parus-qemu-virt-aarch64-entry.img"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Image path"
+help = "Primary generated image path for the selected lane."
+tags = ["target", "artifact"]
+
+[option."parus.target.qstar_label"]
+type = "string"
+default = "//targets/arm64:parus_qemu_virt_aarch64_entry_elf"
+write_domain = "profile"
+owner = "parus-build"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "QStar label"
+help = "Primary QStar label for the selected build lane."
+tags = ["target", "qstar"]
+
+[option."parus.test.qemu_pairing"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "parus-test"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Enable QEMU pairing"
+help = "Keep the paired QEMU validation lane enabled."
+tags = ["test", "qemu"]
+
+[option."parus.test.smoke_level"]
+type = "enum"
+default = "boot-smoke"
+write_domain = "profile"
+owner = "parus-test"
+since = "0.1.0"
+stability = "stable"
+emit = ["header", "cmake", "qstar"]
+prompt = "Smoke level"
+help = "Validation level expected from this profile."
+tags = ["test", "smoke"]
+values = ["entry-smoke", "boot-smoke", "dtb-serial-smoke", "runtime-smoke", "package-check"]

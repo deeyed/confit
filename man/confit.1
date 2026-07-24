@@ -228,6 +228,15 @@ confit migrate \\
   --project legacy/config/confit \\
   --out /tmp/confit-v2-candidate
 .EE
+.SS V1/V2 fixture shadow rehearsal
+.EX
+ctest --test-dir build --output-on-failure \
+  -R '^confit\\.integration\\.v2_migration_shadow$'
+.EE
+이 저장소의 `realish/` V1 mirror와 `realish-v2/` candidate는 실제 Parus/Delos
+source tree가 아니다. 이 gate는 선언된 profile/target selection의 effective value
+table과 artifact bundle 생성을 비교한다. V1 requested assignment ABI와 V2 artifact
+ABI는 다르므로 byte-for-byte parity를 주장하지 않는다.
 .SS Artifact 생성
 .EX
 confit gen \\

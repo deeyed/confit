@@ -145,3 +145,8 @@ category menu, profile, target, `forces`, writer conflict처럼 의미 결정을
 요소는 candidate에 추측해 넣지 않고 `migration-report.json`의 TODO로 남긴다.
 Candidate가 load된다고 실제 project migration이 승인된 것은 아니다. 전체
 profile/target matrix와 generated artifact를 별도로 검토해야 한다.
+
+저장소의 `tests/fixtures/realish-v2/`는 이 원칙을 보여 주는 명시적 candidate다.
+이 fixture는 `tests/fixtures/realish/` V1 mirror와 함께 C 기반 semantic shadow
+test로 검사된다. 이 경로는 실제 Parus/Delos source tree가 아니며, `migrate`가
+source tree를 자동으로 V2로 바꾸었다는 뜻도 아니다.

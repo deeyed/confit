@@ -1,0 +1,43 @@
+schema_version = 2
+
+[[constraint]]
+id = "delos.debug.ddc_not_release"
+when = "enabled(delos.debug.ddc)"
+require = "!enabled(delos.profile.release)"
+message = "DDC cannot be enabled by a release profile."
+
+[[constraint]]
+id = "delos.debug.ddc_surface"
+when = "enabled(delos.debug.ddc)"
+require = "enabled(delos.internal.debug_surface)"
+message = "DDC requires the debug surface marker."
+
+[[constraint]]
+id = "delos.debug.dsh_ddc"
+when = "enabled(delos.debug.dsh)"
+require = "enabled(delos.debug.ddc)"
+message = "DSH requires DDC."
+
+[[constraint]]
+id = "delos.debug.dsh_not_release"
+when = "enabled(delos.debug.dsh)"
+require = "!enabled(delos.profile.release)"
+message = "DSH cannot be enabled by a release profile."
+
+[[constraint]]
+id = "delos.debug.observability_ddc"
+when = "enabled(delos.debug.observability)"
+require = "enabled(delos.debug.ddc)"
+message = "Debug observability requires DDC."
+
+[[constraint]]
+id = "delos.debug.dump_not_dsh"
+when = "enabled(delos.debug.release_diagnostic_dump)"
+require = "!enabled(delos.debug.dsh)"
+message = "Release diagnostic dump conflicts with DSH."
+
+[[constraint]]
+id = "delos.sim.stdio_dsh"
+when = "enabled(delos.sim.hosted_stdio)"
+require = "enabled(delos.debug.dsh)"
+message = "Hosted stdio requires DSH."

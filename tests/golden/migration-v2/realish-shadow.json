@@ -1,0 +1,17 @@
+{
+  "schema": "confit-migration-shadow-v1",
+  "scope": "realish fixture only; no Parus or Delos source tree was modified",
+  "entries": [
+    {"id": "delos/debug/default", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "delos/release/default", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "delos/sim-dsh/sim-dsh", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "delos/parus-delos-debug/sim-dsh", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "delos/parus-delos-mismatch/qemu-mps2-an500", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "parus/bringup/default", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "parus/qemu-aarch64/qemu-virt-aarch64", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "parus/rpi5-direct-dtb/rpi5-direct-dtb", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "parus/parus-delos-debug/qemu-virt-aarch64", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"},
+    {"id": "parus/parus-delos-mismatch/qemu-virt-aarch64", "requested": "unavailable-in-v1-abi", "effective": "same", "provenance": "mechanical", "artifact": "artifact-abi"}
+  ],
+  "summary": {"effective_same": 10, "mechanical": 10, "intentional_semantic": 0, "unresolved": 0}
+}

@@ -1,0 +1,3 @@
+[target]
+name = "qemu-virt-aarch64"
+schema_version = 2
