@@ -22,9 +22,22 @@ computed = 'delos.memory.page_size * delos.memory.page_count'
 
 Expression은 runtime code가 아니다. Confit host tool이 build 전에 평가한다.
 
-현재 구현은 이 문서의 lexer/parser와 source-local AST span을 제공한다. Symbol
-lookup, static type check, builtin signature 검증, evaluation은 후속 단계가 소유하며
-parser는 유효한 identifier나 function name을 semantic하게 승인하지 않는다.
+현재 구현은 lexer/parser, source-local AST span, explicit binding environment를
+받는 static typecheck와 pure evaluator를 제공한다. Symbol linking과 evaluation DAG
+ordering은 후속 단계가 소유한다. parser는 유효한 identifier나 function name을
+semantic하게 승인하지 않으며, typecheck가 binding environment를 기준으로 승인한다.
+
+## 구현 경계
+
+현재 C API의 `ConfitV2ExpressionEnvironment`는 option id, declared expression
+type, effective value를 명시적으로 받는다. Typecheck는 이 environment의 type만
+읽고 AST node별 type table을 만든다. Evaluator는 같은 canonical binding을 받아
+값을 deep-copy하여 계산한다. 따라서 이 단계는 filesystem, 환경 변수, clock,
+terminal locale 또는 전역 mutable state를 읽지 않는다.
+
+다음 symbol linker 단계는 project의 canonical symbol table을 이 environment로
+변환한다. 이 분리는 expression module이 import traversal, profile ownership,
+evaluation DAG 순서를 임의로 결정하지 않게 한다.
 
 ## Lexical 규칙
 
@@ -95,8 +108,11 @@ path
 list<string>
 list<path>
 set<enum<id>>
-unset
 ```
+
+`unset`은 static type이 아니라 optional option의 runtime value state다. Reference는
+선언된 static type을 유지하며, `defined()` 이외의 연산에서 unset value를 읽으면
+evaluation error다.
 
 서로 다른 type 사이의 암묵 변환은 없다.
 
@@ -188,7 +204,7 @@ v2.0 built-in은 다음으로 제한한다.
 | `enabled` | `tristate -> bool`, `bool -> bool` | 활성 여부 |
 | `builtin` | `tristate -> bool` | `y` 여부 |
 | `module` | `tristate -> bool` | `m` 여부 |
-| `defined` | `T -> bool` | unset이 아닌지 검사 |
+| `defined` | `option_reference -> bool` | unset이 아닌지 검사 |
 | `len` | `string/list/set -> uint` | element 또는 byte 길이 |
 | `contains` | `(list<T>, T) -> bool` | element 포함 여부 |
 | `starts_with` | `(string, string) -> bool` | byte prefix |
@@ -223,7 +239,7 @@ Default가 없고 required가 아닌 option은 unset일 수 있다. Unset value�
 Schema가 unset을 허용하는 경우 먼저 `defined()`로 guard해야 한다.
 
 ```toml
-visible_if = '!defined(debug.output_path) || debug.output_path != ""'
+visible_if = '!defined(debug.output_name) || debug.output_name != ""'
 ```
 
 Short circuit 때문에 왼쪽 guard가 false인 branch는 평가하지 않는다.

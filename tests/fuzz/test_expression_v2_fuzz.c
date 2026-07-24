@@ -30,6 +30,9 @@ int main(void) {
     char generated[65];
     ConfitV2ExpressionText source;
     ConfitV2Expression *expression;
+    ConfitV2TypedExpression *typed;
+    ConfitV2ExpressionEnvironment environment;
+    ConfitV2ExpressionValue value;
     ConfitDiagnostic diagnostic;
     size_t length;
 
@@ -50,7 +53,19 @@ int main(void) {
     source.span.column = 1U;
     confit_diagnostic_init(&diagnostic);
     expression = 0;
-    (void)confit_v2_expression_parse(&source, &limits, &expression, &diagnostic);
+    typed = 0;
+    memset(&environment, 0, sizeof(environment));
+    memset(&value, 0, sizeof(value));
+    if (confit_v2_expression_parse(&source, &limits, &expression, &diagnostic) ==
+        CONFIT_OK) {
+      if (confit_v2_expression_type_check(expression, &environment, &typed,
+                                           &diagnostic) == CONFIT_OK) {
+        (void)confit_v2_expression_evaluate(typed, &environment, &value,
+                                             &diagnostic);
+      }
+    }
+    confit_v2_expression_value_clear(&value);
+    confit_v2_typed_expression_free(typed);
     confit_v2_expression_free(expression);
   }
   return 0;

@@ -189,6 +189,8 @@ confit_target_warnings(confit_schema_v2)
 add_library(confit_expression_v2 STATIC
   src/expression/v2/lexer.c
   src/expression/v2/parser.c
+  src/expression/v2/typecheck.c
+  src/expression/v2/evaluate.c
 )
 
 target_link_libraries(confit_expression_v2 PUBLIC confit_core)
@@ -530,6 +532,21 @@ confit_target_warnings(confit_test_expression_v2_fuzz)
 add_test(
   NAME confit.fuzz.expression_v2_bounded
   COMMAND confit_test_expression_v2_fuzz
+)
+
+add_executable(confit_test_expression_v2_semantics
+  tests/unit/test_expression_v2_semantics.c
+)
+
+target_link_libraries(confit_test_expression_v2_semantics PRIVATE
+  confit_expression_v2
+)
+
+confit_target_warnings(confit_test_expression_v2_semantics)
+
+add_test(
+  NAME confit.unit.expression_v2_semantics
+  COMMAND confit_test_expression_v2_semantics
 )
 
 add_executable(confit_test_graph_builder
