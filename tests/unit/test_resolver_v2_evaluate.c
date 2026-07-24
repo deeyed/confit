@@ -370,6 +370,7 @@ static int write_large_project(const char *root, int reverse) {
       return 0;
     }
   }
+#if CONFIT_TEST_LARGE_CONSTRAINT_COUNT > 0U
   for (step = 0U; step < CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT; ++step) {
     char name[32];
     char path[4096];
@@ -412,6 +413,18 @@ static int write_large_project(const char *root, int reverse) {
       return 0;
     }
   }
+#else
+  for (step = 0U; step < CONFIT_TEST_LARGE_CONSTRAINT_FILE_COUNT; ++step) {
+    char name[32];
+    char path[4096];
+
+    (void)snprintf(name, sizeof(name), "constraints-%zu.toml", step);
+    if (!confit_test_fs_path_join(path, sizeof(path), config, name) ||
+        !confit_test_fs_write_file(path, "schema_version = 2\n\nconstraint = []\n")) {
+      return 0;
+    }
+  }
+#endif
   for (step = 0U; step < CONFIT_TEST_LARGE_TARGET_COUNT; ++step) {
     char name[32];
     char path[4096];

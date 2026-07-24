@@ -72,8 +72,8 @@ ConfitStatus confit_host_path_canonicalize(char *out, size_t out_size,
   char *resolved;
 #else
   char resolved[4096];
-#endif
   size_t size;
+#endif
 
   if (out == 0 || out_size == 0U || path == 0 || path[0] == '\0') {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0, 0,

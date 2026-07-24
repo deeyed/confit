@@ -3,71 +3,41 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 BUILD_DIR="${TMPDIR:-/tmp}/confit-round1-smoke"
-CURSES_LIBS=${CONFIT_CURSES_LIBS:-"-lcurses"}
+CONFIT_BIN=${CONFIT_BIN:-""}
 
 mkdir -p "$BUILD_DIR"
 
-cc -std=c17 -Wall -Wextra -Werror -pedantic \
-  -I"$ROOT_DIR/include" \
-  "$ROOT_DIR/src/core/status.c" \
-  "$ROOT_DIR/src/core/diagnostic.c" \
-  "$ROOT_DIR/src/core/model.c" \
-  "$ROOT_DIR/src/core/version.c" \
-  "$ROOT_DIR/tests/unit/test_status_diagnostic.c" \
-  -o "$BUILD_DIR/test_status_diagnostic"
+if [ "$CONFIT_BIN" = "" ]; then
+  CONFIT_BUILD_DIR="$BUILD_DIR/cmake"
+  cmake -S "$ROOT_DIR" -B "$CONFIT_BUILD_DIR"
+  cmake --build "$CONFIT_BUILD_DIR" --target confit
+  CONFIT_BIN="$CONFIT_BUILD_DIR/confit"
+fi
 
-"$BUILD_DIR/test_status_diagnostic"
+if [ ! -x "$CONFIT_BIN" ]; then
+  echo "Confit smoke binary is not executable: $CONFIT_BIN" >&2
+  exit 1
+fi
 
-cc -std=c17 -Wall -Wextra -Werror -pedantic \
-  -I"$ROOT_DIR/include" \
-  -I"$ROOT_DIR/src/parser" \
-  "$ROOT_DIR/src/core/status.c" \
-  "$ROOT_DIR/src/core/diagnostic.c" \
-  "$ROOT_DIR/src/core/model.c" \
-  "$ROOT_DIR/src/core/version.c" \
-  "$ROOT_DIR/src/compat/compat.c" \
-  "$ROOT_DIR/src/explain/explain.c" \
-  "$ROOT_DIR/src/generator/build_integration.c" \
-  "$ROOT_DIR/src/generator/config_header.c" \
-  "$ROOT_DIR/src/generator/reports.c" \
-  "$ROOT_DIR/src/generator/value_serialization.c" \
-  "$ROOT_DIR/src/graph/graph.c" \
-  "$ROOT_DIR/src/parser/parser.c" \
-  "$ROOT_DIR/src/parser/toml_scan.c" \
-  "$ROOT_DIR/src/resolver/resolver.c" \
-  "$ROOT_DIR/src/schema/schema.c" \
-  "$ROOT_DIR/src/tui/curses_frontend.c" \
-  "$ROOT_DIR/src/tui/profile_editor.c" \
-  "$ROOT_DIR/src/tui/schema_editor.c" \
-  "$ROOT_DIR/src/tui/tui.c" \
-  "$ROOT_DIR/src/tui/tui_common.c" \
-  "$ROOT_DIR/src/host/host_directory.c" \
-  "$ROOT_DIR/src/host/host_file.c" \
-  "$ROOT_DIR/src/host/host_io.c" \
-  "$ROOT_DIR/src/host/host_path.c" \
-  "$ROOT_DIR/src/cli/main.c" \
-  $CURSES_LIBS \
-  -o "$BUILD_DIR/confit"
-
-"$BUILD_DIR/confit" --version | grep -Fx "confit 0.2.0-rc1" >/dev/null
-"$BUILD_DIR/confit" --color never --quiet help >"$BUILD_DIR/help.txt"
+"$CONFIT_BIN" --version | grep -Fx "confit 0.2.0-rc1" >/dev/null
+"$CONFIT_BIN" --color never --quiet help >"$BUILD_DIR/help.txt"
 grep -F "Usage:" "$BUILD_DIR/help.txt" >/dev/null
 for command in help doctor init check resolve gen explain list graph diff compat profile tui completion
 do
   grep -F "  $command" "$BUILD_DIR/help.txt" >/dev/null
 done
 
-"$BUILD_DIR/confit" help check | grep -F "confit check --project" >/dev/null
-"$BUILD_DIR/confit" resolve --help | grep -F "confit resolve --project" >/dev/null
-"$BUILD_DIR/confit" --verbose help completion | \
+"$CONFIT_BIN" help check | grep -F "confit check --project" >/dev/null
+"$CONFIT_BIN" resolve --help | grep -F "confit resolve --project" >/dev/null
+"$CONFIT_BIN" --verbose help completion | \
   grep -F "confit completion --shell" >/dev/null
-"$BUILD_DIR/confit" completion --shell bash | grep -F "_confit()" >/dev/null
-"$BUILD_DIR/confit" completion --shell zsh | grep -F "#compdef confit" \
+"$CONFIT_BIN" completion --shell bash | grep -F "_confit()" >/dev/null
+"$CONFIT_BIN" completion --shell zsh | grep -F "#compdef confit" \
   >/dev/null
-"$BUILD_DIR/confit" completion --shell fish | grep -F "complete -c confit" \
+"$CONFIT_BIN" completion --shell fish | grep -F "complete -c confit" \
   >/dev/null
 
-"$BUILD_DIR/confit" doctor >"$BUILD_DIR/doctor.out"
+"$CONFIT_BIN" doctor >"$BUILD_DIR/doctor.out"
 grep -F "Confit doctor" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "version: confit 0.2.0-rc1" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "build mode:" "$BUILD_DIR/doctor.out" >/dev/null
@@ -77,7 +47,7 @@ grep -F "tui:" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "generators enabled:" "$BUILD_DIR/doctor.out" >/dev/null
 grep -F "doctor ok" "$BUILD_DIR/doctor.out" >/dev/null
 
-"$BUILD_DIR/confit" doctor \
+"$CONFIT_BIN" doctor \
   --project "$ROOT_DIR/tests/fixtures/schema/valid/basic" \
   >"$BUILD_DIR/doctor-project.out"
 grep -F "project:" "$BUILD_DIR/doctor-project.out" >/dev/null
@@ -85,7 +55,7 @@ grep -F "options:" "$BUILD_DIR/doctor-project.out" >/dev/null
 grep -F "doctor ok" "$BUILD_DIR/doctor-project.out" >/dev/null
 
 set +e
-"$BUILD_DIR/confit" unknown >"$BUILD_DIR/unknown.out" 2>"$BUILD_DIR/unknown.err"
+"$CONFIT_BIN" unknown >"$BUILD_DIR/unknown.out" 2>"$BUILD_DIR/unknown.err"
 STATUS=$?
 set -e
 if [ "$STATUS" -ne 1 ]; then

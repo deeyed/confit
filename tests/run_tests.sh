@@ -15,4 +15,4 @@ rm -rf "$BUILD_DIR"
 cmake -S "$ROOT_DIR" -B "$BUILD_DIR"
 cmake --build "$BUILD_DIR"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
-"$ROOT_DIR/tests/smoke/round1_cli_smoke.sh"
+CONFIT_BIN="$BUILD_DIR/confit" "$ROOT_DIR/tests/smoke/round1_cli_smoke.sh"
