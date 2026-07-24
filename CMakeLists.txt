@@ -186,6 +186,22 @@ target_compile_features(confit_schema_v2 PUBLIC c_std_17)
 
 confit_target_warnings(confit_schema_v2)
 
+add_library(confit_expression_v2 STATIC
+  src/expression/v2/lexer.c
+  src/expression/v2/parser.c
+)
+
+target_link_libraries(confit_expression_v2 PUBLIC confit_core)
+
+target_include_directories(confit_expression_v2
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/expression/v2
+)
+
+target_compile_features(confit_expression_v2 PUBLIC c_std_17)
+
+confit_target_warnings(confit_expression_v2)
+
 add_library(confit_schema STATIC
   src/schema/schema.c
 )
@@ -482,6 +498,38 @@ confit_target_warnings(confit_test_schema_v2_model)
 add_test(
   NAME confit.unit.schema_v2_model
   COMMAND confit_test_schema_v2_model
+)
+
+add_executable(confit_test_expression_v2
+  tests/unit/test_expression_v2.c
+)
+
+target_link_libraries(confit_test_expression_v2 PRIVATE
+  confit_expression_v2
+  confit_host
+)
+target_compile_definitions(confit_test_expression_v2 PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_expression_v2)
+
+add_test(
+  NAME confit.unit.expression_v2
+  COMMAND confit_test_expression_v2
+)
+
+add_executable(confit_test_expression_v2_fuzz
+  tests/fuzz/test_expression_v2_fuzz.c
+)
+
+target_link_libraries(confit_test_expression_v2_fuzz PRIVATE confit_expression_v2)
+
+confit_target_warnings(confit_test_expression_v2_fuzz)
+
+add_test(
+  NAME confit.fuzz.expression_v2_bounded
+  COMMAND confit_test_expression_v2_fuzz
 )
 
 add_executable(confit_test_graph_builder

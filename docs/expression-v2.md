@@ -2,7 +2,7 @@
 doc_type: language-spec
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
+implementation_status: partially-implemented
 last_verified: 2026-07-24
 ---
 
@@ -21,6 +21,10 @@ computed = 'delos.memory.page_size * delos.memory.page_count'
 ```
 
 Expression은 runtime code가 아니다. Confit host tool이 build 전에 평가한다.
+
+현재 구현은 이 문서의 lexer/parser와 source-local AST span을 제공한다. Symbol
+lookup, static type check, builtin signature 검증, evaluation은 후속 단계가 소유하며
+parser는 유효한 identifier나 function name을 semantic하게 승인하지 않는다.
 
 ## Lexical 규칙
 
