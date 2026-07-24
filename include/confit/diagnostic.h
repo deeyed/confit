@@ -9,6 +9,29 @@
 extern "C" {
 #endif
 
+/** @brief diagnostic의 사용자 노출 severity다. */
+typedef enum ConfitDiagnosticSeverity {
+  CONFIT_DIAGNOSTIC_SEVERITY_NONE = 0,
+  CONFIT_DIAGNOSTIC_SEVERITY_NOTE,
+  CONFIT_DIAGNOSTIC_SEVERITY_WARNING,
+  CONFIT_DIAGNOSTIC_SEVERITY_ERROR,
+} ConfitDiagnosticSeverity;
+
+/** @brief primary diagnostic에 연결되는 immutable source span 설명이다. */
+typedef struct ConfitDiagnosticRelatedSpan {
+  const char *path;
+  size_t line;
+  size_t column;
+  const char *note;
+} ConfitDiagnosticRelatedSpan;
+
+/** @brief 자동 적용하지 않는 수정 후보의 안정된 transport shape다. */
+typedef struct ConfitDiagnosticFixCandidate {
+  const char *option_id;
+  const char *value_text;
+  const char *note;
+} ConfitDiagnosticFixCandidate;
+
 /**
  * @brief Confit 오류 위치와 사람이 읽을 수 있는 메시지를 담는 record다.
  *
@@ -27,6 +50,16 @@ typedef struct ConfitDiagnostic {
   size_t column;
   /** 사람이 읽을 수 있는 짧은 오류 메시지. 없으면 `NULL`. */
   const char *message;
+  /** machine-readable stable diagnostic code. 없으면 `NULL`. */
+  const char *code;
+  /** CLI/JSON에 공통으로 노출할 severity다. */
+  ConfitDiagnosticSeverity severity;
+  /** primary diagnostic의 causal related source span 목록이다. */
+  const ConfitDiagnosticRelatedSpan *related;
+  size_t related_count;
+  /** 자동 적용하지 않는 수정 후보 목록이다. */
+  const ConfitDiagnosticFixCandidate *fix_candidates;
+  size_t fix_candidate_count;
 } ConfitDiagnostic;
 
 /**
@@ -56,6 +89,15 @@ void confit_diagnostic_clear(ConfitDiagnostic *diagnostic);
 void confit_diagnostic_set(ConfitDiagnostic *diagnostic, ConfitStatus status,
                            const char *path, size_t line, size_t column,
                            const char *message);
+
+/** @brief code/severity/related/fix 후보까지 가진 detailed diagnostic을 기록한다. */
+void confit_diagnostic_set_detail(
+    ConfitDiagnostic *diagnostic, ConfitStatus status,
+    ConfitDiagnosticSeverity severity, const char *code, const char *path,
+    size_t line, size_t column, const char *message,
+    const ConfitDiagnosticRelatedSpan *related, size_t related_count,
+    const ConfitDiagnosticFixCandidate *fix_candidates,
+    size_t fix_candidate_count);
 
 /**
  * @brief 활성 오류 diagnostic이 있는지 확인한다.

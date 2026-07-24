@@ -221,7 +221,9 @@ confit_target_warnings(confit_schema_link_v2)
 add_library(confit_constraint_v2 STATIC
   src/schema/v2/validate.c
   src/constraint/v2/choice.c
+  src/constraint/v2/explain.c
   src/constraint/v2/graph.c
+  src/constraint/v2/validate.c
 )
 
 target_link_libraries(confit_constraint_v2
@@ -581,6 +583,24 @@ confit_target_warnings(confit_test_constraint_v2)
 add_test(
   NAME confit.unit.constraint_v2
   COMMAND confit_test_constraint_v2
+)
+
+add_executable(confit_test_constraint_v2_validate
+  tests/unit/test_constraint_v2_validate.c
+)
+
+target_link_libraries(confit_test_constraint_v2_validate PRIVATE
+  confit_resolver_v2
+)
+target_compile_definitions(confit_test_constraint_v2_validate PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_constraint_v2_validate)
+
+add_test(
+  NAME confit.unit.constraint_v2_validate
+  COMMAND confit_test_constraint_v2_validate
 )
 
 add_executable(confit_test_resolver_v2_ledger

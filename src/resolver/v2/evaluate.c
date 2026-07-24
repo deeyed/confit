@@ -1208,6 +1208,44 @@ const ConfitV2ChoiceResolution *confit_v2_evaluation_find_choice(
              : 0;
 }
 
+ConfitStatus confit_v2_evaluation_validate_constraints(
+    const ConfitV2Evaluation *evaluation,
+    ConfitV2ConstraintReport **out_report, ConfitDiagnostic *diagnostic) {
+  ConfitV2ConstraintBinding *bindings;
+  ConfitStatus status;
+  size_t index;
+
+  if (evaluation == 0 || out_report == 0) {
+    confit_v2_ledger_diagnostic(0, 0U, 0U, CONFIT_ERR_INVALID_ARGUMENT,
+                                "invalid schema v2 constraint evaluation argument",
+                                diagnostic);
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_report = 0;
+  bindings = (ConfitV2ConstraintBinding *)calloc(
+      evaluation->value_count, sizeof(*bindings));
+  if (evaluation->value_count > 0U && bindings == 0) {
+    confit_v2_ledger_diagnostic(0, 0U, 0U, CONFIT_ERR_INTERNAL,
+                                kAllocationFailed, diagnostic);
+    return CONFIT_ERR_INTERNAL;
+  }
+  for (index = 0U; index < evaluation->value_count; ++index) {
+    const ConfitV2EffectiveValue *value = &evaluation->values[index];
+
+    bindings[index].symbol = value->symbol;
+    bindings[index].value = value->is_set ? &value->value : 0;
+    bindings[index].is_set = value->is_set;
+    bindings[index].source_path = value->source_path;
+    bindings[index].source_line = value->source_line;
+    bindings[index].source_column = value->source_column;
+  }
+  status = confit_v2_constraint_validate(
+      confit_v2_assignment_ledger_source(evaluation->ledger), bindings,
+      evaluation->value_count, out_report, diagnostic);
+  free(bindings);
+  return status;
+}
+
 ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,
                                         uint64_t *out_hash) {
   uint64_t hash = UINT64_C(1469598103934665603);

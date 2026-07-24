@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "confit/diagnostic.h"
 #include "confit/link_v2.h"
 
 #ifdef __cplusplus
@@ -66,6 +67,65 @@ typedef struct ConfitV2CompiledConstraint {
 /** @brief source/link lifetime을 borrow하는 immutable structure compile handle이다. */
 typedef struct ConfitV2CompiledStructure ConfitV2CompiledStructure;
 
+/** @brief final effective value를 constraint evaluator에 전달하는 binding이다. */
+typedef struct ConfitV2ConstraintBinding {
+  const ConfitV2Symbol *symbol;
+  /** unset이면 NULL이다. payload의 lifetime은 report보다 길어야 한다. */
+  const ConfitV2Value *value;
+  int is_set;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitV2ConstraintBinding;
+
+/** @brief one expression reference가 읽은 effective value와 causal source다. */
+typedef struct ConfitV2ConstraintRead {
+  const ConfitV2Symbol *symbol;
+  const ConfitV2Value *value;
+  int is_set;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+  const char *expression_path;
+  size_t expression_line;
+  size_t expression_column;
+} ConfitV2ConstraintRead;
+
+/** @brief named constraint의 final outcome이다. */
+typedef enum ConfitV2ConstraintOutcome {
+  CONFIT_V2_CONSTRAINT_NOT_APPLICABLE = 0,
+  CONFIT_V2_CONSTRAINT_PASSED,
+  CONFIT_V2_CONSTRAINT_FAILED,
+} ConfitV2ConstraintOutcome;
+
+/** @brief one named constraint의 immutable runtime result다. */
+typedef struct ConfitV2ConstraintResult {
+  const ConfitV2CompiledConstraint *constraint;
+  ConfitV2ConstraintOutcome outcome;
+  ConfitV2ConstraintRead *reads;
+  size_t read_count;
+  ConfitDiagnosticRelatedSpan *related;
+  size_t related_count;
+} ConfitV2ConstraintResult;
+
+/** @brief suggestion의 runtime state다. resolver는 어느 state도 자동 적용하지 않는다. */
+typedef enum ConfitV2SuggestionState {
+  CONFIT_V2_SUGGESTION_NOT_APPLICABLE = 0,
+  CONFIT_V2_SUGGESTION_SATISFIED,
+  CONFIT_V2_SUGGESTION_APPLICABLE,
+  CONFIT_V2_SUGGESTION_CONFLICTING,
+} ConfitV2SuggestionState;
+
+/** @brief final context에서 평가한 one suggestion이다. */
+typedef struct ConfitV2SuggestionResult {
+  const ConfitV2Symbol *symbol;
+  const ConfitV2Suggestion *suggestion;
+  ConfitV2SuggestionState state;
+} ConfitV2SuggestionResult;
+
+/** @brief complete named-constraint/suggestion validation report다. */
+typedef struct ConfitV2ConstraintReport ConfitV2ConstraintReport;
+
 /**
  * @brief linked v2 project의 menu/choice/constraint 구조를 compile한다.
  *
@@ -125,6 +185,45 @@ const ConfitV2CompiledConstraint *confit_v2_compiled_structure_constraint_at(
 /** @brief requested semantic graph를 반환한다. 반환 graph는 compiled handle이 소유한다. */
 const ConfitV2CompiledGraph *confit_v2_compiled_structure_graph(
     const ConfitV2CompiledStructure *compiled, ConfitV2CompiledGraphKind kind);
+
+/**
+ * @brief final effective context에서 named constraint와 suggestion을 평가한다.
+ *
+ * Constraint failure가 있으면 `CONFIT_ERR_SCHEMA`를 반환하지만 `out_report`에는
+ * 모든 deterministic failure와 suggestion state를 계속 반환한다. 이 API는 value를
+ * 변경하거나 suggestion을 적용하지 않는다.
+ */
+ConfitStatus confit_v2_constraint_validate(
+    const ConfitV2CompiledStructure *compiled,
+    const ConfitV2ConstraintBinding *bindings, size_t binding_count,
+    ConfitV2ConstraintReport **out_report, ConfitDiagnostic *diagnostic);
+
+/** @brief report와 report가 소유한 read/related record를 해제한다. */
+void confit_v2_constraint_report_free(ConfitV2ConstraintReport *report);
+
+/** @brief report가 borrow하는 compiled structure를 반환한다. */
+const ConfitV2CompiledStructure *confit_v2_constraint_report_source(
+    const ConfitV2ConstraintReport *report);
+
+/** @brief source span/id 정렬 결과의 constraint record 개수다. */
+size_t confit_v2_constraint_report_result_count(
+    const ConfitV2ConstraintReport *report);
+
+/** @brief sorted constraint runtime result를 반환한다. */
+const ConfitV2ConstraintResult *confit_v2_constraint_report_result_at(
+    const ConfitV2ConstraintReport *report, size_t index);
+
+/** @brief final failure 수를 반환한다. */
+size_t confit_v2_constraint_report_failure_count(
+    const ConfitV2ConstraintReport *report);
+
+/** @brief canonical option id와 declaration order의 suggestion result 수다. */
+size_t confit_v2_constraint_report_suggestion_count(
+    const ConfitV2ConstraintReport *report);
+
+/** @brief suggestion result를 반환한다. */
+const ConfitV2SuggestionResult *confit_v2_constraint_report_suggestion_at(
+    const ConfitV2ConstraintReport *report, size_t index);
 
 #ifdef __cplusplus
 }

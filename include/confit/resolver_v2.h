@@ -215,6 +215,16 @@ const ConfitV2ChoiceResolution *confit_v2_evaluation_choice_at(
 const ConfitV2ChoiceResolution *confit_v2_evaluation_find_choice(
     const ConfitV2Evaluation *evaluation, const char *choice_id);
 
+/**
+ * @brief final effective context에서 named constraint를 검증한다.
+ *
+ * Constraint가 하나라도 실패하면 report는 반환되지만 status는
+ * `CONFIT_ERR_SCHEMA`이며 caller는 성공 snapshot을 publish하면 안 된다.
+ */
+ConfitStatus confit_v2_evaluation_validate_constraints(
+    const ConfitV2Evaluation *evaluation,
+    ConfitV2ConstraintReport **out_report, ConfitDiagnostic *diagnostic);
+
 /** @brief deterministic effective-value hash를 계산한다. */
 ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,
                                         uint64_t *out_hash);

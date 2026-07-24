@@ -1,0 +1,63 @@
+schema_version = 2
+
+[option."constraint.gate"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[[option."constraint.gate".suggestions]]
+when = "true"
+value = true
+message = "gate is already enabled"
+
+[option."constraint.driver"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[[option."constraint.driver".suggestions]]
+when = "constraint.gate"
+value = true
+message = "enable the driver"
+
+[[option."constraint.driver".suggestions]]
+when = "constraint.gate"
+value = false
+message = "leave the driver disabled"
+
+[option."constraint.other"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[[option."constraint.other".suggestions]]
+when = "false"
+value = true
+message = "not applicable"
+
+[[constraint]]
+id = "constraint.alpha"
+when = "true"
+require = "enabled(constraint.driver)"
+message = "driver must be enabled"
+
+[[constraint]]
+id = "constraint.beta"
+when = "true"
+require = "enabled(constraint.other)"
+message = "other must be enabled"
+
+[[constraint]]
+id = "constraint.gamma"
+when = "false"
+require = "enabled(constraint.driver)"
+message = "not applicable"
