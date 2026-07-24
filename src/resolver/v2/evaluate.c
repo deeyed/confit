@@ -30,6 +30,28 @@ static const char kMissingComputedExpression[] =
 static const char kComputedValueUnset[] =
     "computed schema v2 expression produced unset value";
 static const char kRequiredValueUnset[] = "required schema v2 option is unset";
+static const char kAvailabilityConditionUnset[] =
+    "schema v2 available_if condition is unset";
+static const char kVisibilityConditionUnset[] =
+    "schema v2 visible_if condition is unset";
+static const char kUnavailableRequestedValue[] =
+    "requested schema v2 value is unavailable";
+static const char kUnavailableEffectiveValue[] =
+    "schema v2 effective value is unavailable";
+static const char kChoiceAvailabilityConditionUnset[] =
+    "schema v2 choice available_if condition is unset";
+static const char kChoiceVisibilityConditionUnset[] =
+    "schema v2 choice visible_if condition is unset";
+static const char kChoiceDefaultConditionUnset[] =
+    "schema v2 choice default condition is unset";
+static const char kChoiceDefaultAmbiguous[] =
+    "ambiguous schema v2 choice default";
+static const char kChoiceDefaultUnavailable[] =
+    "schema v2 choice default member is unavailable";
+static const char kChoiceTooManySelected[] =
+    "schema v2 choice has too many selected members";
+static const char kChoiceRequiresSelection[] =
+    "schema v2 choice requires an explicit member selection";
 
 static int confit_v2_evaluation_symbol_compare(const void *left,
                                                 const void *right) {
@@ -637,6 +659,295 @@ static ConfitStatus confit_v2_evaluation_input_symbol(
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_v2_evaluation_boolean_condition(
+    const ConfitV2LinkedExpression *expression,
+    const ConfitV2ExpressionEnvironment *environment, const char *unset_message,
+    int *out_value, ConfitDiagnostic *diagnostic) {
+  ConfitV2ExpressionValue condition;
+  ConfitStatus status;
+
+  *out_value = 1;
+  if (expression == 0) {
+    return CONFIT_OK;
+  }
+  memset(&condition, 0, sizeof(condition));
+  status = confit_v2_expression_evaluate(expression->typed, environment,
+                                          &condition, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_v2_expression_value_clear(&condition);
+    return status;
+  }
+  if (!condition.is_set) {
+    confit_v2_expression_value_clear(&condition);
+    confit_v2_ledger_diagnostic(expression->expression->source_span.path,
+                                expression->expression->source_span.line,
+                                expression->expression->source_span.column,
+                                CONFIT_ERR_SCHEMA, unset_message, diagnostic);
+    return CONFIT_ERR_SCHEMA;
+  }
+  *out_value = condition.value.as.bool_value != 0;
+  confit_v2_expression_value_clear(&condition);
+  return CONFIT_OK;
+}
+
+static int confit_v2_evaluation_value_is_disabled(
+    const ConfitV2EffectiveValue *value) {
+  if (!value->is_set) {
+    return 1;
+  }
+  if (value->value.kind == CONFIT_V2_VALUE_BOOL) {
+    return value->value.as.bool_value == 0;
+  }
+  if (value->value.kind == CONFIT_V2_VALUE_TRISTATE) {
+    return value->value.as.tristate_value == 'n';
+  }
+  return 0;
+}
+
+static int confit_v2_evaluation_value_is_selected(
+    const ConfitV2EffectiveValue *value) {
+  if (!value->is_set) {
+    return 0;
+  }
+  if (value->value.kind == CONFIT_V2_VALUE_BOOL) {
+    return value->value.as.bool_value != 0;
+  }
+  return value->value.kind == CONFIT_V2_VALUE_TRISTATE &&
+         (value->value.as.tristate_value == 'm' ||
+          value->value.as.tristate_value == 'y');
+}
+
+static const ConfitV2LinkedExpression *
+confit_v2_evaluation_symbol_expression(const ConfitV2LinkedProject *linked,
+                                       const ConfitV2Symbol *symbol,
+                                       ConfitV2LinkedExpressionRole role) {
+  if ((role == CONFIT_V2_LINKED_EXPRESSION_AVAILABLE_IF &&
+       symbol->available_if.text == 0) ||
+      (role == CONFIT_V2_LINKED_EXPRESSION_VISIBLE_IF &&
+       symbol->visible_if.text == 0)) {
+    return 0;
+  }
+  return confit_v2_evaluation_find_expression(linked, role, symbol->id, 0U);
+}
+
+static ConfitStatus confit_v2_evaluation_option_states(
+    const ConfitV2LinkedProject *linked, ConfitV2Evaluation *evaluation,
+    const ConfitV2ExpressionEnvironment *environment,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+
+  for (index = 0U; index < evaluation->value_count; ++index) {
+    ConfitV2EffectiveValue *value = &evaluation->values[index];
+    const ConfitV2LinkedExpression *available_expression =
+        confit_v2_evaluation_symbol_expression(
+            linked, value->symbol, CONFIT_V2_LINKED_EXPRESSION_AVAILABLE_IF);
+    const ConfitV2LinkedExpression *visible_expression;
+    ConfitStatus status;
+
+    status = confit_v2_evaluation_boolean_condition(
+        available_expression, environment, kAvailabilityConditionUnset,
+        &value->available, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (!value->available && !confit_v2_evaluation_value_is_disabled(value)) {
+      const char *message = value->origin == CONFIT_V2_EFFECTIVE_VALUE_REQUESTED
+                                ? kUnavailableRequestedValue
+                                : kUnavailableEffectiveValue;
+      confit_v2_ledger_diagnostic(value->source_path, value->source_line,
+                                  value->source_column, CONFIT_ERR_SCHEMA,
+                                  message, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    visible_expression = confit_v2_evaluation_symbol_expression(
+        linked, value->symbol, CONFIT_V2_LINKED_EXPRESSION_VISIBLE_IF);
+    status = confit_v2_evaluation_boolean_condition(
+        visible_expression, environment, kVisibilityConditionUnset,
+        &value->visible, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_evaluation_select_choice_default(
+    const ConfitV2CompiledChoice *choice,
+    const ConfitV2ExpressionEnvironment *environment,
+    const ConfitV2Symbol **out_member, ConfitDiagnostic *diagnostic) {
+  const ConfitV2ChoiceDefault *selected = 0;
+  size_t index;
+
+  *out_member = 0;
+  for (index = 0U; index < choice->default_count; ++index) {
+    ConfitV2ExpressionValue condition;
+    ConfitStatus status;
+
+    memset(&condition, 0, sizeof(condition));
+    status = confit_v2_expression_evaluate(choice->default_when[index]->typed,
+                                            environment, &condition, diagnostic);
+    if (status != CONFIT_OK) {
+      confit_v2_expression_value_clear(&condition);
+      return status;
+    }
+    if (!condition.is_set) {
+      confit_v2_expression_value_clear(&condition);
+      confit_v2_ledger_diagnostic(
+          choice->default_when[index]->expression->source_span.path,
+          choice->default_when[index]->expression->source_span.line,
+          choice->default_when[index]->expression->source_span.column,
+          CONFIT_ERR_SCHEMA, kChoiceDefaultConditionUnset, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (condition.value.as.bool_value) {
+      const ConfitV2ChoiceDefault *candidate = &choice->source->defaults[index];
+      if (selected == 0 || candidate->priority > selected->priority) {
+        selected = candidate;
+      } else if (candidate->priority == selected->priority &&
+                 strcmp(candidate->member, selected->member) != 0) {
+        confit_v2_expression_value_clear(&condition);
+        confit_v2_ledger_diagnostic(candidate->span.path, candidate->span.line,
+                                    candidate->span.column, CONFIT_ERR_SCHEMA,
+                                    kChoiceDefaultAmbiguous, diagnostic);
+        return CONFIT_ERR_SCHEMA;
+      }
+    }
+    confit_v2_expression_value_clear(&condition);
+  }
+  if (selected != 0) {
+    for (index = 0U; index < choice->member_count; ++index) {
+      if (strcmp(choice->members[index]->id, selected->member) == 0) {
+        *out_member = choice->members[index];
+        return CONFIT_OK;
+      }
+    }
+    confit_v2_ledger_diagnostic(selected->span.path, selected->span.line,
+                                selected->span.column, CONFIT_ERR_INTERNAL,
+                                kAllocationFailed, diagnostic);
+    return CONFIT_ERR_INTERNAL;
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_evaluation_one_choice(
+    const ConfitV2CompiledChoice *choice, ConfitV2Evaluation *evaluation,
+    const ConfitV2ExpressionEnvironment *environment,
+    ConfitV2ChoiceResolution *out, ConfitDiagnostic *diagnostic) {
+  const ConfitV2LinkedExpression *expression = choice->available_if;
+  size_t index;
+  ConfitStatus status;
+
+  out->choice = choice;
+  out->available = 1;
+  out->visible = 1;
+  status = confit_v2_evaluation_boolean_condition(
+      expression, environment, kChoiceAvailabilityConditionUnset,
+      &out->available, diagnostic);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  status = confit_v2_evaluation_boolean_condition(
+      choice->visible_if, environment, kChoiceVisibilityConditionUnset,
+      &out->visible, diagnostic);
+  if (status != CONFIT_OK || !out->available) {
+    return status;
+  }
+  for (index = 0U; index < choice->member_count; ++index) {
+    const ConfitV2EffectiveValue *member =
+        confit_v2_evaluation_find(evaluation, choice->members[index]->id);
+    if (member == 0) {
+      confit_v2_ledger_diagnostic(choice->source->span.path,
+                                  choice->source->span.line,
+                                  choice->source->span.column,
+                                  CONFIT_ERR_INTERNAL, kAllocationFailed,
+                                  diagnostic);
+      return CONFIT_ERR_INTERNAL;
+    }
+    if (member->available && confit_v2_evaluation_value_is_selected(member)) {
+      out->effective_member_count += 1U;
+      if (out->effective_member_count == 1U) {
+        out->selected_member = member->symbol;
+        out->origin = CONFIT_V2_CHOICE_SELECTION_EFFECTIVE_MEMBER;
+      }
+    }
+  }
+  if (out->effective_member_count == 0U) {
+    const ConfitV2Symbol *default_member = 0;
+
+    status = confit_v2_evaluation_select_choice_default(
+        choice, environment, &default_member, diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+    if (default_member != 0) {
+      const ConfitV2EffectiveValue *effective =
+          confit_v2_evaluation_find(evaluation, default_member->id);
+      if (effective == 0 || !effective->available) {
+        confit_v2_ledger_diagnostic(choice->source->span.path,
+                                    choice->source->span.line,
+                                    choice->source->span.column,
+                                    CONFIT_ERR_SCHEMA, kChoiceDefaultUnavailable,
+                                    diagnostic);
+        return CONFIT_ERR_SCHEMA;
+      }
+      out->selected_member = default_member;
+      out->origin = CONFIT_V2_CHOICE_SELECTION_DEFAULT;
+    }
+  }
+  if ((choice->source->cardinality == CONFIT_V2_CHOICE_CARDINALITY_EXACTLY_ONE ||
+       choice->source->cardinality == CONFIT_V2_CHOICE_CARDINALITY_ZERO_OR_ONE) &&
+      out->effective_member_count > 1U) {
+    confit_v2_ledger_diagnostic(choice->source->span.path,
+                                choice->source->span.line,
+                                choice->source->span.column,
+                                CONFIT_ERR_SCHEMA, kChoiceTooManySelected,
+                                diagnostic);
+    return CONFIT_ERR_SCHEMA;
+  }
+  if ((choice->source->cardinality == CONFIT_V2_CHOICE_CARDINALITY_EXACTLY_ONE ||
+       choice->source->cardinality == CONFIT_V2_CHOICE_CARDINALITY_ONE_OR_MORE) &&
+      out->selected_member == 0) {
+    confit_v2_ledger_diagnostic(choice->source->span.path,
+                                choice->source->span.line,
+                                choice->source->span.column,
+                                CONFIT_ERR_SCHEMA, kChoiceRequiresSelection,
+                                diagnostic);
+    return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_evaluation_choices(
+    const ConfitV2AssignmentLedger *ledger, ConfitV2Evaluation *evaluation,
+    const ConfitV2ExpressionEnvironment *environment,
+    ConfitDiagnostic *diagnostic) {
+  const ConfitV2CompiledStructure *compiled =
+      confit_v2_assignment_ledger_source(ledger);
+  const size_t count = confit_v2_compiled_structure_choice_count(compiled);
+  size_t index;
+
+  evaluation->choice_count = count;
+  if (count == 0U) {
+    return CONFIT_OK;
+  }
+  evaluation->choices = (ConfitV2ChoiceResolution *)calloc(
+      count, sizeof(*evaluation->choices));
+  if (evaluation->choices == 0) {
+    confit_v2_ledger_diagnostic(0, 0U, 0U, CONFIT_ERR_INTERNAL,
+                                kAllocationFailed, diagnostic);
+    return CONFIT_ERR_INTERNAL;
+  }
+  for (index = 0U; index < count; ++index) {
+    ConfitStatus status = confit_v2_evaluation_one_choice(
+        confit_v2_compiled_structure_choice_at(compiled, index), evaluation,
+        environment, &evaluation->choices[index], diagnostic);
+    if (status != CONFIT_OK) {
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 static uint64_t confit_v2_evaluation_hash_bytes(uint64_t hash, const void *data,
                                                  size_t size) {
   const unsigned char *bytes = (const unsigned char *)data;
@@ -780,6 +1091,16 @@ ConfitStatus confit_v2_evaluation_build(const ConfitV2AssignmentLedger *ledger,
     }
     bindings[node_index].value = value->is_set ? &value->value : 0;
   }
+  status = confit_v2_evaluation_option_states(linked, evaluation, &environment,
+                                              diagnostic);
+  if (status != CONFIT_OK) {
+    goto fail;
+  }
+  status = confit_v2_evaluation_choices(ledger, evaluation, &environment,
+                                        diagnostic);
+  if (status != CONFIT_OK) {
+    goto fail;
+  }
   free(bindings);
   free(order);
   confit_v2_evaluation_nodes_clear(nodes, node_count);
@@ -803,6 +1124,7 @@ void confit_v2_evaluation_free(ConfitV2Evaluation *evaluation) {
   for (index = 0U; index < evaluation->value_count; ++index) {
     confit_v2_evaluation_value_clear(&evaluation->values[index]);
   }
+  free(evaluation->choices);
   free(evaluation->values);
   free(evaluation);
 }
@@ -845,6 +1167,44 @@ const ConfitV2EffectiveValue *confit_v2_evaluation_find(
   return low < evaluation->value_count &&
                  strcmp(evaluation->values[low].symbol->id, option_id) == 0
              ? &evaluation->values[low]
+             : 0;
+}
+
+size_t confit_v2_evaluation_choice_count(const ConfitV2Evaluation *evaluation) {
+  return evaluation != 0 ? evaluation->choice_count : 0U;
+}
+
+const ConfitV2ChoiceResolution *confit_v2_evaluation_choice_at(
+    const ConfitV2Evaluation *evaluation, size_t index) {
+  if (evaluation == 0 || index >= evaluation->choice_count) {
+    return 0;
+  }
+  return &evaluation->choices[index];
+}
+
+const ConfitV2ChoiceResolution *confit_v2_evaluation_find_choice(
+    const ConfitV2Evaluation *evaluation, const char *choice_id) {
+  size_t low = 0U;
+  size_t high;
+
+  if (evaluation == 0 || choice_id == 0) {
+    return 0;
+  }
+  high = evaluation->choice_count;
+  while (low < high) {
+    const size_t middle = low + (high - low) / 2U;
+    const int compared =
+        strcmp(evaluation->choices[middle].choice->source->id, choice_id);
+    if (compared < 0) {
+      low = middle + 1U;
+    } else {
+      high = middle;
+    }
+  }
+  return low < evaluation->choice_count &&
+                 strcmp(evaluation->choices[low].choice->source->id,
+                        choice_id) == 0
+             ? &evaluation->choices[low]
              : 0;
 }
 

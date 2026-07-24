@@ -1095,7 +1095,8 @@ static ConfitStatus confit_v2_parse_symbol(ConfitV2Project *project,
       return CONFIT_ERR_SCHEMA;
     }
   } else if (symbol->computed.text != 0 ||
-             (!symbol->default_value.is_set && !symbol->required)) {
+             (!symbol->default_value.is_set && !symbol->required &&
+              symbol->default_count == 0U)) {
     confit_v2_error(diagnostic, CONFIT_ERR_SCHEMA, table, kV2InvalidValue);
     return CONFIT_ERR_SCHEMA;
   }

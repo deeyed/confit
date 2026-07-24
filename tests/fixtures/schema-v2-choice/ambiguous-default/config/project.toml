@@ -1,0 +1,6 @@
+[project]
+name = "choice-ambiguous-default"
+namespace = "choice"
+version = "0.2.0"
+schema_version = 2
+imports = ["options.toml"]

@@ -1,0 +1,20 @@
+schema_version = 2
+
+[option."choice.first"]
+type = "bool"
+default = false
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+available_if = "false"
+
+[choice."choice.mode"]
+member_type = "bool"
+members = ["choice.first"]
+cardinality = "exactly-one"
+
+[[choice."choice.mode".defaults]]
+when = "true"
+member = "choice.first"
+priority = 1

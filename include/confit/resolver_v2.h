@@ -91,12 +91,37 @@ typedef struct ConfitV2EffectiveValue {
   const ConfitV2Symbol *symbol;
   ConfitV2Value value;
   int is_set;
+  /** semantic eligibility. false여도 disabled/unset candidate는 보존한다. */
+  int available;
+  /** presentation eligibility이며 effective value를 변경하지 않는다. */
+  int visible;
   ConfitV2EffectiveValueOrigin origin;
   const ConfitV2LedgerEntry *requested;
   const char *source_path;
   size_t source_line;
   size_t source_column;
 } ConfitV2EffectiveValue;
+
+/** @brief choice selection이 생긴 semantic source다. */
+typedef enum ConfitV2ChoiceSelectionOrigin {
+  CONFIT_V2_CHOICE_SELECTION_NONE = 0,
+  CONFIT_V2_CHOICE_SELECTION_EFFECTIVE_MEMBER,
+  CONFIT_V2_CHOICE_SELECTION_DEFAULT,
+} ConfitV2ChoiceSelectionOrigin;
+
+/** @brief one choice의 immutable validation/selection result다. */
+typedef struct ConfitV2ChoiceResolution {
+  const ConfitV2CompiledChoice *choice;
+  /** choice 자체의 semantic eligibility다. */
+  int available;
+  /** TUI/document presentation eligibility다. */
+  int visible;
+  /** 현재 effective state에서 selected인 available member 수다. */
+  size_t effective_member_count;
+  /** effective member 또는 conditional default가 고른 member다. */
+  const ConfitV2Symbol *selected_member;
+  ConfitV2ChoiceSelectionOrigin origin;
+} ConfitV2ChoiceResolution;
 
 /** @brief requested ledger를 계산한 v2 effective-value handle이다. */
 typedef struct ConfitV2Evaluation ConfitV2Evaluation;
@@ -152,9 +177,10 @@ ConfitStatus confit_v2_assignment_ledger_hash(
 /**
  * @brief requested ledger를 conditional default/computed DAG 순서로 계산한다.
  *
- * Availability, visibility, choice, named constraint와 snapshot freeze는 이 API의
- * 범위 밖이다. 실패하면 partial evaluation을 반환하지 않는다. `ledger`는 반환된
- * evaluation보다 오래 유지해야 한다.
+ * Availability/visibility와 choice selection/cardinality를 함께 계산한다. Named
+ * constraint와 snapshot freeze는 이 API의 범위 밖이다. 실패하면 partial
+ * evaluation을 반환하지 않는다. `ledger`는 반환된 evaluation보다 오래 유지해야
+ * 한다.
  */
 ConfitStatus confit_v2_evaluation_build(const ConfitV2AssignmentLedger *ledger,
                                          ConfitV2Evaluation **out_evaluation,
@@ -177,6 +203,17 @@ const ConfitV2EffectiveValue *confit_v2_evaluation_value_at(
 /** @brief canonical option id의 effective value를 반환한다. */
 const ConfitV2EffectiveValue *confit_v2_evaluation_find(
     const ConfitV2Evaluation *evaluation, const char *option_id);
+
+/** @brief canonical choice id lexical order의 choice result 개수다. */
+size_t confit_v2_evaluation_choice_count(const ConfitV2Evaluation *evaluation);
+
+/** @brief canonical choice result를 반환한다. */
+const ConfitV2ChoiceResolution *confit_v2_evaluation_choice_at(
+    const ConfitV2Evaluation *evaluation, size_t index);
+
+/** @brief canonical choice id의 result를 반환한다. */
+const ConfitV2ChoiceResolution *confit_v2_evaluation_find_choice(
+    const ConfitV2Evaluation *evaluation, const char *choice_id);
 
 /** @brief deterministic effective-value hash를 계산한다. */
 ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,

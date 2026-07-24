@@ -48,6 +48,8 @@ struct ConfitV2Evaluation {
   const ConfitV2AssignmentLedger *ledger;
   ConfitV2EffectiveValue *values;
   size_t value_count;
+  ConfitV2ChoiceResolution *choices;
+  size_t choice_count;
 };
 
 char *confit_v2_ledger_strdup(const char *text);

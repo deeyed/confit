@@ -134,6 +134,63 @@ static int expect_valid_evaluation(void) {
   return result;
 }
 
+static int expect_availability_visibility_and_choice(void) {
+  ConfitV2Project *project;
+  ConfitV2LinkedProject *linked;
+  ConfitV2CompiledStructure *compiled;
+  ConfitV2AssignmentLedger *ledger = 0;
+  ConfitV2Evaluation *evaluation = 0;
+  const ConfitV2EffectiveValue *hidden;
+  const ConfitV2EffectiveValue *disabled;
+  const ConfitV2EffectiveValue *optional;
+  const ConfitV2EffectiveValue *first;
+  const ConfitV2EffectiveValue *second;
+  const ConfitV2ChoiceResolution *backend;
+  const ConfitV2ChoiceResolution *unavailable;
+  ConfitDiagnostic diagnostic;
+  int result;
+
+  confit_diagnostic_init(&diagnostic);
+  if (load_compiled("tests/fixtures/schema-v2-availability/valid", &project,
+                    &linked, &compiled, &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+  result = confit_v2_assignment_ledger_build(compiled, 0, &ledger,
+                                              &diagnostic) == CONFIT_OK &&
+           confit_v2_evaluation_build(ledger, &evaluation, &diagnostic) ==
+               CONFIT_OK;
+  hidden = confit_v2_evaluation_find(evaluation, "availability.hidden");
+  disabled = confit_v2_evaluation_find(evaluation, "availability.disabled");
+  optional = confit_v2_evaluation_find(evaluation, "availability.optional");
+  first = confit_v2_evaluation_find(evaluation, "availability.backend.a");
+  second = confit_v2_evaluation_find(evaluation, "availability.backend.b");
+  backend = confit_v2_evaluation_find_choice(evaluation, "availability.backend");
+  unavailable = confit_v2_evaluation_find_choice(
+      evaluation, "availability.optional_choice");
+  result = result && hidden != 0 && hidden->is_set && hidden->available &&
+           !hidden->visible && hidden->value.kind == CONFIT_V2_VALUE_BOOL &&
+           hidden->value.as.bool_value && disabled != 0 &&
+           disabled->is_set && !disabled->available && disabled->visible &&
+           disabled->value.kind == CONFIT_V2_VALUE_BOOL &&
+           !disabled->value.as.bool_value && optional != 0 && !optional->is_set &&
+           !optional->available && optional->visible && first != 0 && second != 0 &&
+           !first->value.as.bool_value && !second->value.as.bool_value &&
+           confit_v2_evaluation_choice_count(evaluation) == 2U &&
+           backend != 0 && backend->available && !backend->visible &&
+           backend->effective_member_count == 0U &&
+           backend->origin == CONFIT_V2_CHOICE_SELECTION_DEFAULT &&
+           backend->selected_member != 0 &&
+           strcmp(backend->selected_member->id, "availability.backend.a") == 0 &&
+           unavailable != 0 && !unavailable->available && unavailable->visible &&
+           unavailable->effective_member_count == 0U &&
+           unavailable->selected_member == 0 &&
+           unavailable->origin == CONFIT_V2_CHOICE_SELECTION_NONE;
+  confit_v2_evaluation_free(evaluation);
+  confit_v2_assignment_ledger_free(ledger);
+  free_compiled(project, linked, compiled);
+  return result;
+}
+
 static int expect_evaluation_error(const char *fixture, const char *message) {
   ConfitV2Project *project;
   ConfitV2LinkedProject *linked;
@@ -154,6 +211,47 @@ static int expect_evaluation_error(const char *fixture, const char *message) {
                CONFIT_ERR_SCHEMA &&
            evaluation == 0 && diagnostic.message != 0 &&
            strstr(diagnostic.message, message) != 0;
+  confit_v2_evaluation_free(evaluation);
+  confit_v2_assignment_ledger_free(ledger);
+  free_compiled(project, linked, compiled);
+  return result;
+}
+
+static int expect_unavailable_request_error(void) {
+  ConfitV2Project *project;
+  ConfitV2LinkedProject *linked;
+  ConfitV2CompiledStructure *compiled;
+  ConfitV2AssignmentLedger *ledger = 0;
+  ConfitV2Evaluation *evaluation = 0;
+  ConfitV2LedgerOptions options;
+  const ConfitV2LedgerEntry *requested;
+  ConfitDiagnostic diagnostic;
+  uint64_t before;
+  uint64_t after;
+  int result;
+
+  confit_diagnostic_init(&diagnostic);
+  if (load_compiled("tests/fixtures/schema-v2-availability/unavailable-request",
+                    &project, &linked, &compiled, &diagnostic) != CONFIT_OK) {
+    return 0;
+  }
+  memset(&options, 0, sizeof(options));
+  options.profile_name = "enable";
+  result = confit_v2_assignment_ledger_build(compiled, &options, &ledger,
+                                              &diagnostic) == CONFIT_OK &&
+           confit_v2_assignment_ledger_hash(ledger, &before) == CONFIT_OK &&
+           confit_v2_evaluation_build(ledger, &evaluation, &diagnostic) ==
+               CONFIT_ERR_SCHEMA &&
+           evaluation == 0 && diagnostic.message != 0 &&
+           strstr(diagnostic.message, "requested schema v2 value is unavailable") !=
+               0 &&
+           confit_v2_assignment_ledger_hash(ledger, &after) == CONFIT_OK &&
+           before == after;
+  requested = confit_v2_assignment_ledger_requested(ledger,
+                                                     "availability.feature");
+  result = result && requested != 0 && !requested->is_unset &&
+           requested->value.kind == CONFIT_V2_VALUE_BOOL &&
+           requested->value.as.bool_value;
   confit_v2_evaluation_free(evaluation);
   confit_v2_assignment_ledger_free(ledger);
   free_compiled(project, linked, compiled);
@@ -342,28 +440,53 @@ int main(void) {
   if (!expect_valid_evaluation()) {
     return 2;
   }
-  if (!expect_cycle_diagnostic()) {
+  if (!expect_availability_visibility_and_choice()) {
     return 3;
+  }
+  if (!expect_cycle_diagnostic()) {
+    return 4;
   }
   if (!expect_evaluation_error(
           "tests/fixtures/schema-v2-evaluation/ambiguous-default",
           "ambiguous schema v2 conditional default")) {
-    return 4;
+    return 5;
   }
   if (!expect_evaluation_error("tests/fixtures/schema-v2-evaluation/required",
                                "required schema v2 option is unset")) {
-    return 5;
+    return 6;
   }
   if (!expect_evaluation_error(
           "tests/fixtures/schema-v2-evaluation/conditional-range",
           "invalid schema v2 input value")) {
-    return 6;
-  }
-  if (!expect_declaration_order_hash()) {
     return 7;
   }
-  if (!expect_large_evaluation()) {
+  if (!expect_unavailable_request_error()) {
     return 8;
+  }
+  if (!expect_evaluation_error("tests/fixtures/schema-v2-choice/multiple",
+                               "schema v2 choice has too many selected members")) {
+    return 9;
+  }
+  if (!expect_evaluation_error(
+          "tests/fixtures/schema-v2-choice/required",
+          "schema v2 choice requires an explicit member selection")) {
+    return 10;
+  }
+  if (!expect_evaluation_error(
+          "tests/fixtures/schema-v2-choice/unavailable-default",
+          "schema v2 choice default member is unavailable")) {
+    return 11;
+  }
+  if (!expect_evaluation_error(
+          "tests/fixtures/schema-v2-choice/ambiguous-default",
+          "ambiguous schema v2 choice default")) {
+    return 12;
+  }
+  if (!expect_declaration_order_hash()) {
+    return 13;
+  }
+  if (!expect_large_evaluation()) {
+    return 14;
   }
   return 0;
 }

@@ -1,0 +1,22 @@
+schema_version = 2
+
+[option."choice.first"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."choice.second"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[choice."choice.mode"]
+member_type = "bool"
+members = ["choice.first", "choice.second"]
+cardinality = "zero-or-one"

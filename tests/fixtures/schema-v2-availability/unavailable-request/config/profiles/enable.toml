@@ -1,0 +1,6 @@
+[profile]
+name = "enable"
+schema_version = 2
+
+[values]
+"availability.feature" = true
