@@ -1872,7 +1872,7 @@ static ConfitStatus confit_v2_parse_project_document(
     ConfitV2Project *project, const char *config_root, const char *project_path,
     ConfitDiagnostic *diagnostic) {
   static const char *const kFields[] = {"name", "namespace", "version",
-                                         "schema_version", "imports",
+                                         "default_target", "schema_version", "imports",
                                          "profile_dirs", "target_dirs",
                                          "selection_dirs"};
   ConfitV2TomlDocument *document;
@@ -1938,7 +1938,21 @@ static ConfitStatus confit_v2_parse_project_document(
   value = confit_v2_toml_table_find(table, "version");
   if (value != 0 &&
       (status = confit_v2_copy_string(project, value, &project->version,
-                                       diagnostic)) != CONFIT_OK) {
+                                      diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
+  value = confit_v2_toml_table_find(table, "default_target");
+  if (value != 0 &&
+      (status = confit_v2_copy_string(project, value, &project->default_target,
+                                      diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
+  if (value != 0 &&
+      (status = confit_v2_copy_span(project, value, 0U,
+                                    &project->default_target_span,
+                                    diagnostic)) != CONFIT_OK) {
     confit_v2_toml_document_free(document);
     return status;
   }

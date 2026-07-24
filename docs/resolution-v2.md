@@ -2,7 +2,6 @@
 doc_type: semantics-contract
 status: accepted-design
 authority: normative
-implementation_status: not-implemented
 last_verified: 2026-07-24
 ---
 

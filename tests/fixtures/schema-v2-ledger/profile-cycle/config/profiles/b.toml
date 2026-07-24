@@ -1,0 +1,4 @@
+[profile]
+name = "b"
+schema_version = 2
+base = "a"

@@ -2,7 +2,6 @@
 doc_type: language-spec
 status: accepted-design
 authority: normative
-implementation_status: partially-implemented
 last_verified: 2026-07-24
 ---
 
@@ -44,12 +43,15 @@ TOML parsing은 [vendor-tomlc17.md](vendor-tomlc17.md)의 adapter 경계를 따�
 V2 loader는 table level을 직접 순회하고 TOML library의 merge 또는 multipart-key
 helper로 import, namespace, profile precedence를 구현하지 않는다.
 
-현재 v2 loader는 project metadata, explicit import, typed option/menu/choice/
-constraint source model과 source span까지 만든다. Loader 직후의 linker는 canonical
-option namespace를 만들고, expression을 parse/typecheck한 뒤 모든 reference를
-symbol에 연결하며 write-domain ownership을 검증한다. Profile/target assignment의
-실제 병합과 expression evaluation/resolution은 그 다음 pipeline 단계가 소유한다.
-Loader와 linker 모두 expression text를 평가하지 않는다.
+V2 loader는 project metadata, explicit import, typed option/menu/choice/constraint
+source model과 source span을 만들며, linker는 canonical option namespace를 만들고
+expression을 parse/typecheck한 뒤 모든 reference를 symbol에 연결하고 write-domain
+ownership을 검증한다. Profile/target input은 assignment ledger 단계에서 typed record로
+읽고 base chain, write-domain, duplicate assignment를 검증한다. Ledger는 schema
+default, target, profile, user request의 모든 provenance를 보존하고 winning requested
+record를 결정한다. Conditional default, expression evaluation, effective snapshot,
+choice와 constraint enforcement는 resolution 단계가 소유한다. Loader와 linker 모두
+expression text를 평가하지 않는다.
 
 ## Project
 
@@ -59,6 +61,7 @@ name = "delos"
 namespace = "delos"
 version = "0.2.0"
 schema_version = 2
+default_target = "sim-dsh"
 
 imports = [
   "menus/root.toml",
@@ -75,6 +78,8 @@ selection_dirs = ["selection"]
 규칙:
 
 - `name`, `namespace`, `schema_version`은 필수다.
+- `default_target`은 선택 사항이다. CLI/TUI와 leaf profile이 target을 명시하지
+  않았을 때만 사용한다.
 - `namespace`는 option id의 첫 segment와 일치해야 한다.
 - Import path는 project config root 상대 forward-slash path다.
 - Import 대상도 top-level `schema_version = 2`를 선언해야 하며 `imports`로 다시

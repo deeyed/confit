@@ -285,6 +285,10 @@ typedef struct ConfitV2Project {
   char *name;
   char *namespace_name;
   char *version;
+  /** explicit target/profile가 없을 때 선택할 optional target name. */
+  char *default_target;
+  /** `default_target` declaration의 source position. */
+  ConfitV2SourceSpan default_target_span;
   ConfitV2Import *imports;
   size_t import_count;
   ConfitV2StringList profile_dirs;

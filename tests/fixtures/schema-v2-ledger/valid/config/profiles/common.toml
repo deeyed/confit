@@ -1,0 +1,7 @@
+[profile]
+name = "common"
+schema_version = 2
+
+[values]
+"ledger.profile.value" = 2
+"ledger.profile.optional" = false

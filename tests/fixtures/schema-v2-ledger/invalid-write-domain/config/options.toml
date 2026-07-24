@@ -1,0 +1,10 @@
+schema_version = 2
+
+[option."ledger.target.board"]
+type = "enum"
+values = ["host", "sim"]
+default = "host"
+write_domain = "target"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"

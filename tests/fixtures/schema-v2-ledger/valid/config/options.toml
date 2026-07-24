@@ -1,0 +1,37 @@
+schema_version = 2
+
+[option."ledger.profile.value"]
+type = "uint"
+default = 1
+range = { min = 0, max = 99 }
+write_domain = "profile"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."ledger.profile.optional"]
+type = "bool"
+default = true
+write_domain = "profile"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."ledger.target.board"]
+type = "enum"
+values = ["host", "sim", "user"]
+default = "host"
+write_domain = "target"
+user_override = true
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
+
+[option."ledger.schema.constant"]
+type = "bool"
+default = true
+write_domain = "schema"
+owner = "confit"
+since = "0.2.0"
+stability = "stable"
