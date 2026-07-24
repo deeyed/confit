@@ -31,9 +31,9 @@ typedef struct ConfitProjectHandle ConfitProjectHandle;
  *
  * `project_root`는 `config/project.toml`을 포함하는 project root 또는
  * `project.toml`을 직접 포함하는 config root다. schema version은 source file만
- * authority로 삼으며 CLI/API argument로 override할 수 없다. v1은 완성된 adapter로
- * load하고, v2 loader가 아직 준비되지 않은 단계에서는 `CONFIT_ERR_UNSUPPORTED`와
- * 명확한 diagnostic을 반환한다.
+ * authority로 삼으며 CLI/API argument로 override할 수 없다. 지원되는 v1/v2
+ * loader는 각각의 opaque model handle을 반환하며, 지원하지 않는 version만
+ * `CONFIT_ERR_UNSUPPORTED`와 명확한 diagnostic을 반환한다.
  *
  * @param project_root project root 또는 config root.
  * @param out_project 성공 시 caller-owned opaque project handle.

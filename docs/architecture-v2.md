@@ -104,12 +104,11 @@ src/tui/
   ...                       # curses renderer와 input은 공유 가능
 ```
 
-현재 파일을 한 번에 이동하지 않는다. `src/schema/dispatch.c`와
-`src/resolver/dispatch.c`는 먼저 도입되어 `[project].schema_version`을 strict
-TOML bootstrap으로 읽고 version-tagged opaque handle을 만든다. v1은 기존 loader와
-resolver를 adapter로 호출하며, v2는 loader/model이 준비될 때까지 명시적으로
-`CONFIT_ERR_UNSUPPORTED`를 반환한다. 이후 v1 코드를 기계적으로 이동하고 결과가
-동일함을 확인한 뒤 v2 module을 추가한다.
+`src/schema/dispatch.c`와 `src/resolver/dispatch.c`는 `[project].schema_version`을
+strict TOML bootstrap으로 읽고 version-tagged opaque handle을 만든다. v1은 기존
+loader와 resolver를 adapter로 호출하고, v2는 link/compile/resolve/constraint를 모두
+통과한 immutable snapshot만 handle에 넣는다. 어느 경로도 다른 major version의 raw
+model pointer를 public API로 노출하지 않는다.
 
 ## Public Handle
 
@@ -256,7 +255,7 @@ availability와 visibility 결과
 choice selection
 constraint 결과
 provenance graph
-input manifest와 source hash
+source semantic hash, selected input hash, final semantic hash
 ```
 
 Snapshot을 만든 뒤 generator가 값을 다시 계산하거나 dependency를 재평가하면

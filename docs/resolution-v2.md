@@ -212,7 +212,7 @@ Option record:
 id
 type
 write_domain
-requested state와 assignment chain
+requested state와 winning assignment
 effective value
 default/computed source
 availability
@@ -230,8 +230,9 @@ schema = 2
 resolver ABI
 tool/source revision
 selected/requested profile과 target
-source hash
-input manifest hash
+source semantic hash
+selected input hash
+final semantic hash
 constraint summary
 ```
 
@@ -304,6 +305,20 @@ constraint_reads
 `confit explain`은 이 graph를 option 중심으로 slice한다. Generator가 별도의
 provenance 문자열을 추측하지 않는다.
 
+Snapshot은 publish 시점의 winning requested assignment와 final effective value,
+각각의 source span을 깊게 복사한다. 전체 precedence chain은 resolve 중 ledger에
+보존하지만 snapshot에는 현재 선택의 원인과 causal graph만 넣는다. 따라서
+snapshot을 만든 뒤 project, linked project, ledger, evaluation, constraint report를
+해제해도 explanation과 generator가 같은 결과를 읽는다.
+
+Hash는 역할을 섞지 않는다.
+
+- source semantic hash: option/choice/constraint 선언 의미를 나타낸다.
+- selected input hash: profile, target, user override와 winning request 입력을
+  나타낸다.
+- final semantic hash: effective value, availability/visibility, choice와 constraint
+  outcome을 나타낸다.
+
 ## Incremental Resolve
 
 TUI edit는 다음 절차를 사용한다.
@@ -311,12 +326,14 @@ TUI edit는 다음 절차를 사용한다.
 1. 기존 compiled project와 snapshot을 유지한다.
 2. 한 requested assignment를 임시 ledger에 교체한다.
 3. reverse invalidation index로 영향 node를 찾는다.
-4. affected default/computed/availability/choice/constraint만 재평가한다.
+4. affected default/computed/availability/choice/constraint closure를 만든다.
 5. 성공하면 새 immutable snapshot을 publish한다.
 6. 실패하면 기존 snapshot을 유지하고 diagnostic을 반환한다.
 
-Full validation은 저장 직전에 다시 수행한다. Incremental 결과와 full result의
-semantic hash가 달라지면 internal error다.
+Full validation은 저장 직전에 다시 수행한다. Incremental transaction의 publish
+snapshot은 full result와 동일해야 한다. 초기 resolver API는 이 property를 먼저
+보장하기 위해 reverse closure를 계산한 뒤 full resolver를 correctness oracle로
+사용한다. partial evaluator가 도입되어도 이 equality property는 유지한다.
 
 ## Error Recovery 금지
 

@@ -11,7 +11,7 @@ struct ConfitSnapshotHandle {
   ConfitSchemaVersion schema_version;
   union {
     ConfitResolvedConfig *v1;
-    void *opaque;
+    ConfitV2Snapshot *v2;
   } implementation;
 };
 
@@ -20,8 +20,6 @@ static const char kWrongProjectVersion[] =
     "project handle does not use schema_version = 1";
 static const char kSnapshotAllocationFailed[] =
     "failed to allocate opaque snapshot handle";
-static const char kV2ResolverNotImplemented[] =
-    "schema_version = 2 resolver is not implemented";
 
 ConfitStatus confit_resolver_v1_resolve_handle(
     const ConfitProjectHandle *project, const char *profile_name,
@@ -67,6 +65,12 @@ ConfitStatus confit_resolver_v1_resolve_handle(
 ConfitStatus confit_resolver_v2_resolve_handle(
     const ConfitProjectHandle *project, ConfitSnapshotHandle **out_snapshot,
     ConfitDiagnostic *diagnostic) {
+  ConfitV2LinkedProject *linked = 0;
+  ConfitV2CompiledStructure *compiled = 0;
+  ConfitV2Snapshot *resolved = 0;
+  ConfitSnapshotHandle *snapshot;
+  ConfitStatus status;
+
   if (out_snapshot == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0, 0,
                           kMissingSnapshotOutput);
@@ -79,9 +83,30 @@ ConfitStatus confit_resolver_v2_resolve_handle(
                           "project handle does not use schema_version = 2");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
-  confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0, 0,
-                        kV2ResolverNotImplemented);
-  return CONFIT_ERR_UNSUPPORTED;
+  status = confit_v2_schema_link_project(
+      confit_project_handle_borrow_v2(project), &linked, diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_v2_compile_structure(linked, &compiled, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v2_snapshot_resolve(compiled, 0, &resolved, diagnostic);
+  }
+  confit_v2_compiled_structure_free(compiled);
+  confit_v2_linked_project_free(linked);
+  if (status != CONFIT_OK) {
+    return status;
+  }
+  snapshot = (ConfitSnapshotHandle *)calloc(1U, sizeof(*snapshot));
+  if (snapshot == 0) {
+    confit_v2_snapshot_free(resolved);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0, 0,
+                          kSnapshotAllocationFailed);
+    return CONFIT_ERR_INTERNAL;
+  }
+  snapshot->schema_version = CONFIT_SCHEMA_VERSION_V2;
+  snapshot->implementation.v2 = resolved;
+  *out_snapshot = snapshot;
+  return CONFIT_OK;
 }
 
 void confit_snapshot_handle_free(ConfitSnapshotHandle *snapshot) {
@@ -90,6 +115,8 @@ void confit_snapshot_handle_free(ConfitSnapshotHandle *snapshot) {
   }
   if (snapshot->schema_version == CONFIT_SCHEMA_VERSION_V1) {
     confit_resolved_config_free(snapshot->implementation.v1);
+  } else if (snapshot->schema_version == CONFIT_SCHEMA_VERSION_V2) {
+    confit_v2_snapshot_free(snapshot->implementation.v2);
   }
   free(snapshot);
 }

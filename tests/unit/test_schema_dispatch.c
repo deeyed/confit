@@ -120,8 +120,10 @@ static int expect_v2_handle(void) {
                                         &diagnostic) != CONFIT_ERR_INVALID_ARGUMENT ||
       snapshot != 0 ||
       confit_resolver_v2_resolve_handle(project, &snapshot, &diagnostic) !=
-          CONFIT_ERR_UNSUPPORTED ||
-      snapshot != 0) {
+          CONFIT_OK ||
+      snapshot == 0 ||
+      confit_snapshot_handle_schema_version(snapshot) !=
+          CONFIT_SCHEMA_VERSION_V2) {
     confit_snapshot_handle_free(snapshot);
     confit_project_handle_free(project);
     return 0;

@@ -229,17 +229,188 @@ ConfitStatus confit_v2_evaluation_validate_constraints(
 ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,
                                         uint64_t *out_hash);
 
+/** @brief v2 resolve의 publish 가능한 immutable result다. */
+typedef struct ConfitV2Snapshot ConfitV2Snapshot;
+
+/** @brief requested/effective assignment가 온 semantic lane이다. */
+typedef enum ConfitV2ProvenanceKind {
+  CONFIT_V2_PROVENANCE_SCHEMA_DEFAULT = 1,
+  CONFIT_V2_PROVENANCE_CONDITIONAL_DEFAULT,
+  CONFIT_V2_PROVENANCE_PROFILE_ASSIGNMENT,
+  CONFIT_V2_PROVENANCE_TARGET_ASSIGNMENT,
+  CONFIT_V2_PROVENANCE_USER_ASSIGNMENT,
+  CONFIT_V2_PROVENANCE_COMPUTED,
+  CONFIT_V2_PROVENANCE_CHOICE_DECISION,
+  CONFIT_V2_PROVENANCE_CONSTRAINT,
+  CONFIT_V2_PROVENANCE_UNSET,
+  CONFIT_V2_PROVENANCE_EFFECTIVE_VALUE,
+} ConfitV2ProvenanceKind;
+
+/** @brief snapshot이 소유하는 one requested/effective value provenance다. */
+typedef struct ConfitV2SnapshotAssignment {
+  int is_present;
+  int is_set;
+  int is_unset;
+  ConfitV2AssignmentOrigin origin;
+  ConfitV2Value value;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitV2SnapshotAssignment;
+
+/** @brief canonical option id 순서의 fully-owned v2 snapshot option이다. */
+typedef struct ConfitV2SnapshotOption {
+  const char *id;
+  ConfitV2OptionType type;
+  ConfitV2WriteDomain write_domain;
+  int available;
+  int visible;
+  ConfitV2SnapshotAssignment requested;
+  int effective_is_set;
+  ConfitV2EffectiveValueOrigin effective_origin;
+  ConfitV2Value effective_value;
+  const char *effective_source_path;
+  size_t effective_source_line;
+  size_t effective_source_column;
+} ConfitV2SnapshotOption;
+
+/** @brief canonical choice id 순서의 fully-owned choice state다. */
+typedef struct ConfitV2SnapshotChoice {
+  const char *id;
+  int available;
+  int visible;
+  size_t effective_member_count;
+  const char *selected_member_id;
+  ConfitV2ChoiceSelectionOrigin origin;
+} ConfitV2SnapshotChoice;
+
+/** @brief named constraint의 frozen outcome이다. */
+typedef struct ConfitV2SnapshotConstraint {
+  const char *id;
+  ConfitV2ConstraintOutcome outcome;
+  const char *message;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitV2SnapshotConstraint;
+
+/** @brief explanation graph의 node다. snapshot이 모든 text를 소유한다. */
+typedef struct ConfitV2ProvenanceNode {
+  ConfitV2ProvenanceKind kind;
+  const char *subject_id;
+  const char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitV2ProvenanceNode;
+
+/** @brief provenance node index를 잇는 causal edge다. */
+typedef struct ConfitV2ProvenanceEdge {
+  size_t from_index;
+  size_t to_index;
+} ConfitV2ProvenanceEdge;
+
+/** @brief edit가 invalidate할 semantic node 종류다. */
+typedef enum ConfitV2InvalidationKind {
+  CONFIT_V2_INVALIDATION_OPTION = 1,
+  CONFIT_V2_INVALIDATION_CHOICE,
+  CONFIT_V2_INVALIDATION_CONSTRAINT,
+} ConfitV2InvalidationKind;
+
+/** @brief deterministic invalidation set의 one node다. */
+typedef struct ConfitV2InvalidationNode {
+  ConfitV2InvalidationKind kind;
+  const char *id;
+} ConfitV2InvalidationNode;
+
+/** @brief snapshot이 만든 caller-owned invalidation result다. */
+typedef struct ConfitV2InvalidationSet ConfitV2InvalidationSet;
+
 /**
- * @brief v2 resolver skeleton을 호출한다.
+ * @brief validated ledger/evaluation/report를 source lifetime과 분리된 snapshot으로
+ *        freeze한다.
  *
- * v2 expression/model/resolution implementation 전에는 항상
- * CONFIT_ERR_UNSUPPORTED를 반환한다. 이 API는 v1 resolver에 v2 handle을 넘기는
- * 우회 경로를 제공하지 않는다.
+ * `report`는 성공한 complete constraint report여야 한다. constraint failure가
+ * 있으면 snapshot publish는 거부된다. 반환 snapshot은 ledger, evaluation,
+ * report, compiled/project가 해제된 뒤에도 그 공개 data를 계속 보유한다.
+ */
+ConfitStatus confit_v2_snapshot_freeze(
+    const ConfitV2AssignmentLedger *ledger,
+    const ConfitV2Evaluation *evaluation,
+    const ConfitV2ConstraintReport *report, ConfitV2Snapshot **out_snapshot,
+    ConfitDiagnostic *diagnostic);
+
+/** @brief link/compile/ledger/evaluate/constraint를 거쳐 publish snapshot을 만든다. */
+ConfitStatus confit_v2_snapshot_resolve(
+    const ConfitV2CompiledStructure *compiled,
+    const ConfitV2LedgerOptions *options, ConfitV2Snapshot **out_snapshot,
+    ConfitDiagnostic *diagnostic);
+
+/** @brief snapshot과 내부 provenance/reverse index를 해제한다. */
+void confit_v2_snapshot_free(ConfitV2Snapshot *snapshot);
+
+/** @brief source schema semantic hash, selected input hash, final semantic hash다. */
+uint64_t confit_v2_snapshot_source_hash(const ConfitV2Snapshot *snapshot);
+uint64_t confit_v2_snapshot_input_hash(const ConfitV2Snapshot *snapshot);
+uint64_t confit_v2_snapshot_semantic_hash(const ConfitV2Snapshot *snapshot);
+
+/** @brief snapshot이 기록한 selected profile/target name이다. */
+const char *confit_v2_snapshot_profile_name(const ConfitV2Snapshot *snapshot);
+const char *confit_v2_snapshot_target_name(const ConfitV2Snapshot *snapshot);
+
+/** @brief canonical option/choice/constraint record를 조회한다. */
+size_t confit_v2_snapshot_option_count(const ConfitV2Snapshot *snapshot);
+const ConfitV2SnapshotOption *confit_v2_snapshot_option_at(
+    const ConfitV2Snapshot *snapshot, size_t index);
+const ConfitV2SnapshotOption *confit_v2_snapshot_find_option(
+    const ConfitV2Snapshot *snapshot, const char *option_id);
+size_t confit_v2_snapshot_choice_count(const ConfitV2Snapshot *snapshot);
+const ConfitV2SnapshotChoice *confit_v2_snapshot_choice_at(
+    const ConfitV2Snapshot *snapshot, size_t index);
+size_t confit_v2_snapshot_constraint_count(const ConfitV2Snapshot *snapshot);
+const ConfitV2SnapshotConstraint *confit_v2_snapshot_constraint_at(
+    const ConfitV2Snapshot *snapshot, size_t index);
+
+/** @brief frozen causal explanation graph를 canonical insertion order로 조회한다. */
+size_t confit_v2_snapshot_provenance_node_count(
+    const ConfitV2Snapshot *snapshot);
+const ConfitV2ProvenanceNode *confit_v2_snapshot_provenance_node_at(
+    const ConfitV2Snapshot *snapshot, size_t index);
+size_t confit_v2_snapshot_provenance_edge_count(
+    const ConfitV2Snapshot *snapshot);
+const ConfitV2ProvenanceEdge *confit_v2_snapshot_provenance_edge_at(
+    const ConfitV2Snapshot *snapshot, size_t index);
+
+/** @brief changed option에서 시작하는 evaluation/visibility/choice/constraint closure다. */
+ConfitStatus confit_v2_snapshot_invalidate(
+    const ConfitV2Snapshot *snapshot, const char *changed_option_id,
+    ConfitV2InvalidationSet **out_set, ConfitDiagnostic *diagnostic);
+void confit_v2_invalidation_set_free(ConfitV2InvalidationSet *set);
+size_t confit_v2_invalidation_set_count(const ConfitV2InvalidationSet *set);
+const ConfitV2InvalidationNode *confit_v2_invalidation_set_at(
+    const ConfitV2InvalidationSet *set, size_t index);
+
+/**
+ * @brief edit invalidation closure를 계산한 뒤 full resolver와 byte-identical
+ *        snapshot을 만든 correctness-first incremental transaction이다.
+ *
+ * 현재 구현은 partial evaluator를 publish하지 않는다. affected set은 이후
+ * partial evaluation이 갱신할 정확한 closure이며, 반환 snapshot은 항상 full
+ * resolve와 동일한 immutable result다.
+ */
+ConfitStatus confit_v2_snapshot_reconcile_edit(
+    const ConfitV2Snapshot *base,
+    const ConfitV2CompiledStructure *compiled,
+    const ConfitV2LedgerOptions *options, const char *changed_option_id,
+    ConfitV2Snapshot **out_snapshot, ConfitV2InvalidationSet **out_affected,
+    ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief opaque v2 project handle을 default selection으로 resolve한다.
  *
  * @param project v2 project handle.
- * @param out_snapshot 성공 시 caller-owned v2 snapshot handle. 현재는 항상 NULL.
+ * @param out_snapshot 성공 시 caller-owned v2 snapshot handle.
  * @param diagnostic 실패 위치와 원인을 기록할 optional record.
- * @return 현재는 항상 CONFIT_ERR_UNSUPPORTED.
+ * @return fully validated immutable snapshot이면 CONFIT_OK.
  */
 ConfitStatus confit_resolver_v2_resolve_handle(
     const ConfitProjectHandle *project, ConfitSnapshotHandle **out_snapshot,

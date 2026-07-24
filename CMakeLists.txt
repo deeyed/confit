@@ -239,6 +239,8 @@ add_library(confit_resolver_v2 STATIC
   src/resolver/v2/input_loader.c
   src/resolver/v2/plan.c
   src/resolver/v2/evaluate.c
+  src/resolver/v2/snapshot.c
+  src/resolver/v2/incremental.c
 )
 
 target_link_libraries(confit_resolver_v2
@@ -305,6 +307,7 @@ target_link_libraries(confit_resolver_dispatch
   PUBLIC
     confit_resolver
     confit_schema_dispatch
+    confit_resolver_v2
 )
 
 target_include_directories(confit_resolver_dispatch
@@ -638,6 +641,24 @@ confit_target_warnings(confit_test_resolver_v2_evaluate)
 add_test(
   NAME confit.unit.resolver_v2_evaluate
   COMMAND confit_test_resolver_v2_evaluate
+)
+
+add_executable(confit_test_resolver_v2_snapshot
+  tests/unit/test_resolver_v2_snapshot.c
+)
+
+target_link_libraries(confit_test_resolver_v2_snapshot PRIVATE
+  confit_resolver_v2
+)
+target_compile_definitions(confit_test_resolver_v2_snapshot PRIVATE
+  CONFIT_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+confit_target_warnings(confit_test_resolver_v2_snapshot)
+
+add_test(
+  NAME confit.unit.resolver_v2_snapshot
+  COMMAND confit_test_resolver_v2_snapshot
 )
 
 add_executable(confit_test_expression_v2
