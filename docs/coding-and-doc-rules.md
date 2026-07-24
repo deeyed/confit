@@ -10,6 +10,14 @@ last_verified: 2026-06-23
 Confit 구현팀은 Parus/Delos의 기본 코드·문서 규칙을 따라야 한다. Confit은 host tool이지만,
 Parus/Delos의 build authority가 될 예정이므로 더 느슨한 실험 스크립트처럼 작성하면 안 된다.
 
+## Schema Version 경계
+
+현재 v1 구현 규칙과 v2 신규 구현 규칙은
+[schema-versions.md](schema-versions.md)를 따른다. 이 문서에서 언급하는 기존
+dependency edge와 `forces` lint는 v1 코드에만 해당한다. V2는
+[architecture-v2.md](architecture-v2.md)의 별도 model/schema/resolver 구조를
+사용하며 `forces`를 지원하지 않는다.
+
 ## Language
 
 - Core implementation은 C로 작성한다.
@@ -81,12 +89,19 @@ Doxygen block으로 작성한다.
 ```text
 tools/confit/
   README.md
-  architecture.md
-  toml-schema.md
-  resolution-dag.md
-  generators.md
-  cli-tui.md
-  coding-and-doc-rules.md
+  docs/
+    architecture.md
+    schema-versions.md
+    schema-v1.md
+    resolution-v1.md
+    schema-v2.md
+    expression-v2.md
+    resolution-v2.md
+    architecture-v2.md
+    artifacts-v2.md
+    generators.md
+    cli-tui.md
+    coding-and-doc-rules.md
   include/confit/
     status.h
     model.h
@@ -205,12 +220,14 @@ Build graph는 이 값을 보고 DDC/DSH source를 제외해야 한다.
 다른 Codex 팀이 Confit 구현을 시작할 때는 이 순서로 읽는다.
 
 1. `tools/confit/README.md`
-2. `tools/confit/architecture.md`
-3. `tools/confit/toml-schema.md`
-4. `tools/confit/resolution-dag.md`
-5. `tools/confit/generators.md`
-6. `tools/confit/cli-tui.md`
-7. `tools/confit/coding-and-doc-rules.md`
+2. `tools/confit/docs/architecture.md`
+3. `tools/confit/docs/schema-versions.md`
+4. 작업 대상 version의 `schema-v1.md` 또는 `schema-v2.md`
+5. 작업 대상 version의 `resolution-v1.md` 또는 `resolution-v2.md`
+6. V2 작업이면 `expression-v2.md`, `architecture-v2.md`, `artifacts-v2.md`
+7. `tools/confit/docs/generators.md`
+8. `tools/confit/docs/cli-tui.md`
+9. `tools/confit/docs/coding-and-doc-rules.md`
 
 이 문서를 읽은 뒤에도 애매한 점이 있으면 code를 쓰기 전에 schema와 generated artifact 계약부터
 질문해야 한다.

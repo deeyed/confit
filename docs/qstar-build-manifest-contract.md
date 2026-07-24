@@ -12,6 +12,11 @@ last_verified: 2026-06-24
 `wiki/AI_INDEX.md`, `wiki/reference/modules.md`,
 `wiki/reference/configs.md`를 기준으로 확인했다.
 
+이 문서의 구체적인 module schema는 `schema_version = 1`의
+`confit-config-manifest-v1`이다. V2는 QStar import 방식은 유지하지만
+`confit-config-manifest-v2`로 requested/effective/provenance를 분리하며 v1
+module shape로 호환 출력하지 않는다.
+
 ## QStar 문법 기준
 
 Confit generated QStar artifact는 다음 QStar DSL 규칙을 따라야 한다.

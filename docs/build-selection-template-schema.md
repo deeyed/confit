@@ -13,6 +13,13 @@ Delos board 이름, linker script 규칙, QStar label 규칙을 하드코딩하�
 Project가 mapping을 선언하고, 이후 generator가 그 mapping을 resolved config에
 적용한다.
 
+## Schema Version 범위
+
+이 문서의 현재 parser와 artifact는 `schema_version = 1` 계약이다. V2에서도
+project-defined mapping 원칙은 유지하지만 target option은 `write_domain =
+"target"`이어야 하고 mapping 대상은 `emit = ["selection"]`을 포함해야 한다.
+V2 output은 별도 v2 artifact schema를 사용한다.
+
 Template 파일은 config root 아래 `selection/*.toml`에 둔다.
 
 ```text

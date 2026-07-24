@@ -14,6 +14,13 @@ runtime service.
 This document defines the agreed command surface and local installation rules.
 It is not an implementation progress log.
 
+## Schema Version 범위
+
+현재 구현된 command는 `schema_version = 1` project를 처리한다. V2가 구현되면
+동일한 top-level command가 `project.toml`의 version을 자동 dispatch하지만,
+CLI option으로 v1 source를 v2로 강제 해석하지 않는다. 구현 전까지 이 문서의
+command 존재가 v2 지원을 의미하지 않는다.
+
 ## Command Set
 
 Confit has thirteen operational top-level commands plus the `help` command.

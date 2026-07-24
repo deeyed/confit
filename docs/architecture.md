@@ -1,8 +1,8 @@
 ---
-doc_type: tool-spec
-status: draft
-authority: informative
-last_verified: 2026-06-23
+doc_type: architecture-index
+status: accepted
+authority: normative
+last_verified: 2026-07-24
 ---
 
 # Confit Architecture
@@ -10,6 +10,19 @@ last_verified: 2026-06-23
 Confit은 Parus와 Delos를 위한 compile-time configuration authority다. Confit의 핵심 역할은
 configuration source를 읽고, option DAG를 구성하고, profile을 resolve하고, conflict를 설명하고,
 build system과 C code가 소비할 generated artifact를 만드는 것이다.
+
+## Schema Version Boundary
+
+현재 v1 architecture와 새 v2 architecture는 parser/model/resolver에서 분리한다.
+
+- V1 실제 source와 resolution: [schema-v1.md](schema-v1.md),
+  [resolution-v1.md](resolution-v1.md)
+- V2 정본 source와 architecture: [schema-v2.md](schema-v2.md),
+  [architecture-v2.md](architecture-v2.md)
+- Dispatch와 hard cut: [schema-versions.md](schema-versions.md)
+
+공통 CLI가 version을 dispatch할 수는 있지만 v2 evaluator가 v1 model을 받아
+호환 실행하는 구조는 금지한다.
 
 ## Layer Model
 
@@ -29,9 +42,9 @@ TOML source files
 | Layer | 책임 |
 |---|---|
 | Parser adapter | TOML file을 syntax tree 또는 table 형태로 읽는다. |
-| Schema loader | option, choice, profile, target, compat block을 typed model로 만든다. |
-| Graph builder | option reference, dependency, conflict, force, recommend edge를 DAG로 구성한다. |
-| Resolver | default, profile override, target override, user override를 합성한다. |
+| Schema loader | schema version별 option, choice, profile, target, constraint model을 만든다. |
+| Graph builder | version별 evaluation, dependency, visibility, constraint graph를 구성한다. |
+| Resolver | version 계약에 맞춰 immutable resolved snapshot을 만든다. |
 | Checker | range, type, dependency, conflict, cross-project assertion을 검증한다. |
 | Generator | `config.h`, report, explanation, graph, input manifest를 만든다. |
 | Frontend | CLI 또는 TUI를 제공한다. Core evaluator를 대체하지 않는다. |
@@ -103,6 +116,10 @@ TUI는 kconfiglib처럼 menu 안으로 들어가는 얕은 navigation을 지원�
 사용자는 얕은 menu, option 이름, category path, tag, dependency explanation, search로 탐색할 수 있어야
 한다.
 
+V2에서는 menu를 명시 declaration으로 만들며 dependency로 implicit submenu를
+만들지 않는다. Visibility는 presentation이고 semantic eligibility는
+`available_if`가 담당한다.
+
 ## Safety Philosophy
 
 Confit은 illegal configuration을 build 전에 막는 도구다. “사용자가 선택했으니 그대로 진행”하는
@@ -131,7 +148,7 @@ TUI는 host-side ncurses frontend다. Confit이 직접 만든 terminal shim을 `
 
 ## Source Layout Boundary
 
-구현은 다음 경계를 따른다.
+공통 hosted code는 다음 경계를 따른다.
 
 ```text
 tools/confit/
@@ -147,3 +164,8 @@ tools/confit/
 
 `src/core/`는 terminal, filesystem, path separator, environment variable, clock, locale을 직접 알지
 않는다. 이런 hosted 기능은 `src/host/`가 제공하는 작은 interface 뒤에 둔다.
+
+V2의 세부 source 분리는 [architecture-v2.md](architecture-v2.md)의
+`src/model/v1`, `src/model/v2`, `src/schema/v1`, `src/schema/v2`,
+`src/resolver/v1`, `src/resolver/v2`, `src/expression/v2`,
+`src/constraint/v2` 계약을 따른다.

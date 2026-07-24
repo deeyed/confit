@@ -12,6 +12,10 @@ last_verified: 2026-06-25
 configuration authority tool이며, Parus/Delos runtime image 안에 들어가는
 library나 service가 아니다.
 
+이 readiness note는 `schema_version = 1`과 v1 artifact ABI만 평가한다.
+`schema_version = 2`는 별도 설계와 구현/검증 gate를 가지며, 이 rc1 판정을
+v2 지원 주장으로 사용할 수 없다.
+
 ## 판정
 
 Confit `0.1.0-rc1`은 fixture-backed release candidate로 볼 수 있다. 즉,

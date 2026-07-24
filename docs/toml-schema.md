@@ -1,324 +1,53 @@
 ---
-doc_type: tool-spec
-status: draft
-authority: informative
-last_verified: 2026-07-10
+doc_type: schema-index
+status: accepted
+authority: normative
+last_verified: 2026-07-24
 ---
 
 # Confit TOML Schema
 
-Confit source format은 TOML이다. TOML은 사람이 읽기 쉽고, 기존 Kconfig 문법처럼 indentation과
-keyword nesting에 강하게 의존하지 않는다.
+Confit TOML 문법은 `schema_version`별로 분리되어 있다. 이 문서는 version
+선택용 index이며 개별 field 의미를 직접 정의하지 않는다.
 
-## Directory Layout
-
-각 프로젝트는 root에 `config/` directory를 둔다.
-
-```text
-config/
-  project.toml
-  options/
-    debug.toml
-    scheduler.toml
-    dcg.toml
-    boot.toml
-  profiles/
-    debug.toml
-    release.toml
-    sim-dsh.toml
-  targets/
-    qemu-mps2-an500.toml
-    nucleo-h753zi.toml
-  compat/
-    parus-delos.toml
-```
-
-`config/project.toml`은 project identity와 import list를 가진다.
+## Version 선택
 
 ```toml
 [project]
-name = "delos"
-version = "0.1.0"
+name = "example"
 schema_version = 1
-
-imports = [
-  "options/debug.toml",
-  "options/scheduler.toml",
-  "options/dcg.toml",
-]
 ```
 
-## Option Definition
+Project의 `schema_version`이 parser, model, resolver, artifact schema를
+결정한다. CLI가 source version을 강제로 변경하지 않는다.
 
-Option은 global id를 가진다. id는 project prefix를 포함한다.
+## Schema Version 1
 
-```toml
-[option."delos.debug.ddc"]
-type = "bool"
-default = false
-prompt = "Enable Delos Debug Console"
-category = "debug"
-tags = ["debug", "host-tooling"]
-help = "개발용 DDC command parser와 command table을 build에 포함한다."
-owner = "delos-runtime"
-since = "0.1.0"
-stability = "stable"
-```
+현재 실사용 중인 v1 정본:
 
-`category`는 TUI와 문서가 사용하는 표시용 menu path다. 단일 이름도 허용하지만,
-Parus/Delos처럼 option이 많은 project에서는 slash-separated path를 쓴다.
+- [schema-v1.md](schema-v1.md): source field와 type
+- [resolution-v1.md](resolution-v1.md): merge와 dependency 검증
 
-```toml
-category = "runtime/trace"
-```
+V1 문법과 의미는 동결한다. 장래 v2 기능을 v1 문서 예제로 쓰지 않는다.
 
-Category path는 resolver 권위 구조가 아니다. Option validity는 category tree가
-아니라 dependency DAG(`requires`, `conflicts`, `forces`, `visible_if`)가
-결정한다. TUI menu depth는 2단계를 기본으로 하고, 큰 영역에서만 3단계를
-허용한다. 4단계 이상은 일반 validation warning, strict validation failure로
-승격할 수 있는 schema design smell로 본다.
+## Schema Version 2
 
-지원 type:
+새 typed semantics의 v2 정본:
 
-| Type | 의미 |
-|---|---|
-| `bool` | true/false |
-| `int` | signed integer |
-| `uint` | unsigned integer |
-| `hex` | integer를 hex display로 표시 |
-| `string` | short string |
-| `enum` | 정해진 문자열 중 하나 |
-| `float` | finite floating-point value |
-| `path` | source-relative 또는 build-relative path |
+- [schema-v2.md](schema-v2.md): project/option/menu/choice/profile/target/constraint
+- [expression-v2.md](expression-v2.md): expression grammar와 static type
+- [resolution-v2.md](resolution-v2.md): requested/effective resolution
+- [architecture-v2.md](architecture-v2.md): 구현 module과 graph 경계
+- [artifacts-v2.md](artifacts-v2.md): generated artifact ABI
+- [compat-v2.md](compat-v2.md): cross-project constraint
+- [cli-v2.md](cli-v2.md): CLI dispatch와 edit/migration surface
 
-초기에는 Kconfig의 `tristate`를 기본 type으로 넣지 않는다. Parus/Delos는 loadable module model을
-정본으로 갖고 있지 않기 때문이다. 나중에 필요하면 `tri`를 별도 type으로 추가한다.
+V2 loader는 v1 compatibility field를 읽지 않는다.
 
-`float`는 지원하지만 제한적으로 사용한다. `NaN`, `inf`, locale-dependent 표현은 금지한다. Runtime
-configuration에서 exact value가 중요한 곳은 `int`, `uint`, fixed-point convention을 우선한다.
-`float`는 simulation, threshold, tuning metadata처럼 사람이 조정하는 profile 값에 적합하다.
+## 공통 Version 계약
 
-## Stability Metadata
+[schema-versions.md](schema-versions.md)는 version dispatch, mixed-tree 금지,
+artifact ABI, v1 freeze, v2 hard cut을 정의한다.
 
-Public option은 migration과 ownership metadata를 가질 수 있다.
-
-```toml
-[option."delos.debug.dsh"]
-type = "bool"
-default = false
-owner = "delos-runtime"
-since = "0.1.0"
-stability = "stable"
-deprecated_aliases = ["delos.debug.old_dsh"]
-```
-
-`stability` 값은 `experimental`, `stable`, `deprecated`, `internal` 중 하나다. `owner`,
-`since`, `stability`가 없으면 기본 check에서는 warning이며, strict validation에서는 failure로
-승격된다. `deprecated_aliases`는 기존 profile/target 값이 새 canonical option id로 deterministic하게
-해석되도록 하는 migration surface다.
-
-## Output Visibility
-
-Option은 `emit`으로 resolved value를 내보낼 generator 종류를 제한할 수 있다.
-허용 token은 정확히 `header`, `cmake`, `qstar`, `report`, `selection`이다.
-
-```toml
-[option."delos.board.objects"]
-type = "string"
-default = "//src/board:objects"
-emit = ["cmake", "qstar", "report", "selection"]
-```
-
-`emit`을 생략하면 다섯 output 모두에 내보내는 기존 동작을 유지한다. 명시한
-배열은 비어 있을 수 없고 같은 token을 중복하거나 알려지지 않은 token을 넣을
-수 없다.
-
-| Token | 적용 산출물 |
-|---|---|
-| `header` | `config.h`의 option define |
-| `cmake` | `config.cmake`의 resolved option variables |
-| `qstar` | `config/config.qsm` values와 legacy manifest option count |
-| `report` | report JSON, explanation text, graph JSON |
-| `selection` | `selection/*.toml`이 참조할 수 있는 option |
-
-Output visibility는 presentation/generator boundary다. `emit`에서 제외해도
-option은 profile/target override, resolution, dependency validation, source
-hash, compatibility check, TUI model에 계속 참여한다. 따라서 build-only string이나
-object label을 C header에서 숨기면서도 동일한 정본 resolved config에서 CMake,
-QStar, report, build selection을 생성할 수 있다.
-
-## Dependencies
-
-`requires`는 해당 option이 유효하기 위한 hard dependency다.
-
-```toml
-[option."delos.debug.dsh"]
-type = "bool"
-default = false
-requires = ["delos.debug.ddc"]
-forbidden_in = ["release"]
-```
-
-조건식이 필요하면 object form을 사용한다.
-
-```toml
-requires = [
-  { option = "delos.debug.ddc", equals = true },
-  { option = "delos.target.arch", equals = "armv7m" },
-]
-```
-
-## Conflicts
-
-`conflicts`는 동시에 참일 수 없는 option을 나타낸다.
-
-```toml
-[option."delos.debug.dsh_rx"]
-type = "bool"
-default = false
-conflicts = ["delos.profile.release"]
-```
-
-Conflict는 resolver가 자동으로 한쪽을 끄는 기능이 아니다. Confit은 conflict를 발견하면 오류와
-explanation을 출력한다.
-
-## Recommends
-
-`recommends`는 Kconfig의 `imply`에 가깝다. 권고 default를 제공하지만 사용자가 끌 수 있다.
-
-```toml
-[option."delos.sim.dsh"]
-type = "bool"
-default = false
-recommends = ["delos.debug.ddc", "delos.debug.dsh"]
-```
-
-## Forces
-
-`forces`는 Kconfig의 `select`에 해당하지만, 기본적으로 매우 제한한다.
-
-규칙:
-
-- visible option을 강제로 켜면 안 된다.
-- dependency가 있는 option을 dependency 검증 없이 force하면 안 된다.
-- force edge는 explanation report에 반드시 나타난다.
-- release/debug boundary에 영향을 주는 force는 hard error로 격상할 수 있다.
-
-```toml
-[option."delos.target.qemu_mps2"]
-type = "bool"
-default = false
-forces = ["delos.arch.armv7m"]
-```
-
-## Ranges
-
-정수 type은 range를 가질 수 있다.
-
-```toml
-[option."delos.scheduler.task_slots"]
-type = "uint"
-default = 16
-range = [1, 128]
-```
-
-## Choices
-
-Choice는 여러 option 중 하나를 고르는 구조다.
-
-```toml
-[choice."delos.target.board"]
-type = "enum"
-options = ["qemu-mps2-an500", "nucleo-h753zi", "stm32f4-discovery"]
-default = "qemu-mps2-an500"
-```
-
-Choice 결과는 generated header에서 enum-like define 또는 string define으로 표현할 수 있다.
-
-## Profiles
-
-Profile은 option override 묶음이다. Profile은 option schema를 정의하지 않는다.
-
-```toml
-[profile]
-name = "sim-dsh"
-schema_version = 1
-base = "debug"
-target = "host-sim"
-
-[values]
-"delos.debug.ddc" = true
-"delos.debug.dsh" = true
-"delos.sim.host" = true
-"delos.target.board" = "host-sim"
-"delos.sim.tick_hz" = 1000
-"delos.sim.default_gain" = 0.125
-```
-
-`base`는 단일 inheritance만 허용한다. Profile merge order가 복잡해지면 config 결과를 이해하기
-어렵다. `target`은 profile이 기본으로 선택하는 target name이다. 여러 fragment가 필요하면
-`overrides = []`를 명시하고, report에 merge order를 출력한다.
-
-TUI가 profile을 저장할 때도 이 형식을 사용한다. TUI는 profile file을 생성하고 수정할 수 있어야 한다.
-
-## Targets
-
-Target file은 board/arch/toolchain 관련 option override를 가진다.
-
-```toml
-[target]
-name = "nucleo-h753zi"
-schema_version = 1
-arch = "armv7m"
-board = "nucleo-h753zi"
-
-[values]
-"delos.target.arch" = "armv7m"
-"delos.target.board" = "nucleo-h753zi"
-"delos.mcu.cpu" = "cortex-m7"
-```
-
-Target file은 support claim이 아니다. Delos에서 portability probe로만 존재하는 target은 metadata에
-그 성격을 명시한다.
-
-```toml
-[target.claim]
-level = "portability-probe"
-```
-
-## Compatibility
-
-Compatibility file은 여러 project config를 함께 검사한다.
-
-```toml
-[compat]
-name = "parus-delos"
-
-[[assert]]
-when = { option = "parus.rt_executor.delos", equals = true }
-requires = { option = "delos.dcg.enabled", equals = true }
-message = "Parus Delos RT Executor requires Delos DCG."
-
-[[assert]]
-when = { option = "parus.debug.release", equals = true }
-forbids = { option = "delos.debug.dsh_rx", equals = true }
-message = "Release system must not expose Delos DSH RX command parser."
-```
-
-Compatibility assertion은 generated runtime code가 아니다. Build 전에 실행되는 host-side 검증이다.
-
-## Schema Editing
-
-TUI는 schema editing을 지원할 수 있어야 한다. 즉 option 추가, prompt/help 수정, category/tag 수정,
-range 수정, choice 후보 추가 같은 작업을 TUI에서 할 수 있어야 한다.
-
-그러나 schema editing은 profile editing보다 위험하다. TUI는 schema edit mode에 들어갈 때 다음
-경고를 표시해야 한다.
-
-```text
-Schema edit mode changes project configuration semantics.
-Prefer code review for schema changes.
-```
-
-TUI로 schema를 수정하더라도 저장 결과는 같은 TOML schema file이어야 한다. TUI 전용 binary format이나
-sidecar database를 정본으로 삼지 않는다.
+V1 project를 v2로 바꾸는 절차는
+[migration-v1-v2.md](migration-v1-v2.md)를 따른다.

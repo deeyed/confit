@@ -15,6 +15,14 @@ CLI command, option, exit-code, installation contract는
 `docs/cli-contract.md`가 정본이다. 이 문서는 `confit tui`의 화면 구조,
 탐색 방식, keymap, command mode, 저장 정책을 정의한다.
 
+## Schema Version 범위
+
+이 문서의 현재 TUI 동작은 `schema_version = 1` model adapter를 설명한다.
+V2 TUI는 renderer/keymap을 공유할 수 있지만 assignability, requested/effective
+value, choice, constraint를 자체 계산하지 않고
+[architecture-v2.md](architecture-v2.md)의 snapshot adapter를 사용해야 한다.
+V1의 `forces/recommends/visible_if` 설명을 v2 의미론으로 읽으면 안 된다.
+
 ## TUI 목표
 
 Confit TUI는 kconfiglib/menuconfig의 장점인 keyboard 중심 탐색, 검색,

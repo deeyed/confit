@@ -10,6 +10,13 @@ last_verified: 2026-07-10
 Confit의 결과는 build-time generated artifact다. Parus와 Delos runtime은 Confit core를 링크하지 않고,
 generated file만 소비한다.
 
+## Schema Version 범위
+
+이 문서의 구체적인 artifact shape는 현재 `schema_version = 1`과
+`confit-report-v1` 계약을 설명한다. V2는 파일 역할은 유지하되
+`confit-report-v2`, `confit-config-manifest-v2`, requested/effective/provenance
+필드를 사용하는 별도 ABI다. V2 generator가 v1 shape로 fallback하면 안 된다.
+
 ## Output Root
 
 Generated artifact는 source `config/` directory에 쓰지 않는다. 정본 출력 root는 build tree다.

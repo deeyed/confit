@@ -1,8 +1,8 @@
 ---
-doc_type: tool-spec
-status: draft
-authority: informative
-last_verified: 2026-06-23
+doc_type: contract
+status: accepted
+authority: normative
+last_verified: 2026-07-24
 ---
 
 # Syntax Stability
@@ -28,8 +28,12 @@ name = "sim-dsh"
 schema_version = 1
 ```
 
-`schema_version = 1`의 기존 의미는 깨지면 안 된다. 새로운 기능이 필요하면 optional field를 추가하고,
-기존 field 의미를 바꾸지 않는다.
+`schema_version = 1`의 기존 의미는 깨지면 안 된다. Typed expression, computed
+option, write domain처럼 의미를 바꾸는 기능은 v1 optional field로 추가하지 않고
+`schema_version = 2`에서만 제공한다.
+
+V1과 v2의 dispatch와 혼합 금지는 [schema-versions.md](schema-versions.md)를
+따른다.
 
 ## Stable Option Identity
 
@@ -56,14 +60,13 @@ deprecated_aliases = ["delos.debug.old_dsh"]
 Loader는 profile과 target 값에서 deprecated alias를 만나면 canonical option id로 해석해야 한다.
 동일 alias가 둘 이상의 option을 가리키거나 실제 option id와 충돌하면 schema error다.
 
-## Additive Evolution
+## V1 Evolution
 
-Confit 문법은 additive evolution을 기본으로 한다.
+V1 문법은 의미 보존을 기본으로 한다.
 
 허용:
 
-- 새 optional field 추가.
-- 새 type 추가.
+- 기존 resolution에 영향을 주지 않는 optional display metadata 추가.
 - 새 report field 추가.
 - 새 TUI metadata 추가.
 - 새 generator 추가.
@@ -75,6 +78,22 @@ Confit 문법은 additive evolution을 기본으로 한다.
 - 기존 `conflicts` 의미 변경.
 - 기존 profile merge order 변경.
 - 기존 option id를 조용히 제거.
+- `forces` 또는 `recommends`가 값을 변경하게 만들기.
+- visibility가 requested/effective value를 바꾸게 만들기.
+- v2 expression을 v1 field의 새 해석으로 넣기.
+
+## V2 Hard Cut
+
+V2는 v1 source compatibility를 제공하지 않는다.
+
+- V1 field를 v2 loader가 추측해서 변환하지 않는다.
+- V1/v2 profile, target, option file을 섞지 않는다.
+- Alias로 v1 option을 runtime resolution에 남기지 않는다.
+- Migration은 offline candidate 생성과 semantic diff로 수행한다.
+
+V2 안에서 장래 additive field를 추가할 수는 있지만 expression type, write
+domain, requested/effective 구분, deterministic resolution 같은 v2 핵심 의미는
+같은 major version에서 바꾸지 않는다.
 
 ## Reserved Namespaces
 
@@ -86,8 +105,8 @@ parus.*
 system.*
 ```
 
-`system.*`은 cross-project compatibility와 shared profile에서 사용한다. 개별 project가 임의로
-`system.*` option을 소유하면 안 된다.
+`system.*`은 cross-project compatibility가 명시적으로 소유하는 경우에만
+사용한다. 개별 project가 임의로 `system.*` option을 소유하면 안 된다.
 
 ## Unknown Fields
 
@@ -98,8 +117,8 @@ extension metadata로 허용할 수 있다.
 x_ui_group = "debug"
 ```
 
-`x_` field는 resolver authority가 아니다. Core semantics에 영향을 주는 field는 정식 문법으로
-승격해야 한다.
+`x_` field는 resolver authority가 아니다. Core semantics에 영향을 주는 field는
+해당 schema major version의 정식 문법으로 승격해야 한다.
 
 ## Deprecation
 
@@ -116,8 +135,8 @@ deprecated = true
 replaced_by = "delos.debug.dsh"
 ```
 
-Deprecated option은 즉시 삭제하지 않는다. Confit은 warning을 내고, generated report에 migration
-hint를 남긴다.
+이 alias/deprecation 동작은 v1 compatibility surface다. V2에서는 rename을
+offline migration으로 수행하며 v1 `deprecated_aliases`를 읽지 않는다.
 
 `owner`, `since`, `stability` metadata는 장기 유지보수 표면이다. 일반 validation은 누락을 warning으로
 보고, strict validation은 warning을 failure로 승격한다.
@@ -134,6 +153,6 @@ Confit은 수천 개 option을 가정한다.
   warning으로 취급한다.
 - Explanation은 큰 graph에서도 특정 option 중심으로 빠르게 조회 가능해야 한다.
 
-Local scale gate는 5,000개 option synthetic project를 생성해 `check`, `list`, `graph`, `gen`을 실행한다.
-이 수치는 최소 release-candidate smoke 기준이며, 이후 CI에서는 더 큰 profile과 platform
-matrix를 추가한다.
+V1 local scale gate는 기존 5,000 option synthetic project를 유지한다. V2는
+20,000 option과 100,000 expression/constraint edge를 최소 stress 기준으로 삼고,
+incremental TUI update도 별도로 측정한다.

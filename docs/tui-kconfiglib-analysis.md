@@ -11,6 +11,11 @@ last_verified: 2026-06-23
 Reference source는 `/tmp/confit-kconfiglib-reference`에만 clone했고, Delos repository 안으로
 외부 source를 복사하지 않았다.
 
+이 문서는 현재 v1 TUI 구조를 위한 UI 분석이다. Kconfiglib parser/evaluator를
+Confit v2 의미론과 대조한 분석은
+[kconfiglib-v2-analysis.md](kconfiglib-v2-analysis.md)를 따른다. 이 문서의
+`forces/recommends` 언급은 v2 계약이 아니다.
+
 분석 대상:
 
 - Repository: `https://github.com/ulfalizer/Kconfiglib`

@@ -16,6 +16,10 @@ Confit은 build graph를 몰래 수정하지 않는다. 사용자는 `confit gen
 generated directory를 만들고, QStar/CMake 쪽에서 그 directory를 명시적으로
 읽는다.
 
+이 문서의 현재 command와 artifact 예시는 `schema_version = 1` workflow다.
+V2 migration 후에도 explicit import/include 원칙은 유지하지만 manifest schema와
+option ownership은 v2 계약을 사용한다.
+
 ## 1. Generate
 
 Delos 팀이 project fixture 또는 실제 config source를 `fixtures/delos`에 둔

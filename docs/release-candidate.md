@@ -18,6 +18,9 @@ Confit remains confined to `tools/confit/` in this repository. Real Parus/Delos
 user explicitly widens the edit boundary. Generated files are written only under
 an explicit `--out` directory.
 
+이 release candidate 평가는 `schema_version = 1` 구현에만 해당한다. V2 설계
+문서가 존재하더라도 v2 parser/resolver/generator 구현 완료를 의미하지 않는다.
+
 ## RC Gate
 
 Run the full local gate from the repository root:

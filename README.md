@@ -42,9 +42,21 @@ tool이며, 초기 결과는 `config.h`, machine-readable report, explanation re
 
 - [architecture.md](docs/architecture.md): Confit의 전체 구조와 책임 경계.
 - [cli-contract.md](docs/cli-contract.md): CLI command, option, exit code, local install 계약.
-- [toml-schema.md](docs/toml-schema.md): TOML source format과 option/profile/target/compat schema.
-- [syntax-stability.md](docs/syntax-stability.md): 문법 안정성, versioning, deprecation 원칙.
-- [resolution-dag.md](docs/resolution-dag.md): option graph, dependency resolution, conflict explanation.
+- [toml-schema.md](docs/toml-schema.md): schema version별 TOML 정본 index.
+- [schema-versions.md](docs/schema-versions.md): v1 freeze, v2 hard cut, dispatch와 artifact ABI.
+- [schema-v1.md](docs/schema-v1.md): 현재 `schema_version = 1` source 계약.
+- [resolution-v1.md](docs/resolution-v1.md): 현재 v1 merge/dependency 의미론.
+- [schema-v2.md](docs/schema-v2.md): 새 `schema_version = 2` source 언어.
+- [expression-v2.md](docs/expression-v2.md): v2 typed expression 문법.
+- [resolution-v2.md](docs/resolution-v2.md): v2 requested/effective resolution.
+- [architecture-v2.md](docs/architecture-v2.md): v1/v2 source module과 graph 경계.
+- [artifacts-v2.md](docs/artifacts-v2.md): v2 report/header/CMake/QStar와 증분 build artifact.
+- [compat-v2.md](docs/compat-v2.md): v2 cross-project typed compatibility constraint.
+- [cli-v2.md](docs/cli-v2.md): 기존 CLI의 v2 dispatch, override, explain, migrate 계약.
+- [kconfiglib-v2-analysis.md](docs/kconfiglib-v2-analysis.md): upstream Kconfiglib 함수 단위 분석과 채택 판단.
+- [migration-v1-v2.md](docs/migration-v1-v2.md): compatibility layer 없는 v1-to-v2 migration.
+- [syntax-stability.md](docs/syntax-stability.md): 문법 안정성과 major version 원칙.
+- [resolution-dag.md](docs/resolution-dag.md): version별 resolution 정본 index.
 - [generators.md](docs/generators.md): generated `config.h`, report, graph, input manifest 산출물.
 - [build-selection-workflow.md](docs/build-selection-workflow.md): QStar/CMake가 resolved config와 build selection을 소비하는 정본 흐름.
 - [cli-tui.md](docs/cli-tui.md): CLI, TUI, profile/schema editing workflow 전략.
