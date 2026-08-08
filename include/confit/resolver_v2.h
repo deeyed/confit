@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 #include "confit/constraint_v2.h"
-#include "confit/snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -444,18 +443,6 @@ ConfitStatus confit_v2_snapshot_reconcile_edit(
     const ConfitV2CompiledStructure *compiled,
     const ConfitV2LedgerOptions *options, const char *changed_option_id,
     ConfitV2Snapshot **out_snapshot, ConfitV2InvalidationSet **out_affected,
-    ConfitDiagnostic *diagnostic);
-
-/**
- * @brief opaque v2 project handle을 default selection으로 resolve한다.
- *
- * @param project v2 project handle.
- * @param out_snapshot 성공 시 caller-owned v2 snapshot handle.
- * @param diagnostic 실패 위치와 원인을 기록할 optional record.
- * @return fully validated immutable snapshot이면 CONFIT_OK.
- */
-ConfitStatus confit_resolver_v2_resolve_handle(
-    const ConfitProjectHandle *project, ConfitSnapshotHandle **out_snapshot,
     ConfitDiagnostic *diagnostic);
 
 #ifdef __cplusplus

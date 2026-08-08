@@ -27,13 +27,8 @@ CONFIT_HOST_CC_FAMILY?=clang
 .error CONFIT_HOST_CC_FAMILY must be clang or gcc
 .endif
 
-CONFIT_ENABLE_TUI?=yes
-.if ${CONFIT_ENABLE_TUI} != "yes" && ${CONFIT_ENABLE_TUI} != "no"
-.error CONFIT_ENABLE_TUI must be yes or no
-.endif
-
-CONFIT_LEGACY_CMAKE?=/usr/bin/false
-CONFIT_QSTAR?=
+# Confit은 build 전에만 동작하는 구성 resolver다. TUI와 과거 build backend는
+# canonical host tool의 일부가 아니므로 build option으로 되살리지 않는다.
 
 .include "${CONFIT_MANIFEST_FILE}"
 .include "${.PARSEDIR}/confit.host.mk"

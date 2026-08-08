@@ -1,4 +1,0 @@
-[project]
-name = "dispatch"
-schema_version = 1
-imports = ["options/base.toml"]

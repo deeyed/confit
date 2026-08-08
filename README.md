@@ -1,132 +1,89 @@
 ---
-doc_type: tool-spec
-status: draft
-authority: informative
-last_verified: 2026-06-24
+doc_type: tool-contract
+status: accepted
+authority: normative
+last_verified: 2026-08-09
 ---
 
 # Confit
 
-Confit은 `config + fit`에서 온 이름이다. 목적은 Parus와 Delos가 서로 맞는 compile-time
-configuration을 선택했는지 검증하고, 각 프로젝트가 소비할 generated config artifact를 만드는
-host-side configuration tool을 제공하는 것이다.
+Confit은 Parus의 **host-side configuration resolver**다. 사람이 작성한 schema v2
+TOML과 component manifest를 검증·해결하고, immutable selection snapshot을 sealed
+artifact ABI v3 bundle로 publish한다. Confit은 kernel, firmware, runtime service 또는
+build graph executor가 아니다.
 
-Confit은 Delos runtime 기능이 아니다. Parus kernel, Delos runtime, MCU image 안에는 TOML parser,
-TUI, constraint solver, config service가 들어가지 않는다. Confit은 build 전에 실행되는 host
-tool이며, 초기 결과는 `config.h`, machine-readable report, explanation report 같은 정적 산출물로만
-전달된다. `config.cmake`, QStar용 `config/config.qsm`, project-specific build selection module, 기존
-호환용 `config.qst`도 명시적인 `--out` directory 아래에 생성되는 보조 build integration artifact로만
-다룬다.
+## 고정 경계
 
-## Goals
+- source project는 `schema_version = 2`만 허용한다. 다른 schema source, migration
+  command와 compatibility dispatch는 없다.
+- host build의 유일한 engine은 pinned BSD `bmake 20240909`다.
+- `gen`은 `--artifact bundle`만 허용한다. partial artifact 또는 backend selector는
+  fail-closed한다.
+- Confit은 TOML과 component identity를 해석하지만 Makefile을 평가하거나 source를
+  scan하지 않는다. bmake는 sealed `components.mk`와 scalar adapter만 소비한다.
+- generated file은 caller가 지정한 output root 아래에서만 생성한다. source tree와
+  sibling project를 변경하지 않는다.
 
-- TOML 기반 schema와 profile을 읽는다.
-- 옵션 간 dependency를 tree가 아니라 DAG로 모델링한다.
-- Kconfig의 주요 기능을 흡수하되, dependency 함정을 줄인다.
-- Parus와 Delos의 cross-project compatibility를 검증한다.
-- C source가 소비할 generated `config.h`를 먼저 만든다.
-- Python 대량 의존성 없이 C-first host tool로 동작한다.
-- TUI가 profile 생성, profile 편집, schema 편집을 수행할 수 있게 metadata를 보존한다.
+## 빠른 사용
 
-## Non-Goals
-
-- Runtime config service를 만들지 않는다.
-- Parus 또는 Delos firmware 안에서 TOML을 parse하지 않는다.
-- Kconfig 문법을 그대로 복제하지 않는다.
-- `select`의 위험한 dependency 우회를 그대로 허용하지 않는다.
-- TUI를 core evaluator로 만들지 않는다.
-- Build system, package manager, dependency resolver를 Confit 안에 합치지 않는다.
-- 실제 Parus/Delos build graph를 암묵적으로 수정하지 않는다.
-
-## Document Map
-
-- [architecture.md](docs/architecture.md): Confit의 전체 구조와 책임 경계.
-- [cli-contract.md](docs/cli-contract.md): CLI command, option, exit code, local install 계약.
-- [toml-schema.md](docs/toml-schema.md): schema version별 TOML 정본 index.
-- [schema-versions.md](docs/schema-versions.md): v1 freeze, v2 hard cut, dispatch와 artifact ABI.
-- [schema-v1.md](docs/schema-v1.md): 현재 `schema_version = 1` source 계약.
-- [resolution-v1.md](docs/resolution-v1.md): 현재 v1 merge/dependency 의미론.
-- [schema-v2.md](docs/schema-v2.md): 새 `schema_version = 2` source 언어.
-- [expression-v2.md](docs/expression-v2.md): v2 typed expression 문법.
-- [resolution-v2.md](docs/resolution-v2.md): v2 requested/effective resolution.
-- [architecture-v2.md](docs/architecture-v2.md): v1/v2 source module과 graph 경계.
-- [artifacts-v2.md](docs/artifacts-v2.md): v2 report/header/CMake/QStar와 증분 build artifact.
-- [compat-v2.md](docs/compat-v2.md): v2 cross-project typed compatibility constraint.
-- [cli-v2.md](docs/cli-v2.md): 기존 CLI의 v2 dispatch, override, explain, migrate 계약.
-- [kconfiglib-v2-analysis.md](docs/kconfiglib-v2-analysis.md): upstream Kconfiglib 함수 단위 분석과 채택 판단.
-- [migration-v1-v2.md](docs/migration-v1-v2.md): compatibility layer 없는 v1-to-v2 migration.
-- [syntax-stability.md](docs/syntax-stability.md): 문법 안정성과 major version 원칙.
-- [resolution-dag.md](docs/resolution-dag.md): version별 resolution 정본 index.
-- [generators.md](docs/generators.md): generated `config.h`, report, graph, input manifest 산출물.
-- [build-selection-workflow.md](docs/build-selection-workflow.md): QStar/CMake가 resolved config와 build selection을 소비하는 정본 흐름.
-- [cli-tui.md](docs/cli-tui.md): CLI, TUI, profile/schema editing workflow 전략.
-- [cutover-dry-run.md](docs/cutover-dry-run.md): fixture mirror 기반 cutover rehearsal 절차.
-- [rollback.md](docs/rollback.md): generated artifact와 TOML edit rollback 규칙.
-- [coding-and-doc-rules.md](docs/coding-and-doc-rules.md): 구현팀이 따라야 할 C/Doxygen/문서 규칙.
-- [local-build-and-test.md](docs/local-build-and-test.md): Confit local build/test harness와 fixture/golden 규약.
-- [release-candidate.md](docs/release-candidate.md): v0 RC 검증 gate, 예제 command, portability review.
-- [final-release-note.md](docs/final-release-note.md): 18라운드 종료 시점 실전 투입 후보 판정과 남은 위험.
-- [wiki/](wiki/README.md): 처음 쓰는 사용자와 AI 자동화를 위한 한국어 실전 사용 설명서.
-- [man/confit.1](man/confit.1): `man confit`으로 읽는 한국어 CLI reference.
-- [.github/workflows/ci.yml](.github/workflows/ci.yml): standalone repository용 macOS/Linux build/test CI.
-
-## Recommended Repository Placement
-
-Confit은 standalone repository로 사용할 수 있다. Delos monorepo 안에 vendored copy 또는 subtree로 둘 때는
-`tools/confit/` 아래에 위치한다.
-
-이 문서의 명령 예시는 standalone repository root에서는 `.` 기준으로 실행한다. Delos subtree에서 실행할 때는
-같은 경로 앞에 `tools/confit/`을 붙이면 된다.
-
-Parus와 Delos 각 프로젝트는 다음 source layout을 가진다.
-
-```text
-config/
-  project.toml
-  options/
-  profiles/
-  targets/
-  compat/
-```
-
-Confit generated output은 source tree가 아니라 build tree 아래에 둔다.
-
-```text
-build/generated/config/<project>/<profile>/
-  config.h
-  config.report.json
-  config.explain.txt
-  config.graph.json
-  config.inputs.json
-  config.cmake
-  config/
-    config.qsm
-  config.qst
-  delos_build_selection/
-    delos_build_selection.qsm  # selection/*.toml이 선언한 경우
-```
-
-`config/` 아래에는 사람이 관리하는 source config만 둔다. Generated 파일을 `config/`에 쓰는 것은
-기본 정책이 아니다.
-
-## Canonical Local Build
-
-Confit의 정본 build engine은 pinned `bmake` 20240909다. Source selection은
-`share/mk/confit.sources.mk`에 명시하며 output은 source tree 밖에 둔다.
+Parus checkout에서는 root가 제공하는 pinned host tool을 사용한다.
 
 ```sh
-# Standalone Confit repository root; BMAKE는 검증된 absolute path다.
-"$BMAKE" -r -C . -f Makefile CONFIT_OBJROOT=/tmp/confit-build all
-/tmp/confit-build/bin/confit doctor
+build/host/Darwin-arm64/bin/bmake -r -C tools/confit -f Makefile \
+  CONFIT_OBJROOT=/private/tmp/confit-build check
+
+/private/tmp/confit-build/bin/confit check \
+  --project tests/fixtures/schema-v2/valid
+
+/private/tmp/confit-build/bin/confit gen \
+  --project tests/fixtures/schema-v2/valid \
+  --out /private/tmp/confit-generation --artifact bundle
 ```
 
-TUI dependency가 없는 host에서는 frontend만 unsupported stub으로 바꾼다.
+Standalone clone은 동일 release의 pinned `bmake 20240909`를 `PATH`에서 제공하거나
+`CONFIT_BMAKE`로 명시해야 한다. Homebrew의 임의 버전 bmake는 canonical input이
+아니다.
 
-```sh
-"$BMAKE" -r -C . -f Makefile \
-  CONFIT_OBJROOT=/tmp/confit-cli-only CONFIT_ENABLE_TUI=no all
+## sealed bundle
+
+`gen`은 완전한 generation을 임시 위치에서 검증한 뒤에만 publish한다.
+
+```text
+<out>/
+  generations/<bundle-digest>/
+    config.h
+    config.selection.json
+    config.report.json
+    config.inputs.json
+    config.mk
+    config.values.mk
+    components.mk
+    component.catalog.json
+    config.bundle.json
+  selected -> generations/<bundle-digest>
 ```
 
-CMake build와 install script는 migration comparator로만 남아 있으며 canonical backend가 아니다.
-Build는 project `config/` tree를 만들거나 수정하지 않는다. Project skeleton 생성과 profile/schema
-수정은 명시적인 Confit command가 담당한다.
+`selected`는 편의 discovery alias일 뿐이다. configured child는 exact digest directory,
+ABI version, profile/target과 manifest digest를 다시 확인해야 한다. 누락, unknown
+required field, extra unlisted artifact 또는 digest mismatch는 fallback 없이 실패한다.
+
+## 문서
+
+- [bmake-artifact-v3.md](docs/bmake-artifact-v3.md): bmake adapter와 sealed bundle
+  계약.
+- [schema-v2.md](docs/schema-v2.md): source schema와 bounded input 규칙.
+- [resolution-v2.md](docs/resolution-v2.md): immutable resolution pipeline.
+- [architecture-v2.md](docs/architecture-v2.md): host/process/module authority.
+- [cli-v2.md](docs/cli-v2.md): supported command surface와 failure rule.
+- [local-build-and-test.md](docs/local-build-and-test.md): local build/test gate.
+
+Parus integration의 normative authority는
+`docs/contracts/config/config-system-contract.md`와
+`docs/contracts/config/generated-config-abi.md`다. 이 repository의 문서는 그
+contract를 약화하거나 별도 backend를 다시 도입하지 않는다.
+
+## 비주장
+
+Confit `check` 또는 `gen` 성공은 component가 compile되었거나, QEMU에서 실행되었거나,
+physical hardware에서 동작한다는 증거가 아니다. 각각 Parus build, QEMU 및 hardware
+evidence lane이 별도로 증명한다.

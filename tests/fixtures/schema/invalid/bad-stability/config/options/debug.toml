@@ -1,6 +1,0 @@
-[option."delos.debug.ddc"]
-type = "bool"
-default = false
-owner = "delos"
-since = "0.1.0"
-stability = "forever"

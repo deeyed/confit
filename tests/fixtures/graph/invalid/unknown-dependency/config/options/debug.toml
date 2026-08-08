@@ -1,4 +1,0 @@
-[option."delos.debug.ddc"]
-type = "bool"
-default = false
-requires = ["delos.missing.option"]

@@ -15,8 +15,8 @@ extern "C" {
 /** @brief V2 compatibility source가 선언해야 하는 schema version이다. */
 #define CONFIT_V2_COMPAT_SCHEMA_VERSION 2U
 
-/** @brief V2 snapshot artifact ABI의 canonical identifier다. */
-#define CONFIT_V2_COMPAT_ARTIFACT_ABI "confit-artifact-v2"
+/** @brief V2 snapshot을 봉인해 내보내는 artifact ABI의 canonical identifier다. */
+#define CONFIT_V2_COMPAT_ARTIFACT_ABI "confit-artifact-v3"
 
 /** @brief cross-project assertion의 action이다. */
 typedef enum ConfitV2CompatAction {

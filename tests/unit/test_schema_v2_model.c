@@ -285,7 +285,7 @@ int main(void) {
                      CONFIT_ERR_SCHEMA, "schema v2 field has an invalid value")) {
     return 9;
   }
-  if (!expect_status("tests/fixtures/schema-v2/invalid-v1-field",
+  if (!expect_status("tests/fixtures/schema-v2/invalid-unsupported-field",
                      CONFIT_ERR_SCHEMA, "unknown schema v2 option field")) {
     return 10;
   }

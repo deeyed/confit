@@ -150,21 +150,21 @@ static int expect_realish_pass(const ConfitV2CompatSuite *suite,
   return result;
 }
 
-static int expect_mixed_schema_rejected(const ConfitV2CompatSuite *suite,
-                                        ConfitV2CompatProject *projects) {
+static int expect_non_v2_schema_rejected(const ConfitV2CompatSuite *suite,
+                                         ConfitV2CompatProject *projects) {
   ConfitV2CompatReport *report = 0;
   ConfitDiagnostic diagnostic;
   const unsigned int original = projects[0].schema_version;
   int result;
 
-  projects[0].schema_version = 1U;
+  projects[0].schema_version = 3U;
   confit_diagnostic_init(&diagnostic);
   result = confit_v2_compat_check(suite, projects, 2U, &report, &diagnostic) ==
                CONFIT_ERR_SCHEMA &&
            report == 0 && confit_diagnostic_has_error(&diagnostic) &&
            diagnostic.message != 0 &&
            strcmp(diagnostic.message,
-                  "v1 and v2 snapshots cannot be mixed in compatibility checking") ==
+                  "compatibility checking requires schema_version = 2 snapshots") ==
                0;
   projects[0].schema_version = original;
   return result;
@@ -178,7 +178,7 @@ static int expect_artifact_identity_rejected(const ConfitV2CompatSuite *suite,
   const uint64_t original_hash = projects[1].expected_snapshot_hash;
   int result;
 
-  projects[0].artifact_abi = "confit-artifact-v1";
+  projects[0].artifact_abi = "confit-artifact-unknown";
   confit_diagnostic_init(&diagnostic);
   result = confit_v2_compat_check(suite, projects, 2U, &report, &diagnostic) ==
                CONFIT_ERR_SCHEMA &&
@@ -285,7 +285,7 @@ int main(void) {
   projects[1].schema_version = CONFIT_V2_COMPAT_SCHEMA_VERSION;
   projects[1].artifact_abi = CONFIT_V2_COMPAT_ARTIFACT_ABI;
   result = expect_realish_pass(suite, projects) &&
-           expect_mixed_schema_rejected(suite, projects) &&
+           expect_non_v2_schema_rejected(suite, projects) &&
            expect_artifact_identity_rejected(suite, projects);
   confit_v2_snapshot_free(delos);
   delos = 0;

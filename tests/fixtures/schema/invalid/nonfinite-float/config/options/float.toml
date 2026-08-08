@@ -1,3 +1,0 @@
-[option."delos.sim.default_gain"]
-type = "float"
-default = inf

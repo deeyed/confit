@@ -12,7 +12,7 @@ tags = ["test", "bool"]
 owner = "confit"
 since = "0.2.0"
 stability = "stable"
-emit = ["header", "cmake", "qstar"]
+emit = ["header", "selection"]
 available_if = "true"
 visible_if = "true"
 
@@ -85,7 +85,7 @@ write_domain = "target"
 owner = "confit"
 since = "0.2.0"
 stability = "stable"
-emit = ["header", "cmake", "qstar", "selection"]
+emit = ["header", "selection"]
 
 [option."confit.path.linker"]
 type = "path"

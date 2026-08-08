@@ -11,11 +11,11 @@
 #include "confit/constraint_v2.h"
 #include "confit/generator_v2.h"
 #include "confit/host.h"
-#include "confit/migration_v2.h"
 #include "confit/parser_v2.h"
 #include "confit/resolver_v2.h"
 #include "confit/schema_v2.h"
 #include "confit/status.h"
+#include "confit/version.h"
 
 typedef struct ConfitCliV2Builder {
   char *text;
@@ -75,8 +75,6 @@ static ConfitStatus confit_cli_v2_context_load(const ConfitCliV2Args *args,
 static const char kInvalidCommand[] = "invalid schema v2 command arguments";
 static const char kInvalidOption[] = "unknown schema v2 command option";
 static const char kMissingProject[] = "schema v2 command requires --project";
-static const char kMixedCompat[] =
-    "v1 and v2 projects cannot be mixed by the compatibility command";
 
 static void confit_cli_v2_builder_init(ConfitCliV2Builder *builder) {
   memset(builder, 0, sizeof(*builder));
@@ -999,7 +997,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (strcmp(args->artifact, "bundle") != 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, args->artifact,
                           0U, 0U,
-                          "schema v2 gen publishes `bundle`; request semantic subformats through the generator API");
+                          "schema v2 gen accepts only `bundle`; partial and legacy artifact selectors are unsupported");
     return CONFIT_ERR_UNSUPPORTED;
   }
   status = confit_cli_v2_context_load(args, &context, diagnostic);
@@ -1021,8 +1019,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (status == CONFIT_OK) {
     artifact_options.inputs = inputs.records;
     artifact_options.input_count = inputs.count;
-    artifact_options.tool_identity = "confit-0.2.0-rc1";
-    artifact_options.artifact_mask = CONFIT_V3_ARTIFACT_COMPLETE;
+    artifact_options.tool_identity = "confit-" CONFIT_VERSION_RELEASE;
     artifact_options.component_catalog = &catalog;
     artifact_options.component_closure = &closure;
     status = confit_v3_generate_artifacts(context.snapshot, &artifact_options,
@@ -1378,77 +1375,16 @@ static ConfitStatus confit_cli_v2_run_compat(const ConfitCliV2Args *args,
   return status;
 }
 
-static ConfitStatus confit_cli_v2_run_migrate(const ConfitCliV2Args *args,
-                                               ConfitDiagnostic *diagnostic) {
-  ConfitV1ToV2MigrationOptions options;
-  ConfitStatus status;
-
-  if (args->project == 0 || args->out == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
-                          "migrate requires --project and --out");
-    return CONFIT_ERR_INVALID_ARGUMENT;
-  }
-  options.source_project_root = args->project;
-  options.output_root = args->out;
-  status = confit_v1_migrate_to_v2_candidate(&options, diagnostic);
-  if (status == CONFIT_OK) status = confit_host_stdout_write_line("migration candidate ok");
-  return status;
-}
-
-static ConfitSchemaVersion confit_cli_v2_project_version(const char *root,
-                                                          ConfitDiagnostic *diagnostic) {
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *document_root;
-  const ConfitV2TomlValue *project;
-  const ConfitV2TomlValue *schema_version;
-  char direct_path[4096];
-  char config_root[4096];
-  char project_path[4096];
-  ConfitSchemaVersion version = CONFIT_SCHEMA_VERSION_INVALID;
-  int64_t raw_version;
-
-  if (root == 0) return CONFIT_SCHEMA_VERSION_INVALID;
-  if (confit_host_path_join(direct_path, sizeof(direct_path), root,
-                            "project.toml", diagnostic) != CONFIT_OK) {
-    return version;
-  }
-  if (confit_host_file_exists(direct_path)) {
-    memcpy(project_path, direct_path, strlen(direct_path) + 1U);
-  } else if (confit_host_path_join(config_root, sizeof(config_root), root,
-                                   "config", diagnostic) != CONFIT_OK ||
-             confit_host_path_join(project_path, sizeof(project_path), config_root,
-                                   "project.toml", diagnostic) != CONFIT_OK) {
-    return version;
-  }
-  if (confit_v2_toml_parse_file(project_path, &document, diagnostic) != CONFIT_OK) {
-    return version;
-  }
-  document_root = confit_v2_toml_document_root(document);
-  project = confit_v2_toml_table_find(document_root, "project");
-  schema_version = project != 0 ? confit_v2_toml_table_find(project, "schema_version") : 0;
-  if (schema_version != 0 && confit_v2_toml_value_int64(schema_version, &raw_version)) {
-    if (raw_version == (int64_t)CONFIT_SCHEMA_VERSION_V1) {
-      version = CONFIT_SCHEMA_VERSION_V1;
-    } else if (raw_version == (int64_t)CONFIT_SCHEMA_VERSION_V2) {
-      version = CONFIT_SCHEMA_VERSION_V2;
-    }
-  }
-  confit_v2_toml_document_free(document);
-  return version;
-}
-
 int confit_cli_v2_try_run(const char *command, int argc, char **argv,
                           int *out_handled) {
   ConfitCliV2Args args;
   ConfitDiagnostic diagnostic;
-  ConfitSchemaVersion version;
   ConfitStatus status;
-  int handled = 0;
   int diagnostic_json = 0;
 
   if (out_handled != 0) *out_handled = 0;
-  if (strcmp(command, "migrate") != 0 && strcmp(command, "compat") != 0 &&
-      strcmp(command, "check") != 0 && strcmp(command, "resolve") != 0 &&
+  if (strcmp(command, "compat") != 0 && strcmp(command, "check") != 0 &&
+      strcmp(command, "resolve") != 0 &&
       strcmp(command, "gen") != 0 && strcmp(command, "explain") != 0 &&
       strcmp(command, "list") != 0 && strcmp(command, "graph") != 0 &&
       strcmp(command, "diff") != 0 && strcmp(command, "component") != 0) {
@@ -1461,42 +1397,18 @@ int confit_cli_v2_try_run(const char *command, int argc, char **argv,
     confit_cli_v2_args_clear(&args);
     return confit_cli_v2_return_error(status, &diagnostic, diagnostic_json);
   }
-  if (strcmp(command, "migrate") == 0) {
-    handled = 1;
-    status = confit_cli_v2_run_migrate(&args, &diagnostic);
-  } else if (strcmp(command, "compat") == 0) {
-    const ConfitSchemaVersion parus = confit_cli_v2_project_version(args.parus, &diagnostic);
-    const ConfitSchemaVersion delos = confit_cli_v2_project_version(args.delos, &diagnostic);
-    if (parus == CONFIT_SCHEMA_VERSION_V2 || delos == CONFIT_SCHEMA_VERSION_V2) {
-      handled = 1;
-      status = parus == CONFIT_SCHEMA_VERSION_V2 && delos == CONFIT_SCHEMA_VERSION_V2
-                   ? confit_cli_v2_run_compat(&args, &diagnostic)
-                   : CONFIT_ERR_SCHEMA;
-      if (status == CONFIT_ERR_SCHEMA && (parus != CONFIT_SCHEMA_VERSION_V2 ||
-                                          delos != CONFIT_SCHEMA_VERSION_V2)) {
-        confit_diagnostic_set(&diagnostic, status, 0, 0U, 0U, kMixedCompat);
-      }
-    }
-  } else if (strcmp(command, "check") == 0 || strcmp(command, "resolve") == 0 ||
-             strcmp(command, "gen") == 0 || strcmp(command, "explain") == 0 ||
-             strcmp(command, "list") == 0 || strcmp(command, "graph") == 0 ||
-             strcmp(command, "diff") == 0 || strcmp(command, "component") == 0) {
-    version = confit_cli_v2_project_version(args.project, &diagnostic);
-    if (version == CONFIT_SCHEMA_VERSION_V2) {
-      handled = 1;
-      if (strcmp(command, "check") == 0) status = confit_cli_v2_run_check(&args, &diagnostic);
-      else if (strcmp(command, "resolve") == 0) status = confit_cli_v2_run_resolve(&args, &diagnostic);
-      else if (strcmp(command, "gen") == 0) status = confit_cli_v2_run_gen(&args, &diagnostic);
-      else if (strcmp(command, "explain") == 0) status = confit_cli_v2_run_explain(&args, &diagnostic);
-      else if (strcmp(command, "list") == 0) status = confit_cli_v2_run_list(&args, &diagnostic);
-      else if (strcmp(command, "graph") == 0) status = confit_cli_v2_run_graph(&args, &diagnostic);
-      else if (strcmp(command, "component") == 0) status = confit_cli_v2_run_component(&args, &diagnostic);
-      else status = confit_cli_v2_run_diff(&args, &diagnostic);
-    }
-  }
-  if (out_handled != 0) *out_handled = handled;
+  if (strcmp(command, "compat") == 0) status = confit_cli_v2_run_compat(&args, &diagnostic);
+  else if (strcmp(command, "check") == 0) status = confit_cli_v2_run_check(&args, &diagnostic);
+  else if (strcmp(command, "resolve") == 0) status = confit_cli_v2_run_resolve(&args, &diagnostic);
+  else if (strcmp(command, "gen") == 0) status = confit_cli_v2_run_gen(&args, &diagnostic);
+  else if (strcmp(command, "explain") == 0) status = confit_cli_v2_run_explain(&args, &diagnostic);
+  else if (strcmp(command, "list") == 0) status = confit_cli_v2_run_list(&args, &diagnostic);
+  else if (strcmp(command, "graph") == 0) status = confit_cli_v2_run_graph(&args, &diagnostic);
+  else if (strcmp(command, "component") == 0) status = confit_cli_v2_run_component(&args, &diagnostic);
+  else status = confit_cli_v2_run_diff(&args, &diagnostic);
+  if (out_handled != 0) *out_handled = 1;
   confit_cli_v2_args_clear(&args);
-  return handled && status != CONFIT_OK
+  return status != CONFIT_OK
              ? confit_cli_v2_return_error(status, &diagnostic, diagnostic_json)
-             : handled ? confit_status_exit_code(CONFIT_OK) : 0;
+             : confit_status_exit_code(CONFIT_OK);
 }

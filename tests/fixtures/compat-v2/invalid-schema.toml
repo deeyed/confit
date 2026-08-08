@@ -1,6 +1,6 @@
 [compat]
 name = "invalid"
-schema_version = 1
+schema_version = 3
 
 [projects]
 parus = "../parus"

@@ -1,31 +1,23 @@
 #!/bin/sh
+# Confit의 local installer는 반드시 caller가 제공한 pinned bmake만 사용한다.
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PREFIX=
-BUILD_DIR="${TMPDIR:-/tmp}/confit-install-build"
+OBJROOT=
+BMAKE=${CONFIT_BMAKE:-}
 
 usage() {
   cat <<'USAGE'
-Usage:
-  install-local.sh --prefix <path> [--build-dir <path>]
+Usage: install-local.sh --prefix <absolute-path> --objroot <absolute-path> \
+       --bmake <pinned-bmake-path>
 
-Builds Confit from the local checkout and installs the macOS/Linux local
-package surface:
-
+Builds only the Confit host binary with the supplied pinned BSD bmake and
+installs:
   <prefix>/bin/confit
   <prefix>/share/man/man1/confit.1
 
-This script does not fetch network dependencies and does not edit project
-config trees.
-
-Windows is a CLI-only preview lane and does not use this POSIX installer.
-Build with GNU-style clang/Ninja and copy the single executable to:
-
-  <prefix>/bin/confit.exe
-
-Windows docs and the manpage are provided from the repository checkout until a
-dedicated Windows installer is introduced.
+The script neither fetches dependencies nor writes project configuration.
 USAGE
 }
 
@@ -34,56 +26,47 @@ die() {
   exit 1
 }
 
+require_absolute() {
+  case "$1" in
+    /*) ;;
+    *) die "$2 must be an absolute path" ;;
+  esac
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --prefix)
-      [ "$#" -ge 2 ] || die "missing value for --prefix"
-      PREFIX=$2
-      shift 2
-      ;;
-    --build-dir)
-      [ "$#" -ge 2 ] || die "missing value for --build-dir"
-      BUILD_DIR=$2
-      shift 2
-      ;;
-    --help | -h)
-      usage
-      exit 0
-      ;;
-    *)
-      die "unknown option: $1"
-      ;;
+    --prefix) [ "$#" -ge 2 ] || die "missing --prefix value"; PREFIX=$2; shift 2 ;;
+    --objroot) [ "$#" -ge 2 ] || die "missing --objroot value"; OBJROOT=$2; shift 2 ;;
+    --bmake) [ "$#" -ge 2 ] || die "missing --bmake value"; BMAKE=$2; shift 2 ;;
+    --help|-h) usage; exit 0 ;;
+    *) die "unknown option: $1" ;;
   esac
 done
 
 [ -n "$PREFIX" ] || die "missing --prefix"
-
-HOST_SYSTEM=$(uname -s 2>/dev/null || echo unknown)
-case "$HOST_SYSTEM" in
-  MINGW* | MSYS* | CYGWIN*)
-    die "Windows preview installs confit.exe by manual copy, not install-local.sh; see docs/local-build-and-test.md"
-    ;;
-esac
+[ -n "$OBJROOT" ] || die "missing --objroot"
+[ -n "$BMAKE" ] || die "missing --bmake (or CONFIT_BMAKE)"
+require_absolute "$PREFIX" "--prefix"
+require_absolute "$OBJROOT" "--objroot"
+require_absolute "$BMAKE" "--bmake"
 
 case "$PREFIX" in
-  / | "$ROOT_DIR" | "$ROOT_DIR"/*)
-    die "refusing unsafe install prefix: $PREFIX"
-    ;;
+  /|"$ROOT_DIR"|"$ROOT_DIR"/*) die "refusing unsafe install prefix: $PREFIX" ;;
+esac
+case "$OBJROOT" in
+  /|"$ROOT_DIR"|"$ROOT_DIR"/*) die "objroot must be outside the source tree" ;;
 esac
 
-case "$BUILD_DIR" in
-  "" | / | "$ROOT_DIR" | "$ROOT_DIR"/*)
-    die "refusing unsafe build directory: $BUILD_DIR"
-    ;;
-esac
+[ -x "$BMAKE" ] || die "bmake is not executable: $BMAKE"
+make_version=$("$BMAKE" -r -f /dev/null -V MAKE_VERSION 2>/dev/null || true)
+[ "$make_version" = "20240909" ] ||
+  die "requires pinned bmake 20240909; found ${make_version:-unknown}"
 
-rm -rf "$BUILD_DIR"
-cmake -S "$ROOT_DIR" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
-cmake --build "$BUILD_DIR" --target confit
-cmake --install "$BUILD_DIR" --prefix "$PREFIX"
+"$BMAKE" -r -C "$ROOT_DIR" -f Makefile CONFIT_OBJROOT="$OBJROOT" all
+[ -x "$OBJROOT/bin/confit" ] || die "built binary is missing"
 
+mkdir -p "$PREFIX/bin" "$PREFIX/share/man/man1"
+install -m 0755 "$OBJROOT/bin/confit" "$PREFIX/bin/confit"
+install -m 0644 "$ROOT_DIR/man/confit.1" "$PREFIX/share/man/man1/confit.1"
 "$PREFIX/bin/confit" --version >/dev/null
 echo "installed $PREFIX/bin/confit"
-if [ -f "$PREFIX/share/man/man1/confit.1" ]; then
-  echo "installed $PREFIX/share/man/man1/confit.1"
-fi

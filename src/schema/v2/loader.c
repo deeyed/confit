@@ -929,10 +929,6 @@ static ConfitStatus confit_v2_parse_emit(const ConfitV2TomlValue *value,
     }
     if (size == 6U && memcmp(text, "header", 6U) == 0) {
       bit = CONFIT_V2_EMIT_HEADER;
-    } else if (size == 5U && memcmp(text, "cmake", 5U) == 0) {
-      bit = CONFIT_V2_EMIT_CMAKE;
-    } else if (size == 5U && memcmp(text, "qstar", 5U) == 0) {
-      bit = CONFIT_V2_EMIT_QSTAR;
     } else if (size == 9U && memcmp(text, "selection", 9U) == 0) {
       bit = CONFIT_V2_EMIT_SELECTION;
     } else {

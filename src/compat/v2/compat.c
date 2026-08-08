@@ -116,8 +116,8 @@ static const char kInvalidAction[] =
     "compatibility constraint needs exactly one require or forbid expression";
 static const char kInvalidAlias[] = "invalid schema v2 compatibility alias";
 static const char kDuplicateId[] = "duplicate schema v2 compatibility constraint id";
-static const char kMixedSchema[] =
-    "v1 and v2 snapshots cannot be mixed in compatibility checking";
+static const char kNonV2Schema[] =
+    "compatibility checking requires schema_version = 2 snapshots";
 static const char kArtifactAbiMismatch[] =
     "schema v2 compatibility artifact ABI mismatch";
 static const char kSnapshotIdentityMismatch[] =
@@ -857,7 +857,7 @@ static ConfitStatus confit_v2_compat_validate_projects(
     }
     if (projects[index].schema_version != CONFIT_V2_COMPAT_SCHEMA_VERSION) {
       confit_v2_compat_span_diagnostic(diagnostic, CONFIT_ERR_SCHEMA,
-                                       &suite->aliases[0].span, kMixedSchema);
+                                       &suite->aliases[0].span, kNonV2Schema);
       return CONFIT_ERR_SCHEMA;
     }
     if (projects[index].artifact_abi == 0 ||

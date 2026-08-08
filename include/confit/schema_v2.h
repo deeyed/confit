@@ -4,7 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "confit/project.h"
+#include "confit/diagnostic.h"
+#include "confit/status.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -116,13 +117,11 @@ typedef enum ConfitV2Stability {
   CONFIT_V2_STABILITY_INTERNAL,
 } ConfitV2Stability;
 
-/** @brief build output emit surface bit mask다. */
+/** @brief tool-neutral consumer visibility bit mask다. */
 typedef enum ConfitV2EmitSurface {
   CONFIT_V2_EMIT_NONE = 0,
   CONFIT_V2_EMIT_HEADER = 1U << 0,
-  CONFIT_V2_EMIT_CMAKE = 1U << 1,
-  CONFIT_V2_EMIT_QSTAR = 1U << 2,
-  CONFIT_V2_EMIT_SELECTION = 1U << 3,
+  CONFIT_V2_EMIT_SELECTION = 1U << 1,
 } ConfitV2EmitSurface;
 
 /** @brief source span을 가진 expression source text다. 아직 AST가 아니다. */
@@ -352,16 +351,6 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
 
 /** @brief v2 project owner tree를 해제한다. NULL은 허용한다. */
 void confit_v2_project_free(ConfitV2Project *project);
-
-/**
- * @brief v2 schema loader를 opaque project handle adapter로 호출한다.
- *
- * Project source가 schema_version 2가 아니면 hard error다. 성공 handle은 raw
- * `ConfitV2Project`를 generic public path에 노출하지 않는다.
- */
-ConfitStatus confit_schema_v2_load_project_handle(
-    const char *project_root, ConfitProjectHandle **out_project,
-    ConfitDiagnostic *diagnostic);
 
 #ifdef __cplusplus
 }

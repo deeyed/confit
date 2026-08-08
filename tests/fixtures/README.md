@@ -1,21 +1,15 @@
-# Confit Fixtures
+# Confit active fixture corpus
 
-이 디렉터리는 Confit test input project를 보관한다.
+이 디렉터리는 bmake canonical host suite가 실제로 읽는 작은 schema v2 input만 보관한다.
 
-현재 규약:
+- `host/`: canonical path, file/read/list boundary.
+- `parser-v2/`: TOML adapter positive/negative input.
+- `schema-v2/`, `schema-v2-link/`, `schema-v2-structure/`: loader, import,
+  structural bound과 fail-closed corpus.
+- `schema-v2-availability/`, `schema-v2-choice/`, `schema-v2-constraint-runtime/`,
+  `schema-v2-evaluation/`, `schema-v2-ledger/`: immutable resolution semantics.
+- `compat-v2/`: independently resolved snapshots의 typed compatibility assertion.
 
-- `schema/valid/basic/`: Delos 형태의 단일 project positive fixture.
-- `schema/invalid/`: parse, schema, profile, target negative fixtures.
-- `graph/`: dependency graph positive/negative fixtures.
-- `compat/parus/`, `compat/delos/`: Parus/Delos 형태의 compatibility fixture project.
-- `compat/rules/`: compatibility rule positive/negative fixtures.
-- `realish/delos/`: 실제 Delos migration을 준비하기 위한 Delos schema mirror fixture.
-- `realish/parus/`: 실제 Parus migration을 준비하기 위한 Parus schema mirror fixture.
-- `realish-v2/delos/`, `realish-v2/parus/`: `realish/` V1 mirror와 semantic shadow
-  비교하는 명시적 V2 candidate fixture. 실제 project source tree가 아니다.
-- `realish/compat/`: realish Parus/Delos mirror를 함께 검사하는 compatibility rule fixture.
-- `realish/compat-negative/`: realish compatibility failure reporting fixtures.
-- `tui/`: scripted TUI profile/schema editing fixtures.
-
-실제 Parus/Delos `config/` tree를 직접 테스트 입력으로 쓰지 않는다. 필요한 입력은 이 디렉터리 아래에
-작고 결정적인 fixture로 둔다.
+Fixture는 source Parus/Delos tree, runtime execution 또는 hardware support를 mirror하지 않는다.
+모든 project fixture는 schema v2만 사용한다. Component manifest version은 project schema와 별개인
+`component.toml` document version이며, catalog parser가 명시적으로 검증한다.

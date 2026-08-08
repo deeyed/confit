@@ -275,7 +275,7 @@ int main(void) {
                           "schema v2 import cycle")) {
     return 7;
   }
-  if (!expect_load_status("tests/fixtures/schema-v2-link/import-v1-mixed",
+  if (!expect_load_status("tests/fixtures/schema-v2-link/import-unsupported-version",
                           "import source does not declare schema_version = 2")) {
     return 8;
   }

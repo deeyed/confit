@@ -1,531 +1,93 @@
-.\" Confit manual page. Install with CMake to share/man/man1.
-.TH CONFIT 1 "2026-07-24" "Confit 0.2.0-rc1" "Confit Manual"
+.\" Confit manual page. Install with the bmake-only local installer.
+.TH CONFIT 1 "2026-08-09" "Confit 0.3.0-bmake.1" "Confit Manual"
 .SH 이름
-confit \- Parus/Delos용 host-side configuration authority tool
+confit \- Parus schema v2 configuration resolver
 .SH 사용법
 .B confit
 .B --version
 .br
 .B confit
 .B help
-[
-.I command
-]
 .br
 .B confit
 .I command
-[
 .I options
-]
 .SH 설명
 .B confit
-은 build 전에 실행되는 host-side configuration tool이다.
-사람이 관리하는 TOML schema, profile, target, compatibility rule을 읽고,
-선택한 profile을 검증하고 resolve한 뒤 deterministic generated artifact를 만든다.
+은 build 전에 실행되는 host-side configuration resolver다. schema v2 TOML과
+component catalog를 검증하고 immutable snapshot을 sealed artifact ABI v3 bundle로
+publish한다.
 .PP
-Confit은 runtime service가 아니다.
-Parus kernel, Delos runtime, MCU image 안에 TOML parser, TUI,
-solver를 넣지 않는다.
-입력은 source TOML이고, 출력은 명시적인 output directory 아래의 generated file이다.
+Confit은 kernel runtime, firmware service, Makefile evaluator 또는 source scanner가
+아니다. target kernel은 generated
+.I config.h
+만 소비하고, configured bmake child는 sealed generation의 Make adapter만 소비한다.
+.SH 지원 범위
+Confit은 schema version 2 source만 받는다. unknown version, source dispatch,
+migration command, partial artifact 및 unrecognized command는 실패한다. 이 거부는
+compatibility fallback이 아니다.
 .PP
-주요 출력 파일은 다음과 같다.
-.EX
-config.h
-config.report.json
-config.explain.txt
-config.graph.json
-config.inputs.json
-config.cmake
-config/config.qsm
-config.qst  (deprecated compatibility artifact)
-<output>/<output>.qsm  (if selection/*.toml declares one)
-.EE
-.SH RC1 지원 범위
-Confit 0.2.0-rc1은 fixture-backed V2 release candidate다.
-macOS/Linux에서는 CLI와 ncurses TUI를 지원한다.
-Windows에서는 MSYS2
-.B CLANG64
-와 GNU-style clang 기반 CLI-only preview를 지원한다.
-Windows TUI, MSVC,
-.B clang-cl
-은 지원하지 않는다.
-.PP
-rc1에서 믿을 수 있는 주요 범위는 V1 동결 의미론과 V2 hard-cut
-schema/profile/target validation,
-deterministic resolve, dependency graph validation, explanation, diff,
-compatibility check, generated artifact, CMake/QStar manifest, build
-selection module, macOS/Linux TUI profile/schema editing이다. V2는
-requested/effective writer provenance, explicit import, typed expression/link,
-snapshot artifact ABI를 별도 contract로 제공한다.
-.PP
-실제 Parus/Delos
-.I config/
-source tree adoption과 CMake/QStar graph wiring은 Confit install이나
-.B gen
-이 자동으로 수행하지 않는다. 별도 integration review에서 처리해야 한다.
-.PP
-Push/pull request CI는
-.I ubuntu-latest
-,
-.I macos-latest
-,
-.I windows-latest
-를 확인한다. Windows CI는 CLI-only build, CTest,
-.B doctor
-,
-.B check
-,
-gen --artifact all, generated artifact existence,
-.B confit tui
-exit code 8, 그리고
-.I confit.exe
-install smoke를 검증한다.
+Host build engine은 pinned BSD
+.B bmake 20240909
+하나다. 다른 make implementation이나 임의 bmake version은 canonical build input이
+아니다.
 .SH 명령
 .TP
-.B help [command]
-전체 도움말 또는 특정 command 도움말을 출력한다.
-.TP
-.B doctor [--project path]
-설치, release identity, build mode, platform lane, compiler, curses/TUI,
-generator, supported schema versions, V2 resolver/artifact ABI, tomlc17 revision,
-project layout과 dispatch된 project schema 상태를 확인한다.
-.TP
-.B init --project path --template minimal|delos|parus [--force] [--dry-run]
-새 Confit project skeleton을 만든다.
-설치 명령은 project를 만들지 않으며, project 생성은 명시적으로
-.B init
-이 담당한다.
-.TP
-.B check --project path --profile name [--target name] [--strict]
-TOML parse, schema validation, dependency graph validation,
-selected profile resolve를 수행한다.
-.B --strict
-는 warning을 failure로 승격한다.
-.TP
-.B resolve --project path --profile name [--target name] [--set id=value] [--format text|json|toml]
-최종 resolved configuration을 출력한다.
-.B --set
-은 일회성 override이며 profile TOML을 수정하지 않는다.
-.TP
-.B gen --project path --profile name [--target name] --out path [--artifact header|reports|cmake|qstar|build-selection|all] [--force] [--dry-run]
-generated artifact를 만든다.
-기본적으로 기존 file overwrite를 거부하며,
-.B --force
-를 써야 덮어쓴다.
-.B --dry-run
-은 실제 쓰기 없이 예정된 output을 보고한다.
-.TP
-.B explain --project path --profile name [--target name] [--set id=value] option-id
-특정 option의 현재 값, source, dependency 이유를 설명한다.
-.TP
-.B list --project path [--kind options|profiles|targets|categories|tags] [--category name] [--tag name] [--query text] [--show-hidden]
-schema entity를 조회한다.
-category, tag, query filter로
-큰 project에서도 원하는 option을 찾는다.
-.TP
-.B graph --project path [--profile name] [--target name] [--format json|dot]
-option dependency graph를
-JSON 또는 DOT 형식으로
-출력한다.
-.TP
-.B diff --project path --profile name --base profile [--target name] [--format text|json]
-두 profile의 resolved value 차이를 비교한다.
-profile review에서
-무엇이 바뀌는지 확인할 때 사용한다.
-.TP
-.B migrate --project path --out path
-schema_version 1 project를 read-only로 분석하고,
-별도 output 아래에 schema_version 2 candidate와 migration report를 만든다.
-source project root와 같은 output은 거부한다.
-candidate의 dependency, menu, profile, target, force, writer conflict TODO는
-검토 후 명시적으로 V2 semantics로 작성해야 한다.
-.TP
-.B compat --parus path --delos path --profile name [--target name] [--compat path] [--format text|json]
-Parus/Delos-style project root 사이의
-compatibility assertion을
-검사한다.
-.TP
-.B profile list --project path
-profile 목록을 출력한다.
-.TP
-.B profile show --project path name
-profile TOML 내용을 출력한다.
-.TP
-.B profile new --project path name [--base profile] [--target target] [--force]
-새 profile TOML을 만든다.
-.TP
-.B profile set --project path name option-id=value
-profile 값 하나를 설정한다.
-type validation과
-resolve 검증 후 저장한다.
-.TP
-.B profile unset --project path name option-id
-profile override 값을 제거한다.
-.TP
-.B profile validate --project path name
-profile을 검증한다.
-.TP
-.B tui --project path --profile name [--target name]
-macOS/Linux curses host에서
-profile editor TUI를 연다.
-.TP
-.B tui --project path --schema-edit
-guarded schema editor TUI를 연다.
-schema edit는 project 의미를
-바꾸므로
-code review 대상이다.
-.TP
-.B completion --shell bash|zsh|fish
-shell completion script를 출력한다.
-.SH 전역 옵션
-.TP
-.B --help
-도움말을 출력한다.
+.B help
+지원되는 command와 공통 usage를 출력한다.
 .TP
 .B --version
-Confit version을 출력한다.
+release와 artifact ABI identity를 출력한다.
 .TP
-.B --color auto|always|never
-diagnostic color 정책을 선택한다.
+.B check --project path [--profile name] [--target name]
+project parse, bounded import, link, typed expression, constraint와 immutable
+snapshot resolution을 검증한다. source file을 수정하지 않는다.
 .TP
-.B --quiet
-성공 banner 같은 비필수 output을 줄인다.
-JSON payload나 error는
-숨기지 않는다.
+.B resolve --project path [--profile name] [--target name]
+resolved snapshot을 deterministic text 또는 JSON으로 출력한다.
 .TP
-.B --verbose
-추가 실행 context를 stderr에 출력한다.
+.B gen --project path --out absolute-path --artifact bundle [--profile name] [--target name]
+complete ABI v3 bundle을 sealed generation으로 publish한다.
+.I --artifact bundle
+만 허용한다. output root는 source root 밖의 absolute path여야 한다.
 .TP
-.B --diagnostic-format json
-V2 command가 실패하면 stderr에 deterministic JSON diagnostic을 출력한다.
-.SH 자주 쓰는 흐름
-.SS Project 검사
+.B explain, list, graph, diff, component, compat
+schema v2 snapshot과 component catalog의 read-only diagnostic view를 제공한다. 이
+command는 source project나 sibling repository를 변경하지 않는다.
+.SH generation
 .EX
-confit check \\
-  --project tools/confit/tests/fixtures/realish/delos \\
-  --profile sim-dsh
+<out>/generations/<bundle-digest>/
+  config.h
+  config.selection.json
+  config.report.json
+  config.inputs.json
+  config.mk
+  config.values.mk
+  components.mk
+  component.catalog.json
+  config.bundle.json
+<out>/selected
 .EE
-.SS Resolved value 출력
-.EX
-confit resolve \\
-  --project tools/confit/tests/fixtures/realish/delos \\
-  --profile sim-dsh \\
-  --format json
-.EE
-.SS Option 설명
-.EX
-confit explain \\
-  --project tools/confit/tests/fixtures/realish/delos \\
-  --profile sim-dsh \\
-  delos.debug.dsh
-.EE
-.SS Profile 비교
-.EX
-confit diff \\
-  --project tools/confit/tests/fixtures/realish/delos \\
-  --profile sim-dsh \\
-  --base debug
-.EE
-.SS V1 candidate migration
-.EX
-confit migrate \\
-  --project legacy/config/confit \\
-  --out /tmp/confit-v2-candidate
-.EE
-.SS V1/V2 fixture shadow rehearsal
-.EX
-ctest --test-dir build --output-on-failure \
-  -R '^confit\\.integration\\.v2_migration_shadow$'
-.EE
-이 저장소의 `realish/` V1 mirror와 `realish-v2/` candidate는 실제 Parus/Delos
-source tree가 아니다. 이 gate는 선언된 profile/target selection의 effective value
-table과 artifact bundle 생성을 비교한다. V1 requested assignment ABI와 V2 artifact
-ABI는 다르므로 byte-for-byte parity를 주장하지 않는다.
-.SS Artifact 생성
-.EX
-confit gen \\
-  --project tools/confit/tests/fixtures/realish/delos \\
-  --profile sim-dsh \\
-  --out /tmp/confit-generated/delos/sim-dsh \\
-  --artifact all
-.EE
-.SS Delos build selection 생성
-.EX
-confit gen \\
-  --project fixtures/delos \\
-  --profile release \\
-  --target renode-nucleo-h753zi \\
-  --out build/generated/config/delos/release \\
-  --artifact all
-.EE
-.SS QStar import
-.EX
-local config = qstar.import_module("build/generated/config/delos/release/config")
-local selection = qstar.import_module(
-  "build/generated/config/delos/release/delos_build_selection"
-)
-.EE
-.SS CMake include
-.EX
-include("${CMAKE_BINARY_DIR}/generated/config/delos/release/config.cmake")
-message(STATUS "board=${DELOS_CONFIG_TARGET_BOARD}")
-.EE
-.SS Compatibility 검사
-.EX
-confit compat \\
-  --parus tools/confit/tests/fixtures/realish/parus \\
-  --delos tools/confit/tests/fixtures/realish/delos \\
-  --profile parus-delos-debug \\
-  --compat tools/confit/tests/fixtures/realish/compat
-.EE
-.SS TUI 진입
-.EX
-confit tui \\
-  --project tools/confit/tests/fixtures/tui/profile-editor \\
-  --profile edit
-.EE
-.SS Schema editor 진입
-.EX
-confit tui \\
-  --project tools/confit/tests/fixtures/tui/schema-editor \\
-  --schema-edit
-.EE
-.SH 파일
-.TP
-.I config/project.toml
-project metadata와 schema version.
-.TP
-.I config/options/*.toml
-option schema.
-.TP
-.I config/options/tui-schema.toml
-guarded schema editor가 저장하는 draft schema file.
-.TP
-.I config/profiles/*.toml
-profile values.
-.TP
-.I config/targets/*.toml
-target-specific values.
-.TP
-.I config/compat/*.toml
-cross-project compatibility assertions.
-.TP
-.I config.h
-C source가 include하는 generated compile-time define.
-.TP
-.I config.inputs.json
-generated artifact를 만든 input manifest.
-.TP
-.I config/config.qsm
-QStar가
-.B qstar.import_module(".../config")
-로 읽는 canonical pure table module.
-.TP
-.I config.qst
-기존 호환성을 위한 deprecated QStar artifact.
-.TP
-.I <output>/<output>.qsm
-프로젝트가
-.I selection/*.toml
-로 선언한 build selection pure table module.
-.B --artifact build-selection
-또는
-.B --artifact all
-에서 생성된다.
-.SH 종료 코드
-.EX
-0  success
-1  invalid command line
-2  parse error
-3  schema error
-4  dependency or conflict error
-5  compatibility error
-6  generation error
-7  internal error
-8  unsupported command or platform
-.EE
-.SH 안전 규칙
-.IP \(bu 2
-Confit은 read-only command가 기본이다.
-.IP \(bu 2
-write command는 명시적인
-project path 또는 output path를
-요구한다.
-.IP \(bu 2
-.B gen
-은 반드시
-.B --out
-아래에만 generated artifact를 쓴다.
-.IP \(bu 2
-.B migrate
-는 source project를 수정하지 않고 별도
-.B --out
-candidate root에만 쓴다.
-.IP \(bu 2
-설치 과정은 project
-.I config/
-tree를 만들거나
-수정하지 않는다.
-.IP \(bu 2
-runtime source, hidden binary DB, network-fetched configuration은
-Confit의 범위가 아니다.
+.PP
+Consumer는 selected alias를 exact digest path로 해석한 뒤 manifest, artifact digest,
+ABI version, profile과 target을 확인해야 한다. missing, extra, unknown 또는 mismatched
+input은 실패한다.
 .SH 설치
-Confit의 runtime 설치 산출물은 단일 실행 파일이다.
-.PP
-macOS/Linux의 필수 산출물:
-.EX
-<prefix>/bin/confit
-<prefix>/share/man/man1/confit.1
-.EE
-.PP
-macOS/Linux local checkout에서는 다음 스크립트를 사용할 수 있다.
-.EX
-scripts/install-local.sh --prefix ~/.local
-.EE
-.PP
-Delos subtree checkout에서는 다음처럼 실행한다.
-.EX
-tools/confit/scripts/install-local.sh --prefix ~/.local
-.EE
-.PP
-이 스크립트는 network dependency를 받지 않고,
-source tree 밖 임시 build directory에서 빌드한 뒤 CMake install rule을
-사용한다. 설치는 project
-.I config/
-tree를 만들거나 수정하지 않는다.
-.PP
-Windows는 CLI-only preview lane이다. Windows의 필수 runtime 산출물:
-.EX
-<prefix>/bin/confit.exe
-.EE
-.PP
-Windows preview는 GNU-style clang과 Ninja 계열 build driver만 지원한다.
-MSVC와
-.B clang-cl
-은 지원하지 않는다. 이 단계에서는 PowerShell install script를 제공하지
-않고, 빌드된
-.I confit.exe
-를 사용자가 선택한
-.I bin
-directory로 복사하는 규칙을 공식 preview 설치 방식으로 둔다.
-.PP
-Windows 문서와 manpage는 설치 위치로 복사하지 않고 repository checkout의
-.I docs/
+.B scripts/install-local.sh
+은 caller-provided pinned bmake와 external output directory로 Confit을 build한다.
+installer는 network access, source project write, backend selection을 수행하지 않는다.
+.SH 종료 상태
+0은 command success다. nonzero는 invalid input, schema/constraint failure, output
+publication failure 또는 unsupported surface를 뜻한다. 진단은 stderr에 하나의
+deterministic error를 기록한다.
+.SH 관련 문서
+.I README.md
 ,
-.I wiki/
+.I docs/bmake-artifact-v3.md
 ,
-.I man/confit.1
-에서 읽는다.
-.PP
-.B confit doctor
-는 현재 platform의 설치 규칙을
-.B install rule: single executable artifact: ...
-형태로 출력해야 한다.
-.SH 플랫폼
-macOS와 Linux에서는 CLI와 ncurses 기반 TUI를 지원한다.
-TUI build에는 CMake가 찾을 수 있는 curses/ncurses 개발 파일이 필요하다.
-.PP
-Windows는 현재 CLI-only preview lane이다.
-지원 compiler는 GNU-style clang이며, MSVC와
-.B clang-cl
-은 지원하지 않는다.
-Windows에서는
-.B CONFIT_ENABLE_TUI=ON
-을 넘겨도 CMake가 TUI를 비활성화한다.
-.B confit tui
-는 partial UI를 시도하지 않고 exit code
-.B 8
-로 실패해야 한다.
-.SH TUI 키
-.EX
-방향키 / j k       이동
-PageUp/PageDown   페이지 이동
-Home/End          처음/끝
-Enter/Space       menu 진입 또는 edit/toggle
-Left              상위 menu
-Esc               취소, 뒤로, root에서는 종료 흐름
-q                 Esc 종료 흐름의 호환 alias
-:                 command prompt
-e                 edit
-/                 search
-n / N             다음/이전 search result
-profile ? 또는 h  help/detail
-schema ?          keymap/status
-schema h          선택 option help field 수정
-s                 저장
-.EE
-.SH SCHEMA V2 TUI
-schema_version 2 project의 profile editor는 explicit menu tree와 immutable V2
-snapshot을 사용한다. option의 requested value와 effective value는 다를 수 있으며,
-verbose inspector는 각각의 origin과 source를 분리해 표시한다.
-.PP
-V2 profile edit는 memory transaction에만 기록된다. bool은 즉시 toggle되고,
-tristate와 enum은 choice dialog를 사용하며, numeric/string/path/list/set은 value
-dialog에서 type, range, availability, choice, named constraint를 검증한다.
-.PP
-저장 시 Confit은 full resolve, constraint validation, artifact input generation,
-candidate TOML reparse를 끝낸 뒤에만 profile TOML을 atomic replace한다. 실패하면
-원본 profile TOML은 바뀌지 않는다. profile-domain option만 profile TUI에서
-편집할 수 있다.
-.PP
-schema_version 2의
-.B tui --schema-edit
-는 항상
-.B SCHEMA EDIT MODE - guarded
-를 표시하는 guarded 정보 화면이다. V2 schema source mutation은 TUI로 저장하지
-않는다. reviewed TOML edit 뒤
-.B confit check --strict
-와
-.B confit graph
-를 사용한다.
-.SH TUI COMMAND ROW
-TUI의 맨 아래 한 줄은 command row로 예약된다.
-Normal mode에서는 이 줄을 완전히 비워 둔다.
-Key legend와 status message는 그 위의 고정 band에 표시되며,
-command row를 덮지 않는다.
-.PP
-.B :
-를 누르면 vim처럼 command prompt가 command row에 열린다.
-.B /
-search,
-.B c
-category filter,
-.B t
-tag filter도 같은 command row를 사용한다.
-입력 중
-.B Esc
-를 누르면 입력을 취소하고 화면을 유지한다.
-.PP
-Command 실패는 command row에 남기지 않고 status row에 표시한다.
-예를 들어 빈 command는
-.B empty command,
-알 수 없는 command는
-.B unknown command: name,
-.B :filter
-인자 누락은
-.B usage: :filter <text>
-로 표시된다.
-.PP
-지원 command:
-.EX
-:verbose       자세한 inspector 표시
-:noverbose     compact inspector로 복귀
-:tree          menu stack view
-:flat          flat list view
-:filter text   id/prompt/help/category/tag filter
-:clear         search/filter 상태 해제
-:help          command 목록 표시
-:quit          종료 흐름 실행
-.EE
-.SH 함께 볼 문서
-.I tools/confit/wiki/README.md
-.br
-.I tools/confit/docs/cli-contract.md
-.br
-.I tools/confit/docs/toml-schema.md
-.br
-.I tools/confit/docs/build-selection-workflow.md
-.br
-.I tools/confit/docs/qstar-build-manifest-contract.md
-.br
-.I tools/confit/docs/final-release-note.md
+.I docs/schema-v2.md
+,
+.I docs/resolution-v2.md
+및 Parus의
+.I docs/contracts/config/generated-config-abi.md
+를 참조한다.

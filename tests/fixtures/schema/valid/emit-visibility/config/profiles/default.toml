@@ -1,6 +1,0 @@
-[profile]
-name = "default"
-schema_version = 1
-
-[values]
-"delos.build.objects" = "//src/board:rpi5_objects;//src/arch:arm64_objects"

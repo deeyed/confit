@@ -1,3 +1,0 @@
-[option."dispatch.enabled"]
-type = "bool"
-default = false

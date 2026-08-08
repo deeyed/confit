@@ -1,3 +1,0 @@
-[option."delos..debug"]
-type = "bool"
-default = false

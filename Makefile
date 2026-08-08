@@ -26,7 +26,6 @@ check-manifest:
 
 check: check-manifest confit tests
 	@CONFIT_BMAKE="${.MAKE}" \
-	    CONFIT_ENABLE_TUI="${CONFIT_ENABLE_TUI}" \
 	    ${CONFIT_SOURCE_ROOT}/tests/run_bmake_tests.sh \
 	    "${CONFIT_BINARY}" "${CONFIT_SOURCE_ROOT}" \
 	    "${CONFIT_OBJROOT}" "${CONFIT_TEST_BIN_ROOT}"
@@ -40,7 +39,6 @@ help:
 	    '' \
 	    '  bmake CONFIT_OBJROOT=/absolute/output all' \
 	    '  bmake CONFIT_OBJROOT=/absolute/output check' \
-	    '      full parity suite; pass absolute CONFIT_LEGACY_CMAKE' \
-	    '  bmake CONFIT_OBJROOT=/absolute/output CONFIT_ENABLE_TUI=no all' \
+	    '      complete host resolver and sealed-bundle suite' \
 	    '' \
 	    'CONFIT_HOST_CC is the host compiler; target compiler variables are ignored.'
