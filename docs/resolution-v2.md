@@ -2,7 +2,7 @@
 doc_type: semantics-contract
 status: accepted-design
 authority: normative
-last_verified: 2026-07-24
+last_verified: 2026-08-08
 ---
 
 # Confit Resolution Version 2
@@ -34,6 +34,23 @@ strict lint policy
 ```
 
 Schema parse/link/type-check에 실패한 project는 resolver 입력이 될 수 없다.
+
+## Component Capability Selection
+
+Profile/target base chain에서 `root_components`, `required_capabilities`,
+`optional_capabilities`를 각각 deterministic order로 deduplicate한다. Typed option assignment와
+component selection은 서로 값을 덮어쓰지 않는 별도 lane이다.
+
+1. `root_components`를 effective root에 추가한다.
+2. required capability마다 catalog의 exact provider를 찾고 provider component를 effective root에 추가한다.
+3. required provider가 없으면 partial closure 없이 fail-closed한다.
+4. optional capability는 provider가 있으면 그 component를 추가하고, 없으면 아무 root도 추가하지 않는다.
+5. catalog가 duplicate exact provider를 발견하면 required/optional 구분 없이 schema error다.
+6. effective root를 deduplicate한 뒤 component dependency closure를 dependency-first lexical order로 계산한다.
+
+Capability request는 runtime device detection, driver attach, backend fallback 또는 source build
+success를 뜻하지 않는다. Optional absence는 provider selection의 정상 결과일 뿐 다른 capability나
+target으로 해석하는 recovery trigger가 아니다.
 
 ## Phase 1: Target 이름 선택
 

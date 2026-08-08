@@ -2,7 +2,7 @@
 doc_type: language-spec
 status: accepted-design
 authority: normative
-last_verified: 2026-07-24
+last_verified: 2026-08-08
 ---
 
 # Confit Schema Version 2
@@ -30,6 +30,28 @@ config/
 
 Option, menu, constraint는 `project.toml`의 explicit import로 읽는다. Profile과
 target은 project가 선언한 directory에서 filename lexical order로 발견한다.
+
+## Component Selection Input
+
+V2 profile 또는 target table은 typed option overlay와 별도로 bounded component selection field를
+선언할 수 있다.
+
+```toml
+[target]
+name = "virt"
+schema_version = 2
+root_components = ["sys.boot.ingress.rph1"]
+required_capabilities = ["image.arm64.qemu.virt.rph1"]
+optional_capabilities = ["driver.net.virtio"]
+```
+
+`root_components`는 lower-case dot-separated component ID 목록이고,
+`required_capabilities`와 `optional_capabilities`는 bounded ASCII capability atom 목록이다.
+Base chain과 selected document에서 같은 atom이 반복되면 one effective request로 deduplicate한다.
+Unknown field, invalid atom, list length limit 초과는 schema error다.
+
+이 field는 component Makefile, source file, compiler flag, runtime device state나 artifact path를
+포함하지 않는다. Component catalog와 dependency/KAPI schema는 별도 `component.toml`이 소유한다.
 
 ## TOML Syntax Boundary
 

@@ -73,6 +73,21 @@ ConfitStatus confit_component_catalog_resolve(
     size_t root_count, ConfitComponentClosure *out_closure,
     ConfitDiagnostic *diagnostic);
 
+/**
+ * @brief component root와 required/optional capability request를 하나의 closed selection으로 해석한다.
+ *
+ * Required capability는 정확히 한 catalog provider가 있어야 하며, 없으면 fail-closed한다.
+ * Optional capability는 provider가 없을 때 root를 추가하지 않는다. Provider가 있으면 해당 component를
+ * effective root로 추가한다. 모든 effective root는 duplicate 없이 기존 dependency closure 규칙으로
+ * 해석된다. Returned closure의 root_ids는 caller가 요청한 capability의 provider까지 포함한다.
+ */
+ConfitStatus confit_component_catalog_resolve_selection(
+    const ConfitComponentCatalog *catalog, const char *const *component_roots,
+    size_t component_root_count, const char *const *required_capabilities,
+    size_t required_capability_count, const char *const *optional_capabilities,
+    size_t optional_capability_count, ConfitComponentClosure *out_closure,
+    ConfitDiagnostic *diagnostic);
+
 /** @brief closure allocation을 해제한다. */
 void confit_component_closure_clear(ConfitComponentClosure *closure);
 

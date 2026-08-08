@@ -639,22 +639,46 @@ static ConfitStatus confit_cli_v2_parse(const char *command, int argc,
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_cli_v2_resolve_component_closure(
+    const ConfitCliV2Context *context, const ConfitComponentCatalog *catalog,
+    ConfitComponentClosure *closure, char ***out_roots, size_t *out_root_count,
+    ConfitDiagnostic *diagnostic) {
+  char **required_capabilities = 0;
+  char **optional_capabilities = 0;
+  size_t required_capability_count = 0U;
+  size_t optional_capability_count = 0U;
+  ConfitStatus status;
+  *out_roots = 0;
+  *out_root_count = 0U;
+  status = confit_v2_snapshot_collect_component_roots(
+      context->compiled, context->snapshot, out_roots, out_root_count, diagnostic);
+  if (status == CONFIT_OK) status =
+      confit_v2_snapshot_collect_component_capability_requests(
+          context->compiled, context->snapshot, &required_capabilities,
+          &required_capability_count, &optional_capabilities,
+          &optional_capability_count, diagnostic);
+  if (status == CONFIT_OK) status = confit_component_catalog_resolve_selection(
+      catalog, (const char *const *)*out_roots, *out_root_count,
+      (const char *const *)required_capabilities, required_capability_count,
+      (const char *const *)optional_capabilities, optional_capability_count,
+      closure, diagnostic);
+  confit_host_string_list_free(required_capabilities, required_capability_count);
+  confit_host_string_list_free(optional_capabilities, optional_capability_count);
+  return status;
+}
+
 static ConfitStatus confit_cli_v2_component_context_load(
     const ConfitCliV2Args *args, ConfitCliV2Context *context,
     ConfitComponentCatalog *catalog, ConfitComponentClosure *closure,
     char ***out_roots, size_t *out_root_count, ConfitDiagnostic *diagnostic) {
   ConfitStatus status;
-  *out_roots = 0;
-  *out_root_count = 0U;
   memset(catalog, 0, sizeof(*catalog));
   memset(closure, 0, sizeof(*closure));
   status = confit_cli_v2_context_load(args, context, diagnostic);
   if (status == CONFIT_OK) status = confit_component_catalog_load(context->project,
                                                                    catalog, diagnostic);
-  if (status == CONFIT_OK) status = confit_v2_snapshot_collect_component_roots(
-      context->compiled, context->snapshot, out_roots, out_root_count, diagnostic);
-  if (status == CONFIT_OK) status = confit_component_catalog_resolve(
-      catalog, (const char *const *)*out_roots, *out_root_count, closure, diagnostic);
+  if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
+      context, catalog, closure, out_roots, out_root_count, diagnostic);
   return status;
 }
 
@@ -928,10 +952,8 @@ static ConfitStatus confit_cli_v2_run_check(const ConfitCliV2Args *args,
   status = confit_cli_v2_context_load(args, &context, diagnostic);
   if (status == CONFIT_OK) status = confit_component_catalog_load(context.project,
                                                                    &catalog, diagnostic);
-  if (status == CONFIT_OK) status = confit_v2_snapshot_collect_component_roots(
-      context.compiled, context.snapshot, &roots, &root_count, diagnostic);
-  if (status == CONFIT_OK) status = confit_component_catalog_resolve(
-      &catalog, (const char *const *)roots, root_count, &closure, diagnostic);
+  if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
+      &context, &catalog, &closure, &roots, &root_count, diagnostic);
   if (status == CONFIT_OK) status = confit_host_stdout_write_line("check ok");
   confit_component_closure_clear(&closure);
   confit_host_string_list_free(roots, root_count);
@@ -990,14 +1012,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (status == CONFIT_OK) {
     status = confit_component_catalog_load(context.project, &catalog, diagnostic);
   }
-  if (status == CONFIT_OK) {
-    status = confit_v2_snapshot_collect_component_roots(
-        context.compiled, context.snapshot, &roots, &root_count, diagnostic);
-  }
-  if (status == CONFIT_OK) {
-    status = confit_component_catalog_resolve(
-        &catalog, (const char *const *)roots, root_count, &closure, diagnostic);
-  }
+  if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
+      &context, &catalog, &closure, &roots, &root_count, diagnostic);
   if (status == CONFIT_OK) {
     status = confit_cli_v3_collect_inputs(args, &context, &catalog, &inputs,
                                           diagnostic);

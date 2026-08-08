@@ -255,6 +255,17 @@ ConfitStatus confit_v2_snapshot_collect_component_roots(
     const ConfitV2CompiledStructure *compiled, const ConfitV2Snapshot *snapshot,
     char ***out_roots, size_t *out_count, ConfitDiagnostic *diagnostic);
 
+/**
+ * @brief resolved profile/target inheritance의 required/optional capability request를 bounded하게 수집한다.
+ *
+ * Returned lists are caller-owned and 각각 `confit_host_string_list_free()`로 해제한다.
+ * Required request는 provider absence를 실패로 만들고 optional request는 absence를 정상으로 남긴다.
+ */
+ConfitStatus confit_v2_snapshot_collect_component_capability_requests(
+    const ConfitV2CompiledStructure *compiled, const ConfitV2Snapshot *snapshot,
+    char ***out_required, size_t *out_required_count, char ***out_optional,
+    size_t *out_optional_count, ConfitDiagnostic *diagnostic);
+
 /** @brief requested/effective assignment가 온 semantic lane이다. */
 typedef enum ConfitV2ProvenanceKind {
   CONFIT_V2_PROVENANCE_SCHEMA_DEFAULT = 1,

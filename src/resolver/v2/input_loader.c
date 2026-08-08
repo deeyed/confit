@@ -71,6 +71,19 @@ static int confit_v2_input_component_id_valid(const char *text) {
   return !segment_start;
 }
 
+static int confit_v2_input_capability_valid(const char *text) {
+  size_t index;
+  if (text == 0 || text[0] == '\0' || text[0] == '.') return 0;
+  for (index = 0U; text[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (!((value >= 'a' && value <= 'z') || (value >= '0' && value <= '9') ||
+          value == '.' || value == '_' || value == '-' || value == '@')) {
+      return 0;
+    }
+  }
+  return text[index - 1U] != '.';
+}
+
 static ConfitStatus confit_v2_input_parse_component_roots(
     const ConfitV2TomlValue *value, ConfitV2StringList *out,
     const char *path, ConfitDiagnostic *diagnostic) {
@@ -99,6 +112,50 @@ static ConfitStatus confit_v2_input_parse_component_roots(
     memcpy(buffer, text, size);
     buffer[size] = '\0';
     if (!confit_v2_input_component_id_valid(buffer)) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item),
+                                  CONFIT_ERR_SCHEMA, kInvalidInputValue, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    status = confit_v2_input_root_list_append(out, buffer);
+    if (status != CONFIT_OK) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item), status,
+                                  kInvalidInputValue, diagnostic);
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v2_input_parse_capability_requests(
+    const ConfitV2TomlValue *value, ConfitV2StringList *out, const char *path,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+  if (value == 0) return CONFIT_OK;
+  if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
+      confit_v2_toml_array_size(value) > 128U) {
+    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(value),
+                                confit_v2_toml_value_column(value),
+                                CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
+    return CONFIT_ERR_SCHEMA;
+  }
+  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
+    const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+    const char *text;
+    size_t size;
+    char buffer[193];
+    ConfitStatus status;
+    if (!confit_v2_toml_value_string(item, &text, &size) || size == 0U ||
+        size >= sizeof(buffer)) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item),
+                                  CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    memcpy(buffer, text, size);
+    buffer[size] = '\0';
+    if (!confit_v2_input_capability_valid(buffer)) {
       confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
                                   confit_v2_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kInvalidInputValue, diagnostic);
@@ -577,6 +634,8 @@ static void confit_v2_input_document_clear(ConfitV2InputDocument *document) {
   free(document->target);
   free(document->path);
   confit_v2_input_root_list_clear(&document->root_components);
+  confit_v2_input_root_list_clear(&document->required_capabilities);
+  confit_v2_input_root_list_clear(&document->optional_capabilities);
   for (index = 0U; index < document->assignment_count; ++index) {
     confit_v2_ledger_value_clear(&document->assignments[index].value);
   }
@@ -800,10 +859,12 @@ static ConfitStatus confit_v2_input_parse_document(
     const ConfitV2LinkedProject *linked, ConfitV2InputKind kind,
     const char *path, ConfitV2InputDocument *out_document,
     ConfitDiagnostic *diagnostic) {
-  static const char *const kProfileFields[] = {"name", "schema_version", "base",
-                                                "target", "root_components"};
-  static const char *const kTargetFields[] = {"name", "schema_version", "base",
-                                               "claim", "root_components"};
+  static const char *const kProfileFields[] = {
+      "name", "schema_version", "base", "target", "root_components",
+      "required_capabilities", "optional_capabilities"};
+  static const char *const kTargetFields[] = {
+      "name", "schema_version", "base", "claim", "root_components",
+      "required_capabilities", "optional_capabilities"};
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *section;
@@ -901,6 +962,12 @@ static ConfitStatus confit_v2_input_parse_document(
   status = confit_v2_input_parse_component_roots(
       confit_v2_toml_table_find(section, "root_components"),
       &out_document->root_components, path, diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_input_parse_capability_requests(
+      confit_v2_toml_table_find(section, "required_capabilities"),
+      &out_document->required_capabilities, path, diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_input_parse_capability_requests(
+      confit_v2_toml_table_find(section, "optional_capabilities"),
+      &out_document->optional_capabilities, path, diagnostic);
   if (status != CONFIT_OK) goto fail;
   status = confit_v2_input_parse_values(
       linked, kind, out_document, confit_v2_toml_table_find(root, "values"),
@@ -1018,6 +1085,110 @@ ConfitStatus confit_v2_snapshot_collect_component_roots(
   return confit_v2_input_collect_component_roots(
       compiled, confit_v2_snapshot_profile_name(snapshot),
       confit_v2_snapshot_target_name(snapshot), out_roots, out_count, diagnostic);
+}
+
+ConfitStatus confit_v2_input_collect_component_capability_requests(
+    const ConfitV2CompiledStructure *compiled, const char *profile_name,
+    const char *target_name, char ***out_required, size_t *out_required_count,
+    char ***out_optional, size_t *out_optional_count, ConfitDiagnostic *diagnostic) {
+  ConfitV2InputCatalog profiles;
+  ConfitV2InputCatalog targets;
+  const ConfitV2InputDocument **profile_chain = 0;
+  const ConfitV2InputDocument **target_chain = 0;
+  size_t profile_count = 0U;
+  size_t target_count = 0U;
+  ConfitV2StringList required;
+  ConfitV2StringList optional;
+  ConfitStatus status;
+  size_t chain_index;
+
+  if (compiled == 0 || out_required == 0 || out_required_count == 0 ||
+      out_optional == 0 || out_optional_count == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_required = 0;
+  *out_required_count = 0U;
+  *out_optional = 0;
+  *out_optional_count = 0U;
+  memset(&profiles, 0, sizeof(profiles));
+  memset(&targets, 0, sizeof(targets));
+  memset(&required, 0, sizeof(required));
+  memset(&optional, 0, sizeof(optional));
+  status = confit_v2_input_catalog_load(compiled, CONFIT_V2_INPUT_KIND_PROFILE,
+                                         &profiles, diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_input_catalog_load(
+      compiled, CONFIT_V2_INPUT_KIND_TARGET, &targets, diagnostic);
+  if (status == CONFIT_OK && target_name != 0) status =
+      confit_v2_input_catalog_build_chain(&targets, target_name, &target_chain,
+                                          &target_count, diagnostic);
+  if (status == CONFIT_OK && profile_name != 0) status =
+      confit_v2_input_catalog_build_chain(&profiles, profile_name, &profile_chain,
+                                          &profile_count, diagnostic);
+  for (chain_index = 0U; status == CONFIT_OK && chain_index < target_count;
+       ++chain_index) {
+    size_t item_index;
+    for (item_index = 0U; status == CONFIT_OK &&
+                         item_index < target_chain[chain_index]->required_capabilities.count;
+         ++item_index) {
+      status = confit_v2_input_root_list_append(
+          &required, target_chain[chain_index]->required_capabilities.items[item_index]);
+    }
+    for (item_index = 0U; status == CONFIT_OK &&
+                         item_index < target_chain[chain_index]->optional_capabilities.count;
+         ++item_index) {
+      status = confit_v2_input_root_list_append(
+          &optional, target_chain[chain_index]->optional_capabilities.items[item_index]);
+    }
+  }
+  for (chain_index = 0U; status == CONFIT_OK && chain_index < profile_count;
+       ++chain_index) {
+    size_t item_index;
+    for (item_index = 0U; status == CONFIT_OK &&
+                         item_index < profile_chain[chain_index]->required_capabilities.count;
+         ++item_index) {
+      status = confit_v2_input_root_list_append(
+          &required, profile_chain[chain_index]->required_capabilities.items[item_index]);
+    }
+    for (item_index = 0U; status == CONFIT_OK &&
+                         item_index < profile_chain[chain_index]->optional_capabilities.count;
+         ++item_index) {
+      status = confit_v2_input_root_list_append(
+          &optional, profile_chain[chain_index]->optional_capabilities.items[item_index]);
+    }
+  }
+  if (status == CONFIT_OK && required.count > 1U) {
+    qsort(required.items, required.count, sizeof(*required.items),
+          confit_v2_input_compare_string_ptrs);
+  }
+  if (status == CONFIT_OK && optional.count > 1U) {
+    qsort(optional.items, optional.count, sizeof(*optional.items),
+          confit_v2_input_compare_string_ptrs);
+  }
+  free(profile_chain);
+  free(target_chain);
+  confit_v2_input_catalog_clear(&profiles);
+  confit_v2_input_catalog_clear(&targets);
+  if (status != CONFIT_OK) {
+    confit_v2_input_root_list_clear(&required);
+    confit_v2_input_root_list_clear(&optional);
+    return status;
+  }
+  *out_required = required.items;
+  *out_required_count = required.count;
+  *out_optional = optional.items;
+  *out_optional_count = optional.count;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_v2_snapshot_collect_component_capability_requests(
+    const ConfitV2CompiledStructure *compiled, const ConfitV2Snapshot *snapshot,
+    char ***out_required, size_t *out_required_count, char ***out_optional,
+    size_t *out_optional_count, ConfitDiagnostic *diagnostic) {
+  if (snapshot == 0) return CONFIT_ERR_INVALID_ARGUMENT;
+  return confit_v2_input_collect_component_capability_requests(
+      compiled, confit_v2_snapshot_profile_name(snapshot),
+      confit_v2_snapshot_target_name(snapshot), out_required, out_required_count,
+      out_optional, out_optional_count, diagnostic);
 }
 
 ConfitStatus confit_v2_input_catalog_load(

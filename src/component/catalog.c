@@ -754,3 +754,123 @@ ConfitStatus confit_component_catalog_resolve(
   free(emitted);
   return CONFIT_OK;
 }
+
+static char *confit_component_duplicate_text(const char *text) {
+  const size_t size = text != 0 ? strlen(text) : 0U;
+  char *copy;
+  if (size == 0U) return 0;
+  copy = (char *)malloc(size + 1U);
+  if (copy != 0) memcpy(copy, text, size + 1U);
+  return copy;
+}
+
+static void confit_component_root_list_clear(char **roots, size_t root_count) {
+  size_t index;
+  for (index = 0U; index < root_count; ++index) free(roots[index]);
+  free(roots);
+}
+
+static ConfitStatus confit_component_root_list_append(char ***roots,
+                                                       size_t *root_count,
+                                                       const char *id) {
+  char **grown;
+  size_t index;
+  char *copy;
+  if (roots == 0 || root_count == 0 || !confit_component_id_valid(id)) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  for (index = 0U; index < *root_count; ++index) {
+    if (strcmp((*roots)[index], id) == 0) return CONFIT_OK;
+  }
+  if (*root_count >= CONFIT_COMPONENT_MAX_LIST_ITEMS) return CONFIT_ERR_SCHEMA;
+  copy = confit_component_duplicate_text(id);
+  if (copy == 0) return CONFIT_ERR_INTERNAL;
+  grown = (char **)realloc(*roots, (*root_count + 1U) * sizeof(*grown));
+  if (grown == 0) {
+    free(copy);
+    return CONFIT_ERR_INTERNAL;
+  }
+  grown[*root_count] = copy;
+  *roots = grown;
+  *root_count += 1U;
+  return CONFIT_OK;
+}
+
+static const ConfitComponent *confit_component_catalog_find_capability_provider(
+    const ConfitComponentCatalog *catalog, const char *capability) {
+  size_t index;
+  for (index = 0U; index < catalog->component_count; ++index) {
+    const ConfitComponent *component = &catalog->components[index];
+    if (confit_component_list_contains(component->capabilities,
+                                        component->capability_count, capability)) {
+      return component;
+    }
+  }
+  return 0;
+}
+
+ConfitStatus confit_component_catalog_resolve_selection(
+    const ConfitComponentCatalog *catalog, const char *const *component_roots,
+    size_t component_root_count, const char *const *required_capabilities,
+    size_t required_capability_count, const char *const *optional_capabilities,
+    size_t optional_capability_count, ConfitComponentClosure *out_closure,
+    ConfitDiagnostic *diagnostic) {
+  char **effective_roots = 0;
+  size_t effective_root_count = 0U;
+  size_t index;
+  ConfitStatus status = CONFIT_OK;
+  if (catalog == 0 || out_closure == 0 ||
+      (component_root_count > 0U && component_roots == 0) ||
+      (required_capability_count > 0U && required_capabilities == 0) ||
+      (optional_capability_count > 0U && optional_capabilities == 0) ||
+      component_root_count > CONFIT_COMPONENT_MAX_LIST_ITEMS ||
+      required_capability_count > CONFIT_COMPONENT_MAX_LIST_ITEMS ||
+      optional_capability_count > CONFIT_COMPONENT_MAX_LIST_ITEMS) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  for (index = 0U; status == CONFIT_OK && index < component_root_count; ++index) {
+    status = confit_component_root_list_append(&effective_roots, &effective_root_count,
+                                               component_roots[index]);
+  }
+  for (index = 0U; status == CONFIT_OK && index < required_capability_count; ++index) {
+    const ConfitComponent *provider;
+    if (!confit_component_atom_valid(required_capabilities[index])) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
+                            0U, 0U, "required component capability is unsafe");
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    provider = confit_component_catalog_find_capability_provider(
+        catalog, required_capabilities[index]);
+    if (provider == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
+                            0U, 0U, "required component capability is unavailable");
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    status = confit_component_root_list_append(&effective_roots, &effective_root_count,
+                                               provider->id);
+  }
+  for (index = 0U; status == CONFIT_OK && index < optional_capability_count; ++index) {
+    const ConfitComponent *provider;
+    if (!confit_component_atom_valid(optional_capabilities[index])) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, optional_capabilities[index],
+                            0U, 0U, "optional component capability is unsafe");
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    provider = confit_component_catalog_find_capability_provider(
+        catalog, optional_capabilities[index]);
+    if (provider != 0) {
+      status = confit_component_root_list_append(&effective_roots, &effective_root_count,
+                                                 provider->id);
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_component_catalog_resolve(
+        catalog, (const char *const *)effective_roots, effective_root_count,
+        out_closure, diagnostic);
+  }
+  confit_component_root_list_clear(effective_roots, effective_root_count);
+  return status;
+}
