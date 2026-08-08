@@ -116,12 +116,45 @@ static void test_run(ConfitCliV2WorkflowContext *context,
 static void test_v2_commands(ConfitCliV2WorkflowContext *context) {
   ConfitTestProcessResult result = {-1, 0, 0};
   char artifact[4096];
+  char selected_path[4096];
+  char generation_path[4096];
+  char override_dir[4096];
+  char override_generation[4096];
+  char override_project[4096];
+  char override_config[4096];
+  char override_path[4096];
+  char *selected;
+  char *input_text;
+  char *selection_text;
   const char *doctor[] = {0, "doctor", "--project", 0, 0};
   const char *check[] = {0, "check", "--project", 0, "--profile", "release", 0};
   const char *resolve[] = {0, "resolve", "--project", 0, "--profile", "release",
                            "--format", "json", 0};
   const char *gen[] = {0, "gen", "--project", 0, "--profile", "release", "--out",
-                       0, "--artifact", "all", 0};
+                       0, "--artifact", "bundle", 0};
+  const char *unsupported[] = {0, "gen", "--project", 0, "--profile", "release",
+                               "--out", 0, "--artifact", "all", 0};
+  const char *const override_project_toml =
+      "[project]\n"
+      "name = \"cli-override\"\n"
+      "namespace = \"cli\"\n"
+      "version = \"0\"\n"
+      "schema_version = 2\n"
+      "imports = [\"options.toml\"]\n";
+  const char *const override_options_toml =
+      "schema_version = 2\n\n"
+      "[option.\"cli.value\"]\n"
+      "type = \"uint\"\n"
+      "default = 1\n"
+      "range = { min = 0, max = 64 }\n"
+      "write_domain = \"profile\"\n"
+      "user_override = true\n"
+      "owner = \"confit\"\n"
+      "since = \"0\"\n"
+      "stability = \"stable\"\n"
+      "emit = [\"header\"]\n";
+  const char *gen_override[] = {0, "gen", "--project", 0, "--out", 0,
+                                "--set", "cli.value=31", 0};
   const char *explain[] = {0, "explain", "--project", 0, "--profile", "release",
                            "parus.compat.capacity", 0};
   const char *graph[] = {0, "graph", "--project", 0, "--format", "json", 0};
@@ -138,7 +171,9 @@ static void test_v2_commands(ConfitCliV2WorkflowContext *context) {
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
                               "v2 resolver ABI: confit-resolver-v2");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
-                              "v2 artifact ABI: confit-artifact-v2");
+                              "default sealed artifact ABI: confit-artifact-v3");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text,
+                              "v2 compatibility artifact ABI: confit-artifact-v2");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "tomlc17: R260618 (7813bdd)");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "project schema: 2");
   CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "doctor ok");
@@ -164,14 +199,86 @@ static void test_v2_commands(ConfitCliV2WorkflowContext *context) {
   gen[7] = context->generated_dir;
   test_run(context, gen, &result);
   CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
-  test_join3(artifact, sizeof(artifact), context->generated_dir, "config", "config.qsm");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "gen ok: bundle=");
+  confit_test_process_result_clear(&result);
+
+  test_join(selected_path, sizeof(selected_path), context->generated_dir,
+            "selected");
+  selected = confit_test_fs_read_file(selected_path);
+  CONFIT_TEST_ASSERT(selected != 0);
+  CONFIT_TEST_ASSERT(strncmp(selected, "generations/", 12U) == 0);
+  CONFIT_TEST_ASSERT(strstr(selected, "..") == 0);
+  selected[strcspn(selected, "\r\n")] = '\0';
+  test_join(generation_path, sizeof(generation_path), context->generated_dir,
+            selected);
+  confit_test_fs_free(selected);
+
+  test_join(artifact, sizeof(artifact), generation_path, "config.bundle.json");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  test_join(artifact, sizeof(artifact), generation_path, "config.selection.json");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  test_join(artifact, sizeof(artifact), generation_path, "config.mk");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  test_join(artifact, sizeof(artifact), generation_path, "config.values.mk");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  test_join(artifact, sizeof(artifact), generation_path, "components.mk");
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  test_join(artifact, sizeof(artifact), generation_path, "component.catalog.json");
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
   test_join(artifact, sizeof(artifact), context->generated_dir, "config.cmake");
-  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
-  test_join3(artifact, sizeof(artifact), context->generated_dir, "build_selection",
-             "build_selection.qsm");
-  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact));
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(artifact));
+  test_join3(artifact, sizeof(artifact), context->generated_dir, "config", "config.qsm");
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(artifact));
+
+  unsupported[0] = context->confit_bin;
+  unsupported[3] = context->parus_dir;
+  unsupported[7] = context->generated_dir;
+  test_run(context, unsupported, &result);
+  CONFIT_TEST_ASSERT(result.exit_code != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text, "publishes `bundle`");
   confit_test_process_result_clear(&result);
+
+  test_join(override_dir, sizeof(override_dir), context->work_dir,
+            "generated-override");
+  test_join(override_project, sizeof(override_project), context->work_dir,
+            "override-project");
+  test_join(override_config, sizeof(override_config), override_project,
+            "config");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(override_config));
+  test_join(override_path, sizeof(override_path), override_config,
+            "project.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(override_path,
+                                               override_project_toml));
+  test_join(override_path, sizeof(override_path), override_config,
+            "options.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(override_path,
+                                               override_options_toml));
+  gen_override[0] = context->confit_bin;
+  gen_override[3] = override_project;
+  gen_override[5] = override_dir;
+  test_run(context, gen_override, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  confit_test_process_result_clear(&result);
+  test_join(selected_path, sizeof(selected_path), override_dir, "selected");
+  selected = confit_test_fs_read_file(selected_path);
+  CONFIT_TEST_ASSERT(selected != 0);
+  selected[strcspn(selected, "\r\n")] = '\0';
+  test_join(override_generation, sizeof(override_generation), override_dir,
+            selected);
+  confit_test_fs_free(selected);
+  test_join(artifact, sizeof(artifact), override_generation, "config.inputs.json");
+  input_text = confit_test_fs_read_file(artifact);
+  CONFIT_TEST_ASSERT(input_text != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(input_text, "cli/override/0000");
+  CONFIT_TEST_ASSERT_CONTAINS(input_text, "\"role\": \"override\"");
+  confit_test_fs_free(input_text);
+  test_join(artifact, sizeof(artifact), override_generation,
+            "config.selection.json");
+  selection_text = confit_test_fs_read_file(artifact);
+  CONFIT_TEST_ASSERT(selection_text != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(selection_text,
+                              "\"cli.value\", \"type\": \"uint\", \"effective\": 31");
+  confit_test_fs_free(selection_text);
 
   explain[0] = context->confit_bin;
   explain[3] = context->parus_dir;

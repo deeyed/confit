@@ -94,7 +94,7 @@ additional execution context to stderr and must not alter stdout payloads.
 | `--strict` | Treat warnings as command failures where applicable. |
 | `--dry-run` | Validate and report intended writes without writing files. |
 | `--out <path>` | Select the output directory for generated artifacts. |
-| `--artifact header|reports|cmake|qstar|build-selection|all` | Select generated artifact groups. The `qstar` group emits canonical `config/config.qsm` and compatibility `config.qst`. The `build-selection` group emits project-specific modules declared by `selection/*.toml`. `all` includes every group. |
+| `--artifact bundle` | Schema v2 `gen`의 유일한 complete sealed bundle selector다. `all`과 partial/backend selector는 V2에서 fail-closed한다. Schema v1 compatibility CLI는 legacy selector를 별도 dispatch할 수 있으나 Parus normal build authority가 아니다. |
 | `--force` | Permit overwriting existing output files when the command would otherwise refuse. |
 
 Generators must be deterministic. Generated files must not contain timestamps or

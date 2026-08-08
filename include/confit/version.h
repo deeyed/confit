@@ -44,6 +44,9 @@ extern "C" {
 /** @brief immutable v2 generated-artifact identity. */
 #define CONFIT_ARTIFACT_ABI_V2 "confit-artifact-v2"
 
+/** @brief sealed tool-neutral generated-artifact identity. */
+#define CONFIT_ARTIFACT_ABI_V3 "confit-artifact-v3"
+
 /** @brief vendored TOML revision used by the v2 parser adapter. */
 #define CONFIT_TOMLC17_REVISION "R260618 (7813bdd)"
 

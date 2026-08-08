@@ -174,6 +174,34 @@ static void test_expect_artifact_bundle(const char *root) {
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(path));
 }
 
+static void test_expect_sealed_v3_bundle(const char *root) {
+  static const char *const kArtifacts[] = {
+      "config.h", "config.selection.json", "config.report.json",
+      "config.inputs.json", "config.mk", "config.values.mk", "components.mk",
+      "component.catalog.json", "config.bundle.json", 0};
+  char selected_path[4096];
+  char generation_path[4096];
+  char artifact_path[4096];
+  char *selected;
+  size_t index;
+
+  test_join(selected_path, sizeof(selected_path), root, "selected");
+  selected = confit_test_fs_read_file(selected_path);
+  CONFIT_TEST_ASSERT(selected != 0);
+  CONFIT_TEST_ASSERT(strncmp(selected, "generations/", 12U) == 0);
+  CONFIT_TEST_ASSERT(strstr(selected, "..") == 0);
+  selected[strcspn(selected, "\r\n")] = '\0';
+  test_join(generation_path, sizeof(generation_path), root, selected);
+  confit_test_fs_free(selected);
+  for (index = 0U; kArtifacts[index] != 0; ++index) {
+    test_join(artifact_path, sizeof(artifact_path), generation_path,
+              kArtifacts[index]);
+    CONFIT_TEST_ASSERT(confit_test_fs_file_exists(artifact_path));
+  }
+  test_join(artifact_path, sizeof(artifact_path), root, "config.cmake");
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(artifact_path));
+}
+
 static void test_rehearse_automatic_candidate(
     ConfitMigrationShadowContext *context, const char *project) {
   const char *migrate[] = {context->confit_bin, "migrate", "--project", 0,
@@ -307,13 +335,13 @@ static void test_run_shadow_case(ConfitMigrationShadowContext *context,
   gen_v2[argument_index++] = "--out";
   gen_v2[argument_index++] = v2_output;
   gen_v2[argument_index++] = "--artifact";
-  gen_v2[argument_index++] = "all";
+  gen_v2[argument_index++] = "bundle";
   gen_v2[argument_index] = 0;
 
   test_run(context, gen_v1, &v1_result);
   test_run(context, gen_v2, &v2_result);
   test_expect_artifact_bundle(v1_output);
-  test_expect_artifact_bundle(v2_output);
+  test_expect_sealed_v3_bundle(v2_output);
   confit_test_process_result_clear(&v1_result);
   confit_test_process_result_clear(&v2_result);
 }

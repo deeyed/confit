@@ -12,6 +12,11 @@ last_verified: 2026-07-24
 소비하는 파일로 직렬화하는 계약을 정의한다. V1 artifact shape는
 [generators.md](generators.md)가 담당한다.
 
+> 이 문서는 V2 compatibility serializer API의 artifact shape다. Schema V2 CLI의
+> normal `gen --artifact bundle` publication은 sealed artifact ABI v3를 사용하며,
+> `docs/cli-v2.md`의 generation/alias contract가 우선한다. 이 compatibility API는
+> Parus normal build input이 아니다.
+
 ## 기본 Output
 
 ```text

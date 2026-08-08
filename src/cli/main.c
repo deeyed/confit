@@ -225,10 +225,10 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      confit_cli_run_resolve},
     {"gen", "Generate deterministic configuration artifacts.",
      "confit gen --project <path> --profile <name> [--target <name>] --out "
-     "<path> [--artifact header|reports|cmake|qstar|build-selection|all] "
+     "<path> [--artifact bundle|header|reports|cmake|qstar|build-selection|all] "
      "[--force] [--dry-run]",
      "--project <path>\n  --profile <name>\n  --target <name>\n  --out <path>"
-     "\n  --artifact header|reports|cmake|qstar|build-selection|all\n  "
+     "\n  --artifact bundle|header|reports|cmake|qstar|build-selection|all\n  "
      "--force\n  --dry-run",
      confit_cli_run_gen},
     {"explain", "Explain one resolved option value.",
@@ -1151,7 +1151,15 @@ static int confit_cli_run_doctor(int argc, char **argv) {
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv(
-        "deferred generators", "none in this build");
+        "default sealed artifact ABI", CONFIT_ARTIFACT_ABI_V3);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "default sealed generators", "header, reports, selection, make-adapter");
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_write_doctor_kv(
+        "legacy serializers", "compatibility-only; not in sealed bundle");
   }
   if (status == CONFIT_OK) {
     status = confit_cli_write_doctor_kv("supported schema versions",
@@ -1162,7 +1170,7 @@ static int confit_cli_run_doctor(int argc, char **argv) {
                                         CONFIT_RESOLVER_ABI_V2);
   }
   if (status == CONFIT_OK) {
-    status = confit_cli_write_doctor_kv("v2 artifact ABI",
+    status = confit_cli_write_doctor_kv("v2 compatibility artifact ABI",
                                         CONFIT_ARTIFACT_ABI_V2);
   }
   if (status == CONFIT_OK) {
@@ -5719,7 +5727,7 @@ static ConfitStatus confit_cli_completion_bash(char **out_text) {
   CONFIT_COMPLETION_APPEND(
       "  globals=\"--help --version --color --quiet --verbose\"\n");
   CONFIT_COMPLETION_APPEND(
-      "  artifacts=\"header reports cmake qstar build-selection all\"\n");
+      "  artifacts=\"bundle header reports cmake qstar build-selection all\"\n");
   CONFIT_COMPLETION_APPEND("  formats=\"text json toml dot\"\n");
   CONFIT_COMPLETION_APPEND("  shells=\"bash zsh fish\"\n");
   CONFIT_COMPLETION_APPEND("  templates=\"minimal delos parus\"\n");
@@ -5797,7 +5805,7 @@ static ConfitStatus confit_cli_completion_zsh(char **out_text) {
   CONFIT_ZSH_APPEND(
       "    completion) _arguments '--shell:shell:(bash zsh fish)' ;;\n");
   CONFIT_ZSH_APPEND(
-      "    gen) _arguments '--artifact:artifact:(header reports cmake qstar build-selection all)' '--format:format:(text json toml dot)' ;;\n");
+      "    gen) _arguments '--artifact:artifact:(bundle header reports cmake qstar build-selection all)' '--format:format:(text json toml dot)' ;;\n");
   CONFIT_ZSH_APPEND(
       "    init) _arguments '--template:template:(minimal delos parus)' ;;\n");
   CONFIT_ZSH_APPEND("  esac\n");
@@ -5856,7 +5864,7 @@ static ConfitStatus confit_cli_completion_fish(char **out_text) {
   CONFIT_FISH_APPEND(
       "complete -c confit -n '__fish_seen_subcommand_from completion' -l shell -xa 'bash zsh fish'\n");
   CONFIT_FISH_APPEND(
-      "complete -c confit -n '__fish_seen_subcommand_from gen' -l artifact -xa 'header reports cmake qstar build-selection all'\n");
+      "complete -c confit -n '__fish_seen_subcommand_from gen' -l artifact -xa 'bundle header reports cmake qstar build-selection all'\n");
   CONFIT_FISH_APPEND(
       "complete -c confit -n '__fish_seen_subcommand_from init' -l template -xa 'minimal delos parus'\n");
 

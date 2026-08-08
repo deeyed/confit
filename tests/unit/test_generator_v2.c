@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#if !defined(_WIN32)
+#include <sys/stat.h>
+#endif
+
 #include "confit/constraint_v2.h"
 #include "confit/diagnostic.h"
 #include "confit/generator_v2.h"
@@ -58,6 +62,84 @@ static void free_compiled(ConfitV2Project *project,
   confit_v2_compiled_structure_free(compiled);
   confit_v2_linked_project_free(linked);
   confit_v2_project_free(project);
+}
+
+static void expect_hostile_make_value_is_omitted(void) {
+  static const ConfitV2ArtifactInput inputs[] = {
+      {"config/project.toml",
+       "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "project"},
+      {"config/options.toml",
+       "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+       "schema"},
+  };
+  const char *const project_toml =
+      "[project]\n"
+      "name = \"unsafe-fixture\"\n"
+      "namespace = \"unsafe\"\n"
+      "version = \"0\"\n"
+      "schema_version = 2\n"
+      "imports = [\"options.toml\"]\n";
+  const char *const options_toml =
+      "schema_version = 2\n\n"
+      "[option.\"unsafe.value\"]\n"
+      "type = \"string\"\n"
+      "default = \"$(shell hostile)\"\n"
+      "write_domain = \"profile\"\n"
+      "owner = \"confit\"\n"
+      "since = \"0\"\n"
+      "stability = \"stable\"\n"
+      "emit = [\"header\"]\n";
+  ConfitV2Project *project = 0;
+  ConfitV2LinkedProject *linked = 0;
+  ConfitV2CompiledStructure *compiled = 0;
+  ConfitV2Snapshot *snapshot = 0;
+  ConfitV3ArtifactOptions options;
+  ConfitV3ArtifactSet artifacts;
+  ConfitDiagnostic diagnostic;
+  char root[4096] = {0};
+  char config[4096];
+  char path[4096];
+
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_test_fs_make_temp_dir(root, sizeof(root),
+                                                  "confit-v3-hostile"));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(config, sizeof(config), root,
+                                              "config"));
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(config));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(path, sizeof(path), config,
+                                              "project.toml"));
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, project_toml));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(path, sizeof(path), config,
+                                              "options.toml"));
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, options_toml));
+  CONFIT_TEST_ASSERT(confit_v2_schema_load_project(root, &project,
+                                                    &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_v2_schema_link_project(project, &linked,
+                                                    &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_v2_compile_structure(linked, &compiled,
+                                                  &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_v2_snapshot_resolve(compiled, 0, &snapshot,
+                                                &diagnostic) == CONFIT_OK);
+  memset(&options, 0, sizeof(options));
+  options.inputs = inputs;
+  options.input_count = sizeof(inputs) / sizeof(inputs[0]);
+  options.tool_identity = "confit-test-v3";
+  options.artifact_mask = CONFIT_V3_ARTIFACT_COMPLETE;
+  memset(&artifacts, 0, sizeof(artifacts));
+  CONFIT_TEST_ASSERT(confit_v3_generate_artifacts(snapshot, &options,
+                                                   &artifacts,
+                                                   &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT_CONTAINS(artifacts.config_header, "$(shell hostile)");
+  CONFIT_TEST_ASSERT_CONTAINS(artifacts.selection_json, "$(shell hostile)");
+  CONFIT_TEST_ASSERT_NOT_CONTAINS(artifacts.config_values_mk, "$(shell");
+  CONFIT_TEST_ASSERT_NOT_CONTAINS(artifacts.config_values_mk,
+                                  "UNSAFE_CONFIG_UNSAFE_VALUE");
+
+  confit_v3_artifact_set_clear(&artifacts);
+  confit_v2_snapshot_free(snapshot);
+  free_compiled(project, linked, compiled);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
 }
 
 static void assert_lf_text(const char *text) {
@@ -241,8 +323,121 @@ static void expect_selection_name_validation(void) {
   free_compiled(project, linked, compiled);
 }
 
+static void make_tree_writable(const char *root) {
+#if !defined(_WIN32)
+  (void)chmod(root, 0700);
+#else
+  (void)root;
+#endif
+}
+
+static void make_file_writable(const char *path) {
+#if !defined(_WIN32)
+  (void)chmod(path, 0600);
+#else
+  (void)path;
+#endif
+}
+
+static void expect_sealed_v3_bundle(void) {
+  static const ConfitV2ArtifactInput inputs[] = {
+      {"config/options/types.toml",
+       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "schema"},
+      {"config/project.toml",
+       "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+       "project"},
+  };
+  ConfitV2Project *project;
+  ConfitV2LinkedProject *linked;
+  ConfitV2CompiledStructure *compiled;
+  ConfitV2Snapshot *snapshot = 0;
+  ConfitV3ArtifactOptions artifact_options;
+  ConfitV3PublishOptions publish_options;
+  ConfitV3ArtifactSet artifacts;
+  ConfitDiagnostic diagnostic;
+  char root[4096] = {0};
+  char partial_root[4096] = {0};
+  char generations[4096];
+  char generation[4096];
+  char values[4096];
+  char known_hash[65];
+  size_t changed = 0U;
+
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(load_compiled("tests/fixtures/schema-v2/valid", &project,
+                                  &linked, &compiled, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_v2_snapshot_resolve(compiled, 0, &snapshot,
+                                                &diagnostic) == CONFIT_OK);
+  memset(&artifact_options, 0, sizeof(artifact_options));
+  artifact_options.inputs = inputs;
+  artifact_options.input_count = sizeof(inputs) / sizeof(inputs[0]);
+  artifact_options.tool_identity = "confit-test-v3";
+  artifact_options.artifact_mask = CONFIT_V3_ARTIFACT_COMPLETE;
+  memset(&artifacts, 0, sizeof(artifacts));
+  CONFIT_TEST_ASSERT(confit_v3_generate_artifacts(snapshot, &artifact_options,
+                                                   &artifacts, &diagnostic) == CONFIT_OK);
+  confit_v3_sha256_hex("abc", known_hash);
+  CONFIT_TEST_ASSERT(strcmp(
+      known_hash,
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") == 0);
+  CONFIT_TEST_ASSERT(artifacts.config_mk != 0 && artifacts.bundle_json != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(artifacts.config_mk, "CONFIT_ARTIFACT_ABI:= 3");
+  CONFIT_TEST_ASSERT_CONTAINS(artifacts.bundle_json, "confit-bundle-v3");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_temp_dir(root, sizeof(root),
+                                                  "confit-v3-bundle"));
+  memset(&publish_options, 0, sizeof(publish_options));
+  publish_options.output_root = root;
+  CONFIT_TEST_ASSERT(confit_v3_publish_artifacts(&publish_options, &artifacts,
+                                                 &changed, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(changed == 1U);
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(generations, sizeof(generations), root,
+      "generations"));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(generation, sizeof(generation), generations,
+                                              artifacts.bundle_digest));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(values, sizeof(values), generation,
+                                              "config.values.mk"));
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(values));
+  changed = 99U;
+  CONFIT_TEST_ASSERT(confit_v3_publish_artifacts(&publish_options, &artifacts,
+                                                 &changed, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(changed == 0U);
+#if !defined(_WIN32)
+  make_tree_writable(generation);
+  make_file_writable(values);
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(values, "tampered\n"));
+  CONFIT_TEST_ASSERT(confit_v3_publish_artifacts(&publish_options, &artifacts,
+                                                 &changed, &diagnostic) ==
+                      CONFIT_ERR_GENERATION);
+#endif
+  make_tree_writable(generation);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  CONFIT_TEST_ASSERT(confit_test_fs_make_temp_dir(partial_root, sizeof(partial_root),
+                                                  "confit-v3-partial"));
+  publish_options.output_root = partial_root;
+  publish_options.fault_after_artifact = 3U;
+  CONFIT_TEST_ASSERT(confit_v3_publish_artifacts(&publish_options, &artifacts,
+                                                 &changed, &diagnostic) ==
+                      CONFIT_ERR_GENERATION);
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(generations, sizeof(generations),
+                                              partial_root, "generations"));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(generation, sizeof(generation), generations,
+                                              artifacts.bundle_digest));
+  CONFIT_TEST_ASSERT(confit_test_fs_path_join(values, sizeof(values), generation,
+                                              "config.bundle.json"));
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(values));
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(partial_root));
+
+  confit_v3_artifact_set_clear(&artifacts);
+  confit_v2_snapshot_free(snapshot);
+  free_compiled(project, linked, compiled);
+}
+
 int main(void) {
   expect_artifact_bundle();
   expect_selection_name_validation();
+  expect_hostile_make_value_is_omitted();
+  expect_sealed_v3_bundle();
   return 0;
 }

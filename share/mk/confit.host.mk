@@ -80,10 +80,10 @@ ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
 	@mkdir -p -- ${.TARGET:H}
 .if ${_src} == "vendor/tomlc17/tomlc17.c"
 	${CONFIT_HOST_CC} -std=c17 -w ${CONFIT_INCLUDE_FLAGS} -MMD -MP \
-	    -MF ${.TARGET:R}.d -c ${.ALLSRC} -o ${.TARGET}
+	    -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 .else
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    -MMD -MP -MF ${.TARGET:R}.d -c ${.ALLSRC} -o ${.TARGET}
+	    -MMD -MP -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 .endif
 .endfor
 
@@ -95,7 +95,7 @@ ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
 	@mkdir -p -- ${.TARGET:H}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
 	    ${CONFIT_BUILD_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
-	    -c ${.ALLSRC} -o ${.TARGET}
+	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 .endfor
 
 .for _src in ${CONFIT_TEST_SUPPORT_SOURCES}
@@ -105,7 +105,7 @@ CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
 ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
 	@mkdir -p -- ${.TARGET:H}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    -MMD -MP -MF ${.TARGET:R}.d -c ${.ALLSRC} -o ${.TARGET}
+	    -MMD -MP -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 .endfor
 
 .for _src in ${CONFIT_TEST_SOURCES}
@@ -118,7 +118,7 @@ ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
 	@mkdir -p -- ${.TARGET:H}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
 	    ${CONFIT_TEST_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
-	    -c ${.ALLSRC} -o ${.TARGET}
+	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 ${_bin}: ${_obj} ${CONFIT_PRODUCT_OBJECTS} ${CONFIT_TEST_SUPPORT_OBJECTS}
 	@mkdir -p -- ${.TARGET:H}
 	${CONFIT_HOST_CC} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}

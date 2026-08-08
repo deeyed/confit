@@ -74,20 +74,37 @@ effective value와 origin을 출력한다. JSON의 schema는
 
 ```sh
 confit gen --project fixtures/delos-v2 --profile release \
-  --out build/generated/delos/release --artifact all
+  --out build/generated/delos/release --artifact bundle
 ```
 
-V2 generator는 immutable snapshot 하나에서 canonical full bundle을 만든다.
-현재 V2 CLI에서 허용하는 artifact selector는 `--artifact all`뿐이다. 부분
-artifact selector는 unsupported error로 거부하여 서로 다른 partial bundle이
-생기지 않게 한다. `--dry-run`은 snapshot과 bundle serialization만 검증하고
-file을 쓰지 않는다.
+V2 CLI는 `--artifact bundle`만 허용한다. `all`과 개별 backend selector는
+unsupported error로 거부한다. 이는 서로 다른 partial bundle과 hidden backend
+fallback을 만들지 않기 위한 경계다. `--dry-run`은 snapshot과 bundle
+serialization만 검증하고 file을 쓰지 않는다.
 
-생성되는 파일은 `config.h`, `config.report.json`, `config.explain.txt`,
-`config.graph.json`, `config.inputs.json`, `config.changes.json`,
-`config.cmake`, `config/config.qsm`, `build_selection/build_selection.qsm`이다.
-각 file은 write-if-changed atomic publish를 사용하며 timestamp나 absolute host
-path를 넣지 않는다.
+성공한 generation은 다음과 같이 publish된다.
+
+```text
+<out>/
+  generations/<bundle-sha256>/
+    config.h
+    config.selection.json
+    config.report.json
+    config.inputs.json
+    config.mk
+    config.values.mk
+    components.mk
+    component.catalog.json
+    config.bundle.json
+  selected
+```
+
+`selected`는 `generations/<bundle-sha256>`만 가리키는 text alias다. Generator는
+staging에서 complete artifact를 다시 검증한 뒤 generation directory를 publish하고
+마지막으로 alias를 갱신한다. `config.mk`는 literal assignment와 include만 가진
+bmake adapter다. Make-safe atom이 아닌 resolved value는 tool-neutral selection JSON과
+`config.h`에는 남을 수 있지만 `config.values.mk`에는 직렬화되지 않는다. CMake/QStar
+artifact는 V2 CLI normal generation에 포함되지 않는다.
 
 ## Explain, List, Graph, Diff
 

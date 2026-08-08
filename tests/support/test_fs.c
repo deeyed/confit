@@ -307,6 +307,12 @@ static int confit_test_fs_remove_tree_posix(const char *path) {
   DIR *dir;
   struct dirent *entry;
 
+  /* A sealed generation deliberately has mode 0555.  This helper is used only
+   * for test-owned temporary roots, so make the directory removable before
+   * descending rather than teaching each caller an incomplete chmod walk. */
+  if (chmod(path, 0700) != 0 && errno != ENOENT) {
+    return 0;
+  }
   dir = opendir(path);
   if (dir == 0) {
     return errno == ENOENT;
