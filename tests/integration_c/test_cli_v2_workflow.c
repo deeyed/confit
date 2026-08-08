@@ -426,6 +426,9 @@ static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
   const char *missing_required[] = {0, "component", "check", "--project", 0,
                                     "--profile", "release", "--target",
                                     "missing-required", 0};
+  const char *unknown_root[] = {0, "component", "check", "--project", 0,
+                                "--profile", "release", "--target",
+                                "unknown-root", 0};
   const char *list[] = {0, "component", "list", "--project", 0,
                         "--profile", "release", "--target", "virt", 0};
   const char *explain[] = {0, "component", "explain", "--project", 0,
@@ -448,6 +451,9 @@ static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
   const char *const missing_required_target_toml =
       "[target]\nname = \"missing-required\"\nschema_version = 2\n"
       "required_capabilities = [\"runtime.required.absent\"]\n";
+  const char *const unknown_root_target_toml =
+      "[target]\nname = \"unknown-root\"\nschema_version = 2\n"
+      "root_components = [\"sys.unknown.root\"]\n";
   const char *const base_manifest =
       "schema_version = 1\n[component]\nid = \"sys.kern.base\"\n"
       "kind = \"kernel_core\"\nmakefile = \"Makefile\"\n"
@@ -476,6 +482,8 @@ static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, target_toml));
   test_join(path, sizeof(path), targets, "missing-required.toml");
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, missing_required_target_toml));
+  test_join(path, sizeof(path), targets, "unknown-root.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, unknown_root_target_toml));
   test_join(path, sizeof(path), base, "component.toml");
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, base_manifest));
   test_join(path, sizeof(path), base, "Makefile");
@@ -498,6 +506,14 @@ static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
   CONFIT_TEST_ASSERT(result.exit_code != 0);
   CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
                               "required component capability is unavailable");
+  confit_test_process_result_clear(&result);
+
+  unknown_root[0] = context->confit_bin;
+  unknown_root[4] = root;
+  test_run(context, unknown_root, &result);
+  CONFIT_TEST_ASSERT(result.exit_code != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stderr_text,
+                              "selected component root is unavailable");
   confit_test_process_result_clear(&result);
 
   list[0] = context->confit_bin;
