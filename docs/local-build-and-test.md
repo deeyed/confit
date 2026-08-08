@@ -2,75 +2,86 @@
 doc_type: developer-guide
 status: draft
 authority: operational
-last_verified: 2026-06-25
+last_verified: 2026-08-08
 ---
 
 # Local Build And Test
 
 Confit은 Delos runtime build와 분리된 host-side tool이다. Confit 자체 build/test harness는
 Confit source tree 안에서만 정의하고, build output은 source tree 밖 임시 디렉터리에 둔다.
-macOS/Linux TUI frontend는 실제 curses/ncurses library에 link하므로 local build host에는 CMake가
-찾을 수 있는 curses/ncurses 개발 파일이 있어야 한다. Windows는 이 구현 단계에서 CLI-only lane이며
-TUI target은 unsupported stub으로 빌드된다.
+정본 build language는 pinned `bmake` 20240909다. CMake는 migration 기간의 결과 비교기이며 Confit의
+normal build나 Parus bootstrap authority가 아니다. macOS/Linux TUI frontend는 실제
+curses/ncurses library에 link한다. `CONFIT_ENABLE_TUI=no`는 같은 parser, resolver와 generator를
+사용하고 frontend만 unsupported stub으로 바꾼다.
 
 Standalone repository root에서는 Confit source path가 `.`이다. Delos subtree checkout에서는 같은 source
 path가 `tools/confit`이다.
 
 ## Build Dependencies
 
-Confit TUI는 macOS/Linux에서 `CMakeLists.txt`의 `find_package(Curses REQUIRED)`로 system
-curses/ncurses를 찾는다. `vendor/`에는 TUI shim을 두지 않는다. Windows에서는 curses를 찾지 않고
-`confit tui`가 명시적인 unsupported-platform 결과를 반환한다.
+Confit bmake graph는 filesystem scan 없이 `share/mk/confit.sources.mk`의 명시적 semantic source
+group만 소비한다. `tests/check_bmake_manifest.sh`의 scan은 누락을 검출하는 lint일 뿐 build source
+selection이 아니다. `vendor/`에는 TUI shim을 두지 않는다.
 
 필수 항목:
 
 ```text
-CMake >= 3.20
+pinned bmake 20240909
 C17 compiler
 system curses/ncurses headers and library (macOS/Linux TUI build only)
 /bin/sh for Unix integration scripts
+CMake >= 3.20 (legacy artifact/comparator tests only)
 ```
 
 Platform별 확인 사항:
 
 | Platform | Dependency note |
 |---|---|
-| macOS | Xcode Command Line Tools 또는 Xcode SDK의 curses가 CMake에 잡혀야 한다. Round 11에서는 `/Applications/Xcode.app/.../libcurses.tbd`가 감지됐다. |
+| macOS | Xcode Command Line Tools 또는 Xcode SDK의 curses header/library가 필요하다. |
 | Linux | 배포판 개발 package가 필요하다. 예: Debian/Ubuntu `libncurses-dev`, Fedora `ncurses-devel`, Arch `ncurses`. |
-| Windows | CLI-only lane이다. GNU-style Clang과 Ninja 계열 build driver를 사용한다. MSVC와 `clang-cl`은 지원하지 않는다. curses/ncurses와 `/bin/sh`는 Windows gate의 필수 조건이 아니다. |
+| Windows | 기존 CMake CLI-only lane은 migration comparator다. bmake Windows support는 아직 executed claim이 아니다. |
 
-macOS/Linux에서 의존성 탐지 실패 시 `cmake -S <confit-source> -B /tmp/confit-build` 단계에서 Curses package
-오류가 난다. Windows에서는 Curses package를 찾지 않는다.
+TUI dependency가 없는 host는 `CONFIT_ENABLE_TUI=no`로 core CLI를 빌드한다. TUI availability가
+parser/resolver/generator의 build를 막아서는 안 된다.
 
-## CI-like Local Gate
+## Canonical bmake Gate
 
 라운드별 기본 local gate는 다음 명령이다.
 
 ```sh
-# Standalone Confit repository root
-./tests/run_tests.sh
+# Parus checkout: normal core CLI bootstrap (no legacy comparator tools)
+tools/build/bootstrap/parus-bmake confit
 
-# Delos subtree checkout
-tools/confit/tests/run_tests.sh
+# Standalone Confit checkout: exact verified bmake path를 사용한다.
+/absolute/path/to/bmake -r -C . -f Makefile \
+  CONFIT_OBJROOT=/tmp/confit-build \
+  CONFIT_HOST_CC=/usr/bin/cc \
+  CONFIT_HOST_CC_FAMILY=clang \
+  CONFIT_LEGACY_CMAKE=/absolute/path/to/cmake check
 ```
 
-이 script는 다음 순서로 동작한다.
+이 gate는 다음 순서로 동작한다.
 
-1. 기존 임시 build directory를 삭제한다.
-2. `cmake -S <confit-source> -B <build-dir>`로 clean configure를 수행한다.
-3. `cmake --build <build-dir>`로 `confit`과 unit test binary를 build한다.
-4. `ctest --test-dir <build-dir> --output-on-failure`로 unit/CLI tests를 실행한다.
-5. C 기반 integration runner가 shell 없이 `confit` child process를 실행해 stdout/stderr와 exit code를
+1. explicit source manifest가 실제 C source inventory를 완전히 닫는지 검사한다.
+2. fixed host compiler로 core CLI와 test binary를 output root 아래에 build한다.
+3. unit, bounded fuzz, CLI, TUI/unsupported와 integration tests를 직접 실행한다.
+4. C 기반 integration runner가 shell 없이 `confit` child process를 실행해 stdout/stderr와 exit code를
    검증한다.
-6. Round 1 smoke script를 실행해 직접 compiler 기반 smoke도 유지한다.
+5. CLI-only lane은 bmake를 재귀 호출하되 별도 output root와 unsupported TUI backend를 사용한다.
 
-CTest에는 synthetic scale gate도 포함된다. 이 gate는 build directory 안에 5,000개 option을 가진 임시
+Gate에는 synthetic scale test도 포함된다. 이 test는 build directory 안에 5,000개 option을 가진 임시
 project를 생성하고 `check`, `list`, `graph`, `gen`을 순서대로 실행한다.
 
 Schema V2의 bounded fuzz, import depth, incremental reconcile, sanitizer 실행
 방법과 release-size stress 범위는 [v2-hardening.md](v2-hardening.md)를 정본으로
 따른다. 기본 CTest의 빠른 regression 규모와 dedicated high-memory release stress
 규모를 같은 보장으로 취급하면 안 된다.
+
+## Legacy CMake Comparator
+
+`CMakeLists.txt`, `tests/run_tests.sh`와 Windows preview CI는 bmake cutover의 semantic parity를
+비교하기 위해 일시적으로 남아 있다. 이 경로의 통과는 dual canonical backend를 의미하지 않는다.
+Parus가 Confit을 bootstrap할 때는 CMake나 QStar executable을 탐색하거나 실행하지 않는다.
 
 Windows CTest lane에서는 POSIX shell integration tests를 등록하지 않는다. 대신 C 기반
 `confit_test_cli_workflow`가 child process로 CLI command를 실행하고, `doctor`가 Windows clang-only
@@ -113,22 +124,17 @@ ${TMPDIR:-/tmp}/confit-build
 tools/confit/tests/run_tests.sh /tmp/confit-custom-build
 ```
 
-## Manual Commands
+## Manual bmake Commands
 
 수동으로 같은 과정을 나누어 실행할 수 있다.
 
 ```sh
-CONFIT_SRC=.
-# Delos subtree checkout에서는 다음 값을 사용한다.
-# CONFIT_SRC=tools/confit
-
-cmake -S "$CONFIT_SRC" -B /tmp/confit-build
-cmake --build /tmp/confit-build
-ctest --test-dir /tmp/confit-build --output-on-failure
-/tmp/confit-build/confit --version
-/tmp/confit-build/confit help
-/tmp/confit-build/confit diff --project "$CONFIT_SRC/tests/fixtures/schema/valid/basic" --profile sim-dsh --base debug
-/tmp/confit-build/confit_test_cli_workflow
+BMAKE=/absolute/path/to/verified/bmake
+"$BMAKE" -r -C . -f Makefile CONFIT_OBJROOT=/tmp/confit-build all
+/tmp/confit-build/bin/confit --version
+/tmp/confit-build/bin/confit help
+"$BMAKE" -r -C . -f Makefile \
+  CONFIT_OBJROOT=/tmp/confit-cli-only CONFIT_ENABLE_TUI=no all
 ```
 
 Windows native CLI-only 확인 예시는 다음과 같다.

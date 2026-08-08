@@ -32,8 +32,8 @@ dependency edge와 `forces` lint는 v1 코드에만 해당한다. V2는
 - TOML parser는 permissive license C library만 고려한다.
 - Parser는 adapter 뒤에 숨긴다.
 - TUI library를 도입하더라도 core evaluator가 TUI에 의존하면 안 된다.
-- Build graph integration은 CMake/QStar가 담당하고, 초기 Confit은 generated `config.h`와 report를 만든다.
-- CMake/QStar generated fragment는 core/TUI/Parus/Delos 적용이 안정화된 뒤 도입한다.
+- Confit 자체 host build authority는 pinned bmake와 explicit source manifest가 담당한다.
+- CMake/QStar artifact는 consumer migration comparator일 뿐 Confit 또는 Parus의 build backend가 아니다.
 - Hosted OS 기능은 `src/host/` 아래에 격리한다.
 
 ## Memory And Error Handling

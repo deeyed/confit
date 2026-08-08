@@ -109,33 +109,24 @@ build/generated/config/<project>/<profile>/
 `config/` 아래에는 사람이 관리하는 source config만 둔다. Generated 파일을 `config/`에 쓰는 것은
 기본 정책이 아니다.
 
-## Local Install
+## Canonical Local Build
 
-Confit의 필수 설치 산출물은 단일 실행 파일이다.
-
-```sh
-# Standalone Confit repository root
-scripts/install-local.sh --prefix ~/.local
-
-# Delos subtree checkout
-tools/confit/scripts/install-local.sh --prefix ~/.local
-
-~/.local/bin/confit doctor
-man confit
-```
-
-수동 설치도 같은 규칙을 따른다.
+Confit의 정본 build engine은 pinned `bmake` 20240909다. Source selection은
+`share/mk/confit.sources.mk`에 명시하며 output은 source tree 밖에 둔다.
 
 ```sh
-# Standalone Confit repository root
-cmake -S . -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
-
-# Delos subtree checkout
-cmake -S tools/confit -B /tmp/confit-build -DCMAKE_BUILD_TYPE=Release
-
-cmake --build /tmp/confit-build --target confit
-cmake --install /tmp/confit-build --prefix "$HOME/.local"
+# Standalone Confit repository root; BMAKE는 검증된 absolute path다.
+"$BMAKE" -r -C . -f Makefile CONFIT_OBJROOT=/tmp/confit-build all
+/tmp/confit-build/bin/confit doctor
 ```
 
-설치 명령은 project `config/` tree를 만들거나 수정하지 않는다. Project skeleton 생성과 profile/schema
+TUI dependency가 없는 host에서는 frontend만 unsupported stub으로 바꾼다.
+
+```sh
+"$BMAKE" -r -C . -f Makefile \
+  CONFIT_OBJROOT=/tmp/confit-cli-only CONFIT_ENABLE_TUI=no all
+```
+
+CMake build와 install script는 migration comparator로만 남아 있으며 canonical backend가 아니다.
+Build는 project `config/` tree를 만들거나 수정하지 않는다. Project skeleton 생성과 profile/schema
 수정은 명시적인 Confit command가 담당한다.
