@@ -293,6 +293,8 @@ typedef struct ConfitV2Allocator {
  */
 typedef struct ConfitV2Project {
   ConfitV2Allocator allocator;
+  /** component root가 해석되는 canonical project root다. */
+  char *project_root;
   char *config_root;
   char *name;
   char *namespace_name;
@@ -306,6 +308,8 @@ typedef struct ConfitV2Project {
   size_t import_capacity;
   ConfitV2StringList profile_dirs;
   ConfitV2StringList target_dirs;
+  /** canonical project root 기준 bounded component catalog roots다. */
+  ConfitV2StringList component_roots;
   ConfitV2StringList selection_dirs;
   ConfitV2Symbol *symbols;
   size_t symbol_count;

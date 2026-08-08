@@ -341,6 +341,7 @@ void confit_v2_project_free(ConfitV2Project *project) {
     return;
   }
   allocator = &project->allocator;
+  confit_v2_deallocate(allocator, project->project_root);
   confit_v2_deallocate(allocator, project->config_root);
   confit_v2_deallocate(allocator, project->name);
   confit_v2_deallocate(allocator, project->namespace_name);
@@ -355,6 +356,7 @@ void confit_v2_project_free(ConfitV2Project *project) {
   confit_v2_deallocate(allocator, project->imports);
   confit_v2_string_list_clear(allocator, &project->profile_dirs);
   confit_v2_string_list_clear(allocator, &project->target_dirs);
+  confit_v2_string_list_clear(allocator, &project->component_roots);
   confit_v2_string_list_clear(allocator, &project->selection_dirs);
   for (index = 0U; index < project->symbol_count; ++index) {
     confit_v2_symbol_clear(allocator, &project->symbols[index]);

@@ -20,6 +20,101 @@ static const char kDuplicateInputName[] = "duplicate schema v2 input name";
 static const char kUnknownInputName[] = "unknown schema v2 profile or target";
 static const char kInputInheritanceCycle[] = "schema v2 input inheritance cycle";
 
+static void confit_v2_input_root_list_clear(ConfitV2StringList *list) {
+  size_t index;
+  if (list == 0) return;
+  for (index = 0U; index < list->count; ++index) free(list->items[index]);
+  free(list->items);
+  memset(list, 0, sizeof(*list));
+}
+
+static ConfitStatus confit_v2_input_root_list_append(ConfitV2StringList *list,
+                                                      const char *text) {
+  char **grown;
+  char *copy;
+  size_t index;
+  const size_t size = text != 0 ? strlen(text) : 0U;
+  if (size == 0U || size > 192U || list->count >= 128U) return CONFIT_ERR_SCHEMA;
+  for (index = 0U; index < list->count; ++index) {
+    if (strcmp(list->items[index], text) == 0) return CONFIT_OK;
+  }
+  copy = (char *)malloc(size + 1U);
+  if (copy == 0) return CONFIT_ERR_INTERNAL;
+  memcpy(copy, text, size + 1U);
+  grown = (char **)realloc(list->items, (list->count + 1U) * sizeof(*list->items));
+  if (grown == 0) {
+    free(copy);
+    return CONFIT_ERR_INTERNAL;
+  }
+  list->items = grown;
+  list->items[list->count++] = copy;
+  return CONFIT_OK;
+}
+
+static int confit_v2_input_component_id_valid(const char *text) {
+  size_t index;
+  int segment_start = 1;
+  if (text == 0 || text[0] == '\0') return 0;
+  for (index = 0U; text[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (value == '.') {
+      if (segment_start) return 0;
+      segment_start = 1;
+    } else if ((value >= 'a' && value <= 'z') ||
+               (value >= '0' && value <= '9')) {
+      if (segment_start && !(value >= 'a' && value <= 'z')) return 0;
+      segment_start = 0;
+    } else {
+      return 0;
+    }
+  }
+  return !segment_start;
+}
+
+static ConfitStatus confit_v2_input_parse_component_roots(
+    const ConfitV2TomlValue *value, ConfitV2StringList *out,
+    const char *path, ConfitDiagnostic *diagnostic) {
+  size_t index;
+  if (value == 0) return CONFIT_OK;
+  if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
+      confit_v2_toml_array_size(value) > 128U) {
+    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(value),
+                                confit_v2_toml_value_column(value),
+                                CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
+    return CONFIT_ERR_SCHEMA;
+  }
+  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
+    const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+    const char *text;
+    size_t size;
+    char buffer[193];
+    ConfitStatus status;
+    if (!confit_v2_toml_value_string(item, &text, &size) || size == 0U ||
+        size >= sizeof(buffer)) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item),
+                                  CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    memcpy(buffer, text, size);
+    buffer[size] = '\0';
+    if (!confit_v2_input_component_id_valid(buffer)) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item),
+                                  CONFIT_ERR_SCHEMA, kInvalidInputValue, diagnostic);
+      return CONFIT_ERR_SCHEMA;
+    }
+    status = confit_v2_input_root_list_append(out, buffer);
+    if (status != CONFIT_OK) {
+      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
+                                  confit_v2_toml_value_column(item), status,
+                                  kInvalidInputValue, diagnostic);
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
 char *confit_v2_ledger_strdup(const char *text) {
   char *copy;
   size_t size;
@@ -481,6 +576,7 @@ static void confit_v2_input_document_clear(ConfitV2InputDocument *document) {
   free(document->base);
   free(document->target);
   free(document->path);
+  confit_v2_input_root_list_clear(&document->root_components);
   for (index = 0U; index < document->assignment_count; ++index) {
     confit_v2_ledger_value_clear(&document->assignments[index].value);
   }
@@ -705,9 +801,9 @@ static ConfitStatus confit_v2_input_parse_document(
     const char *path, ConfitV2InputDocument *out_document,
     ConfitDiagnostic *diagnostic) {
   static const char *const kProfileFields[] = {"name", "schema_version", "base",
-                                                "target"};
+                                                "target", "root_components"};
   static const char *const kTargetFields[] = {"name", "schema_version", "base",
-                                               "claim"};
+                                               "claim", "root_components"};
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *section;
@@ -802,6 +898,10 @@ static ConfitStatus confit_v2_input_parse_document(
     out_document->target_line = confit_v2_toml_value_line(target);
     out_document->target_column = confit_v2_toml_value_column(target);
   }
+  status = confit_v2_input_parse_component_roots(
+      confit_v2_toml_table_find(section, "root_components"),
+      &out_document->root_components, path, diagnostic);
+  if (status != CONFIT_OK) goto fail;
   status = confit_v2_input_parse_values(
       linked, kind, out_document, confit_v2_toml_table_find(root, "values"),
       diagnostic);
@@ -840,6 +940,84 @@ fail:
     confit_v2_input_document_clear(out_document);
   }
   return status;
+}
+
+static int confit_v2_input_compare_string_ptrs(const void *left, const void *right) {
+  const char *const *a = (const char *const *)left;
+  const char *const *b = (const char *const *)right;
+  return strcmp(*a, *b);
+}
+
+ConfitStatus confit_v2_input_collect_component_roots(
+    const ConfitV2CompiledStructure *compiled, const char *profile_name,
+    const char *target_name, char ***out_roots, size_t *out_count,
+    ConfitDiagnostic *diagnostic) {
+  ConfitV2InputCatalog profiles;
+  ConfitV2InputCatalog targets;
+  const ConfitV2InputDocument **profile_chain = 0;
+  const ConfitV2InputDocument **target_chain = 0;
+  size_t profile_count = 0U;
+  size_t target_count = 0U;
+  ConfitV2StringList roots;
+  ConfitStatus status;
+  size_t chain_index;
+
+  if (compiled == 0 || out_roots == 0 || out_count == 0) return CONFIT_ERR_INVALID_ARGUMENT;
+  *out_roots = 0;
+  *out_count = 0U;
+  memset(&profiles, 0, sizeof(profiles));
+  memset(&targets, 0, sizeof(targets));
+  memset(&roots, 0, sizeof(roots));
+  status = confit_v2_input_catalog_load(compiled, CONFIT_V2_INPUT_KIND_PROFILE,
+                                         &profiles, diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_input_catalog_load(
+      compiled, CONFIT_V2_INPUT_KIND_TARGET, &targets, diagnostic);
+  if (status == CONFIT_OK && target_name != 0) status =
+      confit_v2_input_catalog_build_chain(&targets, target_name, &target_chain,
+                                          &target_count, diagnostic);
+  if (status == CONFIT_OK && profile_name != 0) status =
+      confit_v2_input_catalog_build_chain(&profiles, profile_name, &profile_chain,
+                                          &profile_count, diagnostic);
+  for (chain_index = 0U; status == CONFIT_OK && chain_index < target_count;
+       ++chain_index) {
+    size_t root_index;
+    for (root_index = 0U; status == CONFIT_OK &&
+                           root_index < target_chain[chain_index]->root_components.count;
+         ++root_index) status = confit_v2_input_root_list_append(
+             &roots, target_chain[chain_index]->root_components.items[root_index]);
+  }
+  for (chain_index = 0U; status == CONFIT_OK && chain_index < profile_count;
+       ++chain_index) {
+    size_t root_index;
+    for (root_index = 0U; status == CONFIT_OK &&
+                           root_index < profile_chain[chain_index]->root_components.count;
+         ++root_index) status = confit_v2_input_root_list_append(
+             &roots, profile_chain[chain_index]->root_components.items[root_index]);
+  }
+  if (status == CONFIT_OK && roots.count > 1U) {
+    qsort(roots.items, roots.count, sizeof(*roots.items),
+          confit_v2_input_compare_string_ptrs);
+  }
+  free(profile_chain);
+  free(target_chain);
+  confit_v2_input_catalog_clear(&profiles);
+  confit_v2_input_catalog_clear(&targets);
+  if (status != CONFIT_OK) {
+    confit_v2_input_root_list_clear(&roots);
+    return status;
+  }
+  *out_roots = roots.items;
+  *out_count = roots.count;
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_v2_snapshot_collect_component_roots(
+    const ConfitV2CompiledStructure *compiled, const ConfitV2Snapshot *snapshot,
+    char ***out_roots, size_t *out_count, ConfitDiagnostic *diagnostic) {
+  if (snapshot == 0) return CONFIT_ERR_INVALID_ARGUMENT;
+  return confit_v2_input_collect_component_roots(
+      compiled, confit_v2_snapshot_profile_name(snapshot),
+      confit_v2_snapshot_target_name(snapshot), out_roots, out_count, diagnostic);
 }
 
 ConfitStatus confit_v2_input_catalog_load(

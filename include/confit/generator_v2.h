@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "confit/component_catalog.h"
 #include "confit/constraint_v2.h"
 #include "confit/diagnostic.h"
 #include "confit/resolver_v2.h"
@@ -72,6 +73,10 @@ typedef struct ConfitV3ArtifactOptions {
   const char *tool_identity;
   /** independent semantic output request다. 0은 complete set을 의미한다. */
   unsigned int artifact_mask;
+  /** configured catalog availability. NULL이면 catalog ABI를 publish하지 않는다. */
+  const ConfitComponentCatalog *component_catalog;
+  /** catalog에서 resolved한 exact root closure. catalog와 함께만 유효하다. */
+  const ConfitComponentClosure *component_closure;
 } ConfitV3ArtifactOptions;
 
 /** @brief one immutable snapshot에서 만든 owned ABI v3 semantic bundle이다. */

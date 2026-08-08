@@ -24,7 +24,7 @@ for name in \
     status_diagnostic model host_boundary parser_adapter parser_v2_adapter \
     schema_loader schema_dispatch schema_v2_model schema_v2_linker \
     constraint_v2 constraint_v2_validate resolver_v2_ledger \
-    resolver_v2_evaluate resolver_v2_snapshot generator_v2 compat_v2 \
+    resolver_v2_evaluate resolver_v2_snapshot generator_v2 component_catalog compat_v2 \
     expression_v2 expression_v2_semantics graph_builder resolver explain \
     generator reports compat expression_v2_fuzz parser_v2_fuzz
 do
@@ -89,8 +89,8 @@ run cli.cli_only_lane /bin/sh \
 run cli.stress /bin/sh "$source_root/tests/integration/round20_stress.sh" \
     "$binary" "$source_root" "$work/round20-stress"
 
-expected_count=42
-[ "$enable_tui" = yes ] && expected_count=47
+expected_count=43
+[ "$enable_tui" = yes ] && expected_count=48
 [ "$test_count" -eq "$expected_count" ] || {
     printf 'expected %s tests, ran %s\n' "$expected_count" "$test_count" >&2
     exit 1

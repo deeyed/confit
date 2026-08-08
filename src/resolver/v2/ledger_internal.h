@@ -25,6 +25,7 @@ typedef struct ConfitV2InputDocument {
   size_t target_line;
   size_t target_column;
   char *path;
+  ConfitV2StringList root_components;
   ConfitV2InputAssignment *assignments;
   size_t assignment_count;
 } ConfitV2InputDocument;
@@ -76,6 +77,10 @@ ConfitStatus confit_v2_input_catalog_build_chain(
     const ConfitV2InputDocument ***out_chain, size_t *out_count,
     ConfitDiagnostic *diagnostic);
 void confit_v2_input_chain_free(const ConfitV2InputDocument **chain);
+ConfitStatus confit_v2_input_collect_component_roots(
+    const ConfitV2CompiledStructure *compiled, const char *profile_name,
+    const char *target_name, char ***out_roots, size_t *out_count,
+    ConfitDiagnostic *diagnostic);
 void confit_v2_ledger_diagnostic(const char *path, size_t line, size_t column,
                                  ConfitStatus status, const char *message,
                                  ConfitDiagnostic *diagnostic);

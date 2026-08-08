@@ -407,6 +407,127 @@ static void test_v1_migration(ConfitCliV2WorkflowContext *context) {
   confit_test_process_result_clear(&result);
 }
 
+static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
+  ConfitTestProcessResult result = {-1, 0, 0};
+  char root[4096];
+  char config[4096];
+  char profiles[4096];
+  char targets[4096];
+  char base[4096];
+  char driver[4096];
+  char path[4096];
+  char generated[4096];
+  char selected_path[4096];
+  char generation[4096];
+  char *selected;
+  char *artifact;
+  const char *check[] = {0, "component", "check", "--project", 0,
+                         "--profile", "release", "--target", "virt", 0};
+  const char *list[] = {0, "component", "list", "--project", 0,
+                        "--profile", "release", "--target", "virt", 0};
+  const char *explain[] = {0, "component", "explain", "--project", 0,
+                           "--profile", "release", "--target", "virt",
+                           "sys.dev.driver", 0};
+  const char *gen[] = {0, "gen", "--project", 0, "--profile", "release",
+                       "--target", "virt", "--out", 0, "--artifact", "bundle", 0};
+  const char *const project_toml =
+      "[project]\nname = \"component-fixture\"\nnamespace = \"fixture\"\n"
+      "version = \"0\"\nschema_version = 2\nprofile_dirs = [\"profiles\"]\n"
+      "target_dirs = [\"targets\"]\ncomponent_roots = [\"sys\"]\n";
+  const char *const profile_toml =
+      "[profile]\nname = \"release\"\nschema_version = 2\n"
+      "root_components = [\"sys.dev.driver\"]\n";
+  const char *const target_toml =
+      "[target]\nname = \"virt\"\nschema_version = 2\n"
+      "root_components = [\"sys.kern.base\"]\n";
+  const char *const base_manifest =
+      "schema_version = 1\n[component]\nid = \"sys.kern.base\"\n"
+      "kind = \"kernel_core\"\nmakefile = \"Makefile\"\n"
+      "[provides]\nkapi = [\"parus.base.v1\"]\ncapabilities = [\"runtime.base\"]\n";
+  const char *const driver_manifest =
+      "schema_version = 1\n[component]\nid = \"sys.dev.driver\"\n"
+      "kind = \"kernel_driver\"\nmakefile = \"Makefile\"\n"
+      "[dependencies]\ncomponents = [\"sys.kern.base\"]\n"
+      "kapi = [\"parus.base.v1\"]\n";
+
+  test_join(root, sizeof(root), context->work_dir, "component-project");
+  test_join(config, sizeof(config), root, "config");
+  test_join(profiles, sizeof(profiles), config, "profiles");
+  test_join(targets, sizeof(targets), config, "targets");
+  test_join3(base, sizeof(base), root, "sys", "base");
+  test_join3(driver, sizeof(driver), root, "sys", "driver");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(profiles));
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(targets));
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(base));
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(driver));
+  test_join(path, sizeof(path), config, "project.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, project_toml));
+  test_join(path, sizeof(path), profiles, "release.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, profile_toml));
+  test_join(path, sizeof(path), targets, "virt.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, target_toml));
+  test_join(path, sizeof(path), base, "component.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, base_manifest));
+  test_join(path, sizeof(path), base, "Makefile");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, "# never parsed\n"));
+  test_join(path, sizeof(path), driver, "component.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, driver_manifest));
+  test_join(path, sizeof(path), driver, "Makefile");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, "# never parsed\n"));
+
+  check[0] = context->confit_bin;
+  check[4] = root;
+  test_run(context, check, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "component check ok");
+  confit_test_process_result_clear(&result);
+
+  list[0] = context->confit_bin;
+  list[4] = root;
+  test_run(context, list, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "sys.kern.base\tkernel_core");
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "sys.dev.driver\tkernel_driver");
+  confit_test_process_result_clear(&result);
+
+  explain[0] = context->confit_bin;
+  explain[4] = root;
+  test_run(context, explain, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.stdout_text, "selected: true");
+  confit_test_process_result_clear(&result);
+
+  test_join(generated, sizeof(generated), context->work_dir, "component-generated");
+  gen[0] = context->confit_bin;
+  gen[3] = root;
+  gen[9] = generated;
+  test_run(context, gen, &result);
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  confit_test_process_result_clear(&result);
+  test_join(selected_path, sizeof(selected_path), generated, "selected");
+  selected = confit_test_fs_read_file(selected_path);
+  CONFIT_TEST_ASSERT(selected != 0);
+  selected[strcspn(selected, "\r\n")] = '\0';
+  test_join(generation, sizeof(generation), generated, selected);
+  confit_test_fs_free(selected);
+  test_join(path, sizeof(path), generation, "components.mk");
+  artifact = confit_test_fs_read_file(path);
+  CONFIT_TEST_ASSERT(artifact != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(artifact, "PARUS_COMPONENT_ORDER:= sys.kern.base sys.dev.driver");
+  confit_test_fs_free(artifact);
+  test_join(path, sizeof(path), generation, "component.catalog.json");
+  artifact = confit_test_fs_read_file(path);
+  CONFIT_TEST_ASSERT(artifact != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(artifact, "confit-component-catalog-v1");
+  CONFIT_TEST_ASSERT_CONTAINS(artifact, "sys.dev.driver");
+  confit_test_fs_free(artifact);
+  test_join(path, sizeof(path), generation, "config.inputs.json");
+  artifact = confit_test_fs_read_file(path);
+  CONFIT_TEST_ASSERT(artifact != 0);
+  CONFIT_TEST_ASSERT_CONTAINS(artifact, "component-manifest");
+  confit_test_fs_free(artifact);
+}
+
 int main(int argc, char **argv) {
   ConfitCliV2WorkflowContext context;
   char bin_buffer[4096];
@@ -420,5 +541,6 @@ int main(int argc, char **argv) {
   test_v2_commands(&context);
   test_v2_compat_and_diagnostic(&context);
   test_v1_migration(&context);
+  test_component_catalog(&context);
   return 0;
 }

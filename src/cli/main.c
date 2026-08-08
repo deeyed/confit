@@ -179,6 +179,7 @@ static int confit_cli_run_migrate(int argc, char **argv);
 static int confit_cli_run_profile(int argc, char **argv);
 static int confit_cli_run_completion(int argc, char **argv);
 static int confit_cli_run_tui(int argc, char **argv);
+static int confit_cli_run_component(int argc, char **argv);
 
 static ConfitStatus confit_cli_find_config_root(const char *project_root,
                                                 char *out, size_t out_size,
@@ -255,6 +256,11 @@ static const ConfitCliCommandSpec confit_cli_commands[] = {
      "--project <path>\n  --profile <name>\n  --base <profile>\n  "
      "--target <name>\n  --format text|json",
      confit_cli_run_diff},
+    {"component", "Validate, list, or explain bounded component catalog records.",
+     "confit component check|list --project <path> [--profile <name>] [--target <name>]\n"
+     "confit component explain --project <path> [--profile <name>] [--target <name>] <component-id>",
+     "--project <path>\n  --profile <name>\n  --target <name>",
+     confit_cli_run_component},
     {"migrate", "Create a schema v2 candidate without changing a v1 project.",
      "confit migrate --project <path> --out <path>",
      "--project <path>\n  --out <path>", confit_cli_run_migrate},
@@ -5670,6 +5676,12 @@ static int confit_cli_run_migrate(int argc, char **argv) {
   int exit_code = confit_cli_v2_try_run("migrate", argc, argv, &handled);
 
   return handled != 0 ? exit_code : confit_status_exit_code(CONFIT_ERR_INTERNAL);
+}
+
+static int confit_cli_run_component(int argc, char **argv) {
+  int handled = 0;
+  const int exit_code = confit_cli_v2_try_run("component", argc, argv, &handled);
+  return handled != 0 ? exit_code : confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
 }
 
 static ConfitStatus confit_cli_completion_append_command_words(

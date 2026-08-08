@@ -1,6 +1,7 @@
 #include "confit/host.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -329,4 +330,169 @@ void confit_host_string_list_free(char **items, size_t count) {
     free(items[index]);
   }
   free(items);
+}
+
+static ConfitStatus confit_host_append_named_path(char ***items,
+                                                  size_t *item_count,
+                                                  size_t max_count,
+                                                  const char *path,
+                                                  ConfitDiagnostic *diagnostic) {
+  char **grown;
+  char *copy;
+  const size_t size = strlen(path);
+
+  if (*item_count >= max_count) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path, 0U, 0U,
+                          "component manifest count exceeds the supported limit");
+    return CONFIT_ERR_SCHEMA;
+  }
+  copy = (char *)malloc(size + 1U);
+  if (copy == 0) return CONFIT_ERR_INTERNAL;
+  memcpy(copy, path, size + 1U);
+  grown = (char **)realloc(*items, (*item_count + 1U) * sizeof((*items)[0]));
+  if (grown == 0) {
+    free(copy);
+    return CONFIT_ERR_INTERNAL;
+  }
+  *items = grown;
+  (*items)[*item_count] = copy;
+  *item_count += 1U;
+  return CONFIT_OK;
+}
+
+#if !defined(_WIN32)
+static ConfitStatus confit_host_list_named_files_recursive_impl(
+    const char *directory, const char *file_name, size_t depth,
+    size_t max_depth, size_t max_count, size_t max_file_bytes, char ***items,
+    size_t *item_count, ConfitDiagnostic *diagnostic) {
+  DIR *dir;
+  struct dirent *entry;
+  struct stat info;
+
+  if (lstat(directory, &info) != 0) {
+    if (errno == ENOENT) return CONFIT_OK;
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
+                          "failed to inspect component root");
+    return CONFIT_ERR_PARSE;
+  }
+  if (S_ISLNK(info.st_mode)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
+                          "component discovery rejects symlink roots");
+    return CONFIT_ERR_SCHEMA;
+  }
+  if (!S_ISDIR(info.st_mode)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
+                          "component root is not a directory");
+    return CONFIT_ERR_SCHEMA;
+  }
+  dir = opendir(directory);
+  if (dir == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
+                          "failed to open component root");
+    return CONFIT_ERR_PARSE;
+  }
+  while ((entry = readdir(dir)) != 0) {
+    char *child;
+    ConfitStatus status;
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 ||
+        entry->d_name[0] == '.') continue;
+    child = confit_host_make_child_path(directory, entry->d_name);
+    if (child == 0) {
+      (void)closedir(dir);
+      return CONFIT_ERR_INTERNAL;
+    }
+    if (lstat(child, &info) != 0) {
+      free(child);
+      (void)closedir(dir);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
+                            "failed to inspect component entry");
+      return CONFIT_ERR_PARSE;
+    }
+    if (S_ISLNK(info.st_mode)) {
+      free(child);
+      (void)closedir(dir);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
+                            "component discovery rejects symlink entries");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (S_ISDIR(info.st_mode)) {
+      if (depth >= max_depth) {
+        free(child);
+        (void)closedir(dir);
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
+                              "component discovery depth exceeds the supported limit");
+        return CONFIT_ERR_SCHEMA;
+      }
+      status = confit_host_list_named_files_recursive_impl(
+          child, file_name, depth + 1U, max_depth, max_count, max_file_bytes,
+          items, item_count, diagnostic);
+      free(child);
+      if (status != CONFIT_OK) {
+        (void)closedir(dir);
+        return status;
+      }
+      continue;
+    }
+    if (S_ISREG(info.st_mode) && strcmp(entry->d_name, file_name) == 0) {
+      if ((uintmax_t)info.st_size > (uintmax_t)max_file_bytes) {
+        free(child);
+        (void)closedir(dir);
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
+                              "component manifest exceeds the supported size");
+        return CONFIT_ERR_SCHEMA;
+      }
+      status = confit_host_append_named_path(items, item_count, max_count, child,
+                                             diagnostic);
+      free(child);
+      if (status != CONFIT_OK) {
+        (void)closedir(dir);
+        return status;
+      }
+      continue;
+    }
+    free(child);
+  }
+  if (closedir(dir) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
+                          "failed to close component root");
+    return CONFIT_ERR_PARSE;
+  }
+  return CONFIT_OK;
+}
+#endif
+
+ConfitStatus confit_host_list_named_files_recursive(
+    const char *directory, const char *file_name, size_t max_depth,
+    size_t max_count, size_t max_file_bytes, char ***out_paths,
+    size_t *out_count, ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  if (directory == 0 || directory[0] == '\0' || file_name == 0 ||
+      file_name[0] == '\0' || max_depth == 0U || max_count == 0U ||
+      max_file_bytes == 0U || out_paths == 0 || out_count == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, directory, 0U,
+                          0U, "invalid bounded component discovery argument");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  *out_paths = 0;
+  *out_count = 0U;
+#if defined(_WIN32)
+  (void)max_depth;
+  (void)max_count;
+  (void)max_file_bytes;
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, directory, 0U, 0U,
+                        "bounded recursive component discovery is unsupported on this host");
+  status = CONFIT_ERR_UNSUPPORTED;
+#else
+  status = confit_host_list_named_files_recursive_impl(
+      directory, file_name, 0U, max_depth, max_count, max_file_bytes, out_paths,
+      out_count, diagnostic);
+#endif
+  if (status != CONFIT_OK) {
+    confit_host_string_list_free(*out_paths, *out_count);
+    *out_paths = 0;
+    *out_count = 0U;
+    return status;
+  }
+  confit_host_sort_strings(*out_paths, *out_count);
+  return CONFIT_OK;
 }

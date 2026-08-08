@@ -40,6 +40,44 @@ static const char kV2UnsupportedImportVersion[] =
 
 #define CONFIT_V2_MAX_IMPORT_DEPTH 128U
 
+static ConfitStatus confit_v2_set_project_root(ConfitV2Project *project,
+                                                const char *config_root,
+                                                ConfitDiagnostic *diagnostic) {
+  const char *forward_separator;
+  const char *backward_separator;
+  const char *separator;
+  size_t size;
+  char *root;
+
+  forward_separator = strrchr(config_root, '/');
+  backward_separator = strrchr(config_root, '\\');
+  separator = forward_separator;
+  if (backward_separator != 0 &&
+      (separator == 0 || backward_separator > separator)) {
+    separator = backward_separator;
+  }
+  if (separator != 0 && strcmp(separator + 1U, "config") == 0) {
+    size = (size_t)(separator - config_root);
+  } else {
+    size = strlen(config_root);
+  }
+  if (size == 0U) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, config_root, 0U, 0U,
+                          "invalid canonical project root");
+    return CONFIT_ERR_SCHEMA;
+  }
+  root = (char *)confit_v2_allocate(&project->allocator, size + 1U);
+  if (root == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, config_root, 0U, 0U,
+                          kV2AllocationFailed);
+    return CONFIT_ERR_INTERNAL;
+  }
+  memcpy(root, config_root, size);
+  root[size] = '\0';
+  project->project_root = root;
+  return CONFIT_OK;
+}
+
 static void confit_v2_error(ConfitDiagnostic *diagnostic, ConfitStatus status,
                             const ConfitV2TomlValue *value,
                             const char *message) {
@@ -1895,7 +1933,7 @@ static ConfitStatus confit_v2_parse_project_document(
     ConfitDiagnostic *diagnostic) {
   static const char *const kFields[] = {"name", "namespace", "version",
                                          "default_target", "schema_version", "imports",
-                                         "profile_dirs", "target_dirs",
+                                         "profile_dirs", "target_dirs", "component_roots",
                                          "selection_dirs"};
   ConfitV2TomlDocument *document;
   const ConfitV2TomlValue *root;
@@ -1999,6 +2037,14 @@ static ConfitStatus confit_v2_parse_project_document(
     confit_v2_toml_document_free(document);
     return status;
   }
+  value = confit_v2_toml_table_find(table, "component_roots");
+  if (value != 0 &&
+      (status = confit_v2_parse_string_list(project, value, 1, 1,
+                                             &project->component_roots,
+                                             diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
   value = confit_v2_toml_table_find(table, "selection_dirs");
   if (value != 0 &&
       (status = confit_v2_parse_string_list(project, value, 1, 1,
@@ -2090,6 +2136,11 @@ ConfitStatus confit_v2_schema_load_project_with_allocator(
   }
   memset(project, 0, sizeof(*project));
   project->allocator = *allocator;
+  status = confit_v2_set_project_root(project, config_root, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_v2_project_free(project);
+    return status;
+  }
   project->config_root = confit_v2_strdup(allocator, config_root);
   if (project->config_root == 0) {
     confit_v2_project_free(project);

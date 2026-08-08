@@ -23,6 +23,7 @@ CONFIT_PARSER_SOURCES= \
 
 CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 	src/model/v2/model.c \
+	src/component/catalog.c \
 	src/schema/schema.c \
 	src/schema/dispatch.c \
 	src/schema/v2/loader.c \
@@ -97,6 +98,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver_v2_evaluate.c \
 	tests/unit/test_resolver_v2_snapshot.c \
 	tests/unit/test_generator_v2.c \
+	tests/unit/test_component_catalog.c \
 	tests/unit/test_compat_v2.c \
 	tests/unit/test_expression_v2.c \
 	tests/unit/test_expression_v2_semantics.c \

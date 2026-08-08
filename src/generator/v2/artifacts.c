@@ -1430,8 +1430,36 @@ static ConfitStatus confit_v3_append_identity(
   return status;
 }
 
+static ConfitStatus confit_v3_append_component_id_array(
+    ConfitV2ArtifactBuilder *builder, const ConfitComponentClosure *closure) {
+  ConfitStatus status = confit_v2_builder_append(builder, "[");
+  size_t index;
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->component_count;
+       ++index) {
+    if (index != 0U) status = confit_v2_builder_append(builder, ", ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        builder, closure->ordered[index]->id);
+  }
+  return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
+}
+
+static ConfitStatus confit_v3_append_component_root_array(
+    ConfitV2ArtifactBuilder *builder, const ConfitComponentClosure *closure) {
+  ConfitStatus status = confit_v2_builder_append(builder, "[");
+  size_t index;
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->root_count;
+       ++index) {
+    if (index != 0U) status = confit_v2_builder_append(builder, ", ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        builder, closure->root_ids[index]);
+  }
+  return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
+}
+
 static ConfitStatus confit_v3_generate_selection(
-    const ConfitV2Snapshot *snapshot, const char *tool_identity, char **out) {
+    const ConfitV2Snapshot *snapshot, const char *tool_identity,
+    const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
+    char **out) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
   size_t index;
@@ -1458,7 +1486,14 @@ static ConfitStatus confit_v3_generate_selection(
         index + 1U == confit_v2_snapshot_option_count(snapshot) ? "" : ",");
   }
   if (status == CONFIT_OK) status = confit_v2_builder_append(
-      &builder, "  ],\n  \"components\": { \"catalog_state\": \"deferred\", \"selected\": [] }\n}\n");
+      &builder, "  ],\n  \"components\": { \"catalog_state\": ");
+  if (status == CONFIT_OK) status = confit_v2_append_json_string(
+      &builder, catalog != 0 ? "available" : "unavailable");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"roots\": ");
+  if (status == CONFIT_OK) status = confit_v3_append_component_root_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"selected\": ");
+  if (status == CONFIT_OK) status = confit_v3_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " }\n}\n");
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
     if (*out == 0) status = CONFIT_ERR_INTERNAL;
@@ -1468,7 +1503,9 @@ static ConfitStatus confit_v3_generate_selection(
 }
 
 static ConfitStatus confit_v3_generate_report(
-    const ConfitV2Snapshot *snapshot, const char *tool_identity, char **out) {
+    const ConfitV2Snapshot *snapshot, const char *tool_identity,
+    const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
+    char **out) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
 
@@ -1477,8 +1514,11 @@ static ConfitStatus confit_v3_generate_report(
   if (status == CONFIT_OK) status = confit_v3_append_identity(
       &builder, snapshot, "confit-report-v3", tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-      &builder, ",\n  \"option_count\": %llu,\n  \"component_catalog\": \"deferred\"\n}\n",
-      (unsigned long long)confit_v2_snapshot_option_count(snapshot));
+      &builder, ",\n  \"option_count\": %llu,\n  \"component_catalog\": \"%s\",\n  \"component_count\": %llu,\n  \"selected_component_count\": %llu\n}\n",
+      (unsigned long long)confit_v2_snapshot_option_count(snapshot),
+      catalog != 0 ? "available" : "unavailable",
+      (unsigned long long)(catalog != 0 ? catalog->component_count : 0U),
+      (unsigned long long)(closure != 0 ? closure->component_count : 0U));
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
     if (*out == 0) status = CONFIT_ERR_INTERNAL;
@@ -1678,18 +1718,135 @@ static ConfitStatus confit_v3_generate_make_values(
   return status;
 }
 
+static ConfitStatus confit_v3_component_make_identifier(
+    const char *id, char *out, size_t out_size) {
+  size_t index;
+  if (id == 0 || strlen(id) + 1U > out_size) return CONFIT_ERR_INVALID_ARGUMENT;
+  for (index = 0U; id[index] != '\0'; ++index) {
+    out[index] = id[index] == '.' ? '_' : id[index];
+  }
+  out[index] = '\0';
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v3_generate_components_mk(
+    const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
+    char **out, ConfitDiagnostic *diagnostic) {
+  ConfitV2ArtifactBuilder builder;
+  ConfitStatus status;
+  size_t index;
+  confit_v2_builder_init(&builder);
+  status = confit_v2_builder_append(&builder,
+      "# Generated by Confit; selected component closure only.\nPARUS_COMPONENT_IDS:=");
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->component_count;
+       ++index) {
+    if (!confit_v3_is_safe_atom(closure->ordered[index]->id, 0)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, closure->ordered[index]->id,
+                            0U, 0U, "unsafe component ID cannot enter generated Make syntax");
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    status = confit_v2_builder_append(&builder, " ");
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, closure->ordered[index]->id);
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\nPARUS_COMPONENT_ORDER:=");
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->component_count;
+       ++index) {
+    status = confit_v2_builder_append(&builder, " ");
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, closure->ordered[index]->id);
+  }
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->component_count;
+       ++index) {
+    const ConfitComponent *component = closure->ordered[index];
+    char identifier[256];
+    status = confit_v3_component_make_identifier(component->id, identifier,
+                                                  sizeof(identifier));
+    if (status == CONFIT_OK &&
+        (!confit_v3_is_safe_atom(component->manifest_path, 1) ||
+         !confit_v3_is_safe_atom(component->makefile_path, 1))) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U, 0U,
+                            "unsafe component path cannot enter generated Make syntax");
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_MANIFEST:= %s\nPARUS_COMPONENT_%s_MAKEFILE:= %s",
+        identifier, component->manifest_path, identifier, component->makefile_path);
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  if (status == CONFIT_OK) {
+    *out = confit_v2_builder_take(&builder);
+    if (*out == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_clear(&builder);
+  (void)catalog;
+  return status;
+}
+
+static ConfitStatus confit_v3_append_component_atom_array(
+    ConfitV2ArtifactBuilder *builder, char *const *items, size_t count) {
+  ConfitStatus status = confit_v2_builder_append(builder, "[");
+  size_t index;
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    if (index != 0U) status = confit_v2_builder_append(builder, ", ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(builder, items[index]);
+  }
+  return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
+}
+
+static ConfitStatus confit_v3_generate_component_catalog_json(
+    const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
+    char **out) {
+  ConfitV2ArtifactBuilder builder;
+  ConfitStatus status;
+  size_t index;
+  confit_v2_builder_init(&builder);
+  status = confit_v2_builder_append(&builder, "{\n  \"schema\": \"confit-component-catalog-v1\",\n  \"state\": ");
+  if (status == CONFIT_OK) status = confit_v2_append_json_string(
+      &builder, catalog != 0 ? "available" : "unavailable");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"components\": [\n");
+  for (index = 0U; status == CONFIT_OK && catalog != 0 && index < catalog->component_count;
+       ++index) {
+    const ConfitComponent *component = &catalog->components[index];
+    status = confit_v2_builder_append(&builder, "    { \"id\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->id);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kind\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, confit_component_kind_name(component->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"manifest\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->manifest_path);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"makefile\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->makefile_path);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"dependencies\": ");
+    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+        &builder, component->component_dependencies, component->component_dependency_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_requires\": ");
+    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+        &builder, component->kapi_requires, component->kapi_requirement_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"capabilities\": ");
+    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+        &builder, component->capabilities, component->capability_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " } ");
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, index + 1U == catalog->component_count ? "\n" : ",\n");
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "  ],\n  \"roots\": ");
+  if (status == CONFIT_OK) status = confit_v3_append_component_root_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"selected\": ");
+  if (status == CONFIT_OK) status = confit_v3_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n}\n");
+  if (status == CONFIT_OK) {
+    *out = confit_v2_builder_take(&builder);
+    if (*out == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_clear(&builder);
+  return status;
+}
+
 typedef struct ConfitV3NamedText {
   const char *path;
   const char *text;
   char sha256[65];
 } ConfitV3NamedText;
-
-static char *confit_v3_strdup(const char *text) {
-  const size_t size = strlen(text) + 1U;
-  char *copy = (char *)malloc(size);
-  if (copy != 0) memcpy(copy, text, size);
-  return copy;
-}
 
 static void confit_v3_digest_named_texts(ConfitV3NamedText *texts,
                                          size_t text_count,
@@ -1829,10 +1986,14 @@ ConfitStatus confit_v3_generate_artifacts(
   }
   if (status == CONFIT_OK && (mask & CONFIT_V3_ARTIFACT_SELECTION) != 0U) {
     status = confit_v3_generate_selection(snapshot, tool_identity,
+                                          options->component_catalog,
+                                          options->component_closure,
                                           &out_artifacts->selection_json);
   }
   if (status == CONFIT_OK && (mask & CONFIT_V3_ARTIFACT_REPORTS) != 0U) {
     status = confit_v3_generate_report(snapshot, tool_identity,
+                                       options->component_catalog,
+                                       options->component_closure,
                                        &out_artifacts->report_json);
     if (status == CONFIT_OK) status = confit_v3_generate_inputs(
         snapshot, options, tool_identity, &out_artifacts->inputs_json, diagnostic);
@@ -1841,14 +2002,12 @@ ConfitStatus confit_v3_generate_artifacts(
     status = confit_v3_generate_make_values(snapshot,
                                             &out_artifacts->config_values_mk,
                                             diagnostic);
-    if (status == CONFIT_OK) {
-      out_artifacts->components_mk = confit_v3_strdup(
-          "# Generated by Confit; component catalog is deferred.\nPARUS_COMPONENT_IDS:=\nPARUS_COMPONENT_ORDER:=\n");
-      out_artifacts->component_catalog_json = confit_v3_strdup(
-          "{\n  \"schema\": \"confit-component-catalog-v0\",\n  \"state\": \"deferred\",\n  \"components\": []\n}\n");
-      if (out_artifacts->components_mk == 0 ||
-          out_artifacts->component_catalog_json == 0) status = CONFIT_ERR_INTERNAL;
-    }
+    if (status == CONFIT_OK) status = confit_v3_generate_components_mk(
+        options->component_catalog, options->component_closure,
+        &out_artifacts->components_mk, diagnostic);
+    if (status == CONFIT_OK) status = confit_v3_generate_component_catalog_json(
+        options->component_catalog, options->component_closure,
+        &out_artifacts->component_catalog_json);
   }
   if (status == CONFIT_OK && mask == CONFIT_V3_ARTIFACT_COMPLETE) {
     identity_texts[0] = (ConfitV3NamedText){"config.h", out_artifacts->config_header, {0}};

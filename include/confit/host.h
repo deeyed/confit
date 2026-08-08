@@ -133,6 +133,19 @@ ConfitStatus confit_host_list_toml_files(const char *directory,
                                          ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief fixed directory root 아래에서 exact file name만 bounded lexical order로 찾는다.
+ *
+ * Symlink directory/file은 따라가지 않고 즉시 거부한다. `max_depth`, `max_count`,
+ * `max_file_bytes`는 모두 0보다 커야 하며, limit을 넘기면 partial list를 반환하지
+ * 않는다. 이 API는 configuration manifest discovery 전용이며 source globbing이나
+ * Makefile discovery를 제공하지 않는다.
+ */
+ConfitStatus confit_host_list_named_files_recursive(
+    const char *directory, const char *file_name, size_t max_depth,
+    size_t max_count, size_t max_file_bytes, char ***out_paths,
+    size_t *out_count, ConfitDiagnostic *diagnostic);
+
+/**
  * @brief host adapter가 caller에게 넘긴 string list를 해제한다.
  *
  * @param items 해제할 문자열 배열. `NULL`은 허용한다.

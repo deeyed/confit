@@ -183,6 +183,7 @@ const char *confit_v2_assignment_ledger_target_name(
 const ConfitV2TargetSelection *confit_v2_assignment_ledger_target_selection(
     const ConfitV2AssignmentLedger *ledger);
 
+
 /** @brief ordered ledger의 deterministic FNV-1a hash를 계산한다. */
 ConfitStatus confit_v2_assignment_ledger_hash(
     const ConfitV2AssignmentLedger *ledger, uint64_t *out_hash);
@@ -244,6 +245,15 @@ ConfitStatus confit_v2_evaluation_hash(const ConfitV2Evaluation *evaluation,
 
 /** @brief v2 resolve의 publish 가능한 immutable result다. */
 typedef struct ConfitV2Snapshot ConfitV2Snapshot;
+
+/**
+ * @brief resolved profile/target inheritance에서 component root set을 bounded하게 수집한다.
+ *
+ * Returned strings are caller-owned and `confit_host_string_list_free()`로 해제한다.
+ */
+ConfitStatus confit_v2_snapshot_collect_component_roots(
+    const ConfitV2CompiledStructure *compiled, const ConfitV2Snapshot *snapshot,
+    char ***out_roots, size_t *out_count, ConfitDiagnostic *diagnostic);
 
 /** @brief requested/effective assignment가 온 semantic lane이다. */
 typedef enum ConfitV2ProvenanceKind {
