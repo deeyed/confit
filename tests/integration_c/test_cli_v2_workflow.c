@@ -554,6 +554,7 @@ static void test_component_catalog(ConfitCliV2WorkflowContext *context) {
   CONFIT_TEST_ASSERT(artifact != 0);
   CONFIT_TEST_ASSERT_CONTAINS(artifact, "confit-component-catalog-v1");
   CONFIT_TEST_ASSERT_CONTAINS(artifact, "sys.dev.driver");
+  CONFIT_TEST_ASSERT_CONTAINS(artifact, "\"kapi_provides\": [\"parus.base.v1\"]");
   confit_test_fs_free(artifact);
   test_join(path, sizeof(path), generation, "config.inputs.json");
   artifact = confit_test_fs_read_file(path);

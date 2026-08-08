@@ -1822,6 +1822,9 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_requires\": ");
     if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
         &builder, component->kapi_requires, component->kapi_requirement_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_provides\": ");
+    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+        &builder, component->kapi_provides, component->kapi_provide_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"capabilities\": ");
     if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
         &builder, component->capabilities, component->capability_count);
