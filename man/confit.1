@@ -73,10 +73,6 @@ command는 source project나 sibling repository를 변경하지 않는다.
 Consumer는 selected alias를 exact digest path로 해석한 뒤 manifest, artifact digest,
 ABI version, profile과 target을 확인해야 한다. missing, extra, unknown 또는 mismatched
 input은 실패한다.
-.SH 설치
-.B scripts/install-local.sh
-은 caller-provided pinned bmake와 external output directory로 Confit을 build한다.
-installer는 network access, source project write, backend selection을 수행하지 않는다.
 .SH 종료 상태
 0은 command success다. nonzero는 invalid input, schema/constraint failure, output
 publication failure 또는 unsupported surface를 뜻한다. 진단은 stderr에 하나의

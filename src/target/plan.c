@@ -869,6 +869,52 @@ static ConfitStatus confit_target_measure_machine_identity(
   return CONFIT_OK;
 }
 
+static int confit_target_extract_numeric_version(const char *banner,
+                                                 char output[64]) {
+  size_t start = 0U;
+  size_t length = 0U;
+  while (banner[start] != '\0' &&
+         (banner[start] < '0' || banner[start] > '9')) ++start;
+  while (banner[start + length] != '\0' &&
+         ((banner[start + length] >= '0' && banner[start + length] <= '9') ||
+          banner[start + length] == '.')) {
+    if (length + 1U >= 64U) return 0;
+    ++length;
+  }
+  if (length == 0U || banner[start + length - 1U] == '.') return 0;
+  memcpy(output, banner + start, length);
+  output[length] = '\0';
+  return confit_target_atom_valid(output);
+}
+
+static ConfitStatus confit_target_measure_tool_identity(
+    const char *path, char **out_digest, char **out_version,
+    ConfitDiagnostic *diagnostic) {
+  char digest[65];
+  char banner[512];
+  char version[64];
+  ConfitStatus status;
+  if (path == 0 || out_digest == 0 || out_version == 0) {
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  status = confit_v4_sha256_file(path, digest, diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_host_capture_first_line_argument(
+        banner, sizeof(banner), path, "--version", diagnostic);
+  }
+  if (status == CONFIT_OK && !confit_target_extract_numeric_version(banner, version)) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "tool returned no bounded numeric version token");
+  }
+  if (status == CONFIT_OK) {
+    *out_digest = confit_target_strdup(digest);
+    *out_version = confit_target_strdup(version);
+    if (*out_digest == 0 || *out_version == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  return status;
+}
+
 ConfitStatus confit_target_plan_load(const ConfitV2Project *project,
                                      const char *target_id,
                                      ConfitTargetPlan *out_plan,
@@ -881,6 +927,20 @@ ConfitStatus confit_target_plan_load(const ConfitV2Project *project,
   status = confit_target_parse_build(project, target_id, out_plan, diagnostic);
   if (status == CONFIT_OK) {
     status = confit_target_parse_toolchain(project, out_plan, diagnostic);
+  }
+  if (status == CONFIT_OK) status = confit_target_measure_tool_identity(
+      out_plan->compiler_path, &out_plan->compiler_sha256,
+      &out_plan->compiler_version, diagnostic);
+  if (status == CONFIT_OK) status = confit_target_measure_tool_identity(
+      out_plan->archiver_path, &out_plan->archiver_sha256,
+      &out_plan->archiver_version, diagnostic);
+  if (status == CONFIT_OK) status = confit_target_measure_tool_identity(
+      out_plan->linker_path, &out_plan->linker_sha256,
+      &out_plan->linker_version, diagnostic);
+  if (status == CONFIT_OK && out_plan->dtc_path != 0) {
+    status = confit_target_measure_tool_identity(
+        out_plan->dtc_path, &out_plan->dtc_sha256,
+        &out_plan->dtc_version, diagnostic);
   }
   if (status == CONFIT_OK) {
     status = confit_target_measure_machine_identity(out_plan, diagnostic);
@@ -911,8 +971,14 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(toolchain_kind);
   CONFIT_TARGET_FREE(target_triple);
   CONFIT_TARGET_FREE(compiler_path);
+  CONFIT_TARGET_FREE(compiler_sha256);
+  CONFIT_TARGET_FREE(compiler_version);
   CONFIT_TARGET_FREE(archiver_path);
+  CONFIT_TARGET_FREE(archiver_sha256);
+  CONFIT_TARGET_FREE(archiver_version);
   CONFIT_TARGET_FREE(linker_path);
+  CONFIT_TARGET_FREE(linker_sha256);
+  CONFIT_TARGET_FREE(linker_version);
   CONFIT_TARGET_FREE(resource_include_path);
   CONFIT_TARGET_FREE(sysroot_path);
   CONFIT_TARGET_FREE(link_emulation);
@@ -936,6 +1002,8 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(required_profile);
   CONFIT_TARGET_FREE(dts_path);
   CONFIT_TARGET_FREE(dtc_path);
+  CONFIT_TARGET_FREE(dtc_sha256);
+  CONFIT_TARGET_FREE(dtc_version);
   CONFIT_TARGET_FREE(package_source);
   CONFIT_TARGET_FREE(user_artifact_profile);
   CONFIT_TARGET_FREE(user_artifact_output);

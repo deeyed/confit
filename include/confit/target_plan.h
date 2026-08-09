@@ -29,8 +29,14 @@ typedef struct ConfitTargetPlan {
   char *toolchain_kind;
   char *target_triple;
   char *compiler_path;
+  char *compiler_sha256;
+  char *compiler_version;
   char *archiver_path;
+  char *archiver_sha256;
+  char *archiver_version;
   char *linker_path;
+  char *linker_sha256;
+  char *linker_version;
   char *resource_include_path;
   char *sysroot_path;
   char *link_emulation;
@@ -55,6 +61,8 @@ typedef struct ConfitTargetPlan {
   char *required_profile;
   char *dts_path;
   char *dtc_path;
+  char *dtc_sha256;
+  char *dtc_version;
   char *package_source;
   char *user_artifact_profile;
   char *user_artifact_output;

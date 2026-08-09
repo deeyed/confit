@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#if !defined(_WIN32)
+#include <errno.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #include "confit/constraint_v2.h"
 #include "confit/diagnostic.h"
 #include "confit/generator_v2.h"
@@ -56,10 +62,17 @@ int main(void) {
   ConfitTargetPlan target_plan;
   ConfitV4PublishOptions publication;
   char root[1024];
+  char canonical_root[1024];
   char selected_config[1200];
   char generation_config[1200];
   char partial_config[1200];
   char generation_relative[96];
+#if !defined(_WIN32)
+  char stale_generation[1200];
+  char stale_artifact[1200];
+  char symlink_root[1024];
+  char symlink_alias[1100];
+#endif
   char *selected_text;
   char *generation_text;
   size_t changed = 0U;
@@ -98,8 +111,17 @@ int main(void) {
   target_plan.toolchain_kind = "clang-lld-v1";
   target_plan.target_triple = "aarch64-none-elf";
   target_plan.compiler_path = "/usr/bin/clang";
+  target_plan.compiler_sha256 =
+      "1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  target_plan.compiler_version = "21.0.0";
   target_plan.archiver_path = "/usr/bin/llvm-ar";
+  target_plan.archiver_sha256 =
+      "2123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  target_plan.archiver_version = "20.1.8";
   target_plan.linker_path = "/usr/bin/ld.lld";
+  target_plan.linker_sha256 =
+      "3123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  target_plan.linker_version = "22.1.8";
   target_plan.resource_include_path = "/usr/lib/clang/include";
   target_plan.sysroot_path = "lib/libc/aarch64-unknown-none-elf";
   target_plan.link_emulation = "aarch64elf";
@@ -158,6 +180,10 @@ int main(void) {
   confit_diagnostic_clear(&diagnostic);
   CONFIT_TEST_ASSERT(confit_test_fs_make_temp_dir(
       root, sizeof(root), "confit-publish"));
+  CONFIT_TEST_ASSERT(confit_host_path_canonicalize(
+      canonical_root, sizeof(canonical_root), root, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(strlen(canonical_root) < sizeof(root));
+  memcpy(root, canonical_root, strlen(canonical_root) + 1U);
   CONFIT_TEST_ASSERT(confit_test_fs_path_join(
       selected_config, sizeof(selected_config), root, "selected/config.mk"));
   CONFIT_TEST_ASSERT(snprintf(generation_relative,
@@ -185,9 +211,15 @@ int main(void) {
   confit_diagnostic_clear(&diagnostic);
   publication.fault_after_artifact = 0U;
   changed = 0U;
-  CONFIT_TEST_ASSERT(confit_v4_publish_artifacts(
-                         &publication, &artifacts, &changed,
-                         &diagnostic) == CONFIT_OK);
+  {
+    const ConfitStatus publish_status = confit_v4_publish_artifacts(
+        &publication, &artifacts, &changed, &diagnostic);
+    if (publish_status != CONFIT_OK) {
+      fprintf(stderr, "publication diagnostic: %s\n",
+              diagnostic.message != 0 ? diagnostic.message : "none");
+    }
+    CONFIT_TEST_ASSERT(publish_status == CONFIT_OK);
+  }
   CONFIT_TEST_ASSERT(changed == 1U);
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(selected_config));
   CONFIT_TEST_ASSERT(confit_test_fs_file_exists(generation_config));
@@ -203,6 +235,53 @@ int main(void) {
                          &publication, &artifacts, &changed,
                          &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(changed == 0U);
+
+#if !defined(_WIN32)
+  {
+    static const char *const artifact_names[] = {
+        "config.h", "config.mk", "config.values.mk",
+        "config.selection.json", "config.inputs.json", "config.reason.json",
+        "config.report.json", "config.bundle.json", "components.mk",
+        "component.catalog.json", "tests.mk", "target.mk"};
+    static const char stale_digest[] =
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    size_t artifact_index;
+    CONFIT_TEST_ASSERT(snprintf(generation_relative,
+                                sizeof(generation_relative),
+                                "generations/%s", stale_digest) > 0);
+    CONFIT_TEST_ASSERT(confit_test_fs_path_join(
+        stale_generation, sizeof(stale_generation), root, generation_relative));
+    CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(stale_generation));
+    for (artifact_index = 0U;
+         artifact_index < sizeof(artifact_names) / sizeof(artifact_names[0]);
+         ++artifact_index) {
+      CONFIT_TEST_ASSERT(confit_test_fs_path_join(
+          stale_artifact, sizeof(stale_artifact), stale_generation,
+          artifact_names[artifact_index]));
+      CONFIT_TEST_ASSERT(confit_test_fs_write_file(stale_artifact, "stale\n"));
+    }
+    CONFIT_TEST_ASSERT(chmod(stale_generation, 0555) == 0);
+    CONFIT_TEST_ASSERT(confit_v4_publish_artifacts(
+                           &publication, &artifacts, &changed,
+                           &diagnostic) == CONFIT_OK);
+    errno = 0;
+    CONFIT_TEST_ASSERT(stat(stale_generation, &(struct stat){0}) != 0 &&
+                       errno == ENOENT);
+  }
+
+  CONFIT_TEST_ASSERT(confit_test_fs_make_temp_dir(
+      symlink_root, sizeof(symlink_root), "confit-publish-real"));
+  CONFIT_TEST_ASSERT(snprintf(symlink_alias, sizeof(symlink_alias), "%s-alias",
+                              symlink_root) > 0);
+  CONFIT_TEST_ASSERT(symlink(symlink_root, symlink_alias) == 0);
+  publication.output_root = symlink_alias;
+  CONFIT_TEST_ASSERT(confit_v4_publish_artifacts(
+                         &publication, &artifacts, &changed,
+                         &diagnostic) == CONFIT_ERR_GENERATION);
+  CONFIT_TEST_ASSERT(unlink(symlink_alias) == 0);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(symlink_root));
+  publication.output_root = root;
+#endif
 
   incomplete = artifacts;
   incomplete.config_header = 0;
