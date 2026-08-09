@@ -80,6 +80,9 @@ static void confit_component_clear(ConfitComponent *component) {
   free(component->test_owner);
   free(component->test_lane);
   free(component->test_evidence_class);
+  free(component->test_target);
+  free(component->test_machine_profile);
+  free(component->test_receipt_profile);
   memset(component, 0, sizeof(*component));
 }
 
@@ -158,6 +161,7 @@ static const char *confit_component_kind_build_include(
 
 static int confit_component_relative_path_valid(const char *text);
 static int confit_component_path_within(const char *root, const char *path);
+static int confit_component_atom_valid(const char *text);
 
 static int confit_component_source_path_valid(const char *text) {
   const char *suffix;
@@ -291,7 +295,8 @@ static ConfitStatus confit_component_parse_makefile(
                        sizeof(kSourcesPrefix) - 1U) == 0) {
       char *cursor = statement + sizeof(kSourcesPrefix) - 1U;
       if (seen_sources || component->kind == CONFIT_COMPONENT_KIND_TARGET_IMAGE ||
-          cursor[0] == '\0' || cursor[0] == ' ' || cursor[strlen(cursor) - 1U] == ' ') {
+          cursor[0] == ' ' ||
+          (cursor[0] != '\0' && cursor[strlen(cursor) - 1U] == ' ')) {
         status = CONFIT_ERR_SCHEMA;
       } else {
         seen_sources = 1;
@@ -603,8 +608,9 @@ static ConfitStatus confit_component_parse_manifest(
   static const char *const component_keys[] = {"id", "kind"};
   static const char *const requirement_keys[] = {"components", "kapi"};
   static const char *const provide_keys[] = {"capabilities", "kapi"};
-  static const char *const test_keys[] = {"owner", "lane", "timeout_ms",
-                                          "evidence_class", "target", "machine"};
+  static const char *const test_keys[] = {
+      "owner", "lane", "timeout_ms", "evidence_class", "target",
+      "machine_profile", "receipt_profile"};
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *component_table;
@@ -723,6 +729,24 @@ static ConfitStatus confit_component_parse_manifest(
     if (status == CONFIT_OK) status = confit_component_copy_toml_string(
         confit_v2_toml_table_find(test_table, "evidence_class"),
         &out->test_evidence_class, diagnostic);
+    if (status == CONFIT_OK &&
+        confit_v2_toml_table_find(test_table, "target") != 0) {
+      status = confit_component_copy_toml_string(
+          confit_v2_toml_table_find(test_table, "target"),
+          &out->test_target, diagnostic);
+    }
+    if (status == CONFIT_OK &&
+        confit_v2_toml_table_find(test_table, "machine_profile") != 0) {
+      status = confit_component_copy_toml_string(
+          confit_v2_toml_table_find(test_table, "machine_profile"),
+          &out->test_machine_profile, diagnostic);
+    }
+    if (status == CONFIT_OK &&
+        confit_v2_toml_table_find(test_table, "receipt_profile") != 0) {
+      status = confit_component_copy_toml_string(
+          confit_v2_toml_table_find(test_table, "receipt_profile"),
+          &out->test_receipt_profile, diagnostic);
+    }
     value = confit_v2_toml_table_find(test_table, "timeout_ms");
     if (status == CONFIT_OK &&
         (!confit_component_id_valid(out->test_owner) ||
@@ -732,6 +756,31 @@ static ConfitStatus confit_component_parse_manifest(
              out->test_evidence_class, evidence, sizeof(evidence) / sizeof(evidence[0])) ||
          value == 0 || !confit_v2_toml_value_int64(value, &timeout_ms) ||
          timeout_ms < 1 || timeout_ms > 120000)) {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK &&
+        ((strcmp(out->test_lane, "qemu") == 0 &&
+          (out->test_target == 0 || out->test_machine_profile == 0 ||
+           out->test_receipt_profile == 0)) ||
+         (strcmp(out->test_lane, "package") == 0 &&
+          (out->test_target == 0 || out->test_machine_profile != 0 ||
+           out->test_receipt_profile != 0)) ||
+         ((strcmp(out->test_lane, "qemu") != 0 &&
+           strcmp(out->test_lane, "package") != 0) &&
+          (out->test_target != 0 || out->test_machine_profile != 0 ||
+           out->test_receipt_profile != 0)) ||
+         (out->test_target != 0 && !confit_component_atom_valid(out->test_target)) ||
+         (out->test_machine_profile != 0 &&
+          !confit_component_atom_valid(out->test_machine_profile)) ||
+         (out->test_receipt_profile != 0 &&
+          !confit_component_atom_valid(out->test_receipt_profile)))) {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK && out->source_count == 0U &&
+        strcmp(out->test_lane, "qemu") != 0 &&
+        strcmp(out->test_lane, "package") != 0 &&
+        strcmp(out->test_lane, "documentation") != 0 &&
+        strcmp(out->test_lane, "hardware-manual") != 0) {
       status = CONFIT_ERR_SCHEMA;
     }
     if (status == CONFIT_OK) out->test_timeout_ms = (unsigned int)timeout_ms;

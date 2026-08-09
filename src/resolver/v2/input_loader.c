@@ -985,7 +985,8 @@ static ConfitStatus confit_v2_input_parse_document(
       if (strcmp(key, kind == CONFIT_V2_INPUT_KIND_PROFILE ? "profile" : "target") !=
               0 &&
           strcmp(key, "values") != 0 && strcmp(key, "unset") != 0 &&
-          !(kind == CONFIT_V2_INPUT_KIND_TARGET && strcmp(key, "build") == 0)) {
+          !(kind == CONFIT_V2_INPUT_KIND_TARGET &&
+            (strcmp(key, "build") == 0 || strcmp(key, "machine") == 0))) {
         status = CONFIT_ERR_SCHEMA;
         confit_v2_ledger_diagnostic(
             path, confit_v2_toml_value_line(root),

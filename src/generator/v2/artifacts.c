@@ -1112,6 +1112,29 @@ static ConfitStatus confit_v4_generate_component_catalog_json(
           &builder, ", \"evidence_class\": ");
       if (status == CONFIT_OK) status = confit_v2_append_json_string(
           &builder, component->test_evidence_class);
+      if (status == CONFIT_OK) status = confit_v2_builder_append(
+          &builder, ", \"target\": ");
+      if (status == CONFIT_OK && component->test_target != 0) {
+        status = confit_v2_append_json_string(&builder, component->test_target);
+      } else if (status == CONFIT_OK) {
+        status = confit_v2_builder_append(&builder, "null");
+      }
+      if (status == CONFIT_OK) status = confit_v2_builder_append(
+          &builder, ", \"machine_profile\": ");
+      if (status == CONFIT_OK && component->test_machine_profile != 0) {
+        status = confit_v2_append_json_string(
+            &builder, component->test_machine_profile);
+      } else if (status == CONFIT_OK) {
+        status = confit_v2_builder_append(&builder, "null");
+      }
+      if (status == CONFIT_OK) status = confit_v2_builder_append(
+          &builder, ", \"receipt_profile\": ");
+      if (status == CONFIT_OK && component->test_receipt_profile != 0) {
+        status = confit_v2_append_json_string(
+            &builder, component->test_receipt_profile);
+      } else if (status == CONFIT_OK) {
+        status = confit_v2_builder_append(&builder, "null");
+      }
       if (status == CONFIT_OK) status = confit_v2_builder_appendf(
           &builder, ", \"timeout_ms\": %u }", component->test_timeout_ms);
     } else if (status == CONFIT_OK) {
@@ -1297,6 +1320,33 @@ static ConfitStatus confit_v4_generate_target_mk(
   CONFIT_TARGET_ATOM("PARUS_TARGET_REQUIRED_PROFILE", required_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_USER_ARTIFACT_PROFILE", user_artifact_profile);
 #undef CONFIT_TARGET_ATOM
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_RUNNER",
+      plan->machine_runner != 0 ? plan->machine_runner : "none", diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_ARCHITECTURE",
+      plan->machine_architecture != 0 ? plan->machine_architecture : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_EXECUTABLE",
+      plan->machine_executable != 0 ? plan->machine_executable : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_NAME",
+      plan->machine_name != 0 ? plan->machine_name : "none", diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_CPU",
+      plan->machine_cpu != 0 ? plan->machine_cpu : "none", diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_SERIAL",
+      plan->machine_serial != 0 ? plan->machine_serial : "none", diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_ARTIFACT",
+      plan->machine_artifact != 0 ? plan->machine_artifact : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+      &builder, "PARUS_TARGET_MACHINE_MEMORY_MIB:= %zu\n",
+      plan->machine_memory_mib);
   if (status == CONFIT_OK) status = confit_v4_append_target_path(
       &builder, "PARUS_TARGET_CC", plan->compiler_path, 1, diagnostic);
   if (status == CONFIT_OK) status = confit_v4_append_target_path(
@@ -1447,7 +1497,13 @@ static ConfitStatus confit_v4_generate_tests_mk(
          !confit_v4_is_safe_atom(source_directory, 1) ||
          !confit_v4_is_safe_atom(component->test_owner, 0) ||
          !confit_v4_is_safe_atom(component->test_lane, 0) ||
-         !confit_v4_is_safe_atom(component->test_evidence_class, 0))) {
+         !confit_v4_is_safe_atom(component->test_evidence_class, 0) ||
+         (component->test_target != 0 &&
+          !confit_v4_is_safe_atom(component->test_target, 0)) ||
+         (component->test_machine_profile != 0 &&
+          !confit_v4_is_safe_atom(component->test_machine_profile, 0)) ||
+         (component->test_receipt_profile != 0 &&
+          !confit_v4_is_safe_atom(component->test_receipt_profile, 0)))) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
                             0U, "unsafe test metadata cannot enter generated Make syntax");
       status = CONFIT_ERR_SCHEMA;
@@ -1459,6 +1515,9 @@ static ConfitStatus confit_v4_generate_tests_mk(
           "\nPARUS_TEST_%s_LANE:= %s"
           "\nPARUS_TEST_%s_EVIDENCE_CLASS:= %s"
           "\nPARUS_TEST_%s_TIMEOUT_MS:= %u"
+          "\nPARUS_TEST_%s_TARGET:= %s"
+          "\nPARUS_TEST_%s_MACHINE_PROFILE:= %s"
+          "\nPARUS_TEST_%s_RECEIPT_PROFILE:= %s"
           "\nPARUS_TEST_%s_MANIFEST:= %s"
           "\nPARUS_TEST_%s_MAKEFILE:= %s"
           "\nPARUS_TEST_%s_BUILD_INCLUDE:= %s"
@@ -1466,7 +1525,17 @@ static ConfitStatus confit_v4_generate_tests_mk(
           "\nPARUS_TEST_%s_SRCS:=",
           identifier, component->test_owner, identifier, component->test_lane,
           identifier, component->test_evidence_class, identifier,
-          component->test_timeout_ms, identifier, component->manifest_path,
+          component->test_timeout_ms, identifier,
+          component->test_target != 0 ? component->test_target : "none",
+          identifier,
+          component->test_machine_profile != 0
+              ? component->test_machine_profile
+              : "none",
+          identifier,
+          component->test_receipt_profile != 0
+              ? component->test_receipt_profile
+              : "none",
+          identifier, component->manifest_path,
           identifier, component->makefile_path, identifier,
           component->build_include, identifier, source_directory, identifier);
     }

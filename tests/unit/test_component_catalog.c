@@ -581,6 +581,39 @@ static void write_test_component(const char *root, const char *owner,
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, manifest));
 }
 
+static void write_qemu_test_component(const char *root,
+                                      const char *receipt_profile) {
+  char directory[4096];
+  char path[4096];
+  char manifest[2048];
+  int written;
+
+  path_join(directory, sizeof(directory), root, "sys/qemu-test");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(directory));
+  path_join(path, sizeof(path), directory, "Makefile");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(
+      path,
+      "# QEMU profile test는 local C source를 소유하지 않는다.\n"
+      "# 실행 tuple과 receipt policy는 component manifest만 소유한다.\n"
+      "PARUS_BUILD_API=2\nPARUS_COMPONENT=test.qemu.synthetic.runtime\n"
+      "SRCS=\n\n.include <parus.test.mk>\n"));
+  written = snprintf(
+      manifest, sizeof(manifest),
+      "schema_version = 2\n[component]\n"
+      "id = \"test.qemu.synthetic.runtime\"\nkind = \"test\"\n"
+      "[requires]\ncomponents = []\nkapi = []\n"
+      "[provides]\ncapabilities = []\nkapi = []\n"
+      "[test]\nowner = \"sys.kern.base\"\nlane = \"qemu\"\n"
+      "timeout_ms = 30000\nevidence_class = \"qemu-runtime\"\n"
+      "target = \"qemu-virt-aarch64\"\n"
+      "machine_profile = \"qemu-arm64-virt-v1\"\n%s",
+      receipt_profile != 0 ?
+          "receipt_profile = \"runtime-smoke-v1\"\n" : "");
+  CONFIT_TEST_ASSERT(written > 0 && (size_t)written < sizeof(manifest));
+  path_join(path, sizeof(path), directory, "component.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, manifest));
+}
+
 static void expect_test_metadata_security(void) {
   ConfitV2Project *project = 0;
   ConfitComponentCatalog catalog;
@@ -607,6 +640,32 @@ static void expect_test_metadata_security(void) {
     CONFIT_TEST_ASSERT(test->test_timeout_ms == 5000U);
   }
   confit_component_catalog_clear(&catalog);
+
+  write_qemu_test_component(root, "runtime-smoke-v1");
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) == CONFIT_OK);
+  {
+    const ConfitComponent *test = confit_component_catalog_find(
+        &catalog, "test.qemu.synthetic.runtime");
+    CONFIT_TEST_ASSERT(test != 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_target,
+                              "qemu-virt-aarch64") == 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_machine_profile,
+                              "qemu-arm64-virt-v1") == 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_receipt_profile,
+                              "runtime-smoke-v1") == 0);
+    CONFIT_TEST_ASSERT(test->source_count == 0U);
+  }
+  confit_component_catalog_clear(&catalog);
+
+  write_qemu_test_component(root, 0);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) ==
+                     CONFIT_ERR_SCHEMA);
+  confit_component_catalog_clear(&catalog);
+  write_qemu_test_component(root, "runtime-smoke-v1");
 
   write_test_component(root, "test.sys.kern.base.state", "unit", "host-unit",
                        5000U);

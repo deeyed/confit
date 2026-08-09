@@ -38,6 +38,14 @@ typedef struct ConfitTargetPlan {
   char *image_kind;
   char *package_profile;
   char *machine_profile;
+  char *machine_runner;
+  char *machine_architecture;
+  char *machine_executable;
+  char *machine_name;
+  char *machine_cpu;
+  char *machine_serial;
+  char *machine_artifact;
+  size_t machine_memory_mib;
   char *expected_component;
   char *expected_capability;
   char *output_stem;

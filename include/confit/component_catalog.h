@@ -53,6 +53,9 @@ typedef struct ConfitComponent {
   char *test_owner;
   char *test_lane;
   char *test_evidence_class;
+  char *test_target;
+  char *test_machine_profile;
+  char *test_receipt_profile;
   unsigned int test_timeout_ms;
 } ConfitComponent;
 

@@ -269,27 +269,33 @@ static ConfitStatus confit_target_find_descriptor(
 static ConfitStatus confit_target_parse_build(
     const ConfitV2Project *project, const char *target_id,
     ConfitTargetPlan *plan, ConfitDiagnostic *diagnostic) {
-  static const char *const root_fields[] = {"target", "values", "build"};
+  static const char *const root_fields[] = {"target", "values", "build", "machine"};
   static const char *const build_fields[] = {
       "isa", "abi", "cpu_profile", "entry_profile", "toolchain",
       "linker_script", "image_kind", "package_profile", "machine_profile",
       "expected_component", "expected_capability", "output_stem",
       "required_profile", "private_includes", "max_image_bytes", "dts",
       "dtc", "package_source", "user_artifact_profile"};
+  static const char *const machine_fields[] = {
+      "runner", "architecture", "executable", "machine", "cpu",
+      "memory_mib", "serial", "artifact"};
   char path[CONFIT_TARGET_PATH_LIMIT];
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *target;
   const ConfitV2TomlValue *values;
   const ConfitV2TomlValue *build;
+  const ConfitV2TomlValue *machine;
   const ConfitV2TomlValue *name;
   const ConfitV2TomlValue *schema;
   const ConfitV2TomlValue *capabilities;
   const ConfitV2TomlValue *max_image;
+  const ConfitV2TomlValue *machine_memory;
   const char *name_text;
   size_t name_size;
   int64_t schema_version;
   int64_t max_image_bytes;
+  int64_t machine_memory_mib = 0;
   char *linker_relative = 0;
   char *dts_relative = 0;
   char *package_relative = 0;
@@ -307,12 +313,16 @@ static ConfitStatus confit_target_parse_build(
   target = confit_v2_toml_table_find(root, "target");
   values = confit_v2_toml_table_find(root, "values");
   build = confit_v2_toml_table_find(root, "build");
+  machine = confit_v2_toml_table_find(root, "machine");
   if (!confit_target_table_only(root, root_fields,
                                 sizeof(root_fields) / sizeof(root_fields[0])) ||
       target == 0 || values == 0 ||
       confit_v2_toml_value_type(values) != CONFIT_V2_TOML_VALUE_TABLE ||
       !confit_target_table_only(build, build_fields,
-                                sizeof(build_fields) / sizeof(build_fields[0]))) {
+                                sizeof(build_fields) / sizeof(build_fields[0])) ||
+      (machine != 0 &&
+       !confit_target_table_only(machine, machine_fields,
+                                 sizeof(machine_fields) / sizeof(machine_fields[0])))) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target descriptor has unknown or missing tables");
@@ -354,6 +364,34 @@ static ConfitStatus confit_target_parse_build(
   CONFIT_TARGET_BUILD_STRING("output_stem", output_stem);
   CONFIT_TARGET_BUILD_STRING("required_profile", required_profile);
   CONFIT_TARGET_BUILD_STRING("user_artifact_profile", user_artifact_profile);
+  if (status == CONFIT_OK && machine != 0) {
+    status = confit_target_get_string(machine, "runner", 1,
+                                      &plan->machine_runner, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "architecture", 1, &plan->machine_architecture, path,
+        diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "executable", 1, &plan->machine_executable, path,
+        diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "machine", 1, &plan->machine_name, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "cpu", 1, &plan->machine_cpu, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "serial", 1, &plan->machine_serial, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "artifact", 1, &plan->machine_artifact, path, diagnostic);
+    machine_memory = confit_v2_toml_table_find(machine, "memory_mib");
+    if (status == CONFIT_OK &&
+        (machine_memory == 0 ||
+         !confit_v2_toml_value_int64(machine_memory, &machine_memory_mib) ||
+         machine_memory_mib < 16 || machine_memory_mib > 65536)) {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) {
+      plan->machine_memory_mib = (size_t)machine_memory_mib;
+    }
+  }
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "linker_script", 1, &linker_relative, path, diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
@@ -387,10 +425,33 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_atom_valid(plan->expected_capability) ||
        !confit_target_atom_valid(plan->output_stem) ||
        !confit_target_atom_valid(plan->required_profile) ||
-       !confit_target_atom_valid(plan->user_artifact_profile))) {
+       !confit_target_atom_valid(plan->user_artifact_profile) ||
+       (machine != 0 &&
+        (!confit_target_atom_valid(plan->machine_runner) ||
+         !confit_target_atom_valid(plan->machine_architecture) ||
+         !confit_target_atom_valid(plan->machine_executable) ||
+         !confit_target_atom_valid(plan->machine_name) ||
+         !confit_target_atom_valid(plan->machine_cpu) ||
+         !confit_target_atom_valid(plan->machine_serial) ||
+         !confit_target_atom_valid(plan->machine_artifact))))) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target descriptor contains an unsafe atom");
+  }
+  if (status == CONFIT_OK && machine != 0 &&
+      (strcmp(plan->machine_runner, "qemu-v1") != 0 ||
+       strcmp(plan->machine_architecture, plan->isa) != 0 ||
+       strcmp(plan->machine_serial, "stdio-v1") != 0 ||
+       strcmp(plan->machine_artifact, "flat-image-v1") != 0 ||
+       ((strcmp(plan->isa, "arm64") == 0 &&
+         strcmp(plan->machine_executable, "qemu-system-aarch64") != 0) ||
+        (strcmp(plan->isa, "amd64") == 0 &&
+         strcmp(plan->machine_executable, "qemu-system-x86_64") != 0) ||
+        (strcmp(plan->isa, "riscv64") == 0 &&
+         strcmp(plan->machine_executable, "qemu-system-riscv64") != 0)))) {
+    status = CONFIT_ERR_UNSUPPORTED;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "target machine tuple uses an unknown QEMU profile");
   }
   if (status == CONFIT_OK &&
       (!confit_target_value_matches(values, "parus.target.isa", plan->isa) ||
@@ -673,6 +734,13 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(image_kind);
   CONFIT_TARGET_FREE(package_profile);
   CONFIT_TARGET_FREE(machine_profile);
+  CONFIT_TARGET_FREE(machine_runner);
+  CONFIT_TARGET_FREE(machine_architecture);
+  CONFIT_TARGET_FREE(machine_executable);
+  CONFIT_TARGET_FREE(machine_name);
+  CONFIT_TARGET_FREE(machine_cpu);
+  CONFIT_TARGET_FREE(machine_serial);
+  CONFIT_TARGET_FREE(machine_artifact);
   CONFIT_TARGET_FREE(expected_component);
   CONFIT_TARGET_FREE(expected_capability);
   CONFIT_TARGET_FREE(output_stem);
