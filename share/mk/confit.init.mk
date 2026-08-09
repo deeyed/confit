@@ -11,6 +11,9 @@ CONFIT_MANIFEST_FILE:=${CONFIT_SOURCE_ROOT}/share/mk/confit.sources.mk
 .elif ${MAKE_VERSION} < ${CONFIT_BMAKE_MINIMUM}
 .error Confit Build API ${CONFIT_BUILD_API_VERSION} requires bmake >= ${CONFIT_BMAKE_MINIMUM}; found ${MAKE_VERSION}
 .endif
+.if !empty(.MAKEFLAGS:M-e)
+.error Confit rejects bmake -e because environment values must not override build authority
+.endif
 
 CONFIT_OBJROOT?=/tmp/confit-${.MAKE.OS:tl}-${MACHINE_ARCH:Uunknown}
 .if empty(CONFIT_OBJROOT:M/*)
