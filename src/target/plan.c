@@ -318,7 +318,7 @@ static ConfitStatus confit_target_parse_build(
       "required_profile", "private_includes", "max_image_bytes", "dts",
       "dtc", "package_source", "user_artifact_profile",
       "compile_tuple", "user_artifact_output", "user_artifact_entry",
-      "user_artifact_roles"};
+      "user_artifact_linker_script", "user_artifact_roles"};
   static const char *const machine_fields[] = {
       "runner", "architecture", "executable", "machine", "cpu",
       "memory_mib", "serial", "artifact"};
@@ -342,6 +342,7 @@ static ConfitStatus confit_target_parse_build(
   char *linker_relative = 0;
   char *dts_relative = 0;
   char *package_relative = 0;
+  char *user_artifact_linker_relative = 0;
   char **private_relatives = 0;
   size_t private_count = 0U;
   char **compile_tuple = 0;
@@ -417,6 +418,9 @@ static ConfitStatus confit_target_parse_build(
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "user_artifact_entry", 0, &plan->user_artifact_entry, path,
       diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      build, "user_artifact_linker_script", 0,
+      &user_artifact_linker_relative, path, diagnostic);
   if (status == CONFIT_OK && machine != 0) {
     status = confit_target_get_string(machine, "runner", 1,
                                       &plan->machine_runner, path, diagnostic);
@@ -541,6 +545,11 @@ static ConfitStatus confit_target_parse_build(
       project, dts_relative, 0, &plan->dts_path, diagnostic);
   if (status == CONFIT_OK && package_relative != 0) status = confit_target_repo_path(
       project, package_relative, 1, &plan->package_source, diagnostic);
+  if (status == CONFIT_OK && user_artifact_linker_relative != 0) {
+    status = confit_target_repo_path(
+        project, user_artifact_linker_relative, 0,
+        &plan->user_artifact_linker_script, diagnostic);
+  }
   if (status == CONFIT_OK && strcmp(plan->package_profile,
                                     "rpi5-firmware-v1") == 0 &&
       plan->package_source == 0) {
@@ -601,13 +610,14 @@ static ConfitStatus confit_target_parse_build(
   }
   if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "none") == 0 &&
       (plan->user_artifact_output != 0 || plan->user_artifact_entry != 0 ||
-       artifact_role_count != 0U)) {
+       plan->user_artifact_linker_script != 0 || artifact_role_count != 0U)) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "none user artifact profile must not publish roles");
   }
   if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "elf-v1") == 0 &&
       (plan->user_artifact_output == 0 || plan->user_artifact_entry == 0 ||
+       plan->user_artifact_linker_script == 0 ||
        artifact_role_count == 0U ||
        !confit_target_atom_valid(plan->user_artifact_output) ||
        !confit_target_atom_valid(plan->user_artifact_entry))) {
@@ -653,6 +663,7 @@ done:
   free(linker_relative);
   free(dts_relative);
   free(package_relative);
+  free(user_artifact_linker_relative);
   if (private_relatives != 0) {
     for (index = 0U; index < private_count; ++index) free(private_relatives[index]);
     free(private_relatives);
@@ -1008,6 +1019,7 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(user_artifact_profile);
   CONFIT_TARGET_FREE(user_artifact_output);
   CONFIT_TARGET_FREE(user_artifact_entry);
+  CONFIT_TARGET_FREE(user_artifact_linker_script);
   CONFIT_TARGET_FREE(target_descriptor_path);
   CONFIT_TARGET_FREE(toolchain_descriptor_path);
 #undef CONFIT_TARGET_FREE

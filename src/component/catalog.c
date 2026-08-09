@@ -770,13 +770,15 @@ static ConfitStatus confit_component_parse_manifest(
       status = CONFIT_ERR_SCHEMA;
     }
     if (status == CONFIT_OK &&
-        ((strcmp(out->test_lane, "qemu") == 0 &&
+        (((strcmp(out->test_lane, "qemu") == 0 ||
+           strcmp(out->test_lane, "selftest") == 0) &&
           (out->test_target == 0 || out->test_machine_profile == 0 ||
            out->test_receipt_profile == 0)) ||
          (strcmp(out->test_lane, "package") == 0 &&
           (out->test_target == 0 || out->test_machine_profile != 0 ||
            out->test_receipt_profile != 0)) ||
          ((strcmp(out->test_lane, "qemu") != 0 &&
+           strcmp(out->test_lane, "selftest") != 0 &&
            strcmp(out->test_lane, "package") != 0) &&
           (out->test_target != 0 || out->test_machine_profile != 0 ||
            out->test_receipt_profile != 0)) ||
@@ -789,6 +791,7 @@ static ConfitStatus confit_component_parse_manifest(
     }
     if (status == CONFIT_OK && out->source_count == 0U &&
         strcmp(out->test_lane, "qemu") != 0 &&
+        strcmp(out->test_lane, "selftest") != 0 &&
         strcmp(out->test_lane, "package") != 0 &&
         strcmp(out->test_lane, "documentation") != 0 &&
         strcmp(out->test_lane, "hardware-manual") != 0) {

@@ -159,6 +159,8 @@ int main(void) {
                             "PARUS_TARGET_MACHINE_MEMORY_MIB:= 1024") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_MACHINE_EXECUTABLE_VERSION:= 11.0.2") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_USER_ARTIFACT_LINKER_SCRIPT:= none") != 0);
   confit_v4_artifact_set_clear(&targeted);
   target_plan.machine_executable_sha256 =
       "g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

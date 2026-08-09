@@ -581,8 +581,9 @@ static void write_test_component(const char *root, const char *owner,
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, manifest));
 }
 
-static void write_qemu_test_component(const char *root,
-                                      const char *receipt_profile) {
+static void write_runtime_test_component(const char *root, const char *lane,
+                                         const char *evidence_class,
+                                         const char *receipt_profile) {
   char directory[4096];
   char path[4096];
   char manifest[2048];
@@ -593,7 +594,7 @@ static void write_qemu_test_component(const char *root,
   path_join(path, sizeof(path), directory, "Makefile");
   CONFIT_TEST_ASSERT(confit_test_fs_write_file(
       path,
-      "# QEMU profile test는 local C source를 소유하지 않는다.\n"
+      "# Boot runtime profile test는 local C source를 소유하지 않는다.\n"
       "# 실행 tuple과 receipt policy는 component manifest만 소유한다.\n"
       "PARUS_BUILD_API=2\nPARUS_COMPONENT=test.qemu.synthetic.runtime\n"
       "SRCS=\n\n.include <parus.test.mk>\n"));
@@ -603,11 +604,11 @@ static void write_qemu_test_component(const char *root,
       "id = \"test.qemu.synthetic.runtime\"\nkind = \"test\"\n"
       "[requires]\ncomponents = []\nkapi = []\n"
       "[provides]\ncapabilities = []\nkapi = []\n"
-      "[test]\nowner = \"sys.kern.base\"\nlane = \"qemu\"\n"
-      "timeout_ms = 30000\nevidence_class = \"qemu-runtime\"\n"
+      "[test]\nowner = \"sys.kern.base\"\nlane = \"%s\"\n"
+      "timeout_ms = 30000\nevidence_class = \"%s\"\n"
       "target = \"qemu-virt-aarch64\"\n"
       "machine_profile = \"qemu-arm64-virt-v1\"\n%s",
-      receipt_profile != 0 ?
+      lane, evidence_class, receipt_profile != 0 ?
           "receipt_profile = \"runtime-smoke-v1\"\n" : "");
   CONFIT_TEST_ASSERT(written > 0 && (size_t)written < sizeof(manifest));
   path_join(path, sizeof(path), directory, "component.toml");
@@ -641,7 +642,8 @@ static void expect_test_metadata_security(void) {
   }
   confit_component_catalog_clear(&catalog);
 
-  write_qemu_test_component(root, "runtime-smoke-v1");
+  write_runtime_test_component(root, "qemu", "qemu-runtime",
+                               "runtime-smoke-v1");
   memset(&catalog, 0, sizeof(catalog));
   CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
                                                     &diagnostic) == CONFIT_OK);
@@ -659,13 +661,30 @@ static void expect_test_metadata_security(void) {
   }
   confit_component_catalog_clear(&catalog);
 
-  write_qemu_test_component(root, 0);
+  write_runtime_test_component(root, "selftest", "booted-selftest",
+                               "runtime-smoke-v1");
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) == CONFIT_OK);
+  {
+    const ConfitComponent *test = confit_component_catalog_find(
+        &catalog, "test.qemu.synthetic.runtime");
+    CONFIT_TEST_ASSERT(test != 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_lane, "selftest") == 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_evidence_class,
+                              "booted-selftest") == 0);
+    CONFIT_TEST_ASSERT(test->source_count == 0U);
+  }
+  confit_component_catalog_clear(&catalog);
+
+  write_runtime_test_component(root, "qemu", "qemu-runtime", 0);
   memset(&catalog, 0, sizeof(catalog));
   CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
                                                     &diagnostic) ==
                      CONFIT_ERR_SCHEMA);
   confit_component_catalog_clear(&catalog);
-  write_qemu_test_component(root, "runtime-smoke-v1");
+  write_runtime_test_component(root, "qemu", "qemu-runtime",
+                               "runtime-smoke-v1");
 
   write_test_component(root, "test.sys.kern.base.state", "unit", "host-unit",
                        5000U);

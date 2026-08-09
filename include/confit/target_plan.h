@@ -67,6 +67,7 @@ typedef struct ConfitTargetPlan {
   char *user_artifact_profile;
   char *user_artifact_output;
   char *user_artifact_entry;
+  char *user_artifact_linker_script;
   char **user_artifact_roles;
   size_t user_artifact_role_count;
   char **compile_tuple;

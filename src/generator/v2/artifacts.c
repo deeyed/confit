@@ -1485,6 +1485,16 @@ static ConfitStatus confit_v4_generate_target_mk(
       plan->user_artifact_entry != 0 ? plan->user_artifact_entry : "none",
       diagnostic);
   if (status == CONFIT_OK) {
+    if (plan->user_artifact_linker_script != 0) {
+      status = confit_v4_append_target_path(
+          &builder, "PARUS_TARGET_USER_ARTIFACT_LINKER_SCRIPT",
+          plan->user_artifact_linker_script, 0, diagnostic);
+    } else {
+      status = confit_v2_builder_append(
+          &builder, "PARUS_TARGET_USER_ARTIFACT_LINKER_SCRIPT:= none\n");
+    }
+  }
+  if (status == CONFIT_OK) {
     status = confit_v2_builder_append(&builder,
                                       "PARUS_TARGET_COMPILE_TUPLE:=");
   }
