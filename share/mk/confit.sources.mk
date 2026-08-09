@@ -13,6 +13,7 @@ CONFIT_HOST_SOURCES= \
 	src/host/host_file.c \
 	src/host/host_io.c \
 	src/host/host_path.c \
+	src/host/host_process.c \
 	src/host/host_c17_probe.c
 
 CONFIT_PARSER_SOURCES= \
@@ -22,6 +23,7 @@ CONFIT_PARSER_SOURCES= \
 CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 	src/model/v2/model.c \
 	src/component/catalog.c \
+	src/target/plan.c \
 	src/schema/v2/loader.c \
 	src/schema/v2/linker.c \
 	src/schema/v2/validate.c
@@ -66,7 +68,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver_v2_ledger.c \
 	tests/unit/test_resolver_v2_evaluate.c \
 	tests/unit/test_resolver_v2_snapshot.c \
-	tests/unit/test_generator_v3_publication.c \
+	tests/unit/test_generator_v4_publication.c \
 	tests/unit/test_component_catalog.c \
 	tests/unit/test_expression_v2.c \
 	tests/unit/test_expression_v2_semantics.c

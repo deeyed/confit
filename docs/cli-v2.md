@@ -16,7 +16,7 @@ migration mode 및 alternate backend selector는 없다. 지원하지 않는 com
 artifact request는 nonzero status와 deterministic diagnostic으로 실패한다.
 
 `gen`은 absolute `--out`과 `--artifact bundle`을 요구한다. 성공 시에만
-[bmake-artifact-v3.md](bmake-artifact-v3.md)의 generation을 publish한다. `--dry-run`은
+[bmake-artifact-v4.md](bmake-artifact-v4.md)의 generation을 publish한다. `--dry-run`은
 snapshot과 serialization 검증만 수행하며 public output을 만들지 않는다.
 
 `component check|list|explain|why|deps|rdeps|providers`는 catalog/closure diagnostic

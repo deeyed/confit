@@ -50,6 +50,27 @@ ConfitStatus confit_host_path_canonicalize(char *out, size_t out_size,
                                            ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief PATH에서 단일 executable 이름을 찾아 canonical absolute path로 봉인한다.
+ *
+ * 입력은 path separator나 shell metacharacter가 없는 executable basename이어야 한다.
+ * 성공 결과가 이후 artifact에 포함되므로 ambient PATH 자체가 아니라 실제 resolved
+ * identity가 configuration 의미에 들어간다.
+ */
+ConfitStatus confit_host_resolve_executable(char *out, size_t out_size,
+                                            const char *name,
+                                            ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief absolute executable을 argv 두 원소로 실행해 bounded stdout 한 줄을 읽는다.
+ *
+ * Shell, command string, stderr merge와 arbitrary argv는 제공하지 않는다. 출력이
+ * buffer를 넘거나 child가 비정상 종료하면 partial text를 성공으로 반환하지 않는다.
+ */
+ConfitStatus confit_host_capture_one_argument(
+    char *out, size_t out_size, const char *executable, const char *argument,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief UTF-8 또는 ASCII text file 전체를 memory buffer로 읽는다.
  *
  * 반환된 buffer는 NUL 종료된다. Binary file 여부는 이 layer에서 판정하지 않으며,
@@ -77,6 +98,17 @@ ConfitStatus confit_host_read_text_file(const char *path, char **out_text,
  * @return 읽기 가능한 regular file이면 1, 그 밖에는 0.
  */
 int confit_host_file_exists(const char *path);
+
+/**
+ * @brief host filesystem에 directory가 존재하는지 확인한다.
+ *
+ * Typed descriptor가 file field와 directory field를 서로 바꾸어 넣지 못하게 하는
+ * read-only probe다. 권한 오류, symlink 해석 실패와 비-directory는 0이다.
+ *
+ * @param path 검사할 host path.
+ * @return 접근 가능한 directory이면 1, 그 밖에는 0.
+ */
+int confit_host_directory_exists(const char *path);
 
 /**
  * @brief UTF-8 또는 ASCII text file을 host filesystem에 쓴다.

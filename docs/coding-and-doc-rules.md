@@ -11,7 +11,7 @@ Confit C source는 host tool이지만 bounded parser와 provenance boundary를 �
 path, size와 ownership failure를 명시적으로 처리한다. public header의 type, macro와 function은
 한국어 Doxygen 주석으로 lifetime, ownership, failure를 먼저 설명한다.
 
-새 feature는 schema v2 semantic layer, component catalog 또는 ABI v3 publication 중 정확히 하나의
+새 feature는 schema v2 semantic layer, component catalog 또는 ABI v4 publication 중 정확히 하나의
 authority를 가져야 한다. CLI나 bmake adapter에 semantic rule을 복제하지 않는다. Unbounded filesystem
 scan, shell execution, environment-driven semantic input과 source tree write는 허용하지 않는다.
 

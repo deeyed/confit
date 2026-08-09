@@ -18,7 +18,10 @@ static int confit_host_is_path_separator_local(char value) {
   return value == '/' || value == '\\';
 }
 
-static int confit_host_directory_exists(const char *path) {
+int confit_host_directory_exists(const char *path) {
+  if (path == 0 || path[0] == '\0') {
+    return 0;
+  }
 #if defined(_WIN32)
   const DWORD attributes = GetFileAttributesA(path);
   return attributes != INVALID_FILE_ATTRIBUTES &&

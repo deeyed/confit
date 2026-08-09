@@ -42,7 +42,7 @@ extern "C" {
 #define CONFIT_RESOLVER_ABI_V2 "confit-resolver-v2"
 
 /** @brief sealed tool-neutral generated-artifact identity. */
-#define CONFIT_ARTIFACT_ABI_V3 "confit-artifact-v3"
+#define CONFIT_ARTIFACT_ABI_V4 "confit-artifact-v4"
 
 /** @brief vendored TOML revision used by the v2 parser adapter. */
 #define CONFIT_TOMLC17_REVISION "R260618 (7813bdd)"

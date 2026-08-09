@@ -29,6 +29,13 @@ typedef struct ConfitV2ArtifactBuilder {
 static const char kHeaderListUnsupported[] =
     "schema v2 header artifact needs an explicit list encoding";
 
+static char *confit_v4_strdup(const char *text) {
+  const size_t size = text != 0 ? strlen(text) : 0U;
+  char *copy = (char *)malloc(size + 1U);
+  if (copy != 0) memcpy(copy, text, size + 1U);
+  return copy;
+}
+
 static void confit_v2_builder_init(ConfitV2ArtifactBuilder *builder) {
   memset(builder, 0, sizeof(*builder));
 }
@@ -331,7 +338,7 @@ static ConfitStatus confit_v2_make_option_macro(const ConfitV2Snapshot *snapshot
   return status;
 }
 
-static ConfitStatus confit_v3_generate_header(const ConfitV2Snapshot *snapshot,
+static ConfitStatus confit_v4_generate_header(const ConfitV2Snapshot *snapshot,
                                                char **out, ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
   char *guard = 0;
@@ -341,7 +348,7 @@ static ConfitStatus confit_v3_generate_header(const ConfitV2Snapshot *snapshot,
   confit_v2_builder_init(&builder);
   status = confit_v2_make_option_macro(snapshot, "header", &guard);
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(&builder, "#ifndef %s_H\n#define %s_H\n\n", guard, guard);
-  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "#define CONFIT_SCHEMA_VERSION 2\n#define CONFIT_RESOLVER_ABI 2\n#define CONFIT_ARTIFACT_ABI 3\n");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "#define CONFIT_SCHEMA_VERSION 2\n#define CONFIT_RESOLVER_ABI 2\n#define CONFIT_ARTIFACT_ABI 4\n");
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(&builder, "#define CONFIT_SOURCE_HASH \"0x%016llX\"\n#define CONFIT_INPUT_HASH \"0x%016llX\"\n#define CONFIT_SNAPSHOT_HASH \"0x%016llX\"\n\n#define CONFIT_TRISTATE_N 0\n#define CONFIT_TRISTATE_M 1\n#define CONFIT_TRISTATE_Y 2\n\n", (unsigned long long)confit_v2_snapshot_source_hash(snapshot), (unsigned long long)confit_v2_snapshot_input_hash(snapshot), (unsigned long long)confit_v2_snapshot_semantic_hash(snapshot));
   for (index = 0U; status == CONFIT_OK && index < confit_v2_snapshot_option_count(snapshot); ++index) {
     const ConfitV2SnapshotOption *option = confit_v2_snapshot_option_at(snapshot, index);
@@ -389,29 +396,29 @@ static ConfitStatus confit_v3_generate_header(const ConfitV2Snapshot *snapshot,
 }
 
 /* Removed: the v2 partial report, graph, explain, input and change emitters.
- * ABI v3 publishes exactly one sealed bundle, so leaving those renderers in
+ * ABI v4 publishes exactly one sealed bundle, so leaving those renderers in
  * the binary would preserve a misleading alternate artifact authority. */
-static int confit_v3_input_compare(const void *left, const void *right) {
+static int confit_v4_input_compare(const void *left, const void *right) {
   const ConfitV2ArtifactInput *const *left_input = left;
   const ConfitV2ArtifactInput *const *right_input = right;
   return strcmp((*left_input)->path, (*right_input)->path);
 }
 
-/* ABI v3 deliberately uses a self-contained SHA-256 implementation.  A host
+/* ABI v4 deliberately uses a self-contained SHA-256 implementation.  A host
  * OpenSSL/CommonCrypto dependency would make configuration identity depend on
  * an ambient library or its provider policy. */
-typedef struct ConfitV3Sha256 {
+typedef struct ConfitV4Sha256 {
   uint32_t state[8];
   uint64_t bit_count;
   unsigned char block[64];
   size_t block_size;
-} ConfitV3Sha256;
+} ConfitV4Sha256;
 
-static uint32_t confit_v3_rotr(uint32_t value, unsigned int shift) {
+static uint32_t confit_v4_rotr(uint32_t value, unsigned int shift) {
   return (value >> shift) | (value << (32U - shift));
 }
 
-static void confit_v3_sha256_init(ConfitV3Sha256 *hash) {
+static void confit_v4_sha256_init(ConfitV4Sha256 *hash) {
   static const uint32_t initial[] = {
       UINT32_C(0x6A09E667), UINT32_C(0xBB67AE85), UINT32_C(0x3C6EF372),
       UINT32_C(0xA54FF53A), UINT32_C(0x510E527F), UINT32_C(0x9B05688C),
@@ -422,7 +429,7 @@ static void confit_v3_sha256_init(ConfitV3Sha256 *hash) {
   hash->block_size = 0U;
 }
 
-static void confit_v3_sha256_compress(ConfitV3Sha256 *hash,
+static void confit_v4_sha256_compress(ConfitV4Sha256 *hash,
                                       const unsigned char block[64]) {
   static const uint32_t constants[] = {
       UINT32_C(0x428A2F98), UINT32_C(0x71374491), UINT32_C(0xB5C0FBCF),
@@ -466,11 +473,11 @@ static void confit_v3_sha256_compress(ConfitV3Sha256 *hash,
                       (uint32_t)block[offset + 3U];
   }
   for (index = 16U; index < 64U; ++index) {
-    const uint32_t small0 = confit_v3_rotr(schedule[index - 15U], 7U) ^
-                            confit_v3_rotr(schedule[index - 15U], 18U) ^
+    const uint32_t small0 = confit_v4_rotr(schedule[index - 15U], 7U) ^
+                            confit_v4_rotr(schedule[index - 15U], 18U) ^
                             (schedule[index - 15U] >> 3U);
-    const uint32_t small1 = confit_v3_rotr(schedule[index - 2U], 17U) ^
-                            confit_v3_rotr(schedule[index - 2U], 19U) ^
+    const uint32_t small1 = confit_v4_rotr(schedule[index - 2U], 17U) ^
+                            confit_v4_rotr(schedule[index - 2U], 19U) ^
                             (schedule[index - 2U] >> 10U);
     schedule[index] = schedule[index - 16U] + small0 + schedule[index - 7U] +
                       small1;
@@ -478,12 +485,12 @@ static void confit_v3_sha256_compress(ConfitV3Sha256 *hash,
   a = hash->state[0]; b = hash->state[1]; c = hash->state[2]; d = hash->state[3];
   e = hash->state[4]; f = hash->state[5]; g = hash->state[6]; h = hash->state[7];
   for (index = 0U; index < 64U; ++index) {
-    const uint32_t big1 = confit_v3_rotr(e, 6U) ^ confit_v3_rotr(e, 11U) ^
-                          confit_v3_rotr(e, 25U);
+    const uint32_t big1 = confit_v4_rotr(e, 6U) ^ confit_v4_rotr(e, 11U) ^
+                          confit_v4_rotr(e, 25U);
     const uint32_t choose = (e & f) ^ ((~e) & g);
     const uint32_t temporary1 = h + big1 + choose + constants[index] + schedule[index];
-    const uint32_t big0 = confit_v3_rotr(a, 2U) ^ confit_v3_rotr(a, 13U) ^
-                          confit_v3_rotr(a, 22U);
+    const uint32_t big0 = confit_v4_rotr(a, 2U) ^ confit_v4_rotr(a, 13U) ^
+                          confit_v4_rotr(a, 22U);
     const uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
     const uint32_t temporary2 = big0 + majority;
     h = g; g = f; f = e; e = d + temporary1; d = c; c = b; b = a;
@@ -494,7 +501,7 @@ static void confit_v3_sha256_compress(ConfitV3Sha256 *hash,
   hash->state[6] += g; hash->state[7] += h;
 }
 
-static void confit_v3_sha256_update(ConfitV3Sha256 *hash,
+static void confit_v4_sha256_update(ConfitV4Sha256 *hash,
                                     const unsigned char *text, size_t size) {
   size_t index = 0U;
 
@@ -507,13 +514,13 @@ static void confit_v3_sha256_update(ConfitV3Sha256 *hash,
     hash->block_size += copy_size;
     index += copy_size;
     if (hash->block_size == sizeof(hash->block)) {
-      confit_v3_sha256_compress(hash, hash->block);
+      confit_v4_sha256_compress(hash, hash->block);
       hash->block_size = 0U;
     }
   }
 }
 
-static void confit_v3_sha256_final(ConfitV3Sha256 *hash,
+static void confit_v4_sha256_final(ConfitV4Sha256 *hash,
                                    unsigned char output[32]) {
   size_t index;
   const uint64_t bit_count = hash->bit_count;
@@ -521,14 +528,14 @@ static void confit_v3_sha256_final(ConfitV3Sha256 *hash,
   hash->block[hash->block_size++] = 0x80U;
   if (hash->block_size > 56U) {
     while (hash->block_size < 64U) hash->block[hash->block_size++] = 0U;
-    confit_v3_sha256_compress(hash, hash->block);
+    confit_v4_sha256_compress(hash, hash->block);
     hash->block_size = 0U;
   }
   while (hash->block_size < 56U) hash->block[hash->block_size++] = 0U;
   for (index = 0U; index < 8U; ++index) {
     hash->block[63U - index] = (unsigned char)(bit_count >> (index * 8U));
   }
-  confit_v3_sha256_compress(hash, hash->block);
+  confit_v4_sha256_compress(hash, hash->block);
   for (index = 0U; index < 8U; ++index) {
     output[index * 4U] = (unsigned char)(hash->state[index] >> 24U);
     output[index * 4U + 1U] = (unsigned char)(hash->state[index] >> 16U);
@@ -537,15 +544,15 @@ static void confit_v3_sha256_final(ConfitV3Sha256 *hash,
   }
 }
 
-static void confit_v3_sha256_text(const char *text, char output[65]) {
+static void confit_v4_sha256_text(const char *text, char output[65]) {
   static const char digits[] = "0123456789abcdef";
   unsigned char bytes[32];
-  ConfitV3Sha256 hash;
+  ConfitV4Sha256 hash;
   size_t index;
 
-  confit_v3_sha256_init(&hash);
-  confit_v3_sha256_update(&hash, (const unsigned char *)text, strlen(text));
-  confit_v3_sha256_final(&hash, bytes);
+  confit_v4_sha256_init(&hash);
+  confit_v4_sha256_update(&hash, (const unsigned char *)text, strlen(text));
+  confit_v4_sha256_final(&hash, bytes);
   for (index = 0U; index < sizeof(bytes); ++index) {
     output[index * 2U] = digits[bytes[index] >> 4U];
     output[index * 2U + 1U] = digits[bytes[index] & 0x0FU];
@@ -553,16 +560,16 @@ static void confit_v3_sha256_text(const char *text, char output[65]) {
   output[64] = '\0';
 }
 
-void confit_v3_sha256_hex(const char *text, char output[65]) {
+void confit_v4_sha256_hex(const char *text, char output[65]) {
   if (output == 0) return;
   if (text == 0) {
     output[0] = '\0';
     return;
   }
-  confit_v3_sha256_text(text, output);
+  confit_v4_sha256_text(text, output);
 }
 
-static int confit_v3_is_sha256(const char *text) {
+static int confit_v4_is_sha256(const char *text) {
   size_t index;
   if (text == 0 || strncmp(text, "sha256:", 7U) != 0 || strlen(text) != 71U) {
     return 0;
@@ -574,7 +581,7 @@ static int confit_v3_is_sha256(const char *text) {
   return 1;
 }
 
-static int confit_v3_is_safe_atom(const char *text, int path) {
+static int confit_v4_is_safe_atom(const char *text, int path) {
   size_t index;
   size_t segment_start = 0U;
 
@@ -585,6 +592,7 @@ static int confit_v3_is_safe_atom(const char *text, int path) {
                         (value >= 'A' && value <= 'Z') ||
                         (value >= '0' && value <= '9') || value == '_' ||
                         value == '-' || value == '.' || value == '+' ||
+                        value == '@' ||
                         (path && value == '/');
     if (!allowed) return 0;
     if (path && (value == '/' || text[index + 1U] == '\0')) {
@@ -600,7 +608,7 @@ static int confit_v3_is_safe_atom(const char *text, int path) {
   return 1;
 }
 
-static const char *confit_v3_option_type_name(ConfitV2OptionType type) {
+static const char *confit_v4_option_type_name(ConfitV2OptionType type) {
   switch (type) {
   case CONFIT_V2_OPTION_TYPE_BOOL:
     return "bool";
@@ -632,13 +640,13 @@ static const char *confit_v3_option_type_name(ConfitV2OptionType type) {
   }
 }
 
-static ConfitStatus confit_v3_append_identity(
+static ConfitStatus confit_v4_append_identity(
     ConfitV2ArtifactBuilder *builder, const ConfitV2Snapshot *snapshot,
     const char *schema, const char *tool_identity) {
   ConfitStatus status = confit_v2_builder_append(builder, "  \"schema\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(builder, schema);
   if (status == CONFIT_OK) status = confit_v2_builder_append(
-      builder, ",\n  \"artifact_abi\": 3,\n  \"resolver_abi\": \"confit-resolver-v2\",\n  \"tool\": ");
+      builder, ",\n  \"artifact_abi\": 4,\n  \"resolver_abi\": \"confit-resolver-v2\",\n  \"tool\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(builder, tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_append(builder, ",\n  \"project\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(builder, confit_v2_snapshot_project_name(snapshot));
@@ -652,7 +660,7 @@ static ConfitStatus confit_v3_append_identity(
   return status;
 }
 
-static ConfitStatus confit_v3_append_component_id_array(
+static ConfitStatus confit_v4_append_component_id_array(
     ConfitV2ArtifactBuilder *builder, const ConfitComponentClosure *closure) {
   ConfitStatus status = confit_v2_builder_append(builder, "[");
   size_t index;
@@ -665,7 +673,7 @@ static ConfitStatus confit_v3_append_component_id_array(
   return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
 }
 
-static ConfitStatus confit_v3_append_component_root_array(
+static ConfitStatus confit_v4_append_component_root_array(
     ConfitV2ArtifactBuilder *builder, const ConfitComponentClosure *closure) {
   ConfitStatus status = confit_v2_builder_append(builder, "[");
   size_t index;
@@ -678,7 +686,7 @@ static ConfitStatus confit_v3_append_component_root_array(
   return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
 }
 
-static ConfitStatus confit_v3_generate_selection(
+static ConfitStatus confit_v4_generate_selection(
     const ConfitV2Snapshot *snapshot, const char *tool_identity,
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
     char **out) {
@@ -688,8 +696,8 @@ static ConfitStatus confit_v3_generate_selection(
 
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder, "{\n");
-  if (status == CONFIT_OK) status = confit_v3_append_identity(
-      &builder, snapshot, "confit-selection-v3", tool_identity);
+  if (status == CONFIT_OK) status = confit_v4_append_identity(
+      &builder, snapshot, "confit-selection-v4", tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"options\": [\n");
   for (index = 0U; status == CONFIT_OK &&
                     index < confit_v2_snapshot_option_count(snapshot); ++index) {
@@ -698,7 +706,7 @@ static ConfitStatus confit_v3_generate_selection(
     if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, option->id);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"type\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(
-        &builder, confit_v3_option_type_name(option->type));
+        &builder, confit_v4_option_type_name(option->type));
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"effective\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_value(
         &builder, option->effective_is_set ? &option->effective_value : 0,
@@ -713,9 +721,9 @@ static ConfitStatus confit_v3_generate_selection(
   if (status == CONFIT_OK) status = confit_v2_append_json_string(
       &builder, catalog != 0 ? "available" : "unavailable");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"roots\": ");
-  if (status == CONFIT_OK) status = confit_v3_append_component_root_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v4_append_component_root_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"selected\": ");
-  if (status == CONFIT_OK) status = confit_v3_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v4_append_component_id_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " }\n}\n");
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
@@ -725,7 +733,7 @@ static ConfitStatus confit_v3_generate_selection(
   return status;
 }
 
-static ConfitStatus confit_v3_generate_report(
+static ConfitStatus confit_v4_generate_report(
     const ConfitV2Snapshot *snapshot, const char *tool_identity,
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
     char **out) {
@@ -734,8 +742,8 @@ static ConfitStatus confit_v3_generate_report(
 
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder, "{\n");
-  if (status == CONFIT_OK) status = confit_v3_append_identity(
-      &builder, snapshot, "confit-report-v3", tool_identity);
+  if (status == CONFIT_OK) status = confit_v4_append_identity(
+      &builder, snapshot, "confit-report-v4", tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
       &builder, ",\n  \"option_count\": %llu,\n  \"component_catalog\": \"%s\",\n  \"component_count\": %llu,\n  \"selected_component_count\": %llu\n}\n",
       (unsigned long long)confit_v2_snapshot_option_count(snapshot),
@@ -750,8 +758,8 @@ static ConfitStatus confit_v3_generate_report(
   return status;
 }
 
-static ConfitStatus confit_v3_generate_inputs(
-    const ConfitV2Snapshot *snapshot, const ConfitV3ArtifactOptions *options,
+static ConfitStatus confit_v4_generate_inputs(
+    const ConfitV2Snapshot *snapshot, const ConfitV4ArtifactOptions *options,
     const char *tool_identity, char **out, ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
   const ConfitV2ArtifactInput **ordered = 0;
@@ -763,17 +771,17 @@ static ConfitStatus confit_v3_generate_inputs(
     ordered = calloc(options->input_count, sizeof(*ordered));
     if (ordered == 0) return CONFIT_ERR_INTERNAL;
     for (index = 0U; index < options->input_count; ++index) ordered[index] = &options->inputs[index];
-    qsort(ordered, options->input_count, sizeof(*ordered), confit_v3_input_compare);
+    qsort(ordered, options->input_count, sizeof(*ordered), confit_v4_input_compare);
   }
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder, "{\n");
-  if (status == CONFIT_OK) status = confit_v3_append_identity(
-      &builder, snapshot, "confit-inputs-v3", tool_identity);
+  if (status == CONFIT_OK) status = confit_v4_append_identity(
+      &builder, snapshot, "confit-inputs-v4", tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"inputs\": [\n");
   for (index = 0U; status == CONFIT_OK && index < options->input_count; ++index) {
     const ConfitV2ArtifactInput *input = ordered[index];
-    if (input->path == 0 || input->role == 0 || !confit_v3_is_sha256(input->content_hash) ||
-        !confit_v3_is_safe_atom(input->path, 1) || !confit_v3_is_safe_atom(input->role, 0) ||
+    if (input->path == 0 || input->role == 0 || !confit_v4_is_sha256(input->content_hash) ||
+        !confit_v4_is_safe_atom(input->path, 1) || !confit_v4_is_safe_atom(input->role, 0) ||
         (index > 0U && strcmp(ordered[index - 1U]->path, input->path) == 0)) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT,
                             input != 0 ? input->path : 0, 0U, 0U,
@@ -800,7 +808,7 @@ static ConfitStatus confit_v3_generate_inputs(
   return status;
 }
 
-static ConfitStatus confit_v3_append_make_value(
+static ConfitStatus confit_v4_append_make_value(
     ConfitV2ArtifactBuilder *builder, const ConfitV2SnapshotOption *option,
     ConfitDiagnostic *diagnostic) {
   const ConfitV2Value *value = &option->effective_value;
@@ -820,7 +828,7 @@ static ConfitStatus confit_v3_append_make_value(
   case CONFIT_V2_VALUE_FLOAT:
     return confit_v2_builder_appendf(builder, "%.17g", value->as.float_value);
   case CONFIT_V2_VALUE_STRING:
-    if (!confit_v3_is_safe_atom(value->as.string_value,
+    if (!confit_v4_is_safe_atom(value->as.string_value,
                                 option->type == CONFIT_V2_OPTION_TYPE_PATH)) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0U, 0U,
                             "unsafe value cannot enter generated Make syntax");
@@ -829,7 +837,7 @@ static ConfitStatus confit_v3_append_make_value(
     return confit_v2_builder_append(builder, value->as.string_value);
   case CONFIT_V2_VALUE_STRING_LIST:
     for (index = 0U; index < value->as.string_list.count; ++index) {
-      if (!confit_v3_is_safe_atom(value->as.string_list.items[index],
+      if (!confit_v4_is_safe_atom(value->as.string_list.items[index],
                                   option->type == CONFIT_V2_OPTION_TYPE_PATH_LIST)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, option->id, 0U, 0U,
                               "unsafe list value cannot enter generated Make syntax");
@@ -850,7 +858,7 @@ static ConfitStatus confit_v3_append_make_value(
  * allowed to represent strings such as an ISA name with ':'; the adapter must
  * omit those values rather than either escaping them into Make syntax or
  * rejecting an otherwise valid, tool-neutral generation. */
-static int confit_v3_make_value_is_safe(const ConfitV2SnapshotOption *option) {
+static int confit_v4_make_value_is_safe(const ConfitV2SnapshotOption *option) {
   const ConfitV2Value *value;
   size_t index;
 
@@ -864,11 +872,11 @@ static int confit_v3_make_value_is_safe(const ConfitV2SnapshotOption *option) {
   case CONFIT_V2_VALUE_FLOAT:
     return 1;
   case CONFIT_V2_VALUE_STRING:
-    return confit_v3_is_safe_atom(
+    return confit_v4_is_safe_atom(
         value->as.string_value, option->type == CONFIT_V2_OPTION_TYPE_PATH);
   case CONFIT_V2_VALUE_STRING_LIST:
     for (index = 0U; index < value->as.string_list.count; ++index) {
-      if (!confit_v3_is_safe_atom(
+      if (!confit_v4_is_safe_atom(
               value->as.string_list.items[index],
               option->type == CONFIT_V2_OPTION_TYPE_PATH_LIST)) {
         return 0;
@@ -881,7 +889,7 @@ static int confit_v3_make_value_is_safe(const ConfitV2SnapshotOption *option) {
   }
 }
 
-static ConfitStatus confit_v3_generate_make_values(
+static ConfitStatus confit_v4_generate_make_values(
     const ConfitV2Snapshot *snapshot, char **out, ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
@@ -895,10 +903,10 @@ static ConfitStatus confit_v3_generate_make_values(
     const ConfitV2SnapshotOption *option = confit_v2_snapshot_option_at(snapshot, index);
     char *macro = 0;
     if ((option->emit_mask & CONFIT_V2_EMIT_HEADER) == 0U) continue;
-    if (!confit_v3_make_value_is_safe(option)) continue;
+    if (!confit_v4_make_value_is_safe(option)) continue;
     status = confit_v2_make_option_macro(snapshot, option->id, &macro);
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(&builder, "%s:= ", macro);
-    if (status == CONFIT_OK) status = confit_v3_append_make_value(&builder, option, diagnostic);
+    if (status == CONFIT_OK) status = confit_v4_append_make_value(&builder, option, diagnostic);
     if (status == CONFIT_OK) status = confit_v2_builder_append_char(&builder, '\n');
     free(macro);
   }
@@ -910,7 +918,7 @@ static ConfitStatus confit_v3_generate_make_values(
   return status;
 }
 
-static ConfitStatus confit_v3_component_make_identifier(
+static ConfitStatus confit_v4_component_make_identifier(
     const char *id, char *out, size_t out_size) {
   size_t index;
   if (id == 0 || strlen(id) + 1U > out_size) return CONFIT_ERR_INVALID_ARGUMENT;
@@ -921,7 +929,7 @@ static ConfitStatus confit_v3_component_make_identifier(
   return CONFIT_OK;
 }
 
-static ConfitStatus confit_v3_generate_components_mk(
+static ConfitStatus confit_v4_generate_components_mk(
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
     char **out, ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
@@ -932,7 +940,7 @@ static ConfitStatus confit_v3_generate_components_mk(
       "# Generated by Confit; selected component closure only.\nPARUS_COMPONENT_IDS:=");
   for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->component_count;
        ++index) {
-    if (!confit_v3_is_safe_atom(closure->ordered[index]->id, 0)) {
+    if (!confit_v4_is_safe_atom(closure->ordered[index]->id, 0)) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, closure->ordered[index]->id,
                             0U, 0U, "unsafe component ID cannot enter generated Make syntax");
       status = CONFIT_ERR_SCHEMA;
@@ -955,7 +963,7 @@ static ConfitStatus confit_v3_generate_components_mk(
     const char *separator;
     size_t source_directory_size;
     size_t source_index;
-    status = confit_v3_component_make_identifier(component->id, identifier,
+    status = confit_v4_component_make_identifier(component->id, identifier,
                                                   sizeof(identifier));
     separator = strrchr(component->makefile_path, '/');
     source_directory_size = separator != 0
@@ -973,10 +981,10 @@ static ConfitStatus confit_v3_generate_components_mk(
       source_directory[source_directory_size] = '\0';
     }
     if (status == CONFIT_OK &&
-        (!confit_v3_is_safe_atom(component->manifest_path, 1) ||
-         !confit_v3_is_safe_atom(component->makefile_path, 1) ||
-         !confit_v3_is_safe_atom(component->build_include, 1) ||
-         !confit_v3_is_safe_atom(source_directory, 1))) {
+        (!confit_v4_is_safe_atom(component->manifest_path, 1) ||
+         !confit_v4_is_safe_atom(component->makefile_path, 1) ||
+         !confit_v4_is_safe_atom(component->build_include, 1) ||
+         !confit_v4_is_safe_atom(source_directory, 1))) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U, 0U,
                             "unsafe component path cannot enter generated Make syntax");
       status = CONFIT_ERR_SCHEMA;
@@ -995,7 +1003,7 @@ static ConfitStatus confit_v3_generate_components_mk(
         confit_component_kind_name(component->kind), identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->kapi_requirement_count; ++source_index) {
-      if (!confit_v3_is_safe_atom(component->kapi_requires[source_index], 0)) {
+      if (!confit_v4_is_safe_atom(component->kapi_requires[source_index], 0)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
                               0U, "unsafe KAPI requirement cannot enter generated Make syntax");
         status = CONFIT_ERR_SCHEMA;
@@ -1008,7 +1016,7 @@ static ConfitStatus confit_v3_generate_components_mk(
         &builder, "\nPARUS_COMPONENT_%s_KAPI_PROVIDES:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->kapi_provide_count; ++source_index) {
-      if (!confit_v3_is_safe_atom(component->kapi_provides[source_index], 0)) {
+      if (!confit_v4_is_safe_atom(component->kapi_provides[source_index], 0)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
                               0U, "unsafe KAPI provider cannot enter generated Make syntax");
         status = CONFIT_ERR_SCHEMA;
@@ -1021,7 +1029,7 @@ static ConfitStatus confit_v3_generate_components_mk(
         &builder, "\nPARUS_COMPONENT_%s_SRCS:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->source_count; ++source_index) {
-      if (!confit_v3_is_safe_atom(component->sources[source_index], 1)) {
+      if (!confit_v4_is_safe_atom(component->sources[source_index], 1)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
                               0U, "unsafe component source cannot enter generated Make syntax");
         status = CONFIT_ERR_SCHEMA;
@@ -1041,7 +1049,7 @@ static ConfitStatus confit_v3_generate_components_mk(
   return status;
 }
 
-static ConfitStatus confit_v3_append_component_atom_array(
+static ConfitStatus confit_v4_append_component_atom_array(
     ConfitV2ArtifactBuilder *builder, char *const *items, size_t count) {
   ConfitStatus status = confit_v2_builder_append(builder, "[");
   size_t index;
@@ -1052,7 +1060,7 @@ static ConfitStatus confit_v3_append_component_atom_array(
   return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
 }
 
-static ConfitStatus confit_v3_generate_component_catalog_json(
+static ConfitStatus confit_v4_generate_component_catalog_json(
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
     char **out) {
   ConfitV2ArtifactBuilder builder;
@@ -1078,19 +1086,19 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"build_include\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->build_include);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"sources\": ");
-    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->sources, component->source_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"dependencies\": ");
-    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->component_dependencies, component->component_dependency_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_requires\": ");
-    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->kapi_requires, component->kapi_requirement_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_provides\": ");
-    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->kapi_provides, component->kapi_provide_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"capabilities\": ");
-    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->capabilities, component->capability_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"test\": ");
     if (status == CONFIT_OK && component->kind == CONFIT_COMPONENT_KIND_TEST) {
@@ -1114,9 +1122,9 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
         &builder, index + 1U == catalog->component_count ? "\n" : ",\n");
   }
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "  ],\n  \"roots\": ");
-  if (status == CONFIT_OK) status = confit_v3_append_component_root_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v4_append_component_root_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"selected\": ");
-  if (status == CONFIT_OK) status = confit_v3_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v4_append_component_id_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"reasons\": [\n");
   for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->reason_count;
        ++index) {
@@ -1153,37 +1161,276 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
   return status;
 }
 
-typedef struct ConfitV3NamedText {
+static int confit_v4_is_safe_make_path(const char *text, int absolute) {
+  size_t index;
+  if (text == 0 || text[0] == '\0' || strlen(text) >= 4096U ||
+      ((text[0] == '/') != absolute) ||
+      (!absolute && (strcmp(text, "..") == 0 || strncmp(text, "../", 3U) == 0 ||
+                     strcmp(text, ".") == 0 || strncmp(text, "./", 2U) == 0))) {
+    return 0;
+  }
+  for (index = 0U; text[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (!((value >= 'a' && value <= 'z') ||
+          (value >= 'A' && value <= 'Z') ||
+          (value >= '0' && value <= '9') || value == '/' || value == '.' ||
+          value == '_' || value == '-' || value == '+' || value == '@')) {
+      return 0;
+    }
+  }
+  return strstr(text, "/../") == 0 && strstr(text, "/./") == 0 &&
+         strcmp(text + (strlen(text) >= 3U ? strlen(text) - 3U : 0U), "/..") != 0 &&
+         strcmp(text + (strlen(text) >= 2U ? strlen(text) - 2U : 0U), "/.") != 0;
+}
+
+static ConfitStatus confit_v4_generate_reason_json(
+    const ConfitV2Snapshot *snapshot, const char *tool_identity,
+    const ConfitComponentClosure *closure, char **out) {
+  ConfitV2ArtifactBuilder builder;
+  ConfitStatus status;
+  size_t index;
+  confit_v2_builder_init(&builder);
+  status = confit_v2_builder_append(&builder, "{\n");
+  if (status == CONFIT_OK) status = confit_v4_append_identity(
+      &builder, snapshot, "confit-reason-v4", tool_identity);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(
+      &builder, ",\n  \"reasons\": [\n");
+  for (index = 0U; status == CONFIT_OK && closure != 0 &&
+                        index < closure->reason_count;
+       ++index) {
+    const ConfitComponentReason *reason = &closure->reasons[index];
+    status = confit_v2_builder_append(&builder, "    { \"component\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, reason->component_id);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"kind\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, confit_component_reason_kind_name(reason->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"from\": ");
+    if (status == CONFIT_OK && reason->from_id != 0) {
+      status = confit_v2_append_json_string(&builder, reason->from_id);
+    } else if (status == CONFIT_OK) {
+      status = confit_v2_builder_append(&builder, "null");
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"requirement\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, reason->requirement);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"source\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, reason->source_path);
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, ", \"line\": %llu, \"column\": %llu }%s\n",
+        (unsigned long long)reason->source_line,
+        (unsigned long long)reason->source_column,
+        index + 1U == closure->reason_count ? "" : ",");
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(
+      &builder, "  ]\n}\n");
+  if (status == CONFIT_OK) {
+    *out = confit_v2_builder_take(&builder);
+    if (*out == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_clear(&builder);
+  return status;
+}
+
+static ConfitStatus confit_v4_append_target_atom(
+    ConfitV2ArtifactBuilder *builder, const char *name, const char *value,
+    ConfitDiagnostic *diagnostic) {
+  if (!confit_v4_is_safe_atom(value, 0)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, name, 0U, 0U,
+                          "unsafe target atom cannot enter generated Make syntax");
+    return CONFIT_ERR_SCHEMA;
+  }
+  return confit_v2_builder_appendf(builder, "%s:= %s\n", name, value);
+}
+
+static ConfitStatus confit_v4_append_target_path(
+    ConfitV2ArtifactBuilder *builder, const char *name, const char *value,
+    int absolute, ConfitDiagnostic *diagnostic) {
+  if (value == 0) return confit_v2_builder_appendf(builder, "%s:=\n", name);
+  if (!confit_v4_is_safe_make_path(value, absolute)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, name, 0U, 0U,
+                          "unsafe target path cannot enter generated Make syntax");
+    return CONFIT_ERR_SCHEMA;
+  }
+  return confit_v2_builder_appendf(builder, "%s:= %s\n", name, value);
+}
+
+static ConfitStatus confit_v4_generate_target_mk(
+    const ConfitTargetPlan *plan, char **out, ConfitDiagnostic *diagnostic) {
+  ConfitV2ArtifactBuilder builder;
+  ConfitStatus status;
+  size_t index;
+  if (plan == 0) {
+    *out = confit_v4_strdup(
+        "# Generated by Confit; no target was selected.\n"
+        "PARUS_TARGET_PLAN_ABI:= 0\n");
+    return *out != 0 ? CONFIT_OK : CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_init(&builder);
+  status = confit_v2_builder_append(
+      &builder, "# Generated by Confit; closed target/toolchain tuple only.\n"
+                "PARUS_TARGET_PLAN_ABI:= 1\n");
+#define CONFIT_TARGET_ATOM(name, member)                                       \
+  if (status == CONFIT_OK)                                                     \
+    status = confit_v4_append_target_atom(&builder, name, plan->member,        \
+                                          diagnostic)
+  CONFIT_TARGET_ATOM("PARUS_TARGET_ID", target_id);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_ISA", isa);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_ABI", abi);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_CPU_PROFILE", cpu_profile);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_ENTRY_PROFILE", entry_profile);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_TOOLCHAIN_ID", toolchain_id);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_TOOLCHAIN_KIND", toolchain_kind);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_TRIPLE", target_triple);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_LINK_EMULATION", link_emulation);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_IMAGE_KIND", image_kind);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_PACKAGE_PROFILE", package_profile);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_MACHINE_PROFILE", machine_profile);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_EXPECTED_COMPONENT", expected_component);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_EXPECTED_CAPABILITY", expected_capability);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_OUTPUT_STEM", output_stem);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_REQUIRED_PROFILE", required_profile);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_USER_ARTIFACT_PROFILE", user_artifact_profile);
+#undef CONFIT_TARGET_ATOM
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_CC", plan->compiler_path, 1, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_AR", plan->archiver_path, 1, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_LLD", plan->linker_path, 1, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_RESOURCE_INCLUDE", plan->resource_include_path, 1,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_SYSROOT_RELATIVE", plan->sysroot_path, 0,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_LINKER_SCRIPT", plan->linker_script, 0,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_DTS", plan->dts_path, 0, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_DTC", plan->dtc_path, 1, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_PACKAGE_SOURCE", plan->package_source, 0,
+      diagnostic);
+  /* Package lowering is a closed semantic profile.  The generic Make graph
+   * consumes only these generated literals and never branches on a target or
+   * board name.  Adding another target that reuses a profile therefore needs
+   * no share/mk edit; a new package ABI must first extend this verifier. */
+  if (status == CONFIT_OK &&
+      strcmp(plan->package_profile, "rpi5-firmware-v1") == 0) {
+    status = confit_v2_builder_append(
+        &builder,
+        "PARUS_TARGET_PACKAGE_COMMAND:= rpi5-package\n"
+        "PARUS_TARGET_PACKAGE_MANIFEST_NAME:= package.manifest.json\n"
+        "PARUS_TARGET_PACKAGE_KERNEL_NAME:= kernel_2712.img\n"
+        "PARUS_TARGET_PACKAGE_CONFIG_NAME:= config.txt\n"
+        "PARUS_TARGET_PACKAGE_CMDLINE_NAME:= cmdline.txt\n"
+        "PARUS_TARGET_PACKAGE_DTB_NAME:= bcm2712-rpi-5-b.dtb\n");
+  } else if (status == CONFIT_OK) {
+    status = confit_v2_builder_append(
+        &builder,
+        "PARUS_TARGET_PACKAGE_COMMAND:= none\n"
+        "PARUS_TARGET_PACKAGE_MANIFEST_NAME:= none\n"
+        "PARUS_TARGET_PACKAGE_KERNEL_NAME:= none\n"
+        "PARUS_TARGET_PACKAGE_CONFIG_NAME:= none\n"
+        "PARUS_TARGET_PACKAGE_CMDLINE_NAME:= none\n"
+        "PARUS_TARGET_PACKAGE_DTB_NAME:= none\n");
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+      &builder, "PARUS_TARGET_MAX_IMAGE_BYTES:= %llu\n"
+                "PARUS_TARGET_PRIVATE_INCLUDES:=",
+      (unsigned long long)plan->max_image_bytes);
+  for (index = 0U; status == CONFIT_OK && index < plan->private_include_count;
+       ++index) {
+    if (!confit_v4_is_safe_make_path(plan->private_include_paths[index], 0)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                            "PARUS_TARGET_PRIVATE_INCLUDES", 0U, 0U,
+                            "unsafe private include cannot enter target.mk");
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v2_builder_appendf(
+          &builder, " %s", plan->private_include_paths[index]);
+    }
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  if (status == CONFIT_OK) {
+    *out = confit_v2_builder_take(&builder);
+    if (*out == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_clear(&builder);
+  return status;
+}
+
+static ConfitStatus confit_v4_generate_tests_mk(
+    const ConfitComponentClosure *closure, char **out,
+    ConfitDiagnostic *diagnostic) {
+  ConfitV2ArtifactBuilder builder;
+  ConfitStatus status;
+  size_t index;
+  confit_v2_builder_init(&builder);
+  status = confit_v2_builder_append(
+      &builder, "# Generated by Confit; selected test metadata only.\n"
+                "PARUS_TEST_IDS:=");
+  for (index = 0U; status == CONFIT_OK && closure != 0 &&
+                        index < closure->component_count;
+       ++index) {
+    const ConfitComponent *component = closure->ordered[index];
+    if (component->kind != CONFIT_COMPONENT_KIND_TEST) continue;
+    if (!confit_v4_is_safe_atom(component->id, 0)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                            0U, "unsafe selected test ID");
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v2_builder_appendf(&builder, " %s", component->id);
+    }
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  if (status == CONFIT_OK) {
+    *out = confit_v2_builder_take(&builder);
+    if (*out == 0) status = CONFIT_ERR_INTERNAL;
+  }
+  confit_v2_builder_clear(&builder);
+  return status;
+}
+
+typedef struct ConfitV4NamedText {
   const char *path;
   const char *text;
   char sha256[65];
-} ConfitV3NamedText;
+} ConfitV4NamedText;
 
-static void confit_v3_digest_named_texts(ConfitV3NamedText *texts,
+static void confit_v4_digest_named_texts(ConfitV4NamedText *texts,
                                          size_t text_count,
                                          char output[65]) {
-  ConfitV3Sha256 hash;
+  ConfitV4Sha256 hash;
   size_t index;
 
-  confit_v3_sha256_init(&hash);
-  confit_v3_sha256_update(&hash,
-                          (const unsigned char *)"confit.bundle.v3.identity\n",
-                          strlen("confit.bundle.v3.identity\n"));
+  confit_v4_sha256_init(&hash);
+  confit_v4_sha256_update(&hash,
+                          (const unsigned char *)"confit.bundle.v4.identity\n",
+                          strlen("confit.bundle.v4.identity\n"));
   for (index = 0U; index < text_count; ++index) {
     const char separator = '\n';
-    confit_v3_sha256_text(texts[index].text, texts[index].sha256);
-    confit_v3_sha256_update(&hash, (const unsigned char *)texts[index].path,
+    confit_v4_sha256_text(texts[index].text, texts[index].sha256);
+    confit_v4_sha256_update(&hash, (const unsigned char *)texts[index].path,
                             strlen(texts[index].path));
-    confit_v3_sha256_update(&hash, (const unsigned char *)&separator, 1U);
-    confit_v3_sha256_update(&hash,
+    confit_v4_sha256_update(&hash, (const unsigned char *)&separator, 1U);
+    confit_v4_sha256_update(&hash,
                             (const unsigned char *)texts[index].sha256,
                             strlen(texts[index].sha256));
-    confit_v3_sha256_update(&hash, (const unsigned char *)&separator, 1U);
+    confit_v4_sha256_update(&hash, (const unsigned char *)&separator, 1U);
   }
   {
     static const char digits[] = "0123456789abcdef";
     unsigned char bytes[32];
-    confit_v3_sha256_final(&hash, bytes);
+    confit_v4_sha256_final(&hash, bytes);
     for (index = 0U; index < sizeof(bytes); ++index) {
       output[index * 2U] = digits[bytes[index] >> 4U];
       output[index * 2U + 1U] = digits[bytes[index] & 0x0FU];
@@ -1192,7 +1439,7 @@ static void confit_v3_digest_named_texts(ConfitV3NamedText *texts,
   }
 }
 
-static ConfitStatus confit_v3_generate_config_mk(
+static ConfitStatus confit_v4_generate_config_mk(
     const ConfitV2Snapshot *snapshot, const char *bundle_digest, char **out,
     ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
@@ -1201,23 +1448,23 @@ static ConfitStatus confit_v3_generate_config_mk(
   const char *profile = confit_v2_snapshot_profile_name(snapshot);
   const char *target = confit_v2_snapshot_target_name(snapshot);
 
-  if (!confit_v3_is_safe_atom(project, 0) ||
-      (profile != 0 && !confit_v3_is_safe_atom(profile, 0)) ||
-      (target != 0 && !confit_v3_is_safe_atom(target, 0))) {
+  if (!confit_v4_is_safe_atom(project, 0) ||
+      (profile != 0 && !confit_v4_is_safe_atom(profile, 0)) ||
+      (target != 0 && !confit_v4_is_safe_atom(target, 0))) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, 0, 0U, 0U,
                           "unsafe identity cannot enter generated Make syntax");
     return CONFIT_ERR_SCHEMA;
   }
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder,
-      "# Generated by Confit. DO NOT EDIT.\nCONFIT_ARTIFACT_ABI:= 3\nCONFIT_PROJECT:= ");
+      "# Generated by Confit. DO NOT EDIT.\nCONFIT_ARTIFACT_ABI:= 4\nCONFIT_PROJECT:= ");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, project);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\nCONFIT_PROFILE:= ");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, profile != 0 ? profile : "none");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\nCONFIT_TARGET:= ");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, target != 0 ? target : "none");
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-      &builder, "\nCONFIT_BUNDLE_SHA256:= %s\n.include \"${.PARSEDIR}/config.values.mk\"\n.include \"${.PARSEDIR}/components.mk\"\n",
+      &builder, "\nCONFIT_BUNDLE_SHA256:= %s\n.include \"${.PARSEDIR}/config.values.mk\"\n.include \"${.PARSEDIR}/components.mk\"\n.include \"${.PARSEDIR}/target.mk\"\n.include \"${.PARSEDIR}/tests.mk\"\n",
       bundle_digest);
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
@@ -1227,9 +1474,9 @@ static ConfitStatus confit_v3_generate_config_mk(
   return status;
 }
 
-static ConfitStatus confit_v3_generate_bundle_manifest(
+static ConfitStatus confit_v4_generate_bundle_manifest(
     const ConfitV2Snapshot *snapshot, const char *tool_identity,
-    const ConfitV3NamedText *texts, size_t text_count, const char *bundle_digest,
+    const ConfitV4NamedText *texts, size_t text_count, const char *bundle_digest,
     char **out) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
@@ -1237,8 +1484,8 @@ static ConfitStatus confit_v3_generate_bundle_manifest(
 
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder, "{\n");
-  if (status == CONFIT_OK) status = confit_v3_append_identity(
-      &builder, snapshot, "confit-bundle-v3", tool_identity);
+  if (status == CONFIT_OK) status = confit_v4_append_identity(
+      &builder, snapshot, "confit-bundle-v4", tool_identity);
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
       &builder, ",\n  \"bundle_digest\": \"sha256:%s\",\n  \"identity_preimage\": \"semantic-artifact-digests-v1\",\n  \"artifacts\": [\n",
       bundle_digest);
@@ -1259,18 +1506,18 @@ static ConfitStatus confit_v3_generate_bundle_manifest(
   return status;
 }
 
-ConfitStatus confit_v3_generate_artifacts(
-    const ConfitV2Snapshot *snapshot, const ConfitV3ArtifactOptions *options,
-    ConfitV3ArtifactSet *out_artifacts, ConfitDiagnostic *diagnostic) {
-  ConfitV3ArtifactOptions defaults;
-  ConfitV3NamedText identity_texts[7];
+ConfitStatus confit_v4_generate_artifacts(
+    const ConfitV2Snapshot *snapshot, const ConfitV4ArtifactOptions *options,
+    ConfitV4ArtifactSet *out_artifacts, ConfitDiagnostic *diagnostic) {
+  ConfitV4ArtifactOptions defaults;
+  ConfitV4NamedText identity_texts[10];
   const char *tool_identity;
   ConfitStatus status = CONFIT_OK;
 
   if (snapshot == 0 || out_artifacts == 0 ||
       confit_v2_snapshot_project_name(snapshot) == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
-                          "invalid sealed artifact v3 argument");
+                          "invalid sealed artifact v4 argument");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   memset(out_artifacts, 0, sizeof(*out_artifacts));
@@ -1278,94 +1525,115 @@ ConfitStatus confit_v3_generate_artifacts(
   options = options != 0 ? options : &defaults;
   tool_identity = options->tool_identity != 0 ? options->tool_identity
                                               : CONFIT_VERSION_RELEASE;
-  if (!confit_v3_is_safe_atom(tool_identity, 0)) {
+  if (!confit_v4_is_safe_atom(tool_identity, 0)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, tool_identity,
                           0U, 0U, "unsafe tool identity");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
-  status = confit_v3_generate_header(snapshot, &out_artifacts->config_header,
+  status = confit_v4_generate_header(snapshot, &out_artifacts->config_header,
                                      diagnostic);
+  if (status == CONFIT_OK &&
+      confit_v2_snapshot_target_name(snapshot) != 0) {
+    status = confit_target_plan_validate_selection(
+        options->target_plan, options->component_catalog,
+        options->component_closure, diagnostic);
+  }
   if (status == CONFIT_OK) {
-    status = confit_v3_generate_selection(snapshot, tool_identity,
+    status = confit_v4_generate_selection(snapshot, tool_identity,
                                           options->component_catalog,
                                           options->component_closure,
                                           &out_artifacts->selection_json);
   }
   if (status == CONFIT_OK) {
-    status = confit_v3_generate_report(snapshot, tool_identity,
+    status = confit_v4_generate_reason_json(
+        snapshot, tool_identity, options->component_closure,
+        &out_artifacts->reason_json);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v4_generate_report(snapshot, tool_identity,
                                        options->component_catalog,
                                        options->component_closure,
                                        &out_artifacts->report_json);
-    if (status == CONFIT_OK) status = confit_v3_generate_inputs(
+    if (status == CONFIT_OK) status = confit_v4_generate_inputs(
         snapshot, options, tool_identity, &out_artifacts->inputs_json, diagnostic);
   }
   if (status == CONFIT_OK) {
-    status = confit_v3_generate_make_values(snapshot,
+    status = confit_v4_generate_make_values(snapshot,
                                             &out_artifacts->config_values_mk,
                                             diagnostic);
-    if (status == CONFIT_OK) status = confit_v3_generate_components_mk(
+    if (status == CONFIT_OK) status = confit_v4_generate_components_mk(
         options->component_catalog, options->component_closure,
         &out_artifacts->components_mk, diagnostic);
-    if (status == CONFIT_OK) status = confit_v3_generate_component_catalog_json(
+    if (status == CONFIT_OK) status = confit_v4_generate_target_mk(
+        options->target_plan, &out_artifacts->target_mk, diagnostic);
+    if (status == CONFIT_OK) status = confit_v4_generate_tests_mk(
+        options->component_closure, &out_artifacts->tests_mk, diagnostic);
+    if (status == CONFIT_OK) status = confit_v4_generate_component_catalog_json(
         options->component_catalog, options->component_closure,
         &out_artifacts->component_catalog_json);
   }
   if (status == CONFIT_OK) {
-    identity_texts[0] = (ConfitV3NamedText){"config.h", out_artifacts->config_header, {0}};
-    identity_texts[1] = (ConfitV3NamedText){"config.selection.json", out_artifacts->selection_json, {0}};
-    identity_texts[2] = (ConfitV3NamedText){"config.report.json", out_artifacts->report_json, {0}};
-    identity_texts[3] = (ConfitV3NamedText){"config.inputs.json", out_artifacts->inputs_json, {0}};
-    identity_texts[4] = (ConfitV3NamedText){"config.values.mk", out_artifacts->config_values_mk, {0}};
-    identity_texts[5] = (ConfitV3NamedText){"components.mk", out_artifacts->components_mk, {0}};
-    identity_texts[6] = (ConfitV3NamedText){"component.catalog.json", out_artifacts->component_catalog_json, {0}};
-    confit_v3_digest_named_texts(identity_texts,
+    identity_texts[0] = (ConfitV4NamedText){"config.h", out_artifacts->config_header, {0}};
+    identity_texts[1] = (ConfitV4NamedText){"config.selection.json", out_artifacts->selection_json, {0}};
+    identity_texts[2] = (ConfitV4NamedText){"config.reason.json", out_artifacts->reason_json, {0}};
+    identity_texts[3] = (ConfitV4NamedText){"config.report.json", out_artifacts->report_json, {0}};
+    identity_texts[4] = (ConfitV4NamedText){"config.inputs.json", out_artifacts->inputs_json, {0}};
+    identity_texts[5] = (ConfitV4NamedText){"config.values.mk", out_artifacts->config_values_mk, {0}};
+    identity_texts[6] = (ConfitV4NamedText){"components.mk", out_artifacts->components_mk, {0}};
+    identity_texts[7] = (ConfitV4NamedText){"target.mk", out_artifacts->target_mk, {0}};
+    identity_texts[8] = (ConfitV4NamedText){"tests.mk", out_artifacts->tests_mk, {0}};
+    identity_texts[9] = (ConfitV4NamedText){"component.catalog.json", out_artifacts->component_catalog_json, {0}};
+    confit_v4_digest_named_texts(identity_texts,
                                  sizeof(identity_texts) / sizeof(identity_texts[0]),
                                  out_artifacts->bundle_digest);
-    status = confit_v3_generate_config_mk(snapshot, out_artifacts->bundle_digest,
+    status = confit_v4_generate_config_mk(snapshot, out_artifacts->bundle_digest,
                                           &out_artifacts->config_mk, diagnostic);
     if (status == CONFIT_OK) {
-      ConfitV3NamedText manifest_texts[8];
+      ConfitV4NamedText manifest_texts[11];
       memcpy(manifest_texts, identity_texts, sizeof(identity_texts));
-      manifest_texts[7] = (ConfitV3NamedText){"config.mk", out_artifacts->config_mk, {0}};
+      manifest_texts[10] = (ConfitV4NamedText){"config.mk", out_artifacts->config_mk, {0}};
       for (size_t index = 0U; index < sizeof(manifest_texts) / sizeof(manifest_texts[0]); ++index) {
-        confit_v3_sha256_text(manifest_texts[index].text, manifest_texts[index].sha256);
+        confit_v4_sha256_text(manifest_texts[index].text, manifest_texts[index].sha256);
       }
-      status = confit_v3_generate_bundle_manifest(
+      status = confit_v4_generate_bundle_manifest(
           snapshot, tool_identity, manifest_texts,
           sizeof(manifest_texts) / sizeof(manifest_texts[0]),
           out_artifacts->bundle_digest, &out_artifacts->bundle_json);
     }
   }
   if (status != CONFIT_OK) {
-    confit_v3_artifact_set_clear(out_artifacts);
+    confit_v4_artifact_set_clear(out_artifacts);
     if (diagnostic != 0 && diagnostic->message == 0) {
       confit_diagnostic_set(diagnostic, status, 0, 0U, 0U,
-                            "failed to generate sealed artifact v3 bundle");
+                            "failed to generate sealed artifact v4 bundle");
     }
   }
   return status;
 }
 
-void confit_v3_artifact_set_clear(ConfitV3ArtifactSet *artifacts) {
+void confit_v4_artifact_set_clear(ConfitV4ArtifactSet *artifacts) {
   if (artifacts == 0) return;
   free(artifacts->config_header);
   free(artifacts->selection_json);
+  free(artifacts->reason_json);
   free(artifacts->report_json);
   free(artifacts->inputs_json);
   free(artifacts->config_mk);
   free(artifacts->config_values_mk);
   free(artifacts->components_mk);
+  free(artifacts->target_mk);
+  free(artifacts->tests_mk);
   free(artifacts->component_catalog_json);
   free(artifacts->bundle_json);
   memset(artifacts, 0, sizeof(*artifacts));
 }
 
-static int confit_v3_directory_exists(const char *path) {
+static int confit_v4_directory_exists(const char *path) {
   struct stat state;
   return stat(path, &state) == 0 && S_ISDIR(state.st_mode);
 }
 
-static int confit_v3_make_directory_once(const char *path) {
+static int confit_v4_make_directory_once(const char *path) {
 #if defined(_WIN32)
   return _mkdir(path) == 0;
 #else
@@ -1373,7 +1641,7 @@ static int confit_v3_make_directory_once(const char *path) {
 #endif
 }
 
-static ConfitStatus confit_v3_make_unique_staging(
+static ConfitStatus confit_v4_make_unique_staging(
     const char *staging_parent, const char *bundle_digest, char *out,
     size_t out_size, ConfitDiagnostic *diagnostic) {
   size_t attempt;
@@ -1383,7 +1651,7 @@ static ConfitStatus confit_v3_make_unique_staging(
                                  staging_parent, bundle_digest,
                                  (unsigned long long)attempt);
     if (written < 0 || (size_t)written >= out_size) break;
-    if (confit_v3_make_directory_once(out)) return CONFIT_OK;
+    if (confit_v4_make_directory_once(out)) return CONFIT_OK;
     if (errno != EEXIST) break;
   }
   confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, staging_parent,
@@ -1391,13 +1659,13 @@ static ConfitStatus confit_v3_make_unique_staging(
   return CONFIT_ERR_GENERATION;
 }
 
-static ConfitStatus confit_v3_join_path(char *out, size_t out_size,
+static ConfitStatus confit_v4_join_path(char *out, size_t out_size,
                                         const char *left, const char *right,
                                         ConfitDiagnostic *diagnostic) {
   return confit_host_path_join(out, out_size, left, right, diagnostic);
 }
 
-static ConfitStatus confit_v3_verify_text(const char *path, const char *text,
+static ConfitStatus confit_v4_verify_text(const char *path, const char *text,
                                           ConfitDiagnostic *diagnostic) {
   char *actual = 0;
   ConfitStatus status = confit_host_read_text_file(path, &actual, 0, diagnostic);
@@ -1410,56 +1678,61 @@ static ConfitStatus confit_v3_verify_text(const char *path, const char *text,
   return status;
 }
 
-static ConfitStatus confit_v3_complete_texts(
-    const ConfitV3ArtifactSet *artifacts, ConfitV3NamedText texts[9],
+static ConfitStatus confit_v4_complete_texts(
+    const ConfitV4ArtifactSet *artifacts, ConfitV4NamedText texts[12],
     ConfitDiagnostic *diagnostic) {
   if (artifacts == 0 || artifacts->bundle_digest[0] == '\0' ||
       strlen(artifacts->bundle_digest) != 64U || artifacts->config_header == 0 ||
-      artifacts->selection_json == 0 || artifacts->report_json == 0 ||
+      artifacts->selection_json == 0 || artifacts->reason_json == 0 ||
+      artifacts->report_json == 0 ||
       artifacts->inputs_json == 0 || artifacts->config_mk == 0 ||
       artifacts->config_values_mk == 0 || artifacts->components_mk == 0 ||
+      artifacts->target_mk == 0 || artifacts->tests_mk == 0 ||
       artifacts->component_catalog_json == 0 || artifacts->bundle_json == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
-                          "sealed publication requires the complete ABI v3 artifact set");
+                          "sealed publication requires the complete ABI v4 artifact set");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
-  texts[0] = (ConfitV3NamedText){"config.h", artifacts->config_header, {0}};
-  texts[1] = (ConfitV3NamedText){"config.selection.json", artifacts->selection_json, {0}};
-  texts[2] = (ConfitV3NamedText){"config.report.json", artifacts->report_json, {0}};
-  texts[3] = (ConfitV3NamedText){"config.inputs.json", artifacts->inputs_json, {0}};
-  texts[4] = (ConfitV3NamedText){"config.mk", artifacts->config_mk, {0}};
-  texts[5] = (ConfitV3NamedText){"config.values.mk", artifacts->config_values_mk, {0}};
-  texts[6] = (ConfitV3NamedText){"components.mk", artifacts->components_mk, {0}};
-  texts[7] = (ConfitV3NamedText){"component.catalog.json", artifacts->component_catalog_json, {0}};
-  texts[8] = (ConfitV3NamedText){"config.bundle.json", artifacts->bundle_json, {0}};
+  texts[0] = (ConfitV4NamedText){"config.h", artifacts->config_header, {0}};
+  texts[1] = (ConfitV4NamedText){"config.selection.json", artifacts->selection_json, {0}};
+  texts[2] = (ConfitV4NamedText){"config.reason.json", artifacts->reason_json, {0}};
+  texts[3] = (ConfitV4NamedText){"config.report.json", artifacts->report_json, {0}};
+  texts[4] = (ConfitV4NamedText){"config.inputs.json", artifacts->inputs_json, {0}};
+  texts[5] = (ConfitV4NamedText){"config.mk", artifacts->config_mk, {0}};
+  texts[6] = (ConfitV4NamedText){"config.values.mk", artifacts->config_values_mk, {0}};
+  texts[7] = (ConfitV4NamedText){"components.mk", artifacts->components_mk, {0}};
+  texts[8] = (ConfitV4NamedText){"target.mk", artifacts->target_mk, {0}};
+  texts[9] = (ConfitV4NamedText){"tests.mk", artifacts->tests_mk, {0}};
+  texts[10] = (ConfitV4NamedText){"component.catalog.json", artifacts->component_catalog_json, {0}};
+  texts[11] = (ConfitV4NamedText){"config.bundle.json", artifacts->bundle_json, {0}};
   return CONFIT_OK;
 }
 
-static ConfitStatus confit_v3_verify_generation(
-    const char *generation, const ConfitV3NamedText texts[9],
+static ConfitStatus confit_v4_verify_generation(
+    const char *generation, const ConfitV4NamedText texts[12],
     ConfitDiagnostic *diagnostic) {
   size_t index;
   ConfitStatus status = CONFIT_OK;
   char path[4096];
 
-  for (index = 0U; status == CONFIT_OK && index < 9U; ++index) {
-    status = confit_v3_join_path(path, sizeof(path), generation, texts[index].path,
+  for (index = 0U; status == CONFIT_OK && index < 12U; ++index) {
+    status = confit_v4_join_path(path, sizeof(path), generation, texts[index].path,
                                  diagnostic);
-    if (status == CONFIT_OK) status = confit_v3_verify_text(path, texts[index].text,
+    if (status == CONFIT_OK) status = confit_v4_verify_text(path, texts[index].text,
                                                             diagnostic);
   }
   return status;
 }
 
-static ConfitStatus confit_v3_write_staging(
-    const char *staging, const ConfitV3NamedText texts[9],
+static ConfitStatus confit_v4_write_staging(
+    const char *staging, const ConfitV4NamedText texts[12],
     size_t fault_after_artifact, ConfitDiagnostic *diagnostic) {
   size_t index;
   ConfitStatus status = CONFIT_OK;
   char path[4096];
 
-  for (index = 0U; status == CONFIT_OK && index < 9U; ++index) {
-    status = confit_v3_join_path(path, sizeof(path), staging, texts[index].path,
+  for (index = 0U; status == CONFIT_OK && index < 12U; ++index) {
+    status = confit_v4_join_path(path, sizeof(path), staging, texts[index].path,
                                  diagnostic);
     if (status == CONFIT_OK) status = confit_host_write_text_file(path, texts[index].text,
                                                                    diagnostic);
@@ -1470,16 +1743,16 @@ static ConfitStatus confit_v3_write_staging(
       status = CONFIT_ERR_GENERATION;
     }
   }
-  if (status == CONFIT_OK) status = confit_v3_verify_generation(staging, texts, diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_verify_generation(staging, texts, diagnostic);
   return status;
 }
 
-static void confit_v3_mark_read_only(const char *generation,
-                                     const ConfitV3NamedText texts[9]) {
+static void confit_v4_mark_read_only(const char *generation,
+                                     const ConfitV4NamedText texts[12]) {
 #if !defined(_WIN32)
   char path[4096];
   size_t index;
-  for (index = 0U; index < 9U; ++index) {
+  for (index = 0U; index < 12U; ++index) {
     if (snprintf(path, sizeof(path), "%s/%s", generation, texts[index].path) > 0) {
       (void)chmod(path, 0444);
     }
@@ -1491,12 +1764,12 @@ static void confit_v3_mark_read_only(const char *generation,
 #endif
 }
 
-static int confit_v3_remove_staging(const char *staging,
-                                    const ConfitV3NamedText texts[9]) {
+static int confit_v4_remove_staging(const char *staging,
+                                    const ConfitV4NamedText texts[12]) {
   char path[4096];
   size_t index;
 
-  for (index = 0U; index < 9U; ++index) {
+  for (index = 0U; index < 12U; ++index) {
     if (snprintf(path, sizeof(path), "%s/%s", staging, texts[index].path) <= 0 ||
         remove(path) != 0) {
       if (errno != ENOENT) return 0;
@@ -1509,7 +1782,7 @@ static int confit_v3_remove_staging(const char *staging,
 #endif
 }
 
-static ConfitStatus confit_v3_publish_selected_alias(
+static ConfitStatus confit_v4_publish_selected_alias(
     const char *selected, const char *relative_generation, int *out_changed,
     ConfitDiagnostic *diagnostic) {
   char temporary[4096];
@@ -1577,10 +1850,10 @@ static ConfitStatus confit_v3_publish_selected_alias(
   return CONFIT_OK;
 }
 
-ConfitStatus confit_v3_publish_artifacts(
-    const ConfitV3PublishOptions *options, const ConfitV3ArtifactSet *artifacts,
+ConfitStatus confit_v4_publish_artifacts(
+    const ConfitV4PublishOptions *options, const ConfitV4ArtifactSet *artifacts,
     size_t *out_changed_file_count, ConfitDiagnostic *diagnostic) {
-  ConfitV3NamedText texts[9];
+  ConfitV4NamedText texts[12];
   ConfitStatus status;
   char generations[4096];
   char staging_parent[4096];
@@ -1597,31 +1870,31 @@ ConfitStatus confit_v3_publish_artifacts(
                           "sealed publication requires an output root");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
-  status = confit_v3_complete_texts(artifacts, texts, diagnostic);
+  status = confit_v4_complete_texts(artifacts, texts, diagnostic);
   if (status != CONFIT_OK) return status;
   status = confit_host_make_directories(options->output_root, diagnostic);
-  if (status == CONFIT_OK) status = confit_v3_join_path(
+  if (status == CONFIT_OK) status = confit_v4_join_path(
       generations, sizeof(generations), options->output_root, "generations", diagnostic);
   if (status == CONFIT_OK) status = confit_host_make_directories(generations, diagnostic);
-  if (status == CONFIT_OK) status = confit_v3_join_path(
+  if (status == CONFIT_OK) status = confit_v4_join_path(
       staging_parent, sizeof(staging_parent), options->output_root, ".staging", diagnostic);
   if (status == CONFIT_OK) status = confit_host_make_directories(staging_parent, diagnostic);
-  if (status == CONFIT_OK) status = confit_v3_join_path(
+  if (status == CONFIT_OK) status = confit_v4_join_path(
       generation, sizeof(generation), generations, artifacts->bundle_digest, diagnostic);
   if (status != CONFIT_OK) return status;
 
-  if (confit_v3_directory_exists(generation)) {
-    status = confit_v3_verify_generation(generation, texts, diagnostic);
+  if (confit_v4_directory_exists(generation)) {
+    status = confit_v4_verify_generation(generation, texts, diagnostic);
   } else {
-    status = confit_v3_make_unique_staging(staging_parent, artifacts->bundle_digest,
+    status = confit_v4_make_unique_staging(staging_parent, artifacts->bundle_digest,
                                            staging, sizeof(staging), diagnostic);
     if (status == CONFIT_OK) staging_exists = 1;
-    if (status == CONFIT_OK) status = confit_v3_write_staging(
+    if (status == CONFIT_OK) status = confit_v4_write_staging(
         staging, texts, options->fault_after_artifact, diagnostic);
     if (status == CONFIT_OK) {
       if (rename(staging, generation) != 0) {
-        if (confit_v3_directory_exists(generation)) {
-          status = confit_v3_verify_generation(generation, texts, diagnostic);
+        if (confit_v4_directory_exists(generation)) {
+          status = confit_v4_verify_generation(generation, texts, diagnostic);
         } else {
           confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, generation,
                                 0U, 0U, "failed to atomically publish sealed generation");
@@ -1630,10 +1903,10 @@ ConfitStatus confit_v3_publish_artifacts(
       } else {
         staging_exists = 0;
         published_new = 1;
-        confit_v3_mark_read_only(generation, texts);
+        confit_v4_mark_read_only(generation, texts);
       }
     }
-    if (staging_exists != 0 && !confit_v3_remove_staging(staging, texts)) {
+    if (staging_exists != 0 && !confit_v4_remove_staging(staging, texts)) {
       if (status == CONFIT_OK) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, staging,
                               0U, 0U,
@@ -1642,7 +1915,7 @@ ConfitStatus confit_v3_publish_artifacts(
       }
     }
   }
-  if (status == CONFIT_OK) status = confit_v3_join_path(
+  if (status == CONFIT_OK) status = confit_v4_join_path(
       selected, sizeof(selected), options->output_root, "selected", diagnostic);
   if (status == CONFIT_OK &&
       snprintf(selected_relative, sizeof(selected_relative), "generations/%s",
@@ -1651,7 +1924,7 @@ ConfitStatus confit_v3_publish_artifacts(
                           "selected alias path is too long");
     status = CONFIT_ERR_INTERNAL;
   }
-  if (status == CONFIT_OK) status = confit_v3_publish_selected_alias(
+  if (status == CONFIT_OK) status = confit_v4_publish_selected_alias(
       selected, selected_relative, &selected_changed, diagnostic);
   if (out_changed_file_count != 0) {
     *out_changed_file_count = status == CONFIT_OK &&

@@ -12,7 +12,7 @@ static void confit_cli_print_help(void) {
       "Usage: confit <command> [options]\n\n"
       "Commands:\n"
       "  check, resolve, gen, explain, list, graph, diff, component\n\n"
-      "`gen` accepts only --artifact bundle and publishes the sealed ABI v3 "
+      "`gen` accepts only --artifact bundle and publishes the sealed ABI v4 "
       "bundle.\n"
       "Only schema_version = 2 project input is accepted.\n",
       stdout);
@@ -34,12 +34,12 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "version") == 0) {
     (void)printf("%s\nartifact_abi=%s\n", confit_version_string(),
-                 CONFIT_ARTIFACT_ABI_V3);
+                 CONFIT_ARTIFACT_ABI_V4);
     return 0;
   }
   if (strcmp(argv[1], "doctor") == 0) {
     (void)printf("doctor ok\nengine=bmake\nschema_version=2\nartifact_abi=%s\n",
-                 CONFIT_ARTIFACT_ABI_V3);
+                 CONFIT_ARTIFACT_ABI_V4);
     return 0;
   }
 
@@ -51,6 +51,6 @@ int main(int argc, char **argv) {
 
   (void)fprintf(stderr,
                 "confit: unsupported: command or source schema is outside "
-                "the bmake artifact ABI v3 contract\n");
+                "the bmake artifact ABI v4 contract\n");
   return confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
 }

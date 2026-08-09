@@ -55,13 +55,13 @@ typedef struct ConfitCliV2Context {
   size_t override_count;
 } ConfitCliV2Context;
 
-typedef struct ConfitCliV3InputSet {
+typedef struct ConfitCliV4InputSet {
   ConfitV2ArtifactInput *records;
   char **paths;
   char **hashes;
   char **roles;
   size_t count;
-} ConfitCliV3InputSet;
+} ConfitCliV4InputSet;
 
 static void confit_cli_v2_context_clear(ConfitCliV2Context *context);
 static ConfitStatus confit_cli_v2_context_load(const ConfitCliV2Args *args,
@@ -311,7 +311,7 @@ static char *confit_cli_v2_strdup(const char *text) {
   return copy;
 }
 
-static void confit_cli_v3_input_set_clear(ConfitCliV3InputSet *inputs) {
+static void confit_cli_v4_input_set_clear(ConfitCliV4InputSet *inputs) {
   size_t index;
   if (inputs == 0) return;
   for (index = 0U; index < inputs->count; ++index) {
@@ -326,8 +326,8 @@ static void confit_cli_v3_input_set_clear(ConfitCliV3InputSet *inputs) {
   memset(inputs, 0, sizeof(*inputs));
 }
 
-static ConfitStatus confit_cli_v3_input_set_add_text(
-    ConfitCliV3InputSet *inputs, const char *path, const char *role,
+static ConfitStatus confit_cli_v4_input_set_add_text(
+    ConfitCliV4InputSet *inputs, const char *path, const char *role,
     const char *text, ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactInput *records;
   char **paths;
@@ -351,7 +351,7 @@ static ConfitStatus confit_cli_v3_input_set_add_text(
   if (inputs->count == SIZE_MAX / sizeof(*inputs->records)) return CONFIT_ERR_INTERNAL;
   path_copy = confit_cli_v2_strdup(path);
   role_copy = confit_cli_v2_strdup(role);
-  confit_v3_sha256_hex(text, digest);
+  confit_v4_sha256_hex(text, digest);
   if (snprintf(prefixed, sizeof(prefixed), "sha256:%s", digest) < 0) {
     free(path_copy); free(role_copy);
     return CONFIT_ERR_INTERNAL;
@@ -394,21 +394,21 @@ static ConfitStatus confit_cli_v3_input_set_add_text(
   return CONFIT_OK;
 }
 
-static ConfitStatus confit_cli_v3_input_set_add_file(
-    ConfitCliV3InputSet *inputs, const char *logical_path, const char *physical_path,
+static ConfitStatus confit_cli_v4_input_set_add_file(
+    ConfitCliV4InputSet *inputs, const char *logical_path, const char *physical_path,
     const char *role, ConfitDiagnostic *diagnostic) {
   char *text = 0;
   ConfitStatus status = confit_host_read_text_file(physical_path, &text, 0U,
                                                     diagnostic);
   if (status == CONFIT_OK) {
-    status = confit_cli_v3_input_set_add_text(inputs, logical_path, role, text,
+    status = confit_cli_v4_input_set_add_text(inputs, logical_path, role, text,
                                                diagnostic);
   }
   confit_host_free(text);
   return status;
 }
 
-static ConfitStatus confit_cli_v3_logical_path(const ConfitV2Project *project,
+static ConfitStatus confit_cli_v4_logical_path(const ConfitV2Project *project,
                                                 const char *physical_path,
                                                 char *out, size_t out_size,
                                                 ConfitDiagnostic *diagnostic) {
@@ -427,22 +427,22 @@ static ConfitStatus confit_cli_v3_logical_path(const ConfitV2Project *project,
   return CONFIT_OK;
 }
 
-static ConfitStatus confit_cli_v3_input_set_add_project_file(
-    ConfitCliV3InputSet *inputs, const ConfitV2Project *project,
+static ConfitStatus confit_cli_v4_input_set_add_project_file(
+    ConfitCliV4InputSet *inputs, const ConfitV2Project *project,
     const char *physical_path, const char *role, ConfitDiagnostic *diagnostic) {
   char logical_path[4096];
   ConfitStatus status;
 
   if (physical_path == 0 || physical_path[0] == '\0') return CONFIT_OK;
-  status = confit_cli_v3_logical_path(project, physical_path, logical_path,
+  status = confit_cli_v4_logical_path(project, physical_path, logical_path,
                                       sizeof(logical_path), diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v3_input_set_add_file(
+  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
       inputs, logical_path, physical_path, role, diagnostic);
   return status;
 }
 
-static ConfitStatus confit_cli_v3_input_set_add_directory(
-    ConfitCliV3InputSet *inputs, const ConfitV2Project *project,
+static ConfitStatus confit_cli_v4_input_set_add_directory(
+    ConfitCliV4InputSet *inputs, const ConfitV2Project *project,
     const ConfitV2StringList *directories, const char *role,
     ConfitDiagnostic *diagnostic) {
   size_t directory_index;
@@ -462,7 +462,7 @@ static ConfitStatus confit_cli_v3_input_set_add_directory(
         directory, &paths, &path_count, diagnostic);
     for (path_index = 0U; status == CONFIT_OK && path_index < path_count;
          ++path_index) {
-      status = confit_cli_v3_input_set_add_project_file(inputs, project,
+      status = confit_cli_v4_input_set_add_project_file(inputs, project,
                                                          paths[path_index], role,
                                                          diagnostic);
     }
@@ -471,44 +471,44 @@ static ConfitStatus confit_cli_v3_input_set_add_directory(
   return status;
 }
 
-static ConfitStatus confit_cli_v3_collect_inputs(
+static ConfitStatus confit_cli_v4_collect_inputs(
     const ConfitCliV2Args *args, const ConfitCliV2Context *context,
     const ConfitComponentCatalog *catalog,
-    ConfitCliV3InputSet *out_inputs, ConfitDiagnostic *diagnostic) {
+    ConfitCliV4InputSet *out_inputs, ConfitDiagnostic *diagnostic) {
   const ConfitV2Project *project = context->project;
   ConfitStatus status;
   size_t index;
 
   memset(out_inputs, 0, sizeof(*out_inputs));
-  status = confit_cli_v3_input_set_add_project_file(out_inputs, project,
+  status = confit_cli_v4_input_set_add_project_file(out_inputs, project,
                                                      project->span.path,
                                                      "project", diagnostic);
   for (index = 0U; status == CONFIT_OK && index < project->import_count; ++index) {
-    status = confit_cli_v3_input_set_add_project_file(
+    status = confit_cli_v4_input_set_add_project_file(
         out_inputs, project, project->imports[index].canonical_path, "schema",
         diagnostic);
   }
   for (index = 0U; status == CONFIT_OK && index < project->symbol_count; ++index) {
-    status = confit_cli_v3_input_set_add_project_file(
+    status = confit_cli_v4_input_set_add_project_file(
         out_inputs, project, project->symbols[index].span.path, "schema", diagnostic);
   }
   for (index = 0U; status == CONFIT_OK && index < project->menu_count; ++index) {
-    status = confit_cli_v3_input_set_add_project_file(
+    status = confit_cli_v4_input_set_add_project_file(
         out_inputs, project, project->menus[index].span.path, "schema", diagnostic);
   }
   for (index = 0U; status == CONFIT_OK && index < project->choice_count; ++index) {
-    status = confit_cli_v3_input_set_add_project_file(
+    status = confit_cli_v4_input_set_add_project_file(
         out_inputs, project, project->choices[index].span.path, "schema", diagnostic);
   }
   for (index = 0U; status == CONFIT_OK && index < project->constraint_count; ++index) {
-    status = confit_cli_v3_input_set_add_project_file(
+    status = confit_cli_v4_input_set_add_project_file(
         out_inputs, project, project->constraints[index].span.path, "schema", diagnostic);
   }
-  if (status == CONFIT_OK) status = confit_cli_v3_input_set_add_directory(
+  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
       out_inputs, project, &project->profile_dirs, "profile", diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v3_input_set_add_directory(
+  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
       out_inputs, project, &project->target_dirs, "target", diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v3_input_set_add_directory(
+  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
       out_inputs, project, &project->selection_dirs, "selection", diagnostic);
   for (index = 0U; status == CONFIT_OK && catalog != 0 &&
                          index < catalog->component_count; ++index) {
@@ -517,7 +517,7 @@ static ConfitStatus confit_cli_v3_collect_inputs(
                                    catalog->project_root,
                                    catalog->components[index].manifest_path,
                                    diagnostic);
-    if (status == CONFIT_OK) status = confit_cli_v3_input_set_add_file(
+    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
         out_inputs, catalog->components[index].manifest_path, physical_path,
         "component-manifest", diagnostic);
   }
@@ -528,12 +528,12 @@ static ConfitStatus confit_cli_v3_collect_inputs(
     if (written < 0 || (size_t)written >= sizeof(logical_path)) {
       status = CONFIT_ERR_INTERNAL;
     } else {
-      status = confit_cli_v3_input_set_add_text(out_inputs, logical_path,
+      status = confit_cli_v4_input_set_add_text(out_inputs, logical_path,
                                                  "override", args->sets[index],
                                                  diagnostic);
     }
   }
-  if (status != CONFIT_OK) confit_cli_v3_input_set_clear(out_inputs);
+  if (status != CONFIT_OK) confit_cli_v4_input_set_clear(out_inputs);
   return status;
 }
 
@@ -1140,10 +1140,11 @@ static ConfitStatus confit_cli_v2_run_resolve(const ConfitCliV2Args *args,
 static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
                                            ConfitDiagnostic *diagnostic) {
   ConfitCliV2Context context;
-  ConfitCliV3InputSet inputs;
-  ConfitV3ArtifactOptions artifact_options;
-  ConfitV3ArtifactSet artifacts;
-  ConfitV3PublishOptions publish_options;
+  ConfitCliV4InputSet inputs;
+  ConfitV4ArtifactOptions artifact_options;
+  ConfitV4ArtifactSet artifacts;
+  ConfitV4PublishOptions publish_options;
+  ConfitTargetPlan target_plan;
   ConfitComponentCatalog catalog;
   ConfitComponentClosure closure;
   char **roots = 0;
@@ -1167,6 +1168,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   memset(&inputs, 0, sizeof(inputs));
   memset(&artifact_options, 0, sizeof(artifact_options));
   memset(&publish_options, 0, sizeof(publish_options));
+  memset(&target_plan, 0, sizeof(target_plan));
   memset(&catalog, 0, sizeof(catalog));
   memset(&closure, 0, sizeof(closure));
   if (status == CONFIT_OK) {
@@ -1175,8 +1177,25 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
       &context, &catalog, &closure, &roots, &root_count, diagnostic);
   if (status == CONFIT_OK) {
-    status = confit_cli_v3_collect_inputs(args, &context, &catalog, &inputs,
+    status = confit_target_plan_load(
+        context.project, confit_v2_snapshot_target_name(context.snapshot),
+        &target_plan, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_v4_collect_inputs(args, &context, &catalog, &inputs,
                                           diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_cli_v4_input_set_add_project_file(
+        &inputs, context.project, target_plan.toolchain_descriptor_path,
+        "toolchain", diagnostic);
+    if (status != CONFIT_OK) {
+      const char *message = diagnostic != 0 && diagnostic->message != 0
+                                ? diagnostic->message
+                                : "failed to record the target toolchain input";
+      confit_diagnostic_set(diagnostic, status, "target-plan.toolchain-input",
+                            0U, 0U, message);
+    }
   }
   if (status == CONFIT_OK) {
     artifact_options.inputs = inputs.records;
@@ -1184,14 +1203,15 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
     artifact_options.tool_identity = "confit-" CONFIT_VERSION_RELEASE;
     artifact_options.component_catalog = &catalog;
     artifact_options.component_closure = &closure;
-    status = confit_v3_generate_artifacts(context.snapshot, &artifact_options,
+    artifact_options.target_plan = &target_plan;
+    status = confit_v4_generate_artifacts(context.snapshot, &artifact_options,
                                            &artifacts, diagnostic);
   }
   if (status == CONFIT_OK && args->dry_run) {
     status = confit_host_stdout_write_line("gen dry-run ok");
   } else if (status == CONFIT_OK) {
     publish_options.output_root = args->out;
-    status = confit_v3_publish_artifacts(&publish_options, &artifacts, &changed,
+    status = confit_v4_publish_artifacts(&publish_options, &artifacts, &changed,
                                           diagnostic);
   }
   if (status == CONFIT_OK && !args->dry_run) {
@@ -1200,8 +1220,9 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
                    artifacts.bundle_digest, (unsigned long long)changed);
     status = confit_host_stdout_write_line(line);
   }
-  confit_v3_artifact_set_clear(&artifacts);
-  confit_cli_v3_input_set_clear(&inputs);
+  confit_v4_artifact_set_clear(&artifacts);
+  confit_target_plan_clear(&target_plan);
+  confit_cli_v4_input_set_clear(&inputs);
   confit_component_closure_clear(&closure);
   confit_host_string_list_free(roots, root_count);
   confit_component_catalog_clear(&catalog);

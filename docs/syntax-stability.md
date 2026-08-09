@@ -7,7 +7,7 @@ last_verified: 2026-08-09
 
 # syntax와 ABI 안정성
 
-Schema v2와 artifact ABI v3은 별도의 versioned boundaries다. Source schema change는 parser/linker/resolver
+Schema v2와 artifact ABI v4은 별도의 versioned boundaries다. Source schema change는 parser/linker/resolver
 semantics를 바꾸고, ABI change는 sealed bundle/consumer conformance를 바꾼다. 어느 쪽도 CLI alias,
 silent default 또는 prior generation fallback으로 숨기지 않는다.
 

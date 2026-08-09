@@ -5,9 +5,9 @@ authority: normative
 last_verified: 2026-08-09
 ---
 
-# bmake adapter와 artifact ABI v3
+# bmake adapter와 artifact ABI v4
 
-Confit은 schema v2 resolution의 단일 semantic authority이며, ABI v3 bundle은 그
+Confit은 schema v2 resolution의 단일 semantic authority이며, ABI v4 bundle은 그
 snapshot을 bmake consumer가 안전하게 읽도록 직렬화한 adapter다. bmake syntax 자체는
 configuration 의미를 만들지 않는다.
 
@@ -22,11 +22,14 @@ environment의 임의 값, 이전 output 또는 directory traversal은 input이 
 generations/<digest>/
   config.h                  # target C/ASM scalar/closed feature adapter
   config.selection.json     # canonical semantic snapshot
+  config.reason.json        # component 선택 이유와 source span
   config.report.json        # deterministic diagnostic report
   config.inputs.json        # complete input provenance
   config.mk                 # bundle identity와 include entry
   config.values.mk          # safe scalar/list values
   components.mk             # ordered component IDs, sealed source와 public Build API mapping
+  target.mk                 # 검증된 target/toolchain/image/package tuple
+  tests.mk                  # selected test metadata
   component.catalog.json    # typed catalog/selected closure
   config.bundle.json        # ABI/version and all published artifact digests
 selected -> generations/<bundle-digest>
@@ -38,7 +41,7 @@ versioned KAPI/capability, test metadata, selected root 및 root/private/KAPI/ca
 reason graph를 함께 싣는다. Reason은 source path와 line/column을 포함하며 consumer가
 provider를 다시 추론하거나 first-match fallback을 수행하지 못하게 한다.
 
-`config.mk`, `config.values.mk`, `components.mk`에는 assignment, include와 encoded data만
+`config.mk`, `config.values.mk`, `components.mk`, `target.mk`, `tests.mk`에는 assignment, include와 encoded data만
 있을 수 있다. rule, recipe, conditional, shell expansion 또는 compiler flag는 허용하지
 않는다. Confit은 Component Makefile을 Build API v2 data grammar로 검증하되 실행하지 않고,
 configured bmake child는 원본 leaf Makefile을 다시 include하지 않는다.

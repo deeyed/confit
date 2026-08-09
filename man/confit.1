@@ -15,7 +15,7 @@ confit \- Parus schema v2 configuration resolver
 .SH 설명
 .B confit
 은 build 전에 실행되는 host-side configuration resolver다. schema v2 TOML과
-component catalog를 검증하고 immutable snapshot을 sealed artifact ABI v3 bundle로
+component catalog를 검증하고 immutable snapshot을 sealed artifact ABI v4 bundle로
 publish한다.
 .PP
 Confit은 kernel runtime, firmware service 또는 Makefile evaluator가 아니다. Sibling
@@ -48,7 +48,7 @@ snapshot resolution을 검증한다. source file을 수정하지 않는다.
 resolved snapshot을 deterministic text 또는 JSON으로 출력한다.
 .TP
 .B gen --project path --out absolute-path --artifact bundle [--profile name] [--target name]
-complete ABI v3 bundle을 sealed generation으로 publish한다.
+complete ABI v4 bundle을 sealed generation으로 publish한다.
 .I --artifact bundle
 만 허용한다. output root는 source root 밖의 absolute path여야 한다.
 .TP
@@ -84,7 +84,7 @@ deterministic error를 기록한다.
 .SH 관련 문서
 .I README.md
 ,
-.I docs/bmake-artifact-v3.md
+.I docs/bmake-artifact-v4.md
 ,
 .I docs/schema-v2.md
 ,

@@ -9,7 +9,7 @@ last_verified: 2026-08-09
 
 Confit은 Parus의 **host-side configuration resolver**다. 사람이 작성한 schema v2
 TOML과 component manifest를 검증·해결하고, immutable selection snapshot을 sealed
-artifact ABI v3 bundle로 publish한다. Confit은 kernel, firmware, runtime service 또는
+artifact ABI v4 bundle로 publish한다. Confit은 kernel, firmware, runtime service 또는
 build graph executor가 아니다.
 
 ## 고정 경계
@@ -72,7 +72,7 @@ required field, extra unlisted artifact 또는 digest mismatch는 fallback 없�
 
 ## 문서
 
-- [bmake-artifact-v3.md](docs/bmake-artifact-v3.md): bmake adapter와 sealed bundle
+- [bmake-artifact-v4.md](docs/bmake-artifact-v4.md): bmake adapter와 sealed bundle
   계약.
 - [schema-v2.md](docs/schema-v2.md): source schema와 bounded input 규칙.
 - [resolution-v2.md](docs/resolution-v2.md): immutable resolution pipeline.

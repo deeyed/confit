@@ -20,7 +20,7 @@ typed schema-v2 project -- snapshot resolution -- component closure
       +-------------- canonical snapshot ----+
                          |
                          v
-                 sealed artifact ABI v3
+                 sealed artifact ABI v4
                          |
                          v
                 configured bmake consumer

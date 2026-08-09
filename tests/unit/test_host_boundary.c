@@ -98,6 +98,11 @@ int main(void) {
       confit_host_file_exists("tests/fixtures/host/does-not-exist.txt")) {
     return 26;
   }
+  if (!confit_host_directory_exists(CONFIT_TEST_SOURCE_DIR) ||
+      confit_host_directory_exists(fixture_path) ||
+      confit_host_directory_exists("")) {
+    return 27;
+  }
 
   text = 0;
   text_size = 0U;
