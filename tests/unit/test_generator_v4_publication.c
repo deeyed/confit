@@ -110,6 +110,10 @@ int main(void) {
   target_plan.machine_runner = "qemu-v1";
   target_plan.machine_architecture = "arm64";
   target_plan.machine_executable = "qemu-system-aarch64";
+  target_plan.machine_executable_path = "/usr/bin/qemu-system-aarch64";
+  target_plan.machine_executable_sha256 =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  target_plan.machine_executable_version = "11.0.2";
   target_plan.machine_name = "virt";
   target_plan.machine_cpu = "cortex-a72";
   target_plan.machine_serial = "stdio-v1";
@@ -131,7 +135,16 @@ int main(void) {
                             "PARUS_TARGET_MACHINE_RUNNER:= qemu-v1") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_MACHINE_MEMORY_MIB:= 1024") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_MACHINE_EXECUTABLE_VERSION:= 11.0.2") != 0);
   confit_v4_artifact_set_clear(&targeted);
+  target_plan.machine_executable_sha256 =
+      "g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
+                         snapshot, &targeted_options, &targeted,
+                         &diagnostic) == CONFIT_ERR_SCHEMA);
+  target_plan.machine_executable_sha256 =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   target_plan.linker_script = "../escape/linker.ld";
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
                          snapshot, &targeted_options, &targeted,

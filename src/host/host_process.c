@@ -112,9 +112,9 @@ ConfitStatus confit_host_resolve_executable(char *out, size_t out_size,
 #endif
 }
 
-ConfitStatus confit_host_capture_one_argument(
+static ConfitStatus confit_host_capture_argument(
     char *out, size_t out_size, const char *executable, const char *argument,
-    ConfitDiagnostic *diagnostic) {
+    int first_line_only, ConfitDiagnostic *diagnostic) {
   if (out == 0 || out_size < 2U || executable == 0 || executable[0] != '/' ||
       argument == 0 || argument[0] == '\0' || strlen(argument) > 128U) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, executable,
@@ -124,6 +124,7 @@ ConfitStatus confit_host_capture_one_argument(
   out[0] = '\0';
 #if defined(_WIN32)
   (void)argument;
+  (void)first_line_only;
   confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, executable, 0U, 0U,
                         "bounded target tool probe is unavailable on this host");
   return CONFIT_ERR_UNSUPPORTED;
@@ -133,6 +134,7 @@ ConfitStatus confit_host_capture_one_argument(
     posix_spawn_file_actions_t actions;
     pid_t child = 0;
     char *const arguments[] = {(char *)executable, (char *)argument, 0};
+    char captured[4097];
     size_t used = 0U;
     int status;
     int spawn_status;
@@ -179,35 +181,60 @@ ConfitStatus confit_host_capture_one_argument(
         used = out_size;
         break;
       }
-      if ((size_t)count > out_size - 1U - used) {
-        used = out_size;
+      if ((size_t)count > sizeof(captured) - 1U - used) {
+        used = sizeof(captured);
         break;
       }
-      memcpy(out + used, buffer, (size_t)count);
+      memcpy(captured + used, buffer, (size_t)count);
       used += (size_t)count;
     }
     (void)close(descriptors[0]);
     do {
       wait_status = waitpid(child, &status, 0);
     } while (wait_status < 0 && errno == EINTR);
-    if (used >= out_size || wait_status != child || !WIFEXITED(status) ||
+    if (used >= sizeof(captured) || wait_status != child || !WIFEXITED(status) ||
         WEXITSTATUS(status) != 0) {
       out[0] = '\0';
       confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, executable, 0U,
                             0U, "bounded target tool probe failed or overflowed");
       return CONFIT_ERR_UNSUPPORTED;
     }
-    while (used > 0U && (out[used - 1U] == '\n' || out[used - 1U] == '\r')) {
+    while (used > 0U &&
+           (captured[used - 1U] == '\n' || captured[used - 1U] == '\r')) {
       used -= 1U;
     }
-    out[used] = '\0';
-    if (used == 0U || strchr(out, '\n') != 0 || strchr(out, '\r') != 0) {
+    captured[used] = '\0';
+    if (first_line_only && used != 0U) {
+      char *newline = strchr(captured, '\n');
+      if (newline != 0) {
+        used = (size_t)(newline - captured);
+        if (used != 0U && captured[used - 1U] == '\r') used -= 1U;
+        captured[used] = '\0';
+      }
+    }
+    if (used == 0U || strchr(captured, '\n') != 0 ||
+        strchr(captured, '\r') != 0 || used + 1U > out_size) {
       out[0] = '\0';
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, executable, 0U, 0U,
                             "target tool probe returned no single bounded line");
       return CONFIT_ERR_SCHEMA;
     }
+    memcpy(out, captured, used + 1U);
     return CONFIT_OK;
   }
 #endif
+}
+
+ConfitStatus confit_host_capture_one_argument(
+    char *out, size_t out_size, const char *executable, const char *argument,
+    ConfitDiagnostic *diagnostic) {
+  return confit_host_capture_argument(out, out_size, executable, argument, 0,
+                                      diagnostic);
+}
+
+ConfitStatus confit_host_capture_first_line_argument(
+    char *out, size_t out_size, const char *executable, const char *argument,
+    ConfitDiagnostic *diagnostic) {
+  return confit_host_capture_argument(out, out_size, executable, argument, 1,
+                                      diagnostic);
 }

@@ -71,6 +71,17 @@ ConfitStatus confit_host_capture_one_argument(
     ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief absolute executable의 bounded stdout에서 첫 줄만 identity로 읽는다.
+ *
+ * 전체 stdout은 4096 bytes로 제한해 나머지 줄을 버리더라도 output bomb가 되지 않게
+ * 한다. Version banner처럼 첫 줄이 semantic identity이고 뒤쪽 attribution 문구는
+ * presentation인 도구에만 사용한다.
+ */
+ConfitStatus confit_host_capture_first_line_argument(
+    char *out, size_t out_size, const char *executable, const char *argument,
+    ConfitDiagnostic *diagnostic);
+
+/**
  * @brief UTF-8 또는 ASCII text file 전체를 memory buffer로 읽는다.
  *
  * 반환된 buffer는 NUL 종료된다. Binary file 여부는 이 layer에서 판정하지 않으며,

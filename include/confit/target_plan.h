@@ -41,6 +41,9 @@ typedef struct ConfitTargetPlan {
   char *machine_runner;
   char *machine_architecture;
   char *machine_executable;
+  char *machine_executable_path;
+  char *machine_executable_sha256;
+  char *machine_executable_version;
   char *machine_name;
   char *machine_cpu;
   char *machine_serial;

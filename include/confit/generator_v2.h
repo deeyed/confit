@@ -68,6 +68,10 @@ typedef struct ConfitV4PublishOptions {
 /** @brief NUL-terminated text의 strong SHA-256을 lower-case hex로 쓴다. */
 void confit_v4_sha256_hex(const char *text, char output[65]);
 
+/** @brief 최대 256 MiB regular file을 읽어 lower-case SHA-256 identity를 만든다. */
+ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
+                                   ConfitDiagnostic *diagnostic);
+
 /**
  * @brief immutable v2 snapshot을 complete sealed ABI v4 artifact set으로 만든다.
  *

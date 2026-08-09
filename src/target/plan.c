@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "confit/host.h"
+#include "confit/generator_v2.h"
 #include "confit/parser_v2.h"
 
 enum {
@@ -686,6 +687,53 @@ done:
   return status;
 }
 
+static ConfitStatus confit_target_measure_machine_identity(
+    ConfitTargetPlan *plan, ConfitDiagnostic *diagnostic) {
+  static const char prefix[] = "QEMU emulator version ";
+  char discovered[CONFIT_TARGET_PATH_LIMIT];
+  char canonical[CONFIT_TARGET_PATH_LIMIT];
+  char banner[512];
+  char digest[65];
+  const char *version;
+  ConfitStatus status;
+
+  if (plan->machine_executable == 0) return CONFIT_OK;
+  status = confit_host_resolve_executable(discovered, sizeof(discovered),
+                                          plan->machine_executable, diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_host_path_canonicalize(canonical, sizeof(canonical),
+                                           discovered, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v4_sha256_file(canonical, digest, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_host_capture_first_line_argument(
+        banner, sizeof(banner), canonical, "--version", diagnostic);
+  }
+  if (status != CONFIT_OK) return status;
+  if (strncmp(banner, prefix, sizeof(prefix) - 1U) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, canonical, 0U, 0U,
+                          "machine executable returned an unknown version banner");
+    return CONFIT_ERR_SCHEMA;
+  }
+  version = banner + sizeof(prefix) - 1U;
+  if (!confit_target_atom_valid(version)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, canonical, 0U, 0U,
+                          "machine executable version is not a bounded atom");
+    return CONFIT_ERR_SCHEMA;
+  }
+  plan->machine_executable_path = confit_target_strdup(canonical);
+  plan->machine_executable_sha256 = confit_target_strdup(digest);
+  plan->machine_executable_version = confit_target_strdup(version);
+  if (plan->machine_executable_path == 0 ||
+      plan->machine_executable_sha256 == 0 ||
+      plan->machine_executable_version == 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+  return CONFIT_OK;
+}
+
 ConfitStatus confit_target_plan_load(const ConfitV2Project *project,
                                      const char *target_id,
                                      ConfitTargetPlan *out_plan,
@@ -698,6 +746,9 @@ ConfitStatus confit_target_plan_load(const ConfitV2Project *project,
   status = confit_target_parse_build(project, target_id, out_plan, diagnostic);
   if (status == CONFIT_OK) {
     status = confit_target_parse_toolchain(project, out_plan, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_target_measure_machine_identity(out_plan, diagnostic);
   }
   if (status != CONFIT_OK) {
     /* Parser와 host probe의 path는 document buffer, local path 또는 plan-owned
@@ -737,6 +788,9 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(machine_runner);
   CONFIT_TARGET_FREE(machine_architecture);
   CONFIT_TARGET_FREE(machine_executable);
+  CONFIT_TARGET_FREE(machine_executable_path);
+  CONFIT_TARGET_FREE(machine_executable_sha256);
+  CONFIT_TARGET_FREE(machine_executable_version);
   CONFIT_TARGET_FREE(machine_name);
   CONFIT_TARGET_FREE(machine_cpu);
   CONFIT_TARGET_FREE(machine_serial);
