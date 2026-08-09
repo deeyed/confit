@@ -987,10 +987,38 @@ static ConfitStatus confit_v3_generate_components_mk(
         "\nPARUS_COMPONENT_%s_MAKEFILE:= %s"
         "\nPARUS_COMPONENT_%s_BUILD_INCLUDE:= %s"
         "\nPARUS_COMPONENT_%s_SOURCE_DIR:= %s"
-        "\nPARUS_COMPONENT_%s_SRCS:=",
+        "\nPARUS_COMPONENT_%s_KIND:= %s"
+        "\nPARUS_COMPONENT_%s_KAPI_REQUIRES:=",
         identifier, component->manifest_path, identifier,
         component->makefile_path, identifier, component->build_include,
-        identifier, source_directory, identifier);
+        identifier, source_directory, identifier,
+        confit_component_kind_name(component->kind), identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->kapi_requirement_count; ++source_index) {
+      if (!confit_v3_is_safe_atom(component->kapi_requires[source_index], 0)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe KAPI requirement cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->kapi_requires[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_KAPI_PROVIDES:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->kapi_provide_count; ++source_index) {
+      if (!confit_v3_is_safe_atom(component->kapi_provides[source_index], 0)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe KAPI provider cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->kapi_provides[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_SRCS:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->source_count; ++source_index) {
       if (!confit_v3_is_safe_atom(component->sources[source_index], 1)) {
