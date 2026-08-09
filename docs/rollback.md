@@ -7,9 +7,10 @@ last_verified: 2026-08-09
 
 # sealed generation rollback
 
-Confit은 source project 또는 sibling repository를 write하지 않는다. Failed generation은 selected alias를
-갱신하지 않으므로 rollback은 previously selected exact generation을 계속 consumer input으로 고정하는
-것이다. Build consumer는 alias를 읽은 뒤 digest path를 freeze해야 한다.
+Confit은 source project 또는 sibling repository를 write하지 않는다. Failed generation은
+partial staging을 제거하고 selected directory alias를 갱신하지 않는다. Consumer action은
+current configure 성공 뒤 alias가 가리키는 exact generation만 고정하며 실패한 configure 뒤
+이전 generation을 자동 재사용하지 않는다.
 
 완료된 generation을 폐기해야 하면 project source가 아닌 caller-owned output root에서 exact digest
 directory를 inventory하고, 다른 configured child 또는 result provenance가 참조하지 않는지 확인한 뒤

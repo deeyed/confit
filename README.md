@@ -16,7 +16,7 @@ build graph executor가 아니다.
 
 - source project는 `schema_version = 2`만 허용한다. 다른 schema source, migration
   command와 compatibility dispatch는 없다.
-- host build의 유일한 engine은 pinned BSD `bmake 20240909`다.
+- host build의 유일한 engine은 reviewed feature baseline 이상인 direct `bmake`다.
 - `gen`은 `--artifact bundle`만 허용한다. partial artifact 또는 backend selector는
   fail-closed한다.
 - Confit은 TOML과 component identity를 해석하지만 Makefile을 평가하거나 source를
@@ -26,11 +26,11 @@ build graph executor가 아니다.
 
 ## 빠른 사용
 
-Parus checkout에서는 root가 제공하는 pinned host tool을 사용한다.
+Parus checkout에서는 repository root의 direct bmake entry를 사용한다.
 
 ```sh
-build/host/Darwin-arm64/bin/bmake -r -C tools/confit -f Makefile \
-  CONFIT_OBJROOT=/private/tmp/confit-build check
+bmake -r -C tools/confit -f Makefile \
+  CONFIT_OBJROOT=/private/tmp/confit-build check-host
 
 /private/tmp/confit-build/bin/confit check \
   --project tests/fixtures/schema-v2/valid
@@ -40,9 +40,9 @@ build/host/Darwin-arm64/bin/bmake -r -C tools/confit -f Makefile \
   --out /private/tmp/confit-generation --artifact bundle
 ```
 
-Standalone clone은 동일 release의 pinned `bmake 20240909`를 `PATH`에서 제공하거나
-`CONFIT_BMAKE`로 명시해야 한다. Homebrew의 임의 버전 bmake는 canonical input이
-아니다.
+Standalone clone은 `20240909`에서 검토한 feature baseline 이상인 bmake와 C17 host
+compiler를 제공해야 한다. Exact package-manager path나 한 release만 source에 고정하지
+않으며 실제 engine version은 current invocation에서 확인한다.
 
 ## sealed bundle
 
@@ -63,8 +63,9 @@ Standalone clone은 동일 release의 pinned `bmake 20240909`를 `PATH`에서 �
   selected -> generations/<bundle-digest>
 ```
 
-`selected`는 편의 discovery alias일 뿐이다. configured child는 exact digest directory,
-ABI version, profile/target과 manifest digest를 다시 확인해야 한다. 누락, unknown
+`selected`는 complete generation을 가리키는 atomic relative directory alias다. Configured
+child는 alias의 canonical target이 exact digest directory인지, ABI version, profile/target과
+manifest digest가 일치하는지 다시 확인해야 한다. 누락, unknown
 required field, extra unlisted artifact 또는 digest mismatch는 fallback 없이 실패한다.
 
 ## 문서

@@ -28,7 +28,8 @@ generations/<digest>/
   components.mk             # ordered component IDs와 local manifest/Makefile path
   component.catalog.json    # typed catalog/selected closure
   config.bundle.json        # ABI/version and all published artifact digests
-selected                    # complete generation 뒤에만 바뀌는 discovery alias
+selected -> generations/<bundle-digest>
+                            # complete generation 뒤에만 atomic 교체되는 directory alias
 ```
 
 `config.mk`, `config.values.mk`, `components.mk`에는 assignment, include와 encoded data만
@@ -40,10 +41,10 @@ selected                    # complete generation 뒤에만 바뀌는 discovery 
 
 Generator는 temporary directory에 모든 artifact를 쓰고 canonical read-back, digest/size,
 cross-artifact identity를 검증한다. 성공한 immutable generation만 exact digest 이름으로
-publish하고 나서 `selected`를 갱신한다. 어떤 오류도 이전 selected generation을 mutate하거나
-partial artifact를 public path에 노출하지 않는다.
+publish하고 나서 `selected` relative directory alias를 atomic 교체한다. 어떤 오류도 이전
+selected generation을 mutate하거나 partial staging을 public path에 노출하지 않는다.
 
-Consumer는 selected를 읽은 직후 exact digest directory를 고정하고 `config.bundle.json`의
+Consumer는 selected의 canonical target을 exact digest directory로 고정하고 `config.bundle.json`의
 ABI version, expected profile/target, file list와 SHA-256/size를 검증한다. missing file,
 extra unlisted file, unknown required field, digest mismatch 및 selection disagreement는
 fallback 없이 failure다.

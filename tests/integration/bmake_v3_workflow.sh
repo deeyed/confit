@@ -18,8 +18,8 @@ mkdir -p "$first" "$second"
 "$binary" gen --project "$fixture" --artifact bundle --out "$first"
 "$binary" gen --project "$fixture" --artifact bundle --out "$second"
 
-first_generation=$(sed -n '1p' "$first/selected")
-second_generation=$(sed -n '1p' "$second/selected")
+first_generation=$(readlink "$first/selected")
+second_generation=$(readlink "$second/selected")
 test -n "$first_generation"
 test "$first_generation" = "$second_generation"
 first_bundle=$first/$first_generation
@@ -48,6 +48,6 @@ if "$binary" gen --project "$fixture" --artifact qstar --out "$work/rejected"; t
     exit 1
 fi
 
-# Pinned bmake identity is part of the canonical host contract; this check only
-# proves the supplied engine is usable, not that a developer PATH is canonical.
+# Reviewed bmake feature baseline is part of the canonical host contract; this
+# check only proves the supplied engine is usable, not that PATH is canonical.
 "$bmake" -V MAKE_VERSION >/dev/null

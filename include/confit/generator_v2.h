@@ -53,7 +53,7 @@ typedef struct ConfitV3ArtifactSet {
 
 /** @brief sealed bundle publish request다. */
 typedef struct ConfitV3PublishOptions {
-  /** `generations/`와 `selected` alias를 둘 output root다. */
+  /** `generations/`와 atomic `selected` directory alias를 둘 output root다. */
   const char *output_root;
   /** nonzero면 test가 해당 artifact write 뒤 failure를 주입한다. */
   size_t fault_after_artifact;
@@ -79,7 +79,8 @@ void confit_v3_artifact_set_clear(ConfitV3ArtifactSet *artifacts);
  * @brief complete v3 bundle을 staging 후 exact digest generation으로 atomic publish한다.
  *
  * Published generation은 `output_root/generations/<bundle-digest>`에만 생기며,
- * `selected` alias는 publication 뒤 마지막으로 바뀐다.
+ * `selected`는 exact generation을 가리키는 relative directory alias이며 complete
+ * publication 뒤 마지막으로 atomic 교체된다.
  */
 ConfitStatus confit_v3_publish_artifacts(
     const ConfitV3PublishOptions *options,

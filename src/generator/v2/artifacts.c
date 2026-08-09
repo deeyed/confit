@@ -11,6 +11,8 @@
 
 #if defined(_WIN32)
 #include <direct.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #else
 #include <unistd.h>
 #endif
@@ -1373,6 +1375,92 @@ static void confit_v3_mark_read_only(const char *generation,
 #endif
 }
 
+static int confit_v3_remove_staging(const char *staging,
+                                    const ConfitV3NamedText texts[9]) {
+  char path[4096];
+  size_t index;
+
+  for (index = 0U; index < 9U; ++index) {
+    if (snprintf(path, sizeof(path), "%s/%s", staging, texts[index].path) <= 0 ||
+        remove(path) != 0) {
+      if (errno != ENOENT) return 0;
+    }
+  }
+#if defined(_WIN32)
+  return _rmdir(staging) == 0 || errno == ENOENT;
+#else
+  return rmdir(staging) == 0 || errno == ENOENT;
+#endif
+}
+
+static ConfitStatus confit_v3_publish_selected_alias(
+    const char *selected, const char *relative_generation, int *out_changed,
+    ConfitDiagnostic *diagnostic) {
+  char temporary[4096];
+
+  *out_changed = 0;
+  if (snprintf(temporary, sizeof(temporary), "%s.confit-tmp", selected) <= 0 ||
+      strlen(temporary) >= sizeof(temporary) - 1U) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, selected, 0U, 0U,
+                          "selected alias path is too long");
+    return CONFIT_ERR_GENERATION;
+  }
+#if defined(_WIN32)
+  if (GetFileAttributesA(temporary) != INVALID_FILE_ATTRIBUTES) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, temporary, 0U, 0U,
+                          "selected alias staging path already exists");
+    return CONFIT_ERR_GENERATION;
+  }
+  if (CreateSymbolicLinkA(temporary, relative_generation,
+                          SYMBOLIC_LINK_FLAG_DIRECTORY |
+                              SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, temporary, 0U, 0U,
+                          "failed to create selected directory alias");
+    return CONFIT_ERR_GENERATION;
+  }
+  if (MoveFileExA(temporary, selected,
+                  MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+    (void)DeleteFileA(temporary);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, selected, 0U, 0U,
+                          "failed to atomically publish selected directory alias");
+    return CONFIT_ERR_GENERATION;
+  }
+#else
+  {
+    struct stat state;
+    char current[128];
+    const ssize_t current_size = readlink(selected, current, sizeof(current) - 1U);
+
+    if (current_size >= 0) {
+      current[(size_t)current_size] = '\0';
+      if (strcmp(current, relative_generation) == 0) return CONFIT_OK;
+    } else if (lstat(selected, &state) == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, selected, 0U, 0U,
+                            "selected path is not a directory alias");
+      return CONFIT_ERR_GENERATION;
+    }
+    if (lstat(temporary, &state) == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, temporary, 0U, 0U,
+                            "selected alias staging path already exists");
+      return CONFIT_ERR_GENERATION;
+    }
+    if (symlink(relative_generation, temporary) != 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, temporary, 0U, 0U,
+                            "failed to create selected directory alias");
+      return CONFIT_ERR_GENERATION;
+    }
+    if (rename(temporary, selected) != 0) {
+      (void)unlink(temporary);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, selected, 0U, 0U,
+                            "failed to atomically publish selected directory alias");
+      return CONFIT_ERR_GENERATION;
+    }
+  }
+#endif
+  *out_changed = 1;
+  return CONFIT_OK;
+}
+
 ConfitStatus confit_v3_publish_artifacts(
     const ConfitV3PublishOptions *options, const ConfitV3ArtifactSet *artifacts,
     size_t *out_changed_file_count, ConfitDiagnostic *diagnostic) {
@@ -1383,9 +1471,10 @@ ConfitStatus confit_v3_publish_artifacts(
   char staging[4096];
   char generation[4096];
   char selected[4096];
-  char selected_text[128];
+  char selected_relative[128];
   int selected_changed = 0;
   int published_new = 0;
+  int staging_exists = 0;
 
   if (options == 0 || options->output_root == 0 || options->output_root[0] == '\0') {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
@@ -1410,6 +1499,7 @@ ConfitStatus confit_v3_publish_artifacts(
   } else {
     status = confit_v3_make_unique_staging(staging_parent, artifacts->bundle_digest,
                                            staging, sizeof(staging), diagnostic);
+    if (status == CONFIT_OK) staging_exists = 1;
     if (status == CONFIT_OK) status = confit_v3_write_staging(
         staging, texts, options->fault_after_artifact, diagnostic);
     if (status == CONFIT_OK) {
@@ -1422,22 +1512,31 @@ ConfitStatus confit_v3_publish_artifacts(
           status = CONFIT_ERR_GENERATION;
         }
       } else {
+        staging_exists = 0;
         published_new = 1;
         confit_v3_mark_read_only(generation, texts);
+      }
+    }
+    if (staging_exists != 0 && !confit_v3_remove_staging(staging, texts)) {
+      if (status == CONFIT_OK) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, staging,
+                              0U, 0U,
+                              "failed to clean incomplete sealed-bundle staging");
+        status = CONFIT_ERR_GENERATION;
       }
     }
   }
   if (status == CONFIT_OK) status = confit_v3_join_path(
       selected, sizeof(selected), options->output_root, "selected", diagnostic);
   if (status == CONFIT_OK &&
-      snprintf(selected_text, sizeof(selected_text), "generations/%s\n",
-               artifacts->bundle_digest) >= (int)sizeof(selected_text)) {
+      snprintf(selected_relative, sizeof(selected_relative), "generations/%s",
+               artifacts->bundle_digest) >= (int)sizeof(selected_relative)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, selected, 0U, 0U,
                           "selected alias path is too long");
     status = CONFIT_ERR_INTERNAL;
   }
-  if (status == CONFIT_OK) status = confit_host_write_text_file_if_changed_atomic(
-      selected, selected_text, &selected_changed, diagnostic);
+  if (status == CONFIT_OK) status = confit_v3_publish_selected_alias(
+      selected, selected_relative, &selected_changed, diagnostic);
   if (out_changed_file_count != 0) {
     *out_changed_file_count = status == CONFIT_OK &&
                               (selected_changed != 0 || published_new != 0)

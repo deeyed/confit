@@ -12,7 +12,8 @@ CONFIT_HOST_SOURCES= \
 	src/host/host_directory.c \
 	src/host/host_file.c \
 	src/host/host_io.c \
-	src/host/host_path.c
+	src/host/host_path.c \
+	src/host/host_c17_probe.c
 
 CONFIT_PARSER_SOURCES= \
 	vendor/tomlc17/tomlc17.c \
@@ -66,6 +67,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver_v2_ledger.c \
 	tests/unit/test_resolver_v2_evaluate.c \
 	tests/unit/test_resolver_v2_snapshot.c \
+	tests/unit/test_generator_v3_publication.c \
 	tests/unit/test_component_catalog.c \
 	tests/unit/test_compat_v2.c \
 	tests/unit/test_expression_v2.c \

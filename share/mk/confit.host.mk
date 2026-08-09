@@ -8,13 +8,6 @@ CONFIT_BINARY=${CONFIT_BIN_ROOT}/confit
 
 CONFIT_STRICT_CFLAGS= \
 	-std=c17 -Wall -Wextra -Werror -pedantic
-.if ${CONFIT_HOST_CC_FAMILY} == "clang" && ${.MAKE.OS} == "Darwin"
-CONFIT_STRICT_CFLAGS+= \
-	-Wno-availability -Wno-extra-semi -Wno-expansion-to-defined \
-	-Wno-nullability-completeness -Wno-nullability-extension
-.elif ${CONFIT_HOST_CC_FAMILY} == "gcc"
-CONFIT_STRICT_CFLAGS+=-Wno-format-truncation
-.endif
 CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/include \
 	-I${CONFIT_SOURCE_ROOT}/src/parser \
@@ -49,7 +42,7 @@ CONFIT_DEPFILES=
 
 CONFIT_BUILD_DEFINES= \
 	-DCONFIT_BUILD_MODE=\"bmake\" \
-	-DCONFIT_BUILD_C_COMPILER_ID=\"${CONFIT_HOST_CC_FAMILY}\" \
+	-DCONFIT_BUILD_C_COMPILER_ID=\"c17-probed\" \
 	-DCONFIT_BUILD_C_COMPILER_VERSION=\"external\" \
 	-DCONFIT_BUILD_SYSTEM_NAME=\"${.MAKE.OS}\"
 
@@ -116,6 +109,16 @@ CONFIT_GENERATED_FILES= \
 	${CONFIT_PRODUCT_OBJECTS} ${CONFIT_CLI_OBJECTS} \
 	${CONFIT_TEST_SUPPORT_OBJECTS} ${CONFIT_TEST_OBJECTS} \
 	${CONFIT_DEPFILES} ${CONFIT_BINARY} ${CONFIT_TEST_BINARIES}
+
+# Test source path마다 고유 target을 parse time에 만든다. 각 recipe는 한 C executable만
+# 실행하며 shell loop나 runtime registry가 test selection을 소유하지 않는다.
+CONFIT_DIRECT_TEST_TARGETS=
+.for _test_binary in ${CONFIT_TEST_BINARIES}
+CONFIT_DIRECT_TEST_TARGETS+=run-${_test_binary:T}
+.PHONY: run-${_test_binary:T}
+run-${_test_binary:T}: ${_test_binary}
+	@${_test_binary}
+.endfor
 
 .for _dep in ${CONFIT_DEPFILES}
 .sinclude "${_dep}"

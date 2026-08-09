@@ -1,18 +1,12 @@
-_CONFIT_GNU_MAKE_GUARD := $(if $(filter 20240909,$(MAKE_VERSION)),,$(error Confit requires pinned bmake 20240909))
-
 .if !defined(.MAKE)
-.error Confit requires pinned bmake 20240909
-.endif
-
-.if ${MAKE_VERSION:Uunknown} != "20240909"
-.error Confit requires pinned bmake 20240909; found ${MAKE_VERSION:Uunknown}
+.error Confit requires bmake; GNU make is not supported
 .endif
 
 .include "${.PARSEDIR}/share/mk/confit.init.mk"
 
 .MAIN: all
 
-.PHONY: all confit tests check check-manifest clean help
+.PHONY: all confit tests check check-host check-cli check-manifest clean help
 
 all: confit
 
@@ -30,15 +24,24 @@ check: check-manifest confit tests
 	    "${CONFIT_BINARY}" "${CONFIT_SOURCE_ROOT}" \
 	    "${CONFIT_OBJROOT}" "${CONFIT_TEST_BIN_ROOT}"
 
+# 이 gate는 bmake가 열거한 C test binary를 각각 직접 실행한다. Shell runner,
+# 동적 argv registry와 과거 result file은 이 target의 성공 권위가 아니다.
+check-host: check-cli ${CONFIT_DIRECT_TEST_TARGETS}
+	@printf '%s\n' 'confit direct C host tests: pass'
+
+check-cli: confit
+	@${CONFIT_BINARY} --version
+	@${CONFIT_BINARY} doctor
+
 clean:
 	@rm -f -- ${CONFIT_GENERATED_FILES}
 
 help:
 	@printf '%s\n' \
-	    'Confit host build (bmake 20240909)' \
+	    'Confit host build (direct bmake)' \
 	    '' \
 	    '  bmake CONFIT_OBJROOT=/absolute/output all' \
-	    '  bmake CONFIT_OBJROOT=/absolute/output check' \
-	    '      complete host resolver and sealed-bundle suite' \
+	    '  bmake CONFIT_OBJROOT=/absolute/output check-host' \
+	    '      run every registered C host test without a shell runner' \
 	    '' \
 	    'CONFIT_HOST_CC is the host compiler; target compiler variables are ignored.'
