@@ -22,6 +22,10 @@ CONFIT_OBJROOT?=/tmp/confit-${.MAKE.OS:tl}-${MACHINE_ARCH:Uunknown}
 .if !exists(${CONFIT_OBJROOT})
 .error CONFIT_OBJROOT must exist before Confit is parsed
 .endif
+.if ${CONFIT_OBJROOT} == "/" || empty(CONFIT_OBJROOT:T) || \
+    ${CONFIT_OBJROOT:T} == "."
+.error CONFIT_OBJROOT must name a dedicated output leaf, not a filesystem root
+.endif
 CONFIT_OBJROOT_CANONICAL:=${CONFIT_OBJROOT:tA}
 .if ${CONFIT_OBJROOT_CANONICAL} != ${CONFIT_OBJROOT}
 .error CONFIT_OBJROOT must be canonical and must not be a symlink alias
