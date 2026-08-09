@@ -57,6 +57,12 @@ typedef struct ConfitTargetPlan {
   char *dtc_path;
   char *package_source;
   char *user_artifact_profile;
+  char *user_artifact_output;
+  char *user_artifact_entry;
+  char **user_artifact_roles;
+  size_t user_artifact_role_count;
+  char **compile_tuple;
+  size_t compile_tuple_count;
   char **private_include_paths;
   size_t private_include_count;
   size_t max_image_bytes;

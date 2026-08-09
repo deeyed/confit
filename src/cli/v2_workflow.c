@@ -715,6 +715,67 @@ static int confit_cli_v2_private_edge_redundant_candidate(
   return 0;
 }
 
+static ConfitStatus confit_cli_v2_write_reason(
+    const ConfitComponentReason *reason, size_t depth) {
+  char line[1024];
+  int written = snprintf(
+      line, sizeof(line),
+      "depth=%llu\t%s\t%s\tfrom=%s\trequirement=%s\tsource=%s:%llu:%llu\n",
+      (unsigned long long)depth, reason->component_id,
+      confit_component_reason_kind_name(reason->kind),
+      reason->from_id != 0 ? reason->from_id : "-", reason->requirement,
+      reason->source_path, (unsigned long long)reason->source_line,
+      (unsigned long long)reason->source_column);
+  return written < 0 || (size_t)written >= sizeof(line)
+             ? CONFIT_ERR_INTERNAL : confit_host_stdout_write(line);
+}
+
+/* Deterministic reason DAG에서 한 complete root->target authority path를 출력한다.
+ * 각 edge의 exact manifest span을 보존하며 cycle/단절은 schema failure다. */
+static ConfitStatus confit_cli_v2_write_why_chain(
+    const ConfitComponentClosure *closure, const char *target) {
+  const ConfitComponentReason **chain;
+  const ConfitComponentReason *root = 0;
+  const char *current = target;
+  size_t chain_count = 0U;
+  size_t guard;
+  ConfitStatus status = CONFIT_OK;
+  chain = (const ConfitComponentReason **)calloc(
+      closure->reason_count == 0U ? 1U : closure->reason_count,
+      sizeof(*chain));
+  if (chain == 0) return CONFIT_ERR_INTERNAL;
+  for (guard = 0U; guard <= closure->reason_count; ++guard) {
+    const ConfitComponentReason *incoming = 0;
+    size_t index;
+    for (index = 0U; index < closure->reason_count; ++index) {
+      const ConfitComponentReason *candidate = &closure->reasons[index];
+      if (strcmp(candidate->component_id, current) != 0) continue;
+      if (candidate->from_id == 0) {
+        root = candidate;
+        break;
+      }
+      if (incoming == 0) incoming = candidate;
+    }
+    if (root != 0) break;
+    if (incoming == 0 || chain_count >= closure->reason_count) {
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    chain[chain_count++] = incoming;
+    current = incoming->from_id;
+  }
+  if (status == CONFIT_OK && root == 0) status = CONFIT_ERR_SCHEMA;
+  if (status == CONFIT_OK) status = confit_cli_v2_write_reason(root, 0U);
+  {
+    size_t depth = 1U;
+    while (status == CONFIT_OK && chain_count != 0U) {
+      status = confit_cli_v2_write_reason(chain[--chain_count], depth++);
+    }
+  }
+  free(chain);
+  return status;
+}
+
 static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
                                                  ConfitDiagnostic *diagnostic) {
   ConfitCliV2Context context;
@@ -790,22 +851,12 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
       }
     }
   } else if (status == CONFIT_OK && strcmp(args->component_action, "why") == 0) {
-    int found = 0;
-    for (index = 0U; status == CONFIT_OK && index < closure.reason_count; ++index) {
-      const ConfitComponentReason *reason = &closure.reasons[index];
-      char line[1024];
-      int written;
-      if (strcmp(reason->component_id, requested->id) != 0) continue;
-      found = 1;
-      written = snprintf(line, sizeof(line), "%s\t%s\tfrom=%s\trequirement=%s\tsource=%s:%llu:%llu\n",
-          reason->component_id, confit_component_reason_kind_name(reason->kind),
-          reason->from_id != 0 ? reason->from_id : "-", reason->requirement,
-          reason->source_path, (unsigned long long)reason->source_line,
-          (unsigned long long)reason->source_column);
-      status = written < 0 || (size_t)written >= sizeof(line)
-                   ? CONFIT_ERR_INTERNAL : confit_host_stdout_write(line);
+    int selected = 0;
+    for (index = 0U; index < closure.component_count; ++index) {
+      if (closure.ordered[index] == requested) selected = 1;
     }
-    if (status == CONFIT_OK && !found) status = confit_host_stdout_write_line("not-selected");
+    status = selected ? confit_cli_v2_write_why_chain(&closure, requested->id)
+                      : confit_host_stdout_write_line("not-selected");
   } else if (status == CONFIT_OK && strcmp(args->component_action, "deps") == 0) {
     ConfitComponentClosure dependency_closure;
     const char *one_root[1];

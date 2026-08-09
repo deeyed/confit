@@ -1067,11 +1067,37 @@ static ConfitStatus confit_v4_generate_components_mk(
         "\nPARUS_COMPONENT_%s_BUILD_INCLUDE:= %s"
         "\nPARUS_COMPONENT_%s_SOURCE_DIR:= %s"
         "\nPARUS_COMPONENT_%s_KIND:= %s"
-        "\nPARUS_COMPONENT_%s_KAPI_REQUIRES:=",
+        "\nPARUS_COMPONENT_%s_COMPONENT_REQUIRES:=",
         identifier, component->manifest_path, identifier,
         component->makefile_path, identifier, component->build_include,
         identifier, source_directory, identifier,
         confit_component_kind_name(component->kind), identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->component_dependency_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->component_dependencies[source_index], 0)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe component dependency cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->component_dependencies[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_LINK_REQUIRES:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->link_dependency_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->link_dependencies[source_index], 0)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe component link authority cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->link_dependencies[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_KAPI_REQUIRES:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->kapi_requirement_count; ++source_index) {
       if (!confit_v4_is_safe_atom(component->kapi_requires[source_index], 0)) {
@@ -1081,6 +1107,39 @@ static ConfitStatus confit_v4_generate_components_mk(
       } else {
         status = confit_v2_builder_appendf(
             &builder, " %s", component->kapi_requires[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_KAPI_INCLUDE_ROOTS:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->kapi_requirement_count; ++source_index) {
+      const ConfitComponent *provider = confit_component_catalog_find_kapi_provider(
+          catalog, component->kapi_requires[source_index]);
+      const char *provider_separator =
+          provider != 0 ? strrchr(provider->makefile_path, '/') : 0;
+      char provider_directory[1024];
+      size_t provider_directory_size = provider_separator != 0
+          ? (size_t)(provider_separator - provider->makefile_path) : 0U;
+      if (provider == 0 || provider_directory_size == 0U ||
+          provider_directory_size + sizeof("/kapi/include") >
+              sizeof(provider_directory)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "KAPI provider has no bounded facade directory");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        memcpy(provider_directory, provider->makefile_path,
+               provider_directory_size);
+        memcpy(provider_directory + provider_directory_size, "/kapi/include",
+               sizeof("/kapi/include"));
+        if (!confit_v4_is_safe_atom(provider_directory, 1)) {
+          confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id,
+                                0U, 0U,
+                                "unsafe KAPI facade path cannot enter generated Make syntax");
+          status = CONFIT_ERR_SCHEMA;
+        } else {
+          status = confit_v2_builder_appendf(&builder, " %s",
+                                             provider_directory);
+        }
       }
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
@@ -1401,6 +1460,58 @@ static ConfitStatus confit_v4_generate_target_mk(
   CONFIT_TARGET_ATOM("PARUS_TARGET_REQUIRED_PROFILE", required_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_USER_ARTIFACT_PROFILE", user_artifact_profile);
 #undef CONFIT_TARGET_ATOM
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_USER_ARTIFACT_OUTPUT",
+      plan->user_artifact_output != 0 ? plan->user_artifact_output : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_USER_ARTIFACT_ENTRY",
+      plan->user_artifact_entry != 0 ? plan->user_artifact_entry : "none",
+      diagnostic);
+  if (status == CONFIT_OK) {
+    status = confit_v2_builder_append(&builder,
+                                      "PARUS_TARGET_COMPILE_TUPLE:=");
+  }
+  for (index = 0U; status == CONFIT_OK && index < plan->compile_tuple_count;
+       ++index) {
+    status = confit_v2_builder_appendf(&builder, " %s",
+                                       plan->compile_tuple[index]);
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v2_builder_append(
+        &builder, "\nPARUS_TARGET_USER_ARTIFACT_ROLES:=");
+  }
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->user_artifact_role_count; ++index) {
+    const char *separator = strchr(plan->user_artifact_roles[index], '=');
+    size_t role_size = separator != 0
+        ? (size_t)(separator - plan->user_artifact_roles[index]) : 0U;
+    char role[64];
+    if (separator == 0 || role_size == 0U || role_size >= sizeof(role)) {
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    memcpy(role, plan->user_artifact_roles[index], role_size);
+    role[role_size] = '\0';
+    status = confit_v2_builder_appendf(&builder, " %s", role);
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->user_artifact_role_count; ++index) {
+    const char *separator = strchr(plan->user_artifact_roles[index], '=');
+    size_t role_size = separator != 0
+        ? (size_t)(separator - plan->user_artifact_roles[index]) : 0U;
+    char role[64];
+    if (separator == 0 || role_size == 0U || role_size >= sizeof(role)) {
+      status = CONFIT_ERR_SCHEMA;
+      break;
+    }
+    memcpy(role, plan->user_artifact_roles[index], role_size);
+    role[role_size] = '\0';
+    status = confit_v2_builder_appendf(
+        &builder, "PARUS_TARGET_USER_ARTIFACT_ROLE_%s:= %s\n", role,
+        separator + 1);
+  }
   if (status == CONFIT_OK) status = confit_v4_append_target_atom(
       &builder, "PARUS_TARGET_MACHINE_RUNNER",
       plan->machine_runner != 0 ? plan->machine_runner : "none", diagnostic);

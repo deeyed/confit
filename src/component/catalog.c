@@ -68,6 +68,9 @@ static void confit_component_clear(ConfitComponent *component) {
   confit_component_string_list_clear(component->component_dependencies,
                                      component->component_dependency_count);
   free(component->component_dependency_spans);
+  confit_component_string_list_clear(component->link_dependencies,
+                                     component->link_dependency_count);
+  free(component->link_dependency_spans);
   confit_component_string_list_clear(component->kapi_requires,
                                      component->kapi_requirement_count);
   free(component->kapi_requirement_spans);
@@ -606,7 +609,7 @@ static ConfitStatus confit_component_parse_manifest(
   static const char *const root_keys[] = {"schema_version", "component", "requires",
                                            "provides", "test"};
   static const char *const component_keys[] = {"id", "kind"};
-  static const char *const requirement_keys[] = {"components", "kapi"};
+  static const char *const requirement_keys[] = {"components", "links", "kapi"};
   static const char *const provide_keys[] = {"capabilities", "kapi"};
   static const char *const test_keys[] = {
       "owner", "lane", "timeout_ms", "evidence_class", "target",
@@ -695,6 +698,14 @@ static ConfitStatus confit_component_parse_manifest(
       confit_v2_toml_table_find(requirement_table, "components"), CONFIT_COMPONENT_ATOM_ID,
       &out->component_dependencies, &out->component_dependency_spans,
       &out->component_dependency_count, total_edges, diagnostic);
+  if (status == CONFIT_OK &&
+      confit_v2_toml_table_find(requirement_table, "links") != 0) {
+    status = confit_component_parse_atom_list(
+        confit_v2_toml_table_find(requirement_table, "links"),
+        CONFIT_COMPONENT_ATOM_ID, &out->link_dependencies,
+        &out->link_dependency_spans, &out->link_dependency_count,
+        total_edges, diagnostic);
+  }
   if (status == CONFIT_OK) status = confit_component_parse_atom_list(
       confit_v2_toml_table_find(requirement_table, "kapi"), CONFIT_COMPONENT_ATOM_KAPI,
       &out->kapi_requires, &out->kapi_requirement_spans,
@@ -958,6 +969,19 @@ static ConfitStatus confit_component_catalog_validate(
         free(depths);
         confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
                               "component dependency is missing or self-referential");
+        return CONFIT_ERR_SCHEMA;
+      }
+    }
+    for (dependency_index = 0U; dependency_index < component->link_dependency_count;
+         ++dependency_index) {
+      if (strcmp(component->id, component->link_dependencies[dependency_index]) == 0 ||
+          confit_component_catalog_find(
+              catalog, component->link_dependencies[dependency_index]) == 0) {
+        free(emitted);
+        free(depths);
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+            "component link authority is missing or self-referential");
         return CONFIT_ERR_SCHEMA;
       }
     }

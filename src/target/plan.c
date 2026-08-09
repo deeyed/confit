@@ -40,6 +40,46 @@ static int confit_target_atom_valid(const char *text) {
   return 1;
 }
 
+/* Compile tuple은 shell text가 아니라 argv atom 목록이다. 새 ISA는 이 generic
+ * grammar 안에서 descriptor만 추가할 수 있지만 output/control/plugin option은 어느
+ * target도 주입할 수 없다. */
+static int confit_target_compile_atom_valid(const char *text) {
+  size_t index;
+  if (text == 0 || text[0] != '-' || strlen(text) > 128U ||
+      strcmp(text, "-o") == 0 || strncmp(text, "-o", 2U) == 0 ||
+      strncmp(text, "-M", 2U) == 0 || strncmp(text, "-fplugin", 8U) == 0 ||
+      strncmp(text, "-X", 2U) == 0 || strncmp(text, "-B", 2U) == 0 ||
+      text[1] == '-' || strchr(text, '@') != 0 || strchr(text, '/') != 0) {
+    return 0;
+  }
+  if (text[1] != 'm' && strncmp(text, "-fno-", 5U) != 0 &&
+      text[1] != 'D') {
+    return 0;
+  }
+  for (index = 1U; text[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (!((value >= 'A' && value <= 'Z') ||
+          (value >= 'a' && value <= 'z') ||
+          (value >= '0' && value <= '9') || value == '_' || value == '-' ||
+          value == '.' || value == '+' || value == '=')) return 0;
+  }
+  return 1;
+}
+
+static int confit_target_artifact_role_valid(const char *text) {
+  const char *separator = text != 0 ? strchr(text, '=') : 0;
+  size_t index;
+  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
+      (size_t)(separator - text) >= 64U ||
+      !confit_target_atom_valid(separator + 1)) return 0;
+  for (index = 0U; text + index < separator; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (!((value >= 'a' && value <= 'z') ||
+          (value >= '0' && value <= '9') || value == '_')) return 0;
+  }
+  return 1;
+}
+
 static int confit_target_relative_path_valid(const char *text) {
   const char *segment;
   const char *cursor;
@@ -276,7 +316,9 @@ static ConfitStatus confit_target_parse_build(
       "linker_script", "image_kind", "package_profile", "machine_profile",
       "expected_component", "expected_capability", "output_stem",
       "required_profile", "private_includes", "max_image_bytes", "dts",
-      "dtc", "package_source", "user_artifact_profile"};
+      "dtc", "package_source", "user_artifact_profile",
+      "compile_tuple", "user_artifact_output", "user_artifact_entry",
+      "user_artifact_roles"};
   static const char *const machine_fields[] = {
       "runner", "architecture", "executable", "machine", "cpu",
       "memory_mib", "serial", "artifact"};
@@ -302,6 +344,10 @@ static ConfitStatus confit_target_parse_build(
   char *package_relative = 0;
   char **private_relatives = 0;
   size_t private_count = 0U;
+  char **compile_tuple = 0;
+  size_t compile_tuple_count = 0U;
+  char **artifact_roles = 0;
+  size_t artifact_role_count = 0U;
   size_t index;
   ConfitStatus status;
 
@@ -365,6 +411,12 @@ static ConfitStatus confit_target_parse_build(
   CONFIT_TARGET_BUILD_STRING("output_stem", output_stem);
   CONFIT_TARGET_BUILD_STRING("required_profile", required_profile);
   CONFIT_TARGET_BUILD_STRING("user_artifact_profile", user_artifact_profile);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      build, "user_artifact_output", 0, &plan->user_artifact_output, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      build, "user_artifact_entry", 0, &plan->user_artifact_entry, path,
+      diagnostic);
   if (status == CONFIT_OK && machine != 0) {
     status = confit_target_get_string(machine, "runner", 1,
                                       &plan->machine_runner, path, diagnostic);
@@ -402,6 +454,12 @@ static ConfitStatus confit_target_parse_build(
   if (status == CONFIT_OK) status = confit_target_get_string_list(
       build, "private_includes", &private_relatives, &private_count, path,
       diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string_list(
+      build, "compile_tuple", &compile_tuple, &compile_tuple_count, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string_list(
+      build, "user_artifact_roles", &artifact_roles, &artifact_role_count,
+      path, diagnostic);
 #undef CONFIT_TARGET_BUILD_STRING
   max_image = confit_v2_toml_table_find(build, "max_image_bytes");
   if (status == CONFIT_OK &&
@@ -472,7 +530,7 @@ static ConfitStatus confit_target_parse_build(
         strcmp(plan->package_profile, "rpi5-firmware-v1") != 0) ||
        strcmp(plan->required_profile, "release") != 0 ||
        (strcmp(plan->user_artifact_profile, "none") != 0 &&
-        strcmp(plan->user_artifact_profile, "initial-c-v1") != 0))) {
+        strcmp(plan->user_artifact_profile, "elf-v1") != 0))) {
     status = CONFIT_ERR_UNSUPPORTED;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target descriptor uses an unknown image or package kind");
@@ -521,6 +579,75 @@ static ConfitStatus confit_target_parse_build(
                                      diagnostic);
     if (status == CONFIT_OK) plan->private_include_count += 1U;
   }
+  if (status == CONFIT_OK && compile_tuple_count == 0U) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "target compile tuple must not be empty");
+  }
+  for (index = 0U; status == CONFIT_OK && index < compile_tuple_count; ++index) {
+    size_t prior;
+    if (!confit_target_compile_atom_valid(compile_tuple[index])) {
+      status = CONFIT_ERR_SCHEMA;
+      confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                            "target compile tuple contains an unsafe argv atom");
+    }
+    for (prior = 0U; status == CONFIT_OK && prior < index; ++prior) {
+      if (strcmp(compile_tuple[prior], compile_tuple[index]) == 0) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "target compile tuple contains a duplicate atom");
+      }
+    }
+  }
+  if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "none") == 0 &&
+      (plan->user_artifact_output != 0 || plan->user_artifact_entry != 0 ||
+       artifact_role_count != 0U)) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "none user artifact profile must not publish roles");
+  }
+  if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "elf-v1") == 0 &&
+      (plan->user_artifact_output == 0 || plan->user_artifact_entry == 0 ||
+       artifact_role_count == 0U ||
+       !confit_target_atom_valid(plan->user_artifact_output) ||
+       !confit_target_atom_valid(plan->user_artifact_entry))) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "elf user artifact profile has no sealed output, entry, or roles");
+  }
+  for (index = 0U; status == CONFIT_OK && index < artifact_role_count; ++index) {
+    size_t prior;
+    const char *separator;
+    if (!confit_target_artifact_role_valid(artifact_roles[index])) {
+      status = CONFIT_ERR_SCHEMA;
+      confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                            "user artifact role is not role=component");
+      break;
+    }
+    separator = strchr(artifact_roles[index], '=');
+    for (prior = 0U; prior < index; ++prior) {
+      const char *prior_separator = strchr(artifact_roles[prior], '=');
+      if ((size_t)(separator - artifact_roles[index]) ==
+              (size_t)(prior_separator - artifact_roles[prior]) &&
+          memcmp(artifact_roles[index], artifact_roles[prior],
+                 (size_t)(separator - artifact_roles[index])) == 0) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "user artifact role name is duplicated");
+        break;
+      }
+    }
+  }
+  if (status == CONFIT_OK) {
+    plan->compile_tuple = compile_tuple;
+    plan->compile_tuple_count = compile_tuple_count;
+    compile_tuple = 0;
+    compile_tuple_count = 0U;
+    plan->user_artifact_roles = artifact_roles;
+    plan->user_artifact_role_count = artifact_role_count;
+    artifact_roles = 0;
+    artifact_role_count = 0U;
+  }
 
 done:
   free(linker_relative);
@@ -529,6 +656,14 @@ done:
   if (private_relatives != 0) {
     for (index = 0U; index < private_count; ++index) free(private_relatives[index]);
     free(private_relatives);
+  }
+  if (compile_tuple != 0) {
+    for (index = 0U; index < compile_tuple_count; ++index) free(compile_tuple[index]);
+    free(compile_tuple);
+  }
+  if (artifact_roles != 0) {
+    for (index = 0U; index < artifact_role_count; ++index) free(artifact_roles[index]);
+    free(artifact_roles);
   }
   confit_v2_toml_document_free(document);
   return status;
@@ -803,6 +938,8 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(dtc_path);
   CONFIT_TARGET_FREE(package_source);
   CONFIT_TARGET_FREE(user_artifact_profile);
+  CONFIT_TARGET_FREE(user_artifact_output);
+  CONFIT_TARGET_FREE(user_artifact_entry);
   CONFIT_TARGET_FREE(target_descriptor_path);
   CONFIT_TARGET_FREE(toolchain_descriptor_path);
 #undef CONFIT_TARGET_FREE
@@ -810,6 +947,14 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
     free(plan->private_include_paths[index]);
   }
   free(plan->private_include_paths);
+  for (index = 0U; index < plan->compile_tuple_count; ++index) {
+    free(plan->compile_tuple[index]);
+  }
+  free(plan->compile_tuple);
+  for (index = 0U; index < plan->user_artifact_role_count; ++index) {
+    free(plan->user_artifact_roles[index]);
+  }
+  free(plan->user_artifact_roles);
   memset(plan, 0, sizeof(*plan));
 }
 
@@ -838,6 +983,26 @@ ConfitStatus confit_target_plan_validate_selection(
         diagnostic, CONFIT_ERR_CONFLICT, "target-plan.selection", 0U, 0U,
         "target expected component/capability is not the selected provider");
     return CONFIT_ERR_CONFLICT;
+  }
+  for (index = 0U; index < plan->user_artifact_role_count; ++index) {
+    const char *separator = strchr(plan->user_artifact_roles[index], '=');
+    const ConfitComponent *role_component = separator != 0
+        ? confit_component_catalog_find(catalog, separator + 1) : 0;
+    size_t selected_index;
+    int role_selected = 0;
+    for (selected_index = 0U; role_component != 0 &&
+         selected_index < closure->component_count; ++selected_index) {
+      if (closure->ordered[selected_index] == role_component) {
+        role_selected = 1;
+        break;
+      }
+    }
+    if (!role_selected || role_component->kind == CONFIT_COMPONENT_KIND_TEST) {
+      confit_diagnostic_set(
+          diagnostic, CONFIT_ERR_CONFLICT, "target-plan.user-artifact", 0U, 0U,
+          "user artifact role does not name one selected production component");
+      return CONFIT_ERR_CONFLICT;
+    }
   }
   return CONFIT_OK;
 }

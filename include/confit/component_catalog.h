@@ -41,6 +41,9 @@ typedef struct ConfitComponent {
   char **component_dependencies;
   ConfitComponentSourceSpan *component_dependency_spans;
   size_t component_dependency_count;
+  char **link_dependencies;
+  ConfitComponentSourceSpan *link_dependency_spans;
+  size_t link_dependency_count;
   char **kapi_requires;
   ConfitComponentSourceSpan *kapi_requirement_spans;
   size_t kapi_requirement_count;
