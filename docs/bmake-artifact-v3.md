@@ -13,8 +13,9 @@ configuration 의미를 만들지 않는다.
 
 ## 입력·출력 경계
 
-Confit은 source TOML, explicit component root와 typed override만 읽는다. Makefile,
-C source, environment의 임의 값, 이전 output 또는 directory traversal은 input이 아니다.
+Confit은 source TOML, explicit component root, typed override와 sibling Makefile의 bounded
+Build API v2 data만 읽는다. Makefile을 실행하거나 C contents를 scan하지 않으며,
+environment의 임의 값, 이전 output 또는 directory traversal은 input이 아니다.
 `gen --artifact bundle`은 다음 완전 집합만 publish한다.
 
 ```text
@@ -25,7 +26,7 @@ generations/<digest>/
   config.inputs.json        # complete input provenance
   config.mk                 # bundle identity와 include entry
   config.values.mk          # safe scalar/list values
-  components.mk             # ordered component IDs와 local manifest/Makefile path
+  components.mk             # ordered component IDs, sealed source와 public Build API mapping
   component.catalog.json    # typed catalog/selected closure
   config.bundle.json        # ABI/version and all published artifact digests
 selected -> generations/<bundle-digest>
@@ -39,8 +40,8 @@ provider를 다시 추론하거나 first-match fallback을 수행하지 못하�
 
 `config.mk`, `config.values.mk`, `components.mk`에는 assignment, include와 encoded data만
 있을 수 있다. rule, recipe, conditional, shell expansion 또는 compiler flag는 허용하지
-않는다. Component Makefile의 restricted grammar 검사는 Parus가 소유하며 Confit은 이를
-평가하지 않는다.
+않는다. Confit은 Component Makefile을 Build API v2 data grammar로 검증하되 실행하지 않고,
+configured bmake child는 원본 leaf Makefile을 다시 include하지 않는다.
 
 ## publication
 
@@ -57,6 +58,7 @@ fallback 없이 failure다.
 ## cache와 identity
 
 Bundle digest는 canonical input provenance와 semantic snapshot에 domain-separated strong
-hash를 적용해 만든다. Host compiler, bmake implementation, local component Makefile은
-consumer action provenance이지 config bundle identity가 아니다. 따라서 새 configure는 새
+hash를 적용해 만든다. Host compiler와 bmake implementation은 consumer action
+provenance다. Local Makefile의 semantic source/include mapping은 catalog artifact에 들어가며
+주석·presentation text는 semantic identity가 아니다. 따라서 새 configure는 새
 generation을 publish할 수 있어도 이미 configured child가 참조하는 generation은 바꾸지 않는다.

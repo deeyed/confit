@@ -35,6 +35,9 @@ typedef struct ConfitComponent {
   ConfitComponentKind kind;
   char *manifest_path;
   char *makefile_path;
+  char *build_include;
+  char **sources;
+  size_t source_count;
   char **component_dependencies;
   ConfitComponentSourceSpan *component_dependency_spans;
   size_t component_dependency_count;

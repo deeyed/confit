@@ -7,6 +7,8 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <sys/stat.h>
 #endif
 
 static ConfitStatus confit_host_file_error(ConfitDiagnostic *diagnostic,
@@ -17,17 +19,21 @@ static ConfitStatus confit_host_file_error(ConfitDiagnostic *diagnostic,
 }
 
 int confit_host_file_exists(const char *path) {
-  FILE *file;
-
   if (path == 0 || path[0] == '\0') {
     return 0;
   }
-  file = fopen(path, "rb");
-  if (file == 0) {
-    return 0;
+#if defined(_WIN32)
+  {
+    const DWORD attributes = GetFileAttributesA(path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0U;
   }
-  (void)fclose(file);
-  return 1;
+#else
+  {
+    struct stat info;
+    return stat(path, &info) == 0 && S_ISREG(info.st_mode);
+  }
+#endif
 }
 
 ConfitStatus confit_host_read_text_file(const char *path, char **out_text,

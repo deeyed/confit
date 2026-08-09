@@ -19,8 +19,10 @@ build graph executor가 아니다.
 - host build의 유일한 engine은 reviewed feature baseline 이상인 direct `bmake`다.
 - `gen`은 `--artifact bundle`만 허용한다. partial artifact 또는 backend selector는
   fail-closed한다.
-- Confit은 TOML과 component identity를 해석하지만 Makefile을 평가하거나 source를
-  scan하지 않는다. bmake는 sealed `components.mk`와 scalar adapter만 소비한다.
+- Confit은 sibling Makefile을 실행하지 않고 Build API v2의 literal assignment와 마지막
+  public include만 bounded data grammar로 해석한다. 명시된 source의 존재·소유권을
+  검증하지만 source tree glob이나 C contents scan은 하지 않는다. bmake는 sealed
+  `components.mk`의 source mapping과 scalar adapter만 소비한다.
 - generated file은 caller가 지정한 output root 아래에서만 생성한다. source tree와
   sibling project를 변경하지 않는다.
 

@@ -18,8 +18,9 @@ confit \- Parus schema v2 configuration resolver
 component catalog를 검증하고 immutable snapshot을 sealed artifact ABI v3 bundle로
 publish한다.
 .PP
-Confit은 kernel runtime, firmware service, Makefile evaluator 또는 source scanner가
-아니다. target kernel은 generated
+Confit은 kernel runtime, firmware service 또는 Makefile evaluator가 아니다. Sibling
+Makefile은 Build API v2의 bounded data grammar로만 검증하며 실행하거나 source contents를
+scan하지 않는다. target kernel은 generated
 .I config.h
 만 소비하고, configured bmake child는 sealed generation의 Make adapter만 소비한다.
 .SH 지원 범위

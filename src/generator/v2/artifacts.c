@@ -951,18 +951,57 @@ static ConfitStatus confit_v3_generate_components_mk(
        ++index) {
     const ConfitComponent *component = closure->ordered[index];
     char identifier[256];
+    char source_directory[1024];
+    const char *separator;
+    size_t source_directory_size;
+    size_t source_index;
     status = confit_v3_component_make_identifier(component->id, identifier,
                                                   sizeof(identifier));
+    separator = strrchr(component->makefile_path, '/');
+    source_directory_size = separator != 0
+                                ? (size_t)(separator - component->makefile_path)
+                                : 0U;
+    if (status == CONFIT_OK &&
+        (separator == 0 || source_directory_size == 0U ||
+         source_directory_size + 1U > sizeof(source_directory))) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                            0U, "component source directory cannot enter generated Make syntax");
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) {
+      memcpy(source_directory, component->makefile_path, source_directory_size);
+      source_directory[source_directory_size] = '\0';
+    }
     if (status == CONFIT_OK &&
         (!confit_v3_is_safe_atom(component->manifest_path, 1) ||
-         !confit_v3_is_safe_atom(component->makefile_path, 1))) {
+         !confit_v3_is_safe_atom(component->makefile_path, 1) ||
+         !confit_v3_is_safe_atom(component->build_include, 1) ||
+         !confit_v3_is_safe_atom(source_directory, 1))) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U, 0U,
                             "unsafe component path cannot enter generated Make syntax");
       status = CONFIT_ERR_SCHEMA;
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-        &builder, "\nPARUS_COMPONENT_%s_MANIFEST:= %s\nPARUS_COMPONENT_%s_MAKEFILE:= %s",
-        identifier, component->manifest_path, identifier, component->makefile_path);
+        &builder,
+        "\nPARUS_COMPONENT_%s_MANIFEST:= %s"
+        "\nPARUS_COMPONENT_%s_MAKEFILE:= %s"
+        "\nPARUS_COMPONENT_%s_BUILD_INCLUDE:= %s"
+        "\nPARUS_COMPONENT_%s_SOURCE_DIR:= %s"
+        "\nPARUS_COMPONENT_%s_SRCS:=",
+        identifier, component->manifest_path, identifier,
+        component->makefile_path, identifier, component->build_include,
+        identifier, source_directory, identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->source_count; ++source_index) {
+      if (!confit_v3_is_safe_atom(component->sources[source_index], 1)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe component source cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->sources[source_index]);
+      }
+    }
   }
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
   if (status == CONFIT_OK) {
@@ -1008,6 +1047,11 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->manifest_path);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"makefile\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->makefile_path);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"build_include\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->build_include);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"sources\": ");
+    if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
+        &builder, component->sources, component->source_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"dependencies\": ");
     if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
         &builder, component->component_dependencies, component->component_dependency_count);

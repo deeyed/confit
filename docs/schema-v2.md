@@ -14,7 +14,8 @@ Unknown field, duplicate canonical path, absolute/parent path, symlink escape, c
 
 Profile/target은 typed `values`와 bounded component selection request만 표현한다. source list, compiler
 flag, backend label, generated artifact path 또는 physical device attach rule은 source schema가 아니다.
-Component 의미는 explicit `component.toml`이 소유하고 source shape는 local Makefile이 소유한다.
+Component 의미는 explicit `component.toml`이 소유하고 source shape는 Confit이 Build API
+v2 data grammar로 검증하는 local Makefile이 소유한다. Makefile은 실행되지 않는다.
 
 Component ID는 lower-case dot-separated atom이다. Required capability의 missing/ambiguous provider는 error다.
 Optional capability absence는 success일 수 있지만 selected source, fallback component나 driver policy를
@@ -53,3 +54,8 @@ atom 127 bytes, path 1024 bytes로 제한한다. Duplicate ID/provider, missing 
 self-edge, cycle, symlink/path escape와 limit 초과는 partial catalog 없이 실패한다.
 Selection은 root/private/KAPI/capability reason과 manifest source 위치를 immutable
 artifact에 보존한다.
+
+Sibling Makefile은 `PARUS_BUILD_API=2`, exact component ID, bounded `SRCS`와 kind별 public
+include 하나만 가진다. Condition, modifier, recipe, glob, raw flag, extra include와 source
+escape는 catalog 단계에서 거부한다. Source는 component directory 아래 existing regular
+file이어야 하고 한 catalog에서 owner가 중복될 수 없다.

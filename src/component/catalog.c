@@ -17,6 +17,9 @@
 #define CONFIT_COMPONENT_MAX_LIST_ITEMS 128U
 #define CONFIT_COMPONENT_MAX_TOTAL_EDGES 4096U
 #define CONFIT_COMPONENT_MAX_SUGGESTIONS 5U
+#define CONFIT_COMPONENT_MAKE_MAX_BYTES (128U * 1024U)
+#define CONFIT_COMPONENT_MAKE_MAX_LINE_BYTES 4096U
+#define CONFIT_COMPONENT_MAKE_MAX_SOURCES 256U
 
 static const char kManifestName[] = "component.toml";
 
@@ -59,6 +62,9 @@ static void confit_component_clear(ConfitComponent *component) {
   free(component->id);
   free(component->manifest_path);
   free(component->makefile_path);
+  free(component->build_include);
+  confit_component_string_list_clear(component->sources,
+                                     component->source_count);
   confit_component_string_list_clear(component->component_dependencies,
                                      component->component_dependency_count);
   free(component->component_dependency_spans);
@@ -134,6 +140,234 @@ static ConfitComponentKind confit_component_kind_parse(const char *text) {
     if (strcmp(text, confit_component_kind_name(kind)) == 0) return kind;
   }
   return CONFIT_COMPONENT_KIND_INVALID;
+}
+
+static const char *confit_component_kind_build_include(
+    ConfitComponentKind kind) {
+  switch (kind) {
+  case CONFIT_COMPONENT_KIND_KERNEL_CORE: return "parus.kernel.mk";
+  case CONFIT_COMPONENT_KIND_KERNEL_DRIVER: return "parus.driver.mk";
+  case CONFIT_COMPONENT_KIND_USER_LIBRARY: return "parus.userlib.mk";
+  case CONFIT_COMPONENT_KIND_USER_SERVICE: return "parus.service.mk";
+  case CONFIT_COMPONENT_KIND_HOST_TOOL: return "parus.host.mk";
+  case CONFIT_COMPONENT_KIND_TARGET_IMAGE: return "parus.target.mk";
+  case CONFIT_COMPONENT_KIND_TEST: return "parus.test.mk";
+  default: return 0;
+  }
+}
+
+static int confit_component_relative_path_valid(const char *text);
+static int confit_component_path_within(const char *root, const char *path);
+
+static int confit_component_source_path_valid(const char *text) {
+  const char *suffix;
+  const unsigned char *cursor;
+  if (!confit_component_relative_path_valid(text)) return 0;
+  suffix = strrchr(text, '.');
+  if (suffix == 0 || (strcmp(suffix, ".c") != 0 &&
+                      strcmp(suffix, ".S") != 0 &&
+                      strcmp(suffix, ".s") != 0)) return 0;
+  for (cursor = (const unsigned char *)text; *cursor != '\0'; ++cursor) {
+    if (!( (*cursor >= 'a' && *cursor <= 'z') ||
+           (*cursor >= 'A' && *cursor <= 'Z') ||
+           (*cursor >= '0' && *cursor <= '9') || *cursor == '_' ||
+           *cursor == '-' || *cursor == '.' || *cursor == '/')) return 0;
+  }
+  return 1;
+}
+
+static ConfitStatus confit_component_append_source(
+    ConfitComponent *component, const char *source,
+    ConfitDiagnostic *diagnostic, const char *makefile, size_t line) {
+  char **grown;
+  size_t index;
+  if (!confit_component_source_path_valid(source)) {
+    confit_component_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+        "component Makefile has an unsafe source-relative path");
+    return CONFIT_ERR_SCHEMA;
+  }
+  for (index = 0U; index < component->source_count; ++index) {
+    if (strcmp(component->sources[index], source) == 0) {
+      confit_component_diagnostic_set(
+          diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+          "component Makefile declares a duplicate source");
+      return CONFIT_ERR_SCHEMA;
+    }
+  }
+  if (component->source_count >= CONFIT_COMPONENT_MAKE_MAX_SOURCES) {
+    confit_component_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+        "component Makefile source count exceeds the supported limit");
+    return CONFIT_ERR_SCHEMA;
+  }
+  grown = (char **)realloc(component->sources,
+                           (component->source_count + 1U) * sizeof(*grown));
+  if (grown == 0) return CONFIT_ERR_INTERNAL;
+  component->sources = grown;
+  component->sources[component->source_count] = confit_component_strdup(source);
+  if (component->sources[component->source_count] == 0) return CONFIT_ERR_INTERNAL;
+  component->source_count += 1U;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_component_parse_makefile(
+    const char *project_root, const char *directory, const char *makefile,
+    ConfitComponent *component, ConfitDiagnostic *diagnostic) {
+  static const char kApiPrefix[] = "PARUS_BUILD_API=";
+  static const char kComponentPrefix[] = "PARUS_COMPONENT=";
+  static const char kSourcesPrefix[] = "SRCS=";
+  char expected_include[96];
+  char *text = 0;
+  size_t size = 0U;
+  size_t offset = 0U;
+  size_t line = 1U;
+  int seen_api = 0;
+  int seen_component = 0;
+  int seen_sources = 0;
+  int seen_include = 0;
+  ConfitStatus status;
+  const char *include_name = confit_component_kind_build_include(component->kind);
+
+  if (include_name == 0 || snprintf(expected_include, sizeof(expected_include),
+                                    ".include <%s>", include_name) <= 0) {
+    return CONFIT_ERR_INTERNAL;
+  }
+  status = confit_host_read_text_file(makefile, &text, &size, diagnostic);
+  if (status != CONFIT_OK) return status;
+  if (size == 0U || size > CONFIT_COMPONENT_MAKE_MAX_BYTES ||
+      memchr(text, '\0', size) != 0) {
+    confit_component_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, makefile, 0U, 0U,
+        "component Makefile violates the bounded text size contract");
+    status = CONFIT_ERR_SCHEMA;
+    goto done;
+  }
+
+  while (offset < size) {
+    size_t end = offset;
+    size_t length;
+    char saved;
+    char *statement;
+    while (end < size && text[end] != '\n') ++end;
+    length = end - offset;
+    if (length > 0U && text[offset + length - 1U] == '\r') --length;
+    if (length > CONFIT_COMPONENT_MAKE_MAX_LINE_BYTES) {
+      confit_component_diagnostic_set(
+          diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+          "component Makefile line exceeds the supported limit");
+      status = CONFIT_ERR_SCHEMA;
+      goto done;
+    }
+    saved = text[offset + length];
+    text[offset + length] = '\0';
+    statement = text + offset;
+    if (length == 0U || statement[0] == '#') {
+      /* Korean responsibility comments are author guidance, never parser authority. */
+    } else if (strchr(statement, '\t') != 0 || strchr(statement, '$') != 0 ||
+               strchr(statement, '\\') != 0 || strchr(statement, '#') != 0 ||
+               seen_include) {
+      confit_component_diagnostic_set(
+          diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+          "component Makefile contains a recipe, expansion, inline comment, or statement after the public include");
+      status = CONFIT_ERR_SCHEMA;
+      text[offset + length] = saved;
+      goto done;
+    } else if (strncmp(statement, kApiPrefix, sizeof(kApiPrefix) - 1U) == 0) {
+      if (seen_api || strcmp(statement + sizeof(kApiPrefix) - 1U, "2") != 0) {
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        seen_api = 1;
+      }
+    } else if (strncmp(statement, kComponentPrefix,
+                       sizeof(kComponentPrefix) - 1U) == 0) {
+      if (seen_component || strcmp(statement + sizeof(kComponentPrefix) - 1U,
+                                   component->id) != 0) {
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        seen_component = 1;
+      }
+    } else if (strncmp(statement, kSourcesPrefix,
+                       sizeof(kSourcesPrefix) - 1U) == 0) {
+      char *cursor = statement + sizeof(kSourcesPrefix) - 1U;
+      if (seen_sources || component->kind == CONFIT_COMPONENT_KIND_TARGET_IMAGE ||
+          cursor[0] == '\0' || cursor[0] == ' ' || cursor[strlen(cursor) - 1U] == ' ') {
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        seen_sources = 1;
+        while (status == CONFIT_OK && *cursor != '\0') {
+          char *separator = strchr(cursor, ' ');
+          char separator_saved = '\0';
+          char physical[4096];
+          char canonical[4096];
+          if (separator != 0) {
+            separator_saved = *separator;
+            *separator = '\0';
+          }
+          if (cursor[0] == '\0') {
+            status = CONFIT_ERR_SCHEMA;
+          } else {
+            status = confit_component_append_source(component, cursor, diagnostic,
+                                                     makefile, line);
+          }
+          if (status == CONFIT_OK) {
+            status = confit_host_path_join(physical, sizeof(physical), directory,
+                                           cursor, diagnostic);
+          }
+          if (status == CONFIT_OK &&
+              (confit_host_path_canonicalize(canonical, sizeof(canonical), physical,
+                                             diagnostic) != CONFIT_OK ||
+               strcmp(canonical, physical) != 0 ||
+               !confit_component_path_within(directory, canonical) ||
+               !confit_component_path_within(project_root, canonical) ||
+               !confit_host_file_exists(canonical))) {
+            confit_component_diagnostic_set(
+                diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+                "component source is missing, symlinked, or outside its owner directory");
+            status = CONFIT_ERR_SCHEMA;
+          }
+          if (separator != 0) {
+            *separator = separator_saved;
+            cursor = separator + 1U;
+            if (*cursor == ' ') status = CONFIT_ERR_SCHEMA;
+          } else {
+            cursor += strlen(cursor);
+          }
+        }
+      }
+    } else if (strcmp(statement, expected_include) == 0) {
+      seen_include = 1;
+    } else {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    text[offset + length] = saved;
+    if (status != CONFIT_OK) {
+      if (!confit_diagnostic_has_error(diagnostic)) {
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+            "component Makefile contains an unknown variable, syntax, API version, identity, or public include");
+      }
+      goto done;
+    }
+    offset = end < size ? end + 1U : end;
+    ++line;
+  }
+
+  if (!seen_api || !seen_component || !seen_include ||
+      (component->kind == CONFIT_COMPONENT_KIND_TARGET_IMAGE && seen_sources) ||
+      (component->kind != CONFIT_COMPONENT_KIND_TARGET_IMAGE && !seen_sources)) {
+    confit_component_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, makefile, 0U, 0U,
+        "component Makefile is missing its exact Build API v2 declaration, source list, or final public include");
+    status = CONFIT_ERR_SCHEMA;
+    goto done;
+  }
+  component->build_include = confit_component_strdup(include_name);
+  if (component->build_include == 0) status = CONFIT_ERR_INTERNAL;
+
+done:
+  confit_host_free(text);
+  return status;
 }
 
 static int confit_component_id_valid(const char *text) {
@@ -447,6 +681,10 @@ static ConfitStatus confit_component_parse_manifest(
     status = CONFIT_ERR_INTERNAL;
     goto invalid;
   }
+  status = confit_component_parse_makefile(project_root, directory,
+                                            makefile_canonical, out,
+                                            diagnostic);
+  if (status != CONFIT_OK) goto invalid;
   status = confit_component_parse_atom_list(
       confit_v2_toml_table_find(requirement_table, "components"), CONFIT_COMPONENT_ATOM_ID,
       &out->component_dependencies, &out->component_dependency_spans,
@@ -549,6 +787,25 @@ static int confit_component_list_contains(char *const *items, size_t count,
   return 0;
 }
 
+static int confit_component_source_logical_path(
+    const ConfitComponent *component, const char *source, char *out,
+    size_t out_size) {
+  const char *separator;
+  size_t directory_size;
+  size_t source_size;
+  if (component == 0 || component->makefile_path == 0 || source == 0 ||
+      out == 0 || out_size == 0U) return 0;
+  separator = strrchr(component->makefile_path, '/');
+  if (separator == 0) return 0;
+  directory_size = (size_t)(separator - component->makefile_path);
+  source_size = strlen(source);
+  if (directory_size + 1U + source_size + 1U > out_size) return 0;
+  memcpy(out, component->makefile_path, directory_size);
+  out[directory_size] = '/';
+  memcpy(out + directory_size + 1U, source, source_size + 1U);
+  return 1;
+}
+
 static ConfitStatus confit_component_catalog_validate(
     const ConfitComponentCatalog *catalog, ConfitDiagnostic *diagnostic) {
   unsigned char *emitted;
@@ -567,6 +824,45 @@ static ConfitStatus confit_component_catalog_validate(
     const ConfitComponent *component = &catalog->components[index];
     size_t dependency_index;
     size_t other;
+    size_t source_index;
+    for (source_index = 0U; source_index < component->source_count;
+         ++source_index) {
+      char source_path[4096];
+      if (!confit_component_source_logical_path(
+              component, component->sources[source_index], source_path,
+              sizeof(source_path))) {
+        free(emitted);
+        free(depths);
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, component->makefile_path, 0U, 0U,
+            "component source identity cannot be represented safely");
+        return CONFIT_ERR_SCHEMA;
+      }
+      for (other = index + 1U; other < catalog->component_count; ++other) {
+        size_t other_source_index;
+        for (other_source_index = 0U;
+             other_source_index < catalog->components[other].source_count;
+             ++other_source_index) {
+          char other_source_path[4096];
+          if (!confit_component_source_logical_path(
+                  &catalog->components[other],
+                  catalog->components[other].sources[other_source_index],
+                  other_source_path, sizeof(other_source_path))) {
+            free(emitted);
+            free(depths);
+            return CONFIT_ERR_SCHEMA;
+          }
+          if (strcmp(source_path, other_source_path) == 0) {
+            free(emitted);
+            free(depths);
+            confit_component_diagnostic_set(
+                diagnostic, CONFIT_ERR_SCHEMA, component->makefile_path, 0U,
+                0U, "one source file is owned by multiple components");
+            return CONFIT_ERR_SCHEMA;
+          }
+        }
+      }
+    }
     if (component->kind == CONFIT_COMPONENT_KIND_TEST &&
         confit_component_catalog_find(catalog, component->test_owner) == 0) {
       free(emitted);

@@ -779,9 +779,11 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
       {
         char line[1024];
         const int written = snprintf(line, sizeof(line),
-            "%s\nkind: %s\nmanifest: %s\nmakefile: %s\nselected: %s\n",
+            "%s\nkind: %s\nmanifest: %s\nmakefile: %s\nbuild-include: %s\nsources: %llu\nselected: %s\n",
             requested->id, confit_component_kind_name(requested->kind),
             requested->manifest_path, requested->makefile_path,
+            requested->build_include,
+            (unsigned long long)requested->source_count,
             selected ? "true" : "false");
         if (written < 0 || (size_t)written >= sizeof(line)) status = CONFIT_ERR_INTERNAL;
         else status = confit_host_stdout_write(line);
