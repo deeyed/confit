@@ -863,13 +863,42 @@ static ConfitStatus confit_component_catalog_validate(
         }
       }
     }
-    if (component->kind == CONFIT_COMPONENT_KIND_TEST &&
-        confit_component_catalog_find(catalog, component->test_owner) == 0) {
-      free(emitted);
-      free(depths);
-      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path,
-                            0U, 0U, "test component owner is unavailable");
-      return CONFIT_ERR_SCHEMA;
+    if (component->kind == CONFIT_COMPONENT_KIND_TEST) {
+      const ConfitComponent *test_owner =
+          confit_component_catalog_find(catalog, component->test_owner);
+      int lane_matches_evidence = 0;
+      if (test_owner == 0 || test_owner->kind == CONFIT_COMPONENT_KIND_TEST) {
+        free(emitted);
+        free(depths);
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+            "test owner must be one existing non-test component");
+        return CONFIT_ERR_SCHEMA;
+      }
+      lane_matches_evidence =
+          (strcmp(component->test_lane, "unit") == 0 &&
+           strcmp(component->test_evidence_class, "host-unit") == 0) ||
+          (strcmp(component->test_lane, "selftest") == 0 &&
+           strcmp(component->test_evidence_class, "booted-selftest") == 0) ||
+          (strcmp(component->test_lane, "security") == 0 &&
+           strcmp(component->test_evidence_class, "host-security") == 0) ||
+          (strcmp(component->test_lane, "qemu") == 0 &&
+           (strcmp(component->test_evidence_class, "qemu-smoke") == 0 ||
+            strcmp(component->test_evidence_class, "qemu-runtime") == 0)) ||
+          (strcmp(component->test_lane, "package") == 0 &&
+           strcmp(component->test_evidence_class, "package") == 0) ||
+          (strcmp(component->test_lane, "documentation") == 0 &&
+           strcmp(component->test_evidence_class, "documentation") == 0) ||
+          (strcmp(component->test_lane, "hardware-manual") == 0 &&
+           strcmp(component->test_evidence_class, "physical-hardware") == 0);
+      if (!lane_matches_evidence) {
+        free(emitted);
+        free(depths);
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+            "test lane and evidence_class are incompatible");
+        return CONFIT_ERR_SCHEMA;
+      }
     }
     for (dependency_index = 0U; dependency_index < component->component_dependency_count;
          ++dependency_index) {

@@ -29,7 +29,7 @@ generations/<digest>/
   config.values.mk          # safe scalar/list values
   components.mk             # ordered component IDs, sealed source와 public Build API mapping
   target.mk                 # 검증된 target/toolchain/image/package tuple
-  tests.mk                  # selected test metadata
+  tests.mk                  # bounded roots에서 발견한 complete test catalog와 selected-test subset
   component.catalog.json    # typed catalog/selected closure
   config.bundle.json        # ABI/version and all published artifact digests
 selected -> generations/<bundle-digest>
@@ -40,6 +40,13 @@ selected -> generations/<bundle-digest>
 versioned KAPI/capability, test metadata, selected root 및 root/private/KAPI/capability
 reason graph를 함께 싣는다. Reason은 source path와 line/column을 포함하며 consumer가
 provider를 다시 추론하거나 first-match fallback을 수행하지 못하게 한다.
+
+`tests.mk`는 중앙 test ID registry를 대체한다. `PARUS_TEST_IDS`는 bounded
+`component_roots`에서 발견한 모든 `kind = "test"` component를 결정적으로 열거하고,
+각 ID에 대해 owner, lane, evidence class, nonzero timeout, source directory와 sealed
+source list를 낸다. `PARUS_SELECTED_TEST_IDS`는 production selection closure에 test가
+침투했는지 fail-closed로 검사하기 위한 별도 subset이다. Test owner는 존재하는 non-test
+component여야 하고 lane/evidence 조합은 closed compatibility table과 일치해야 한다.
 
 `config.mk`, `config.values.mk`, `components.mk`, `target.mk`, `tests.mk`에는 assignment, include와 encoded data만
 있을 수 있다. rule, recipe, conditional, shell expansion 또는 compiler flag는 허용하지

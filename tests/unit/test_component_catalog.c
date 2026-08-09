@@ -547,6 +547,93 @@ static void expect_zero_central_sound_driver(void) {
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
 }
 
+static void write_test_component(const char *root, const char *owner,
+                                 const char *lane,
+                                 const char *evidence_class,
+                                 unsigned int timeout_ms) {
+  char directory[4096];
+  char path[4096];
+  char manifest[2048];
+  int written;
+  path_join(directory, sizeof(directory), root, "sys/state-test");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(directory));
+  path_join(path, sizeof(path), directory, "test.c");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(
+      path, "int confit_component_owned_test(void) { return 0; }\n"));
+  path_join(path, sizeof(path), directory, "Makefile");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(
+      path,
+      "# 이 fixture는 test binary의 local source만 선언한다.\n"
+      "# 실행 정책과 timeout은 manifest와 private runner가 소유한다.\n"
+      "PARUS_BUILD_API=2\nPARUS_COMPONENT=test.sys.kern.base.state\n"
+      "SRCS=test.c\n\n.include <parus.test.mk>\n"));
+  written = snprintf(
+      manifest, sizeof(manifest),
+      "schema_version = 2\n[component]\n"
+      "id = \"test.sys.kern.base.state\"\nkind = \"test\"\n"
+      "[requires]\ncomponents = []\nkapi = []\n"
+      "[provides]\ncapabilities = []\nkapi = []\n"
+      "[test]\nowner = \"%s\"\nlane = \"%s\"\n"
+      "timeout_ms = %u\nevidence_class = \"%s\"\n",
+      owner, lane, timeout_ms, evidence_class);
+  CONFIT_TEST_ASSERT(written > 0 && (size_t)written < sizeof(manifest));
+  path_join(path, sizeof(path), directory, "component.toml");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, manifest));
+}
+
+static void expect_test_metadata_security(void) {
+  ConfitV2Project *project = 0;
+  ConfitComponentCatalog catalog;
+  ConfitDiagnostic diagnostic;
+  char root[4096] = {0};
+
+  setup_catalog_fixture(root, sizeof(root));
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_v2_schema_load_project(root, &project,
+                                                    &diagnostic) == CONFIT_OK);
+
+  write_test_component(root, "sys.kern.base", "unit", "host-unit", 5000U);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) == CONFIT_OK);
+  {
+    const ConfitComponent *test = confit_component_catalog_find(
+        &catalog, "test.sys.kern.base.state");
+    CONFIT_TEST_ASSERT(test != 0);
+    CONFIT_TEST_ASSERT(test->kind == CONFIT_COMPONENT_KIND_TEST);
+    CONFIT_TEST_ASSERT(strcmp(test->test_owner, "sys.kern.base") == 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_lane, "unit") == 0);
+    CONFIT_TEST_ASSERT(strcmp(test->test_evidence_class, "host-unit") == 0);
+    CONFIT_TEST_ASSERT(test->test_timeout_ms == 5000U);
+  }
+  confit_component_catalog_clear(&catalog);
+
+  write_test_component(root, "test.sys.kern.base.state", "unit", "host-unit",
+                       5000U);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) ==
+                     CONFIT_ERR_SCHEMA);
+  confit_component_catalog_clear(&catalog);
+
+  write_test_component(root, "sys.kern.base", "security", "host-unit", 5000U);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) ==
+                     CONFIT_ERR_SCHEMA);
+  confit_component_catalog_clear(&catalog);
+
+  write_test_component(root, "sys.kern.base", "unit", "host-unit", 0U);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_component_catalog_load(project, &catalog,
+                                                    &diagnostic) ==
+                     CONFIT_ERR_SCHEMA);
+  confit_component_catalog_clear(&catalog);
+
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+}
+
 int main(void) {
   expect_bounded_catalog();
   expect_symlink_rejection();
@@ -557,5 +644,6 @@ int main(void) {
   expect_list_bound_rejection();
   expect_make_api_v2_rejection();
   expect_zero_central_sound_driver();
+  expect_test_metadata_security();
   return 0;
 }
