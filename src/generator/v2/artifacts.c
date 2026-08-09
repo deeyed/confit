@@ -992,7 +992,7 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
   ConfitStatus status;
   size_t index;
   confit_v2_builder_init(&builder);
-  status = confit_v2_builder_append(&builder, "{\n  \"schema\": \"confit-component-catalog-v1\",\n  \"state\": ");
+  status = confit_v2_builder_append(&builder, "{\n  \"schema\": \"confit-component-catalog-v2\",\n  \"state\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(
       &builder, catalog != 0 ? "available" : "unavailable");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"components\": [\n");
@@ -1020,6 +1020,23 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"capabilities\": ");
     if (status == CONFIT_OK) status = confit_v3_append_component_atom_array(
         &builder, component->capabilities, component->capability_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"test\": ");
+    if (status == CONFIT_OK && component->kind == CONFIT_COMPONENT_KIND_TEST) {
+      status = confit_v2_builder_append(&builder, "{ \"owner\": ");
+      if (status == CONFIT_OK) status = confit_v2_append_json_string(
+          &builder, component->test_owner);
+      if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"lane\": ");
+      if (status == CONFIT_OK) status = confit_v2_append_json_string(
+          &builder, component->test_lane);
+      if (status == CONFIT_OK) status = confit_v2_builder_append(
+          &builder, ", \"evidence_class\": ");
+      if (status == CONFIT_OK) status = confit_v2_append_json_string(
+          &builder, component->test_evidence_class);
+      if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+          &builder, ", \"timeout_ms\": %u }", component->test_timeout_ms);
+    } else if (status == CONFIT_OK) {
+      status = confit_v2_builder_append(&builder, "null");
+    }
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " } ");
     if (status == CONFIT_OK) status = confit_v2_builder_append(
         &builder, index + 1U == catalog->component_count ? "\n" : ",\n");
@@ -1028,6 +1045,33 @@ static ConfitStatus confit_v3_generate_component_catalog_json(
   if (status == CONFIT_OK) status = confit_v3_append_component_root_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"selected\": ");
   if (status == CONFIT_OK) status = confit_v3_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"reasons\": [\n");
+  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->reason_count;
+       ++index) {
+    const ConfitComponentReason *reason = &closure->reasons[index];
+    status = confit_v2_builder_append(&builder, "    { \"component\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, reason->component_id);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kind\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, confit_component_reason_kind_name(reason->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"from\": ");
+    if (status == CONFIT_OK && reason->from_id != 0) {
+      status = confit_v2_append_json_string(&builder, reason->from_id);
+    } else if (status == CONFIT_OK) {
+      status = confit_v2_builder_append(&builder, "null");
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"requirement\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, reason->requirement);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"source\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, reason->source_path);
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, ", \"line\": %llu, \"column\": %llu",
+        (unsigned long long)reason->source_line,
+        (unsigned long long)reason->source_column);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, index + 1U == closure->reason_count ? " }\n" : " },\n");
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "  ]");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n}\n");
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);

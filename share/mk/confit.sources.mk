@@ -43,9 +43,8 @@ CONFIT_RESOLVER_SOURCES= \
 	src/resolver/v2/snapshot.c \
 	src/resolver/v2/incremental.c
 
-CONFIT_GENERATOR_AND_COMPAT_SOURCES= \
-	src/generator/v2/artifacts.c \
-	src/compat/v2/compat.c
+CONFIT_GENERATOR_SOURCES= \
+	src/generator/v2/artifacts.c
 
 CONFIT_CLI_SOURCES= \
 	src/cli/main.c \
@@ -69,7 +68,6 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver_v2_snapshot.c \
 	tests/unit/test_generator_v3_publication.c \
 	tests/unit/test_component_catalog.c \
-	tests/unit/test_compat_v2.c \
 	tests/unit/test_expression_v2.c \
 	tests/unit/test_expression_v2_semantics.c
 

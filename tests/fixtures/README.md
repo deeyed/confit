@@ -8,7 +8,6 @@
   structural bound과 fail-closed corpus.
 - `schema-v2-availability/`, `schema-v2-choice/`, `schema-v2-constraint-runtime/`,
   `schema-v2-evaluation/`, `schema-v2-ledger/`: immutable resolution semantics.
-- `compat-v2/`: independently resolved snapshots의 typed compatibility assertion.
 
 Fixture는 source Parus/Delos tree, runtime execution 또는 hardware support를 mirror하지 않는다.
 모든 project fixture는 schema v2만 사용한다. Component manifest version은 project schema와 별개인

@@ -1,7 +1,0 @@
-[profile]
-name = "release"
-schema_version = 2
-base = "base"
-
-[values]
-"parus.compat.capacity" = 4096

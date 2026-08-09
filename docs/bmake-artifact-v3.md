@@ -32,6 +32,11 @@ selected -> generations/<bundle-digest>
                             # complete generation 뒤에만 atomic 교체되는 directory alias
 ```
 
+`component.catalog.json`은 catalog schema v2로, 모든 available component와 dependency,
+versioned KAPI/capability, test metadata, selected root 및 root/private/KAPI/capability
+reason graph를 함께 싣는다. Reason은 source path와 line/column을 포함하며 consumer가
+provider를 다시 추론하거나 first-match fallback을 수행하지 못하게 한다.
+
 `config.mk`, `config.values.mk`, `components.mk`에는 assignment, include와 encoded data만
 있을 수 있다. rule, recipe, conditional, shell expansion 또는 compiler flag는 허용하지
 않는다. Component Makefile의 restricted grammar 검사는 Parus가 소유하며 Confit은 이를

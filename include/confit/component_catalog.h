@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-/** @brief component.toml v1의 closed build kind다. */
+/** @brief component.toml v2의 closed build kind다. */
 typedef enum ConfitComponentKind {
   CONFIT_COMPONENT_KIND_INVALID = 0,
   CONFIT_COMPONENT_KIND_KERNEL_CORE,
@@ -24,21 +24,33 @@ typedef enum ConfitComponentKind {
 } ConfitComponentKind;
 
 /** @brief one strict component.toml manifest의 immutable catalog record다. */
+typedef struct ConfitComponentSourceSpan {
+  size_t line;
+  size_t column;
+} ConfitComponentSourceSpan;
+
+/** @brief one strict component.toml manifest의 immutable catalog record다. */
 typedef struct ConfitComponent {
   char *id;
   ConfitComponentKind kind;
   char *manifest_path;
   char *makefile_path;
-  char **enabled_if;
-  size_t enabled_if_count;
   char **component_dependencies;
+  ConfitComponentSourceSpan *component_dependency_spans;
   size_t component_dependency_count;
   char **kapi_requires;
+  ConfitComponentSourceSpan *kapi_requirement_spans;
   size_t kapi_requirement_count;
   char **capabilities;
+  ConfitComponentSourceSpan *capability_spans;
   size_t capability_count;
   char **kapi_provides;
+  ConfitComponentSourceSpan *kapi_provide_spans;
   size_t kapi_provide_count;
+  char *test_owner;
+  char *test_lane;
+  char *test_evidence_class;
+  unsigned int test_timeout_ms;
 } ConfitComponent;
 
 /** @brief fixed project roots에서 얻은 complete available catalog다. */
@@ -48,12 +60,41 @@ typedef struct ConfitComponentCatalog {
   size_t component_count;
 } ConfitComponentCatalog;
 
+/** @brief selected component를 closure에 넣은 exact authority edge다. */
+typedef enum ConfitComponentReasonKind {
+  CONFIT_COMPONENT_REASON_ROOT = 1,
+  CONFIT_COMPONENT_REASON_PRIVATE_DEPENDENCY,
+  CONFIT_COMPONENT_REASON_KAPI_PROVIDER,
+  CONFIT_COMPONENT_REASON_REQUIRED_CAPABILITY,
+  CONFIT_COMPONENT_REASON_OPTIONAL_CAPABILITY,
+} ConfitComponentReasonKind;
+
+/**
+ * @brief immutable selection reason graph의 한 edge다.
+ *
+ * from_id는 root/capability reason이면 NULL이고 dependency/provider reason이면
+ * consumer component ID다. requirement는 root면 component ID, 나머지는 exact
+ * dependency ID, KAPI 또는 versioned capability atom이다. 모든 문자열은 closure가
+ * 소유한다.
+ */
+typedef struct ConfitComponentReason {
+  ConfitComponentReasonKind kind;
+  char *component_id;
+  char *from_id;
+  char *requirement;
+  char *source_path;
+  size_t source_line;
+  size_t source_column;
+} ConfitComponentReason;
+
 /** @brief selected root의 dependency-first deterministic closure다. */
 typedef struct ConfitComponentClosure {
   char **root_ids;
   size_t root_count;
   const ConfitComponent **ordered;
   size_t component_count;
+  ConfitComponentReason *reasons;
+  size_t reason_count;
 } ConfitComponentClosure;
 
 /** @brief closed kind의 stable schema spelling을 반환한다. */
@@ -94,6 +135,27 @@ void confit_component_closure_clear(ConfitComponentClosure *closure);
 /** @brief exact stable component ID lookup이다. */
 const ConfitComponent *confit_component_catalog_find(
     const ConfitComponentCatalog *catalog, const char *id);
+
+/** @brief exact versioned KAPI provider를 반환하며 없으면 NULL이다. */
+const ConfitComponent *confit_component_catalog_find_kapi_provider(
+    const ConfitComponentCatalog *catalog, const char *kapi);
+
+/** @brief exact versioned capability provider를 반환하며 없으면 NULL이다. */
+const ConfitComponent *confit_component_catalog_find_capability_provider(
+    const ConfitComponentCatalog *catalog, const char *capability);
+
+/** @brief stable diagnostic spelling을 반환한다. */
+const char *confit_component_reason_kind_name(ConfitComponentReasonKind kind);
+
+/**
+ * @brief bounded typo candidate를 lexical tie-break로 반환한다.
+ *
+ * 반환 포인터는 catalog가 소유하며 out_count는 언제나 5 이하이다.
+ */
+size_t confit_component_catalog_suggest(const ConfitComponentCatalog *catalog,
+                                        const char *id,
+                                        const ConfitComponent **out_candidates,
+                                        size_t capacity);
 
 #ifdef __cplusplus
 }

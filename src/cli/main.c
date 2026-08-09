@@ -11,7 +11,7 @@ static void confit_cli_print_help(void) {
       "Confit bmake configuration resolver\n\n"
       "Usage: confit <command> [options]\n\n"
       "Commands:\n"
-      "  check, resolve, gen, explain, list, graph, diff, component, compat\n\n"
+      "  check, resolve, gen, explain, list, graph, diff, component\n\n"
       "`gen` accepts only --artifact bundle and publishes the sealed ABI v3 "
       "bundle.\n"
       "Only schema_version = 2 project input is accepted.\n",

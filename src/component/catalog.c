@@ -11,12 +11,33 @@
 #define CONFIT_COMPONENT_MAX_DEPTH 32U
 #define CONFIT_COMPONENT_MAX_ROOTS 32U
 #define CONFIT_COMPONENT_MAX_COUNT 512U
-#define CONFIT_COMPONENT_MAX_FILE_BYTES (64U * 1024U)
-#define CONFIT_COMPONENT_MAX_STRING_BYTES 192U
+#define CONFIT_COMPONENT_MAX_FILE_BYTES (128U * 1024U)
+#define CONFIT_COMPONENT_MAX_ATOM_BYTES 127U
+#define CONFIT_COMPONENT_MAX_PATH_BYTES 1024U
 #define CONFIT_COMPONENT_MAX_LIST_ITEMS 128U
 #define CONFIT_COMPONENT_MAX_TOTAL_EDGES 4096U
+#define CONFIT_COMPONENT_MAX_SUGGESTIONS 5U
 
 static const char kManifestName[] = "component.toml";
+
+/* Diagnostic path는 catalog/scan allocation 해제 뒤에도 CLI가 소비한다. */
+static _Thread_local char g_component_diagnostic_path[4096];
+
+static void confit_component_diagnostic_set(
+    ConfitDiagnostic *diagnostic, ConfitStatus status, const char *path,
+    size_t line, size_t column, const char *message) {
+  const char *stable_path = 0;
+  if (path != 0) {
+    size_t size = strlen(path);
+    if (size >= sizeof(g_component_diagnostic_path)) {
+      size = sizeof(g_component_diagnostic_path) - 1U;
+    }
+    memcpy(g_component_diagnostic_path, path, size);
+    g_component_diagnostic_path[size] = '\0';
+    stable_path = g_component_diagnostic_path;
+  }
+  confit_diagnostic_set(diagnostic, status, stable_path, line, column, message);
+}
 
 static char *confit_component_strdup(const char *text) {
   const size_t size = text != 0 ? strlen(text) : 0U;
@@ -38,16 +59,21 @@ static void confit_component_clear(ConfitComponent *component) {
   free(component->id);
   free(component->manifest_path);
   free(component->makefile_path);
-  confit_component_string_list_clear(component->enabled_if,
-                                     component->enabled_if_count);
   confit_component_string_list_clear(component->component_dependencies,
                                      component->component_dependency_count);
+  free(component->component_dependency_spans);
   confit_component_string_list_clear(component->kapi_requires,
                                      component->kapi_requirement_count);
+  free(component->kapi_requirement_spans);
   confit_component_string_list_clear(component->capabilities,
                                      component->capability_count);
+  free(component->capability_spans);
   confit_component_string_list_clear(component->kapi_provides,
                                      component->kapi_provide_count);
+  free(component->kapi_provide_spans);
+  free(component->test_owner);
+  free(component->test_lane);
+  free(component->test_evidence_class);
   memset(component, 0, sizeof(*component));
 }
 
@@ -63,10 +89,29 @@ void confit_component_catalog_clear(ConfitComponentCatalog *catalog) {
 }
 
 void confit_component_closure_clear(ConfitComponentClosure *closure) {
+  size_t index;
   if (closure == 0) return;
   confit_component_string_list_clear(closure->root_ids, closure->root_count);
+  for (index = 0U; index < closure->reason_count; ++index) {
+    free(closure->reasons[index].component_id);
+    free(closure->reasons[index].from_id);
+    free(closure->reasons[index].requirement);
+    free(closure->reasons[index].source_path);
+  }
+  free(closure->reasons);
   free(closure->ordered);
   memset(closure, 0, sizeof(*closure));
+}
+
+const char *confit_component_reason_kind_name(ConfitComponentReasonKind kind) {
+  switch (kind) {
+  case CONFIT_COMPONENT_REASON_ROOT: return "root";
+  case CONFIT_COMPONENT_REASON_PRIVATE_DEPENDENCY: return "private-dependency";
+  case CONFIT_COMPONENT_REASON_KAPI_PROVIDER: return "kapi-provider";
+  case CONFIT_COMPONENT_REASON_REQUIRED_CAPABILITY: return "required-capability";
+  case CONFIT_COMPONENT_REASON_OPTIONAL_CAPABILITY: return "optional-capability";
+  default: return "invalid";
+  }
 }
 
 const char *confit_component_kind_name(ConfitComponentKind kind) {
@@ -94,7 +139,7 @@ static ConfitComponentKind confit_component_kind_parse(const char *text) {
 static int confit_component_id_valid(const char *text) {
   size_t index;
   int segment_start = 1;
-  if (text == 0 || text[0] == '\0' || strlen(text) > CONFIT_COMPONENT_MAX_STRING_BYTES) {
+  if (text == 0 || text[0] == '\0' || strlen(text) > CONFIT_COMPONENT_MAX_ATOM_BYTES) {
     return 0;
   }
   for (index = 0U; text[index] != '\0'; ++index) {
@@ -115,7 +160,7 @@ static int confit_component_id_valid(const char *text) {
 
 static int confit_component_atom_valid(const char *text) {
   size_t index;
-  if (text == 0 || text[0] == '\0' || strlen(text) > CONFIT_COMPONENT_MAX_STRING_BYTES) {
+  if (text == 0 || text[0] == '\0' || strlen(text) > CONFIT_COMPONENT_MAX_ATOM_BYTES) {
     return 0;
   }
   for (index = 0U; text[index] != '\0'; ++index) {
@@ -133,7 +178,7 @@ static int confit_component_relative_path_valid(const char *text) {
   const char *cursor;
   if (text == 0 || text[0] == '\0' || text[0] == '/' || text[0] == '\\' ||
       strchr(text, '\\') != 0 ||
-      strlen(text) > CONFIT_COMPONENT_MAX_STRING_BYTES) return 0;
+      strlen(text) > CONFIT_COMPONENT_MAX_PATH_BYTES) return 0;
   segment = text;
   for (cursor = text;; ++cursor) {
     if (*cursor == '/' || *cursor == '\0') {
@@ -160,9 +205,9 @@ static ConfitStatus confit_component_copy_toml_string(const ConfitV2TomlValue *v
   char *copy;
   *out = 0;
   if (value == 0 || !confit_v2_toml_value_string(value, &text, &size) ||
-      size == 0U || size > CONFIT_COMPONENT_MAX_STRING_BYTES ||
+      size == 0U || size > CONFIT_COMPONENT_MAX_ATOM_BYTES ||
       memchr(text, '\0', size) != 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+    confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
                           value != 0 ? confit_v2_toml_value_source(value) : 0,
                           value != 0 ? confit_v2_toml_value_line(value) : 0U,
                           value != 0 ? confit_v2_toml_value_column(value) : 0U,
@@ -175,6 +220,39 @@ static ConfitStatus confit_component_copy_toml_string(const ConfitV2TomlValue *v
   copy[size] = '\0';
   *out = copy;
   return CONFIT_OK;
+}
+
+static int confit_component_capability_valid(const char *text) {
+  const char *version;
+  const char *cursor;
+  if (!confit_component_atom_valid(text)) return 0;
+  version = strrchr(text, '@');
+  if (version == 0 || version == text || version[1] == '\0') return 0;
+  for (cursor = version + 1; *cursor != '\0'; ++cursor) {
+    if (*cursor < '0' || *cursor > '9') return 0;
+  }
+  return version[1] != '0' || version[2] != '\0';
+}
+
+static int confit_component_kapi_valid(const char *text) {
+  const char *version;
+  const char *cursor;
+  if (!confit_component_atom_valid(text)) return 0;
+  version = strrchr(text, '.');
+  if (version == 0 || version[1] != 'v' || version[2] == '\0') return 0;
+  for (cursor = version + 2; *cursor != '\0'; ++cursor) {
+    if (*cursor < '0' || *cursor > '9') return 0;
+  }
+  return version[2] != '0' || version[3] != '\0';
+}
+
+static int confit_component_string_in_closed_set(
+    const char *text, const char *const *items, size_t count) {
+  size_t index;
+  for (index = 0U; index < count; ++index) {
+    if (strcmp(text, items[index]) == 0) return 1;
+  }
+  return 0;
 }
 
 static int confit_component_table_keys(const ConfitV2TomlValue *table,
@@ -195,16 +273,24 @@ static int confit_component_table_keys(const ConfitV2TomlValue *table,
   return 1;
 }
 
+typedef enum ConfitComponentAtomKind {
+  CONFIT_COMPONENT_ATOM_ID = 1,
+  CONFIT_COMPONENT_ATOM_KAPI,
+  CONFIT_COMPONENT_ATOM_CAPABILITY,
+} ConfitComponentAtomKind;
+
 static ConfitStatus confit_component_parse_atom_list(
-    const ConfitV2TomlValue *value, int require_component_id, char ***out_items,
-    size_t *out_count, size_t *total_edges, ConfitDiagnostic *diagnostic) {
+    const ConfitV2TomlValue *value, ConfitComponentAtomKind atom_kind, char ***out_items,
+    ConfitComponentSourceSpan **out_spans, size_t *out_count, size_t *total_edges,
+    ConfitDiagnostic *diagnostic) {
   size_t count;
   size_t index;
   char **items = 0;
+  ConfitComponentSourceSpan *spans = 0;
   if (value == 0) return CONFIT_OK;
   if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
       (count = confit_v2_toml_array_size(value)) > CONFIT_COMPONENT_MAX_LIST_ITEMS) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+    confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
                           confit_v2_toml_value_source(value),
                           confit_v2_toml_value_line(value),
                           confit_v2_toml_value_column(value),
@@ -213,29 +299,40 @@ static ConfitStatus confit_component_parse_atom_list(
   }
   if (count > 0U) {
     items = (char **)calloc(count, sizeof(*items));
-    if (items == 0) return CONFIT_ERR_INTERNAL;
+    spans = (ConfitComponentSourceSpan *)calloc(count, sizeof(*spans));
+    if (items == 0 || spans == 0) {
+      free(items);
+      free(spans);
+      return CONFIT_ERR_INTERNAL;
+    }
   }
   for (index = 0U; index < count; ++index) {
     size_t other;
+    const ConfitV2TomlValue *atom = confit_v2_toml_array_at(value, index);
     ConfitStatus status = confit_component_copy_toml_string(
-        confit_v2_toml_array_at(value, index), &items[index], diagnostic);
+        atom, &items[index], diagnostic);
+    spans[index].line = confit_v2_toml_value_line(atom);
+    spans[index].column = confit_v2_toml_value_column(atom);
     if (status != CONFIT_OK ||
-        !(require_component_id ? confit_component_id_valid(items[index])
-                               : confit_component_atom_valid(items[index]))) {
+        !((atom_kind == CONFIT_COMPONENT_ATOM_ID && confit_component_id_valid(items[index])) ||
+          (atom_kind == CONFIT_COMPONENT_ATOM_KAPI && confit_component_kapi_valid(items[index])) ||
+          (atom_kind == CONFIT_COMPONENT_ATOM_CAPABILITY && confit_component_capability_valid(items[index])))) {
       if (status == CONFIT_OK) {
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
                               confit_v2_toml_value_source(value),
                               confit_v2_toml_value_line(value),
                               confit_v2_toml_value_column(value),
                               "component manifest has an unsafe atom");
       }
       confit_component_string_list_clear(items, count);
+      free(spans);
       return status == CONFIT_OK ? CONFIT_ERR_SCHEMA : status;
     }
     for (other = 0U; other < index; ++other) {
       if (strcmp(items[other], items[index]) == 0) {
         confit_component_string_list_clear(items, count);
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+        free(spans);
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
                               confit_v2_toml_value_source(value),
                               confit_v2_toml_value_line(value),
                               confit_v2_toml_value_column(value),
@@ -247,7 +344,8 @@ static ConfitStatus confit_component_parse_atom_list(
   if (total_edges != 0) {
     if (*total_edges > CONFIT_COMPONENT_MAX_TOTAL_EDGES - count) {
       confit_component_string_list_clear(items, count);
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+      free(spans);
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
                             confit_v2_toml_value_source(value),
                             confit_v2_toml_value_line(value),
                             confit_v2_toml_value_column(value),
@@ -257,6 +355,7 @@ static ConfitStatus confit_component_parse_atom_list(
     *total_edges += count;
   }
   *out_items = items;
+  *out_spans = spans;
   *out_count = count;
   return CONFIT_OK;
 }
@@ -265,18 +364,19 @@ static ConfitStatus confit_component_parse_manifest(
     const char *project_root, const char *manifest_physical,
     const char *manifest_logical, size_t *total_edges, ConfitComponent *out,
     ConfitDiagnostic *diagnostic) {
-  static const char *const root_keys[] = {"schema_version", "component", "selection",
-                                           "dependencies", "provides"};
-  static const char *const component_keys[] = {"id", "kind", "makefile"};
-  static const char *const selection_keys[] = {"enabled_if"};
-  static const char *const dependency_keys[] = {"components", "kapi"};
+  static const char *const root_keys[] = {"schema_version", "component", "requires",
+                                           "provides", "test"};
+  static const char *const component_keys[] = {"id", "kind"};
+  static const char *const requirement_keys[] = {"components", "kapi"};
   static const char *const provide_keys[] = {"capabilities", "kapi"};
+  static const char *const test_keys[] = {"owner", "lane", "timeout_ms",
+                                          "evidence_class", "target", "machine"};
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *component_table;
-  const ConfitV2TomlValue *selection_table;
-  const ConfitV2TomlValue *dependency_table;
+  const ConfitV2TomlValue *requirement_table;
   const ConfitV2TomlValue *provide_table;
+  const ConfitV2TomlValue *test_table;
   const ConfitV2TomlValue *value;
   char directory[4096];
   char makefile_physical[4096];
@@ -292,10 +392,20 @@ static ConfitStatus confit_component_parse_manifest(
   if (!confit_component_table_keys(root, root_keys,
                                    sizeof(root_keys) / sizeof(root_keys[0])) ||
       (value = confit_v2_toml_table_find(root, "schema_version")) == 0 ||
-      !confit_v2_toml_value_int64(value, &schema_version) || schema_version != 1 ||
+      !confit_v2_toml_value_int64(value, &schema_version) || schema_version != 2 ||
       (component_table = confit_v2_toml_table_find(root, "component")) == 0 ||
       !confit_component_table_keys(component_table, component_keys,
-                                   sizeof(component_keys) / sizeof(component_keys[0]))) {
+                                   sizeof(component_keys) / sizeof(component_keys[0])) ||
+      (requirement_table = confit_v2_toml_table_find(root, "requires")) == 0 ||
+      !confit_component_table_keys(requirement_table, requirement_keys,
+                                   sizeof(requirement_keys) / sizeof(requirement_keys[0])) ||
+      confit_v2_toml_table_find(requirement_table, "components") == 0 ||
+      confit_v2_toml_table_find(requirement_table, "kapi") == 0 ||
+      (provide_table = confit_v2_toml_table_find(root, "provides")) == 0 ||
+      !confit_component_table_keys(provide_table, provide_keys,
+                                   sizeof(provide_keys) / sizeof(provide_keys[0])) ||
+      confit_v2_toml_table_find(provide_table, "capabilities") == 0 ||
+      confit_v2_toml_table_find(provide_table, "kapi") == 0) {
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
@@ -314,76 +424,80 @@ static ConfitStatus confit_component_parse_manifest(
     free(kind_text);
     if (out->kind == CONFIT_COMPONENT_KIND_INVALID) goto invalid;
   }
-  {
-    char *makefile_relative = 0;
-    status = confit_component_copy_toml_string(
-        confit_v2_toml_table_find(component_table, "makefile"), &makefile_relative,
-        diagnostic);
-    if (status != CONFIT_OK || !confit_component_relative_path_valid(makefile_relative)) {
-      free(makefile_relative);
-      goto invalid;
-    }
-    separator = strrchr(manifest_physical, '/');
-    if (separator == 0 || (size_t)(separator - manifest_physical) >= sizeof(directory)) {
-      free(makefile_relative);
-      status = CONFIT_ERR_SCHEMA;
-      goto invalid;
-    }
-    memcpy(directory, manifest_physical, (size_t)(separator - manifest_physical));
-    directory[separator - manifest_physical] = '\0';
-    status = confit_host_path_join(makefile_physical, sizeof(makefile_physical),
-                                   directory, makefile_relative, diagnostic);
-    free(makefile_relative);
-    if (status != CONFIT_OK ||
-        confit_host_path_canonicalize(makefile_canonical, sizeof(makefile_canonical),
-                                      makefile_physical, diagnostic) != CONFIT_OK ||
-        strcmp(makefile_canonical, makefile_physical) != 0 ||
-        !confit_component_path_within(directory, makefile_canonical) ||
-        !confit_component_path_within(project_root, makefile_canonical)) {
-      status = CONFIT_ERR_SCHEMA;
-      goto invalid;
-    }
-    out->makefile_path = confit_component_strdup(makefile_canonical + strlen(project_root) + 1U);
-    if (out->makefile_path == 0) {
-      status = CONFIT_ERR_INTERNAL;
-      goto invalid;
-    }
-  }
-  selection_table = confit_v2_toml_table_find(root, "selection");
-  if (selection_table != 0 &&
-      !confit_component_table_keys(selection_table, selection_keys,
-                                   sizeof(selection_keys) / sizeof(selection_keys[0]))) {
+  separator = strrchr(manifest_physical, '/');
+  if (separator == 0 || (size_t)(separator - manifest_physical) >= sizeof(directory)) {
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
-  if (selection_table != 0) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(selection_table, "enabled_if"), 0,
-      &out->enabled_if, &out->enabled_if_count, total_edges, diagnostic);
-  dependency_table = confit_v2_toml_table_find(root, "dependencies");
-  if (status == CONFIT_OK && dependency_table != 0 &&
-      !confit_component_table_keys(dependency_table, dependency_keys,
-                                   sizeof(dependency_keys) / sizeof(dependency_keys[0]))) {
+  memcpy(directory, manifest_physical, (size_t)(separator - manifest_physical));
+  directory[separator - manifest_physical] = '\0';
+  status = confit_host_path_join(makefile_physical, sizeof(makefile_physical),
+                                 directory, "Makefile", diagnostic);
+  if (status != CONFIT_OK ||
+      confit_host_path_canonicalize(makefile_canonical, sizeof(makefile_canonical),
+                                    makefile_physical, diagnostic) != CONFIT_OK ||
+      strcmp(makefile_canonical, makefile_physical) != 0 ||
+      !confit_component_path_within(directory, makefile_canonical) ||
+      !confit_component_path_within(project_root, makefile_canonical)) {
     status = CONFIT_ERR_SCHEMA;
+    goto invalid;
   }
-  if (status == CONFIT_OK && dependency_table != 0) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(dependency_table, "components"), 1,
-      &out->component_dependencies, &out->component_dependency_count, total_edges,
-      diagnostic);
-  if (status == CONFIT_OK && dependency_table != 0) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(dependency_table, "kapi"), 0, &out->kapi_requires,
+  out->makefile_path = confit_component_strdup(makefile_canonical + strlen(project_root) + 1U);
+  if (out->makefile_path == 0) {
+    status = CONFIT_ERR_INTERNAL;
+    goto invalid;
+  }
+  status = confit_component_parse_atom_list(
+      confit_v2_toml_table_find(requirement_table, "components"), CONFIT_COMPONENT_ATOM_ID,
+      &out->component_dependencies, &out->component_dependency_spans,
+      &out->component_dependency_count, total_edges, diagnostic);
+  if (status == CONFIT_OK) status = confit_component_parse_atom_list(
+      confit_v2_toml_table_find(requirement_table, "kapi"), CONFIT_COMPONENT_ATOM_KAPI,
+      &out->kapi_requires, &out->kapi_requirement_spans,
       &out->kapi_requirement_count, total_edges, diagnostic);
-  provide_table = confit_v2_toml_table_find(root, "provides");
-  if (status == CONFIT_OK && provide_table != 0 &&
-      !confit_component_table_keys(provide_table, provide_keys,
-                                   sizeof(provide_keys) / sizeof(provide_keys[0]))) {
+  if (status == CONFIT_OK) status = confit_component_parse_atom_list(
+      confit_v2_toml_table_find(provide_table, "capabilities"), CONFIT_COMPONENT_ATOM_CAPABILITY,
+      &out->capabilities, &out->capability_spans, &out->capability_count,
+      total_edges, diagnostic);
+  if (status == CONFIT_OK) status = confit_component_parse_atom_list(
+      confit_v2_toml_table_find(provide_table, "kapi"), CONFIT_COMPONENT_ATOM_KAPI,
+      &out->kapi_provides, &out->kapi_provide_spans,
+      &out->kapi_provide_count, total_edges, diagnostic);
+  test_table = confit_v2_toml_table_find(root, "test");
+  if (status == CONFIT_OK &&
+      ((out->kind == CONFIT_COMPONENT_KIND_TEST && test_table == 0) ||
+       (out->kind != CONFIT_COMPONENT_KIND_TEST && test_table != 0) ||
+       (test_table != 0 && !confit_component_table_keys(
+           test_table, test_keys, sizeof(test_keys) / sizeof(test_keys[0]))))) {
     status = CONFIT_ERR_SCHEMA;
   }
-  if (status == CONFIT_OK && provide_table != 0) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(provide_table, "capabilities"), 0,
-      &out->capabilities, &out->capability_count, total_edges, diagnostic);
-  if (status == CONFIT_OK && provide_table != 0) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(provide_table, "kapi"), 0, &out->kapi_provides,
-      &out->kapi_provide_count, total_edges, diagnostic);
+  if (status == CONFIT_OK && test_table != 0) {
+    static const char *const lanes[] = {"unit", "selftest", "security", "qemu",
+                                        "package", "documentation", "hardware-manual"};
+    static const char *const evidence[] = {"host-unit", "booted-selftest",
+        "host-security", "qemu-smoke", "qemu-runtime", "package",
+        "documentation", "physical-hardware"};
+    int64_t timeout_ms = 0;
+    status = confit_component_copy_toml_string(
+        confit_v2_toml_table_find(test_table, "owner"), &out->test_owner, diagnostic);
+    if (status == CONFIT_OK) status = confit_component_copy_toml_string(
+        confit_v2_toml_table_find(test_table, "lane"), &out->test_lane, diagnostic);
+    if (status == CONFIT_OK) status = confit_component_copy_toml_string(
+        confit_v2_toml_table_find(test_table, "evidence_class"),
+        &out->test_evidence_class, diagnostic);
+    value = confit_v2_toml_table_find(test_table, "timeout_ms");
+    if (status == CONFIT_OK &&
+        (!confit_component_id_valid(out->test_owner) ||
+         !confit_component_string_in_closed_set(
+             out->test_lane, lanes, sizeof(lanes) / sizeof(lanes[0])) ||
+         !confit_component_string_in_closed_set(
+             out->test_evidence_class, evidence, sizeof(evidence) / sizeof(evidence[0])) ||
+         value == 0 || !confit_v2_toml_value_int64(value, &timeout_ms) ||
+         timeout_ms < 1 || timeout_ms > 120000)) {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) out->test_timeout_ms = (unsigned int)timeout_ms;
+  }
   if (status != CONFIT_OK) goto invalid;
   out->manifest_path = confit_component_strdup(manifest_logical);
   if (out->manifest_path == 0) {
@@ -394,8 +508,8 @@ static ConfitStatus confit_component_parse_manifest(
   return CONFIT_OK;
 
 invalid:
-  if (status == CONFIT_OK) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, manifest_physical, 0U, 0U,
+  if (status == CONFIT_OK || !confit_diagnostic_has_error(diagnostic)) {
+    confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, manifest_physical, 0U, 0U,
                           "component.toml has an unknown field or invalid schema");
     status = CONFIT_ERR_SCHEMA;
   }
@@ -438,22 +552,37 @@ static int confit_component_list_contains(char *const *items, size_t count,
 static ConfitStatus confit_component_catalog_validate(
     const ConfitComponentCatalog *catalog, ConfitDiagnostic *diagnostic) {
   unsigned char *emitted;
+  unsigned char *depths;
   size_t emitted_count = 0U;
   size_t index;
   if (catalog->component_count == 0U) return CONFIT_OK;
   emitted = (unsigned char *)calloc(catalog->component_count, sizeof(*emitted));
-  if (emitted == 0) return CONFIT_ERR_INTERNAL;
+  depths = (unsigned char *)calloc(catalog->component_count, sizeof(*depths));
+  if (emitted == 0 || depths == 0) {
+    free(depths);
+    free(emitted);
+    return CONFIT_ERR_INTERNAL;
+  }
   for (index = 0U; index < catalog->component_count; ++index) {
     const ConfitComponent *component = &catalog->components[index];
     size_t dependency_index;
     size_t other;
+    if (component->kind == CONFIT_COMPONENT_KIND_TEST &&
+        confit_component_catalog_find(catalog, component->test_owner) == 0) {
+      free(emitted);
+      free(depths);
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path,
+                            0U, 0U, "test component owner is unavailable");
+      return CONFIT_ERR_SCHEMA;
+    }
     for (dependency_index = 0U; dependency_index < component->component_dependency_count;
          ++dependency_index) {
       if (strcmp(component->id, component->component_dependencies[dependency_index]) == 0 ||
           confit_component_catalog_find(catalog,
                                         component->component_dependencies[dependency_index]) == 0) {
         free(emitted);
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+        free(depths);
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
                               "component dependency is missing or self-referential");
         return CONFIT_ERR_SCHEMA;
       }
@@ -468,7 +597,8 @@ static ConfitStatus confit_component_catalog_validate(
       }
       if (providers != 1U) {
         free(emitted);
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+        free(depths);
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
                               "component KAPI requirement does not have one exact provider");
         return CONFIT_ERR_SCHEMA;
       }
@@ -480,7 +610,8 @@ static ConfitStatus confit_component_catalog_validate(
                                            catalog->components[other].capability_count,
                                            component->capabilities[dependency_index])) {
           free(emitted);
-          confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+          free(depths);
+          confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
                                 "component capability has multiple exact providers");
           return CONFIT_ERR_SCHEMA;
         }
@@ -493,7 +624,8 @@ static ConfitStatus confit_component_catalog_validate(
                                            catalog->components[other].kapi_provide_count,
                                            component->kapi_provides[dependency_index])) {
           free(emitted);
-          confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+          free(depths);
+          confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
                                 "component KAPI has multiple exact providers");
           return CONFIT_ERR_SCHEMA;
         }
@@ -505,6 +637,7 @@ static ConfitStatus confit_component_catalog_validate(
     for (index = 0U; index < catalog->component_count; ++index) {
       const ConfitComponent *component = &catalog->components[index];
       size_t dependency_index;
+      unsigned char depth = 1U;
       int ready = !emitted[index];
       if (!ready) continue;
       for (dependency_index = 0U; dependency_index < component->component_dependency_count;
@@ -516,21 +649,45 @@ static ConfitStatus confit_component_catalog_validate(
           ready = 0;
           break;
         }
+        if ((unsigned int)depths[dependency_slot] + 1U > depth) {
+          depth = (unsigned char)(depths[dependency_slot] + 1U);
+        }
+      }
+      for (dependency_index = 0U; ready &&
+           dependency_index < component->kapi_requirement_count; ++dependency_index) {
+        const ConfitComponent *dependency = confit_component_catalog_find_kapi_provider(
+            catalog, component->kapi_requires[dependency_index]);
+        const size_t dependency_slot = (size_t)(dependency - catalog->components);
+        if (!emitted[dependency_slot]) ready = 0;
+        else if ((unsigned int)depths[dependency_slot] + 1U > depth) {
+          depth = (unsigned char)(depths[dependency_slot] + 1U);
+        }
       }
       if (ready) {
+        if (depth > CONFIT_COMPONENT_MAX_DEPTH) {
+          free(depths);
+          free(emitted);
+          confit_component_diagnostic_set(
+              diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path, 0U, 0U,
+              "component dependency graph exceeds the supported depth");
+          return CONFIT_ERR_SCHEMA;
+        }
         emitted[index] = 1U;
+        depths[index] = depth;
         emitted_count += 1U;
         progressed = 1;
       }
     }
     if (!progressed) {
       free(emitted);
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, catalog->project_root, 0U, 0U,
+      free(depths);
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, catalog->project_root, 0U, 0U,
                             "component dependency graph contains a cycle");
       return CONFIT_ERR_SCHEMA;
     }
   }
   free(emitted);
+  free(depths);
   return CONFIT_OK;
 }
 
@@ -544,7 +701,7 @@ ConfitStatus confit_component_catalog_load(const ConfitV2Project *project,
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   if (project->component_roots.count > CONFIT_COMPONENT_MAX_ROOTS) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, project->config_root,
+    confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, project->config_root,
                           0U, 0U,
                           "component root count exceeds the supported limit");
     return CONFIT_ERR_SCHEMA;
@@ -559,7 +716,7 @@ ConfitStatus confit_component_catalog_load(const ConfitV2Project *project,
     size_t path_count = 0U;
     size_t path_index;
     if (!confit_component_relative_path_valid(project->component_roots.items[root_index])) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, project->config_root, 0U, 0U,
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, project->config_root, 0U, 0U,
                             "project component_roots contains an unsafe path");
       status = CONFIT_ERR_SCHEMA;
       break;
@@ -575,7 +732,7 @@ ConfitStatus confit_component_catalog_load(const ConfitV2Project *project,
       ConfitComponent *grown;
       size_t existing;
       if (!confit_component_path_within(project->project_root, paths[path_index])) {
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index], 0U, 0U,
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index], 0U, 0U,
                               "component manifest escapes the project root");
         status = CONFIT_ERR_SCHEMA;
         break;
@@ -586,7 +743,7 @@ ConfitStatus confit_component_catalog_load(const ConfitV2Project *project,
       if (status != CONFIT_OK) break;
       if (out_catalog->component_count >= CONFIT_COMPONENT_MAX_COUNT) {
         confit_component_clear(&parsed);
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index],
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index],
                               0U, 0U,
                               "component catalog count exceeds the supported limit");
         status = CONFIT_ERR_SCHEMA;
@@ -596,7 +753,7 @@ ConfitStatus confit_component_catalog_load(const ConfitV2Project *project,
         if (strcmp(out_catalog->components[existing].id, parsed.id) == 0 ||
             strcmp(out_catalog->components[existing].manifest_path, parsed.manifest_path) == 0) {
           confit_component_clear(&parsed);
-          confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index], 0U, 0U,
+          confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, paths[path_index], 0U, 0U,
                                 "component catalog has a duplicate ID or path");
           status = CONFIT_ERR_SCHEMA;
           break;
@@ -645,14 +802,14 @@ ConfitStatus confit_component_catalog_resolve(
     size_t other;
     if (!confit_component_id_valid(root_ids[root_index]) ||
         confit_component_catalog_find(catalog, root_ids[root_index]) == 0) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, root_ids[root_index], 0U, 0U,
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, root_ids[root_index], 0U, 0U,
                             "selected component root is unavailable");
       confit_component_closure_clear(out_closure);
       return CONFIT_ERR_SCHEMA;
     }
     for (other = 0U; other < root_index; ++other) {
       if (strcmp(root_ids[other], root_ids[root_index]) == 0) {
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, root_ids[root_index], 0U, 0U,
+        confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, root_ids[root_index], 0U, 0U,
                               "selected component root is duplicated");
         confit_component_closure_clear(out_closure);
         return CONFIT_ERR_SCHEMA;
@@ -684,18 +841,20 @@ ConfitStatus confit_component_catalog_resolve(
       const ConfitComponent *component = &catalog->components[index];
       size_t dependency_index;
       if (!selected[index]) continue;
-      if (component->enabled_if_count != 0U) {
-        free(selected);
-        free(emitted);
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, component->manifest_path, 0U, 0U,
-                              "component enabled_if requires a typed selection evaluator");
-        confit_component_closure_clear(out_closure);
-        return CONFIT_ERR_UNSUPPORTED;
-      }
       for (dependency_index = 0U; dependency_index < component->component_dependency_count;
            ++dependency_index) {
         const ConfitComponent *dependency = confit_component_catalog_find(
             catalog, component->component_dependencies[dependency_index]);
+        const size_t dependency_slot = (size_t)(dependency - catalog->components);
+        if (!selected[dependency_slot]) {
+          selected[dependency_slot] = 1U;
+          changed = 1;
+        }
+      }
+      for (dependency_index = 0U; dependency_index < component->kapi_requirement_count;
+           ++dependency_index) {
+        const ConfitComponent *dependency = confit_component_catalog_find_kapi_provider(
+            catalog, component->kapi_requires[dependency_index]);
         const size_t dependency_slot = (size_t)(dependency - catalog->components);
         if (!selected[dependency_slot]) {
           selected[dependency_slot] = 1U;
@@ -735,6 +894,12 @@ ConfitStatus confit_component_catalog_resolve(
           break;
         }
       }
+      for (dependency_index = 0U; ready &&
+           dependency_index < component->kapi_requirement_count; ++dependency_index) {
+        const ConfitComponent *dependency = confit_component_catalog_find_kapi_provider(
+            catalog, component->kapi_requires[dependency_index]);
+        if (!emitted[(size_t)(dependency - catalog->components)]) ready = 0;
+      }
       if (ready) {
         emitted[index] = 1U;
         out_closure->ordered[out_closure->component_count++] = component;
@@ -744,7 +909,7 @@ ConfitStatus confit_component_catalog_resolve(
     if (!progressed) {
       free(selected);
       free(emitted);
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, catalog->project_root, 0U, 0U,
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, catalog->project_root, 0U, 0U,
                             "selected component closure contains a cycle");
       confit_component_closure_clear(out_closure);
       return CONFIT_ERR_SCHEMA;
@@ -752,6 +917,78 @@ ConfitStatus confit_component_catalog_resolve(
   }
   free(selected);
   free(emitted);
+  {
+    size_t index;
+    size_t reason_capacity = root_count;
+    for (index = 0U; index < out_closure->component_count; ++index) {
+      reason_capacity += out_closure->ordered[index]->component_dependency_count;
+      reason_capacity += out_closure->ordered[index]->kapi_requirement_count;
+    }
+    if (reason_capacity > CONFIT_COMPONENT_MAX_TOTAL_EDGES + CONFIT_COMPONENT_MAX_LIST_ITEMS) {
+      confit_component_closure_clear(out_closure);
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (reason_capacity > 0U) {
+      out_closure->reasons = (ConfitComponentReason *)calloc(
+          reason_capacity, sizeof(*out_closure->reasons));
+      if (out_closure->reasons == 0) {
+        confit_component_closure_clear(out_closure);
+        return CONFIT_ERR_INTERNAL;
+      }
+    }
+    for (index = 0U; index < root_count; ++index) {
+      const ConfitComponent *root_component =
+          confit_component_catalog_find(catalog, root_ids[index]);
+      ConfitComponentReason *reason = &out_closure->reasons[out_closure->reason_count++];
+      reason->kind = CONFIT_COMPONENT_REASON_ROOT;
+      reason->component_id = confit_component_strdup(root_ids[index]);
+      reason->requirement = confit_component_strdup(root_ids[index]);
+      reason->source_path = confit_component_strdup(root_component->manifest_path);
+      reason->source_line = 1U;
+      reason->source_column = 1U;
+      if (reason->component_id == 0 || reason->requirement == 0 ||
+          reason->source_path == 0) {
+        confit_component_closure_clear(out_closure);
+        return CONFIT_ERR_INTERNAL;
+      }
+    }
+    for (index = 0U; index < out_closure->component_count; ++index) {
+      const ConfitComponent *component = out_closure->ordered[index];
+      size_t edge;
+      for (edge = 0U; edge < component->component_dependency_count; ++edge) {
+        ConfitComponentReason *reason = &out_closure->reasons[out_closure->reason_count++];
+        reason->kind = CONFIT_COMPONENT_REASON_PRIVATE_DEPENDENCY;
+        reason->component_id = confit_component_strdup(component->component_dependencies[edge]);
+        reason->from_id = confit_component_strdup(component->id);
+        reason->requirement = confit_component_strdup(component->component_dependencies[edge]);
+        reason->source_path = confit_component_strdup(component->manifest_path);
+        reason->source_line = component->component_dependency_spans[edge].line;
+        reason->source_column = component->component_dependency_spans[edge].column;
+        if (reason->component_id == 0 || reason->from_id == 0 || reason->requirement == 0 ||
+            reason->source_path == 0) {
+          confit_component_closure_clear(out_closure);
+          return CONFIT_ERR_INTERNAL;
+        }
+      }
+      for (edge = 0U; edge < component->kapi_requirement_count; ++edge) {
+        const ConfitComponent *provider = confit_component_catalog_find_kapi_provider(
+            catalog, component->kapi_requires[edge]);
+        ConfitComponentReason *reason = &out_closure->reasons[out_closure->reason_count++];
+        reason->kind = CONFIT_COMPONENT_REASON_KAPI_PROVIDER;
+        reason->component_id = confit_component_strdup(provider->id);
+        reason->from_id = confit_component_strdup(component->id);
+        reason->requirement = confit_component_strdup(component->kapi_requires[edge]);
+        reason->source_path = confit_component_strdup(component->manifest_path);
+        reason->source_line = component->kapi_requirement_spans[edge].line;
+        reason->source_column = component->kapi_requirement_spans[edge].column;
+        if (reason->component_id == 0 || reason->from_id == 0 || reason->requirement == 0 ||
+            reason->source_path == 0) {
+          confit_component_closure_clear(out_closure);
+          return CONFIT_ERR_INTERNAL;
+        }
+      }
+    }
+  }
   return CONFIT_OK;
 }
 
@@ -768,6 +1005,47 @@ static void confit_component_root_list_clear(char **roots, size_t root_count) {
   size_t index;
   for (index = 0U; index < root_count; ++index) free(roots[index]);
   free(roots);
+}
+
+static int confit_component_id_in_list(const char *id,
+                                       const char *const *items,
+                                       size_t count) {
+  size_t index;
+  for (index = 0U; index < count; ++index) {
+    if (strcmp(id, items[index]) == 0) return 1;
+  }
+  return 0;
+}
+
+static ConfitStatus confit_component_reason_append(
+    ConfitComponentClosure *closure, ConfitComponentReasonKind kind,
+    const char *component_id, const char *from_id, const char *requirement,
+    const char *source_path, size_t source_line, size_t source_column) {
+  ConfitComponentReason *grown = (ConfitComponentReason *)realloc(
+      closure->reasons, (closure->reason_count + 1U) * sizeof(*grown));
+  ConfitComponentReason *reason;
+  if (grown == 0) return CONFIT_ERR_INTERNAL;
+  closure->reasons = grown;
+  reason = &closure->reasons[closure->reason_count];
+  memset(reason, 0, sizeof(*reason));
+  reason->kind = kind;
+  reason->component_id = confit_component_strdup(component_id);
+  reason->from_id = from_id != 0 ? confit_component_strdup(from_id) : 0;
+  reason->requirement = confit_component_strdup(requirement);
+  reason->source_path = confit_component_strdup(source_path);
+  reason->source_line = source_line;
+  reason->source_column = source_column;
+  if (reason->component_id == 0 || (from_id != 0 && reason->from_id == 0) ||
+      reason->requirement == 0 || reason->source_path == 0) {
+    free(reason->component_id);
+    free(reason->from_id);
+    free(reason->requirement);
+    free(reason->source_path);
+    memset(reason, 0, sizeof(*reason));
+    return CONFIT_ERR_INTERNAL;
+  }
+  closure->reason_count += 1U;
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_component_root_list_append(char ***roots,
@@ -796,7 +1074,7 @@ static ConfitStatus confit_component_root_list_append(char ***roots,
   return CONFIT_OK;
 }
 
-static const ConfitComponent *confit_component_catalog_find_capability_provider(
+const ConfitComponent *confit_component_catalog_find_capability_provider(
     const ConfitComponentCatalog *catalog, const char *capability) {
   size_t index;
   for (index = 0U; index < catalog->component_count; ++index) {
@@ -807,6 +1085,79 @@ static const ConfitComponent *confit_component_catalog_find_capability_provider(
     }
   }
   return 0;
+}
+
+const ConfitComponent *confit_component_catalog_find_kapi_provider(
+    const ConfitComponentCatalog *catalog, const char *kapi) {
+  size_t index;
+  if (catalog == 0 || kapi == 0) return 0;
+  for (index = 0U; index < catalog->component_count; ++index) {
+    const ConfitComponent *component = &catalog->components[index];
+    if (confit_component_list_contains(component->kapi_provides,
+                                        component->kapi_provide_count, kapi)) {
+      return component;
+    }
+  }
+  return 0;
+}
+
+static size_t confit_component_edit_distance(const char *left, const char *right) {
+  size_t previous[CONFIT_COMPONENT_MAX_ATOM_BYTES + 1U];
+  size_t current[CONFIT_COMPONENT_MAX_ATOM_BYTES + 1U];
+  size_t left_size = strlen(left);
+  size_t right_size = strlen(right);
+  size_t row;
+  size_t column;
+  if (left_size > CONFIT_COMPONENT_MAX_ATOM_BYTES ||
+      right_size > CONFIT_COMPONENT_MAX_ATOM_BYTES) return SIZE_MAX;
+  for (column = 0U; column <= right_size; ++column) previous[column] = column;
+  for (row = 1U; row <= left_size; ++row) {
+    current[0] = row;
+    for (column = 1U; column <= right_size; ++column) {
+      size_t deletion = previous[column] + 1U;
+      size_t insertion = current[column - 1U] + 1U;
+      size_t substitution = previous[column - 1U] +
+          (left[row - 1U] == right[column - 1U] ? 0U : 1U);
+      size_t best = deletion < insertion ? deletion : insertion;
+      if (substitution < best) best = substitution;
+      current[column] = best;
+    }
+    memcpy(previous, current, (right_size + 1U) * sizeof(previous[0]));
+  }
+  return previous[right_size];
+}
+
+size_t confit_component_catalog_suggest(const ConfitComponentCatalog *catalog,
+                                        const char *id,
+                                        const ConfitComponent **out_candidates,
+                                        size_t capacity) {
+  size_t distances[CONFIT_COMPONENT_MAX_SUGGESTIONS];
+  size_t count = 0U;
+  size_t index;
+  size_t limit = capacity < CONFIT_COMPONENT_MAX_SUGGESTIONS
+                     ? capacity : CONFIT_COMPONENT_MAX_SUGGESTIONS;
+  if (catalog == 0 || id == 0 || out_candidates == 0 || limit == 0U) return 0U;
+  for (index = 0U; index < catalog->component_count; ++index) {
+    const ConfitComponent *candidate = &catalog->components[index];
+    size_t distance = confit_component_edit_distance(id, candidate->id);
+    size_t slot = count;
+    while (slot > 0U &&
+           (distance < distances[slot - 1U] ||
+            (distance == distances[slot - 1U] &&
+             strcmp(candidate->id, out_candidates[slot - 1U]->id) < 0))) {
+      if (slot < limit) {
+        distances[slot] = distances[slot - 1U];
+        out_candidates[slot] = out_candidates[slot - 1U];
+      }
+      --slot;
+    }
+    if (slot < limit) {
+      distances[slot] = distance;
+      out_candidates[slot] = candidate;
+      if (count < limit) ++count;
+    }
+  }
+  return count;
 }
 
 ConfitStatus confit_component_catalog_resolve_selection(
@@ -834,8 +1185,8 @@ ConfitStatus confit_component_catalog_resolve_selection(
   }
   for (index = 0U; status == CONFIT_OK && index < required_capability_count; ++index) {
     const ConfitComponent *provider;
-    if (!confit_component_atom_valid(required_capabilities[index])) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
+    if (!confit_component_capability_valid(required_capabilities[index])) {
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
                             0U, 0U, "required component capability is unsafe");
       status = CONFIT_ERR_SCHEMA;
       break;
@@ -843,7 +1194,7 @@ ConfitStatus confit_component_catalog_resolve_selection(
     provider = confit_component_catalog_find_capability_provider(
         catalog, required_capabilities[index]);
     if (provider == 0) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, required_capabilities[index],
                             0U, 0U, "required component capability is unavailable");
       status = CONFIT_ERR_SCHEMA;
       break;
@@ -853,8 +1204,8 @@ ConfitStatus confit_component_catalog_resolve_selection(
   }
   for (index = 0U; status == CONFIT_OK && index < optional_capability_count; ++index) {
     const ConfitComponent *provider;
-    if (!confit_component_atom_valid(optional_capabilities[index])) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, optional_capabilities[index],
+    if (!confit_component_capability_valid(optional_capabilities[index])) {
+      confit_component_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, optional_capabilities[index],
                             0U, 0U, "optional component capability is unsafe");
       status = CONFIT_ERR_SCHEMA;
       break;
@@ -871,6 +1222,58 @@ ConfitStatus confit_component_catalog_resolve_selection(
         catalog, (const char *const *)effective_roots, effective_root_count,
         out_closure, diagnostic);
   }
+  if (status == CONFIT_OK) {
+    size_t read_index;
+    size_t write_index = 0U;
+    for (read_index = 0U; read_index < out_closure->reason_count; ++read_index) {
+      ConfitComponentReason *reason = &out_closure->reasons[read_index];
+      if (reason->kind == CONFIT_COMPONENT_REASON_ROOT &&
+          !confit_component_id_in_list(reason->component_id, component_roots,
+                                       component_root_count)) {
+        free(reason->component_id);
+        free(reason->from_id);
+        free(reason->requirement);
+        free(reason->source_path);
+        continue;
+      }
+      if (write_index != read_index) out_closure->reasons[write_index] = *reason;
+      ++write_index;
+    }
+    out_closure->reason_count = write_index;
+  }
+  for (index = 0U; status == CONFIT_OK && index < required_capability_count; ++index) {
+    const ConfitComponent *provider = confit_component_catalog_find_capability_provider(
+        catalog, required_capabilities[index]);
+    size_t capability_index = 0U;
+    while (capability_index < provider->capability_count &&
+           strcmp(provider->capabilities[capability_index],
+                  required_capabilities[index]) != 0) {
+      ++capability_index;
+    }
+    status = confit_component_reason_append(
+        out_closure, CONFIT_COMPONENT_REASON_REQUIRED_CAPABILITY, provider->id,
+        0, required_capabilities[index], provider->manifest_path,
+        provider->capability_spans[capability_index].line,
+        provider->capability_spans[capability_index].column);
+  }
+  for (index = 0U; status == CONFIT_OK && index < optional_capability_count; ++index) {
+    const ConfitComponent *provider = confit_component_catalog_find_capability_provider(
+        catalog, optional_capabilities[index]);
+    if (provider != 0) {
+      size_t capability_index = 0U;
+      while (capability_index < provider->capability_count &&
+             strcmp(provider->capabilities[capability_index],
+                    optional_capabilities[index]) != 0) {
+        ++capability_index;
+      }
+      status = confit_component_reason_append(
+          out_closure, CONFIT_COMPONENT_REASON_OPTIONAL_CAPABILITY, provider->id,
+          0, optional_capabilities[index], provider->manifest_path,
+          provider->capability_spans[capability_index].line,
+          provider->capability_spans[capability_index].column);
+    }
+  }
+  if (status != CONFIT_OK) confit_component_closure_clear(out_closure);
   confit_component_root_list_clear(effective_roots, effective_root_count);
   return status;
 }
