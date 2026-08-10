@@ -58,6 +58,8 @@ int main(void) {
   ConfitV4ArtifactSet artifacts;
   ConfitV4ArtifactSet incomplete;
   ConfitV4ArtifactSet targeted;
+  ConfitV4ArtifactSet component_first;
+  ConfitV4ArtifactSet component_second;
   ConfitV4ArtifactOptions targeted_options;
   ConfitTargetPlan target_plan;
   ConfitV4PublishOptions publication;
@@ -80,6 +82,8 @@ int main(void) {
   confit_diagnostic_init(&diagnostic);
   memset(&artifacts, 0, sizeof(artifacts));
   memset(&targeted, 0, sizeof(targeted));
+  memset(&component_first, 0, sizeof(component_first));
+  memset(&component_second, 0, sizeof(component_second));
   memset(&targeted_options, 0, sizeof(targeted_options));
   memset(&target_plan, 0, sizeof(target_plan));
   memset(&publication, 0, sizeof(publication));
@@ -98,6 +102,88 @@ int main(void) {
   CONFIT_TEST_ASSERT(strstr(artifacts.target_mk,
                             "PARUS_TARGET_PLAN_ABI:= 0") != 0);
   CONFIT_TEST_ASSERT(artifacts.reason_json != 0 && artifacts.tests_mk != 0);
+
+  /* schema v3 component selection은 catalog/profile digest, KAPI 의미와
+   * deterministic ordering을 selected bundle에 함께 봉인한다. */
+  {
+    char *features[] = {"world.synthetic@1"};
+    char *roots[] = {"world.synthetic@1"};
+    const ConfitComponent *ordered[1];
+    ConfitComponent component;
+    ConfitComponentCatalog catalog;
+    ConfitComponentClosure closure;
+    ConfitComponentReason reason;
+    ConfitV2ArtifactInput profile_input;
+    ConfitV4ArtifactOptions component_options;
+    memset(&component, 0, sizeof(component));
+    memset(&catalog, 0, sizeof(catalog));
+    memset(&closure, 0, sizeof(closure));
+    memset(&reason, 0, sizeof(reason));
+    memset(&profile_input, 0, sizeof(profile_input));
+    memset(&component_options, 0, sizeof(component_options));
+    component.id = "world.synthetic";
+    component.kind = CONFIT_COMPONENT_KIND_WORLD_FEATURE;
+    component.summary = "synthetic deterministic world feature";
+    component.owner = "world.synthetic";
+    component.manifest_path = "components/world.synthetic/component.toml";
+    component.makefile_path = "components/world.synthetic/Makefile";
+    component.build_include = "parus.world.mk";
+    component.feature_provides = features;
+    component.feature_provide_count = 1U;
+    catalog.project_root = "/tmp";
+    catalog.components = &component;
+    catalog.component_count = 1U;
+    ordered[0] = &component;
+    closure.root_features = roots;
+    closure.root_feature_count = 1U;
+    closure.ordered = ordered;
+    closure.component_count = 1U;
+    reason.kind = CONFIT_COMPONENT_REASON_ROOT_FEATURE;
+    reason.provider_selection = CONFIT_COMPONENT_PROVIDER_SELECTION_UNIQUE;
+    reason.component_id = "world.synthetic";
+    reason.requirement = "world.synthetic@1";
+    reason.source_path = "/tmp/profile.toml";
+    reason.source_line = 7U;
+    reason.source_column = 11U;
+    closure.reasons = &reason;
+    closure.reason_count = 1U;
+    profile_input.path = "config/profiles/profile.toml";
+    profile_input.content_hash =
+        "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    profile_input.role = "profile";
+    component_options.inputs = &profile_input;
+    component_options.input_count = 1U;
+    component_options.component_catalog = &catalog;
+    component_options.component_closure = &closure;
+    {
+      const ConfitStatus component_status = confit_v4_generate_artifacts(
+          snapshot, &component_options, &component_first, &diagnostic);
+      if (component_status != CONFIT_OK) {
+        fprintf(stderr, "component serialization diagnostic: %s\n",
+                diagnostic.message != 0 ? diagnostic.message : "none");
+      }
+      CONFIT_TEST_ASSERT(component_status == CONFIT_OK);
+    }
+    CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
+                           snapshot, &component_options, &component_second,
+                           &diagnostic) == CONFIT_OK);
+    CONFIT_TEST_ASSERT(strcmp(component_first.bundle_digest,
+                              component_second.bundle_digest) == 0);
+    CONFIT_TEST_ASSERT(strcmp(component_first.selection_json,
+                              component_second.selection_json) == 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.selection_json,
+                              "\"schema_version\": 3") != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.selection_json,
+                              "\"catalog_digest\"") != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.selection_json,
+                              profile_input.content_hash) != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.component_catalog_json,
+                              "confit-component-catalog-v3") != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.tests_mk,
+                              "not selectable schema v3 components") != 0);
+    confit_v4_artifact_set_clear(&component_first);
+    confit_v4_artifact_set_clear(&component_second);
+  }
 
   /* Make injection과 path escape는 resolver 밖에서 artifact adapter를 직접
    * 호출하더라도 fail-closed여야 한다. 이 fixture는 target selection 의미를

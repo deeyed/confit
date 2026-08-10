@@ -750,22 +750,35 @@ static ConfitStatus confit_v4_append_component_root_array(
     ConfitV2ArtifactBuilder *builder, const ConfitComponentClosure *closure) {
   ConfitStatus status = confit_v2_builder_append(builder, "[");
   size_t index;
-  for (index = 0U; status == CONFIT_OK && closure != 0 && index < closure->root_count;
+  for (index = 0U; status == CONFIT_OK && closure != 0 &&
+                        index < closure->root_feature_count;
        ++index) {
     if (index != 0U) status = confit_v2_builder_append(builder, ", ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(
-        builder, closure->root_ids[index]);
+        builder, closure->root_features[index]);
   }
   return status == CONFIT_OK ? confit_v2_builder_append(builder, "]") : status;
 }
 
+static ConfitStatus confit_v4_append_component_atom_array(
+    ConfitV2ArtifactBuilder *builder, char *const *items, size_t count);
+
 static ConfitStatus confit_v4_generate_selection(
     const ConfitV2Snapshot *snapshot, const char *tool_identity,
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
+    const ConfitV4ArtifactOptions *options, const char *catalog_digest,
     char **out) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
   size_t index;
+  const char *profile_digest = 0;
+
+  for (index = 0U; options != 0 && index < options->input_count; ++index) {
+    if (strcmp(options->inputs[index].role, "profile") == 0) {
+      profile_digest = options->inputs[index].content_hash;
+      break;
+    }
+  }
 
   confit_v2_builder_init(&builder);
   status = confit_v2_builder_append(&builder, "{\n");
@@ -790,13 +803,29 @@ static ConfitStatus confit_v4_generate_selection(
         index + 1U == confit_v2_snapshot_option_count(snapshot) ? "" : ",");
   }
   if (status == CONFIT_OK) status = confit_v2_builder_append(
-      &builder, "  ],\n  \"components\": { \"catalog_state\": ");
+      &builder,
+      "  ],\n  \"components\": { \"schema_version\": 3, "
+      "\"selection_authority\": \"build-time-only\", \"catalog_state\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(
       &builder, catalog != 0 ? "available" : "unavailable");
-  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"roots\": ");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"root_features\": ");
   if (status == CONFIT_OK) status = confit_v4_append_component_root_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"selected\": ");
   if (status == CONFIT_OK) status = confit_v4_append_component_id_array(&builder, closure);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"catalog_digest\": ");
+  if (status == CONFIT_OK) status = confit_v2_append_json_string(
+      &builder, catalog_digest != 0 ? catalog_digest : "unavailable");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"profile_digest\": ");
+  if (status == CONFIT_OK) status = confit_v2_append_json_string(
+      &builder, profile_digest != 0 ? profile_digest : "unavailable");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_requires\": ");
+  if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
+      &builder, closure != 0 ? closure->kapi_requires : 0,
+      closure != 0 ? closure->kapi_requirement_count : 0U);
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_provides\": ");
+  if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
+      &builder, closure != 0 ? closure->kapi_provides : 0,
+      closure != 0 ? closure->kapi_provide_count : 0U);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " }\n}\n");
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
@@ -1069,33 +1098,46 @@ static ConfitStatus confit_v4_generate_components_mk(
         "\nPARUS_COMPONENT_%s_BUILD_INCLUDE:= %s"
         "\nPARUS_COMPONENT_%s_SOURCE_DIR:= %s"
         "\nPARUS_COMPONENT_%s_KIND:= %s"
-        "\nPARUS_COMPONENT_%s_COMPONENT_REQUIRES:=",
+        "\nPARUS_COMPONENT_%s_FEATURE_REQUIRES:=",
         identifier, component->manifest_path, identifier,
         component->makefile_path, identifier, component->build_include,
         identifier, source_directory, identifier,
         confit_component_kind_name(component->kind), identifier);
     for (source_index = 0U; status == CONFIT_OK &&
-         source_index < component->component_dependency_count; ++source_index) {
-      if (!confit_v4_is_safe_atom(component->component_dependencies[source_index], 0)) {
+         source_index < component->feature_requirement_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->feature_requires[source_index], 0)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                              0U, "unsafe component dependency cannot enter generated Make syntax");
+                              0U, "unsafe feature requirement cannot enter generated Make syntax");
         status = CONFIT_ERR_SCHEMA;
       } else {
         status = confit_v2_builder_appendf(
-            &builder, " %s", component->component_dependencies[source_index]);
+            &builder, " %s", component->feature_requires[source_index]);
       }
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-        &builder, "\nPARUS_COMPONENT_%s_LINK_REQUIRES:=", identifier);
+        &builder, "\nPARUS_COMPONENT_%s_FEATURE_PROVIDES:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
-         source_index < component->link_dependency_count; ++source_index) {
-      if (!confit_v4_is_safe_atom(component->link_dependencies[source_index], 0)) {
+         source_index < component->feature_provide_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->feature_provides[source_index], 0)) {
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                              0U, "unsafe component link authority cannot enter generated Make syntax");
+                              0U, "unsafe feature provider cannot enter generated Make syntax");
         status = CONFIT_ERR_SCHEMA;
       } else {
         status = confit_v2_builder_appendf(
-            &builder, " %s", component->link_dependencies[source_index]);
+            &builder, " %s", component->feature_provides[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_FEATURE_CONFLICTS:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->feature_conflict_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->feature_conflicts[source_index], 0)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe feature conflict cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->feature_conflicts[source_index]);
       }
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
@@ -1115,8 +1157,8 @@ static ConfitStatus confit_v4_generate_components_mk(
         &builder, "\nPARUS_COMPONENT_%s_KAPI_INCLUDE_ROOTS:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->kapi_requirement_count; ++source_index) {
-      const ConfitComponent *provider = confit_component_catalog_find_kapi_provider(
-          catalog, component->kapi_requires[source_index]);
+      const ConfitComponent *provider = confit_component_closure_find_kapi_provider(
+          closure, component->kapi_requires[source_index]);
       const char *provider_separator =
           provider != 0 ? strrchr(provider->makefile_path, '/') : 0;
       char provider_directory[1024];
@@ -1170,6 +1212,19 @@ static ConfitStatus confit_v4_generate_components_mk(
             &builder, " %s", component->sources[source_index]);
       }
     }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_PUBLIC_HEADERS:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->public_header_count; ++source_index) {
+      if (!confit_v4_is_safe_atom(component->public_headers[source_index], 1)) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
+                              0U, "unsafe public header cannot enter generated Make syntax");
+        status = CONFIT_ERR_SCHEMA;
+      } else {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", component->public_headers[source_index]);
+      }
+    }
   }
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
   if (status == CONFIT_OK) {
@@ -1199,7 +1254,7 @@ static ConfitStatus confit_v4_generate_component_catalog_json(
   ConfitStatus status;
   size_t index;
   confit_v2_builder_init(&builder);
-  status = confit_v2_builder_append(&builder, "{\n  \"schema\": \"confit-component-catalog-v2\",\n  \"state\": ");
+  status = confit_v2_builder_append(&builder, "{\n  \"schema\": \"confit-component-catalog-v3\",\n  \"selection_authority\": \"build-time-only; not a runtime capability grant\",\n  \"state\": ");
   if (status == CONFIT_OK) status = confit_v2_append_json_string(
       &builder, catalog != 0 ? "available" : "unavailable");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"components\": [\n");
@@ -1211,6 +1266,12 @@ static ConfitStatus confit_v4_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kind\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(
         &builder, confit_component_kind_name(component->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"summary\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, component->summary);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"owner\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, component->owner);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"manifest\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(&builder, component->manifest_path);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"makefile\": ");
@@ -1220,63 +1281,29 @@ static ConfitStatus confit_v4_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"sources\": ");
     if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->sources, component->source_count);
-    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"dependencies\": ");
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"public_headers\": ");
     if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
-        &builder, component->component_dependencies, component->component_dependency_count);
+        &builder, component->public_headers, component->public_header_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"feature_requires\": ");
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
+        &builder, component->feature_requires, component->feature_requirement_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"feature_provides\": ");
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
+        &builder, component->feature_provides, component->feature_provide_count);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"feature_conflicts\": ");
+    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
+        &builder, component->feature_conflicts, component->feature_conflict_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_requires\": ");
     if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->kapi_requires, component->kapi_requirement_count);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kapi_provides\": ");
     if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
         &builder, component->kapi_provides, component->kapi_provide_count);
-    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"capabilities\": ");
-    if (status == CONFIT_OK) status = confit_v4_append_component_atom_array(
-        &builder, component->capabilities, component->capability_count);
-    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"test\": ");
-    if (status == CONFIT_OK && component->kind == CONFIT_COMPONENT_KIND_TEST) {
-      status = confit_v2_builder_append(&builder, "{ \"owner\": ");
-      if (status == CONFIT_OK) status = confit_v2_append_json_string(
-          &builder, component->test_owner);
-      if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"lane\": ");
-      if (status == CONFIT_OK) status = confit_v2_append_json_string(
-          &builder, component->test_lane);
-      if (status == CONFIT_OK) status = confit_v2_builder_append(
-          &builder, ", \"evidence_class\": ");
-      if (status == CONFIT_OK) status = confit_v2_append_json_string(
-          &builder, component->test_evidence_class);
-      if (status == CONFIT_OK) status = confit_v2_builder_append(
-          &builder, ", \"target\": ");
-      if (status == CONFIT_OK && component->test_target != 0) {
-        status = confit_v2_append_json_string(&builder, component->test_target);
-      } else if (status == CONFIT_OK) {
-        status = confit_v2_builder_append(&builder, "null");
-      }
-      if (status == CONFIT_OK) status = confit_v2_builder_append(
-          &builder, ", \"machine_profile\": ");
-      if (status == CONFIT_OK && component->test_machine_profile != 0) {
-        status = confit_v2_append_json_string(
-            &builder, component->test_machine_profile);
-      } else if (status == CONFIT_OK) {
-        status = confit_v2_builder_append(&builder, "null");
-      }
-      if (status == CONFIT_OK) status = confit_v2_builder_append(
-          &builder, ", \"receipt_profile\": ");
-      if (status == CONFIT_OK && component->test_receipt_profile != 0) {
-        status = confit_v2_append_json_string(
-            &builder, component->test_receipt_profile);
-      } else if (status == CONFIT_OK) {
-        status = confit_v2_builder_append(&builder, "null");
-      }
-      if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-          &builder, ", \"timeout_ms\": %u }", component->test_timeout_ms);
-    } else if (status == CONFIT_OK) {
-      status = confit_v2_builder_append(&builder, "null");
-    }
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, " } ");
     if (status == CONFIT_OK) status = confit_v2_builder_append(
         &builder, index + 1U == catalog->component_count ? "\n" : ",\n");
   }
-  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "  ],\n  \"roots\": ");
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "  ],\n  \"root_features\": ");
   if (status == CONFIT_OK) status = confit_v4_append_component_root_array(&builder, closure);
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ",\n  \"selected\": ");
   if (status == CONFIT_OK) status = confit_v4_append_component_id_array(&builder, closure);
@@ -1289,6 +1316,11 @@ static ConfitStatus confit_v4_generate_component_catalog_json(
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"kind\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(
         &builder, confit_component_reason_kind_name(reason->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"provider_selection\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, confit_component_provider_selection_name(
+            reason->provider_selection));
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, ", \"from\": ");
     if (status == CONFIT_OK && reason->from_id != 0) {
       status = confit_v2_append_json_string(&builder, reason->from_id);
@@ -1361,6 +1393,11 @@ static ConfitStatus confit_v4_generate_reason_json(
         &builder, ", \"kind\": ");
     if (status == CONFIT_OK) status = confit_v2_append_json_string(
         &builder, confit_component_reason_kind_name(reason->kind));
+    if (status == CONFIT_OK) status = confit_v2_builder_append(
+        &builder, ", \"provider_selection\": ");
+    if (status == CONFIT_OK) status = confit_v2_append_json_string(
+        &builder, confit_component_provider_selection_name(
+            reason->provider_selection));
     if (status == CONFIT_OK) status = confit_v2_builder_append(
         &builder, ", \"from\": ");
     if (status == CONFIT_OK && reason->from_id != 0) {
@@ -1674,146 +1711,18 @@ static ConfitStatus confit_v4_generate_target_mk(
   return status;
 }
 
-static int confit_v4_closure_contains(
-    const ConfitComponentClosure *closure, const ConfitComponent *component) {
-  size_t index;
-  for (index = 0U; closure != 0 && index < closure->component_count; ++index) {
-    if (closure->ordered[index] == component) return 1;
-  }
-  return 0;
-}
-
 static ConfitStatus confit_v4_generate_tests_mk(
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
     char **out,
     ConfitDiagnostic *diagnostic) {
-  ConfitV2ArtifactBuilder builder;
-  ConfitStatus status;
-  size_t index;
-  confit_v2_builder_init(&builder);
-  status = confit_v2_builder_append(
-      &builder, "# Generated by Confit; complete bounded test catalog.\n"
-                "PARUS_TEST_IDS:=");
-  for (index = 0U; status == CONFIT_OK && catalog != 0 &&
-                        index < catalog->component_count;
-       ++index) {
-    const ConfitComponent *component = &catalog->components[index];
-    if (component->kind != CONFIT_COMPONENT_KIND_TEST) continue;
-    if (!confit_v4_is_safe_atom(component->id, 0)) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                            0U, "unsafe selected test ID");
-      status = CONFIT_ERR_SCHEMA;
-    } else {
-      status = confit_v2_builder_appendf(&builder, " %s", component->id);
-    }
-  }
-  if (status == CONFIT_OK) {
-    status = confit_v2_builder_append(&builder, "\nPARUS_SELECTED_TEST_IDS:=");
-  }
-  for (index = 0U; status == CONFIT_OK && catalog != 0 &&
-                        index < catalog->component_count;
-       ++index) {
-    const ConfitComponent *component = &catalog->components[index];
-    if (component->kind == CONFIT_COMPONENT_KIND_TEST &&
-        confit_v4_closure_contains(closure, component)) {
-      status = confit_v2_builder_appendf(&builder, " %s", component->id);
-    }
-  }
-  for (index = 0U; status == CONFIT_OK && catalog != 0 &&
-                        index < catalog->component_count;
-       ++index) {
-    const ConfitComponent *component = &catalog->components[index];
-    char identifier[256];
-    char source_directory[1024];
-    const char *separator;
-    size_t source_directory_size;
-    size_t source_index;
-    if (component->kind != CONFIT_COMPONENT_KIND_TEST) continue;
-    status = confit_v4_component_make_identifier(component->id, identifier,
-                                                  sizeof(identifier));
-    separator = strrchr(component->makefile_path, '/');
-    source_directory_size = separator != 0
-                                ? (size_t)(separator - component->makefile_path)
-                                : 0U;
-    if (status == CONFIT_OK &&
-        (separator == 0 || source_directory_size == 0U ||
-         source_directory_size + 1U > sizeof(source_directory))) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                            0U, "test source directory is not representable");
-      status = CONFIT_ERR_SCHEMA;
-    }
-    if (status == CONFIT_OK) {
-      memcpy(source_directory, component->makefile_path, source_directory_size);
-      source_directory[source_directory_size] = '\0';
-    }
-    if (status == CONFIT_OK &&
-        (!confit_v4_is_safe_atom(component->manifest_path, 1) ||
-         !confit_v4_is_safe_atom(component->makefile_path, 1) ||
-         !confit_v4_is_safe_atom(component->build_include, 1) ||
-         !confit_v4_is_safe_atom(source_directory, 1) ||
-         !confit_v4_is_safe_atom(component->test_owner, 0) ||
-         !confit_v4_is_safe_atom(component->test_lane, 0) ||
-         !confit_v4_is_safe_atom(component->test_evidence_class, 0) ||
-         (component->test_target != 0 &&
-          !confit_v4_is_safe_atom(component->test_target, 0)) ||
-         (component->test_machine_profile != 0 &&
-          !confit_v4_is_safe_atom(component->test_machine_profile, 0)) ||
-         (component->test_receipt_profile != 0 &&
-          !confit_v4_is_safe_atom(component->test_receipt_profile, 0)))) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                            0U, "unsafe test metadata cannot enter generated Make syntax");
-      status = CONFIT_ERR_SCHEMA;
-    }
-    if (status == CONFIT_OK) {
-      status = confit_v2_builder_appendf(
-          &builder,
-          "\nPARUS_TEST_%s_OWNER:= %s"
-          "\nPARUS_TEST_%s_LANE:= %s"
-          "\nPARUS_TEST_%s_EVIDENCE_CLASS:= %s"
-          "\nPARUS_TEST_%s_TIMEOUT_MS:= %u"
-          "\nPARUS_TEST_%s_TARGET:= %s"
-          "\nPARUS_TEST_%s_MACHINE_PROFILE:= %s"
-          "\nPARUS_TEST_%s_RECEIPT_PROFILE:= %s"
-          "\nPARUS_TEST_%s_MANIFEST:= %s"
-          "\nPARUS_TEST_%s_MAKEFILE:= %s"
-          "\nPARUS_TEST_%s_BUILD_INCLUDE:= %s"
-          "\nPARUS_TEST_%s_SOURCE_DIR:= %s"
-          "\nPARUS_TEST_%s_SRCS:=",
-          identifier, component->test_owner, identifier, component->test_lane,
-          identifier, component->test_evidence_class, identifier,
-          component->test_timeout_ms, identifier,
-          component->test_target != 0 ? component->test_target : "none",
-          identifier,
-          component->test_machine_profile != 0
-              ? component->test_machine_profile
-              : "none",
-          identifier,
-          component->test_receipt_profile != 0
-              ? component->test_receipt_profile
-              : "none",
-          identifier, component->manifest_path,
-          identifier, component->makefile_path, identifier,
-          component->build_include, identifier, source_directory, identifier);
-    }
-    for (source_index = 0U; status == CONFIT_OK &&
-         source_index < component->source_count; ++source_index) {
-      if (!confit_v4_is_safe_atom(component->sources[source_index], 1)) {
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                              0U, "unsafe test source cannot enter generated Make syntax");
-        status = CONFIT_ERR_SCHEMA;
-      } else {
-        status = confit_v2_builder_appendf(
-            &builder, " %s", component->sources[source_index]);
-      }
-    }
-  }
-  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
-  if (status == CONFIT_OK) {
-    *out = confit_v2_builder_take(&builder);
-    if (*out == 0) status = CONFIT_ERR_INTERNAL;
-  }
-  confit_v2_builder_clear(&builder);
-  return status;
+  (void)catalog;
+  (void)closure;
+  (void)diagnostic;
+  *out = confit_v4_strdup(
+      "# Generated by Confit. Tests are not selectable schema v3 components.\n"
+      "# Owner-local test discovery is activated by the Parus test graph.\n"
+      "PARUS_TEST_IDS:=\nPARUS_SELECTED_TEST_IDS:=\n");
+  return *out != 0 ? CONFIT_OK : CONFIT_ERR_INTERNAL;
 }
 
 typedef struct ConfitV4NamedText {
@@ -1927,6 +1836,7 @@ ConfitStatus confit_v4_generate_artifacts(
     ConfitV4ArtifactSet *out_artifacts, ConfitDiagnostic *diagnostic) {
   ConfitV4ArtifactOptions defaults;
   ConfitV4NamedText identity_texts[10];
+  char component_catalog_digest[65] = {0};
   const char *tool_identity;
   ConfitStatus status = CONFIT_OK;
 
@@ -1955,9 +1865,19 @@ ConfitStatus confit_v4_generate_artifacts(
         options->component_closure, diagnostic);
   }
   if (status == CONFIT_OK) {
+    status = confit_v4_generate_component_catalog_json(
+        options->component_catalog, options->component_closure,
+        &out_artifacts->component_catalog_json);
+    if (status == CONFIT_OK) {
+      confit_v4_sha256_text(out_artifacts->component_catalog_json,
+                            component_catalog_digest);
+    }
+  }
+  if (status == CONFIT_OK) {
     status = confit_v4_generate_selection(snapshot, tool_identity,
                                           options->component_catalog,
                                           options->component_closure,
+                                          options, component_catalog_digest,
                                           &out_artifacts->selection_json);
   }
   if (status == CONFIT_OK) {
@@ -1985,9 +1905,6 @@ ConfitStatus confit_v4_generate_artifacts(
     if (status == CONFIT_OK) status = confit_v4_generate_tests_mk(
         options->component_catalog, options->component_closure,
         &out_artifacts->tests_mk, diagnostic);
-    if (status == CONFIT_OK) status = confit_v4_generate_component_catalog_json(
-        options->component_catalog, options->component_closure,
-        &out_artifacts->component_catalog_json);
   }
   if (status == CONFIT_OK) {
     identity_texts[0] = (ConfitV4NamedText){"config.h", out_artifacts->config_header, {0}};

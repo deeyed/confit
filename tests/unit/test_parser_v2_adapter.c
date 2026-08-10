@@ -160,7 +160,7 @@ int main(void) {
   if (confit_v2_toml_parse_file(path, &document, &diagnostic) !=
           CONFIT_ERR_PARSE ||
       document != 0 || !confit_diagnostic_has_error(&diagnostic) ||
-      diagnostic.line != 3U || diagnostic.column != 0U ||
+      diagnostic.line != 3U || diagnostic.column != 1U ||
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "tomlc17 rejected TOML input") != 0) {
     return 7;

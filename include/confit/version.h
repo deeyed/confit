@@ -13,7 +13,7 @@ extern "C" {
 /**
  * @brief Confit minor version이다.
  */
-#define CONFIT_VERSION_MINOR 3
+#define CONFIT_VERSION_MINOR 4
 
 /**
  * @brief Confit patch version이다.
@@ -21,14 +21,14 @@ extern "C" {
 #define CONFIT_VERSION_PATCH 0
 
 /**
- * @brief bmake 단일 artifact ABI 전환 라벨이다.
+ * @brief selectable component schema v3 candidate 라벨이다.
  */
-#define CONFIT_VERSION_LABEL "bmake.1"
+#define CONFIT_VERSION_LABEL "schema-v3.1"
 
 /**
  * @brief semver prerelease까지 포함한 release 문자열이다.
  */
-#define CONFIT_VERSION_RELEASE "0.3.0-bmake.1"
+#define CONFIT_VERSION_RELEASE "0.4.0-schema-v3.1"
 
 /**
  * @brief CLI와 generated artifact에 기록할 display 문자열이다.
@@ -36,7 +36,7 @@ extern "C" {
 #define CONFIT_VERSION_DISPLAY "confit " CONFIT_VERSION_RELEASE
 
 /** @brief this binary can dispatch these independent schema semantics. */
-#define CONFIT_SUPPORTED_SCHEMA_VERSIONS "2"
+#define CONFIT_SUPPORTED_SCHEMA_VERSIONS "config-v2,component-v3"
 
 /** @brief immutable v2 resolver identity written to generated artifacts. */
 #define CONFIT_RESOLVER_ABI_V2 "confit-resolver-v2"

@@ -137,6 +137,29 @@ static size_t confit_v2_toml_error_line(const char *message) {
   }
 }
 
+/* tomlc17의 parse error transport는 line만 제공한다. 0-column 진단을 외부
+ * schema checker로 흘리지 않도록 그 line의 첫 non-whitespace byte를 bounded하게
+ * 계산한다. EOF line처럼 source에 없는 line도 1-based column 1로 봉인한다. */
+static size_t confit_v2_toml_error_column(const char *text, size_t text_size,
+                                          size_t error_line) {
+  size_t index = 0U;
+  size_t line = 1U;
+  if (text == 0 || error_line == 0U) return 1U;
+  while (index < text_size && line < error_line) {
+    if (text[index++] == '\n') ++line;
+  }
+  if (line != error_line) return 1U;
+  {
+    size_t column = 1U;
+    while (index < text_size && text[index] != '\n' &&
+           (text[index] == ' ' || text[index] == '\t' || text[index] == '\r')) {
+      ++index;
+      ++column;
+    }
+    return column;
+  }
+}
+
 static ConfitV2TomlValueType
 confit_v2_toml_map_type(toml_type_t type) {
   switch (type) {
@@ -206,9 +229,10 @@ ConfitStatus confit_v2_toml_parse_text(const char *source_name,
   result = toml_parse_named(owned_text, (int)text_size, source_name);
   if (!result.ok) {
     line = confit_v2_toml_error_line(result.errmsg);
+    column = confit_v2_toml_error_column(owned_text, text_size, line);
     toml_free(result);
     free(owned_text);
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line, 0U,
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line, column,
                           kConfitV2TomlParseFailed);
     return CONFIT_ERR_PARSE;
   }

@@ -1,7 +1,7 @@
-.\" Confit manual page. Install with the bmake-only local installer.
-.TH CONFIT 1 "2026-08-09" "Confit 0.3.0-bmake.1" "Confit Manual"
+.\" Confit manual page for the bounded host-side resolver.
+.TH CONFIT 1 "2026-08-10" "Confit 0.4.0-schema-v3.1" "Confit Manual"
 .SH 이름
-confit \- Parus schema v2 configuration resolver
+confit \- Parus configuration and selectable component resolver
 .SH 사용법
 .B confit
 .B --version
@@ -14,19 +14,21 @@ confit \- Parus schema v2 configuration resolver
 .I options
 .SH 설명
 .B confit
-은 build 전에 실행되는 host-side configuration resolver다. schema v2 TOML과
-component catalog를 검증하고 immutable snapshot을 sealed artifact ABI v4 bundle로
-publish한다.
+은 build 전에 실행되는 host-side configuration resolver다. 일반 typed option/target
+configuration과 selectable component schema v3 catalog를 검증하고 immutable snapshot을
+sealed artifact ABI v4 bundle로 publish한다.
 .PP
 Confit은 kernel runtime, firmware service 또는 Makefile evaluator가 아니다. Sibling
-Makefile은 Build API v2의 bounded data grammar로만 검증하며 실행하거나 source contents를
+Makefile은 component Build API v3의 bounded data grammar로만 검증하며 실행하거나 source contents를
 scan하지 않는다. target kernel은 generated
 .I config.h
 만 소비하고, configured bmake child는 sealed generation의 Make adapter만 소비한다.
 .SH 지원 범위
-Confit은 schema version 2 source만 받는다. unknown version, source dispatch,
-migration command, partial artifact 및 unrecognized command는 실패한다. 이 거부는
-compatibility fallback이 아니다.
+Selectable component parser는 schema version 3만 받으며 v2 component, old kind,
+requires.components, requires.links와 compatibility alias를 거부한다. Generic typed option
+resolver의 source schema는 독립적으로 version 2이며 두 문법을 자동 변환하거나 서로의
+fallback으로 쓰지 않는다. Unknown version, migration command, partial artifact 및
+unrecognized command는 실패한다.
 .PP
 Host build engine은 pinned BSD
 .B bmake 20240909
@@ -53,8 +55,47 @@ complete ABI v4 bundle을 sealed generation으로 publish한다.
 만 허용한다. output root는 source root 밖의 absolute path여야 한다.
 .TP
 .B explain, list, graph, diff, component
-schema v2 snapshot과 component catalog의 read-only diagnostic view를 제공한다. 이
+typed option snapshot과 component schema v3 catalog의 read-only diagnostic view를 제공한다. 이
 command는 source project나 sibling repository를 변경하지 않는다.
+.PP
+.B component list
+는 stable ID, four-kind kind, summary와 selected state를 출력한다.
+.B component explain
+은 direct owner/build metadata를,
+.B component deps
+와
+.B component rdeps
+는 direct/transitive feature edge를,
+.B component providers
+는 feature/KAPI candidate와 provider selection reason을 출력한다.
+.B component why
+는 profile root부터 exact target까지 source span을 가진 deterministic chain을 출력한다.
+.SH selectable component schema v3
+Manifest의 closed tables는
+.B [component], [selection], [interfaces]
+다. Kind는
+.B kernel_feature, kernel_provider, world_feature, world_service
+네 개뿐이다. Selection atom은 positive-major version을 가진
+.I feature@major
+이고 KAPI는
+.I namespace.vmajor
+형식이다. Manifest에는 source path, output path, recipe, hardware match와 runtime grant를
+기록할 수 없다.
+.PP
+Sibling Makefile은 정확히
+.B PARUS_MK_API = 3,
+.B SRCS +=,
+.B PUBLIC_HEADERS +=
+및 kind에 맞는 one final include만 허용한다. Recipe, variable expansion, raw flag,
+path traversal, symlinked owner file은 실패한다.
+.PP
+Schema v3 profile은 high-level
+.B [features].enable
+과 ambiguous feature용 explicit
+.B [providers]
+mapping만 기록한다. Candidate가 하나면 unique selection, 둘 이상이면 explicit mapping이
+없을 때 failure다. Catalog order와 first-match는 selection authority가 아니다. KAPI set은
+build/link selection record일 뿐 runtime capability grant가 아니다.
 .SH generation
 .EX
 <out>/generations/<bundle-digest>/

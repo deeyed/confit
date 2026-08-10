@@ -1042,23 +1042,24 @@ ConfitStatus confit_target_plan_validate_selection(
     const ConfitTargetPlan *plan, const ConfitComponentCatalog *catalog,
     const ConfitComponentClosure *closure, ConfitDiagnostic *diagnostic) {
   const ConfitComponent *component;
-  const ConfitComponent *provider;
+  const ConfitComponent *provider = 0;
+  size_t provider_count;
   size_t index;
   int selected = 0;
   if (plan == 0 || catalog == 0 || closure == 0) {
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   component = confit_component_catalog_find(catalog, plan->expected_component);
-  provider = confit_component_catalog_find_capability_provider(
-      catalog, plan->expected_capability);
+  provider_count = confit_component_catalog_find_feature_providers(
+      catalog, plan->expected_capability, &provider, 1U);
   for (index = 0U; index < closure->component_count; ++index) {
     if (strcmp(closure->ordered[index]->id, plan->expected_component) == 0) {
       selected = 1;
       break;
     }
   }
-  if (component == 0 || component->kind != CONFIT_COMPONENT_KIND_TARGET_IMAGE ||
-      provider != component || !selected) {
+  if (component == 0 || provider_count != 1U || provider != component ||
+      !selected) {
     confit_diagnostic_set(
         diagnostic, CONFIT_ERR_CONFLICT, "target-plan.selection", 0U, 0U,
         "target expected component/capability is not the selected provider");
@@ -1077,7 +1078,7 @@ ConfitStatus confit_target_plan_validate_selection(
         break;
       }
     }
-    if (!role_selected || role_component->kind == CONFIT_COMPONENT_KIND_TEST) {
+    if (!role_selected) {
       confit_diagnostic_set(
           diagnostic, CONFIT_ERR_CONFLICT, "target-plan.user-artifact", 0U, 0U,
           "user artifact role does not name one selected production component");
