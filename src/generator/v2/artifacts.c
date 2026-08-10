@@ -1536,7 +1536,7 @@ static ConfitStatus confit_v4_generate_target_mk(
   CONFIT_TARGET_ATOM("PARUS_TARGET_TOOLCHAIN_KIND", toolchain_kind);
   CONFIT_TARGET_ATOM("PARUS_TARGET_TRIPLE", target_triple);
   CONFIT_TARGET_ATOM("PARUS_TARGET_LINK_EMULATION", link_emulation);
-  CONFIT_TARGET_ATOM("PARUS_TARGET_IMAGE_KIND", image_kind);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_IMAGE_ARTIFACT_PROFILE", image_artifact_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_PACKAGE_PROFILE", package_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_MACHINE_PROFILE", machine_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_EXPECTED_COMPONENT", expected_component);
@@ -1546,6 +1546,76 @@ static ConfitStatus confit_v4_generate_target_mk(
   CONFIT_TARGET_ATOM("PARUS_TARGET_KERNEL_ARTIFACT_PROFILE", kernel_artifact_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_WORLD_ARTIFACT_PROFILE", world_artifact_profile);
 #undef CONFIT_TARGET_ATOM
+  if (status == CONFIT_OK) {
+    status = confit_v2_builder_append(
+        &builder, "PARUS_TARGET_IMAGE_ARTIFACT_ROLES:=");
+  }
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->image_artifact_role_count; ++index) {
+    const char *separator = strchr(plan->image_artifact_roles[index], '=');
+    const size_t role_size = separator != 0
+        ? (size_t)(separator - plan->image_artifact_roles[index]) : 0U;
+    if (separator == 0 || role_size == 0U || role_size >= 64U) {
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v2_builder_appendf(&builder, " %.*s", (int)role_size,
+                                         plan->image_artifact_roles[index]);
+    }
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->image_artifact_role_count; ++index) {
+    const char *separator = strchr(plan->image_artifact_roles[index], '=');
+    const size_t role_size = separator != 0
+        ? (size_t)(separator - plan->image_artifact_roles[index]) : 0U;
+    char variable[128];
+    const int written = snprintf(variable, sizeof(variable),
+                                 "PARUS_TARGET_IMAGE_ARTIFACT_ROLE_%.*s",
+                                 (int)role_size,
+                                 plan->image_artifact_roles[index]);
+    if (separator == 0 || role_size == 0U || written < 0 ||
+        (size_t)written >= sizeof(variable)) {
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v4_append_target_path(
+          &builder, variable, separator + 1, 0, diagnostic);
+    }
+  }
+  if (status == CONFIT_OK) {
+    status = confit_v2_builder_append(
+        &builder, "PARUS_TARGET_PACKAGE_INPUT_DIGEST_ROLES:=");
+  }
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->package_input_digest_count; ++index) {
+    const char *separator = strchr(plan->package_input_digests[index], '=');
+    const size_t role_size = separator != 0
+        ? (size_t)(separator - plan->package_input_digests[index]) : 0U;
+    if (separator == 0 || role_size == 0U || role_size >= 64U) {
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v2_builder_appendf(&builder, " %.*s", (int)role_size,
+                                         plan->package_input_digests[index]);
+    }
+  }
+  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+  for (index = 0U; status == CONFIT_OK &&
+                        index < plan->package_input_digest_count; ++index) {
+    const char *separator = strchr(plan->package_input_digests[index], '=');
+    const size_t role_size = separator != 0
+        ? (size_t)(separator - plan->package_input_digests[index]) : 0U;
+    char variable[128];
+    const int written = snprintf(variable, sizeof(variable),
+                                 "PARUS_TARGET_PACKAGE_INPUT_SHA256_%.*s",
+                                 (int)role_size,
+                                 plan->package_input_digests[index]);
+    if (separator == 0 || role_size == 0U || written < 0 ||
+        (size_t)written >= sizeof(variable)) {
+      status = CONFIT_ERR_SCHEMA;
+    } else {
+      status = confit_v4_append_target_atom(&builder, variable,
+                                             separator + 1, diagnostic);
+    }
+  }
   if (status == CONFIT_OK) {
     status = confit_v2_builder_append(
         &builder, "PARUS_TARGET_KERNEL_ARTIFACT_ROLES:=");
@@ -1748,30 +1818,6 @@ static ConfitStatus confit_v4_generate_target_mk(
   if (status == CONFIT_OK) status = confit_v4_append_target_path(
       &builder, "PARUS_TARGET_PACKAGE_SOURCE", plan->package_source, 0,
       diagnostic);
-  /* Package lowering is a closed semantic profile.  The generic Make graph
-   * consumes only these generated literals and never branches on a target or
-   * board name.  Adding another target that reuses a profile therefore needs
-   * no share/mk edit; a new package ABI must first extend this verifier. */
-  if (status == CONFIT_OK &&
-      strcmp(plan->package_profile, "rpi5-firmware-v1") == 0) {
-    status = confit_v2_builder_append(
-        &builder,
-        "PARUS_TARGET_PACKAGE_COMMAND:= rpi5-package\n"
-        "PARUS_TARGET_PACKAGE_MANIFEST_NAME:= package.manifest.json\n"
-        "PARUS_TARGET_PACKAGE_KERNEL_NAME:= kernel_2712.img\n"
-        "PARUS_TARGET_PACKAGE_CONFIG_NAME:= config.txt\n"
-        "PARUS_TARGET_PACKAGE_CMDLINE_NAME:= cmdline.txt\n"
-        "PARUS_TARGET_PACKAGE_DTB_NAME:= bcm2712-rpi-5-b.dtb\n");
-  } else if (status == CONFIT_OK) {
-    status = confit_v2_builder_append(
-        &builder,
-        "PARUS_TARGET_PACKAGE_COMMAND:= none\n"
-        "PARUS_TARGET_PACKAGE_MANIFEST_NAME:= none\n"
-        "PARUS_TARGET_PACKAGE_KERNEL_NAME:= none\n"
-        "PARUS_TARGET_PACKAGE_CONFIG_NAME:= none\n"
-        "PARUS_TARGET_PACKAGE_CMDLINE_NAME:= none\n"
-        "PARUS_TARGET_PACKAGE_DTB_NAME:= none\n");
-  }
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
       &builder, "PARUS_TARGET_MAX_IMAGE_BYTES:= %llu\n"
                 "PARUS_TARGET_MAX_KERNEL_BYTES:= %llu\n"

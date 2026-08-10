@@ -41,7 +41,9 @@ typedef struct ConfitTargetPlan {
   char *sysroot_path;
   char *link_emulation;
   char *linker_script;
-  char *image_kind;
+  char *image_artifact_profile;
+  char **image_artifact_roles;
+  size_t image_artifact_role_count;
   char *package_profile;
   char *machine_profile;
   char *machine_runner;
@@ -64,6 +66,8 @@ typedef struct ConfitTargetPlan {
   char *dtc_sha256;
   char *dtc_version;
   char *package_source;
+  char **package_input_digests;
+  size_t package_input_digest_count;
   char *kernel_artifact_profile;
   char **kernel_artifact_roles;
   size_t kernel_artifact_role_count;

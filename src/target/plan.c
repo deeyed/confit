@@ -115,11 +115,53 @@ static int confit_target_world_role_valid(const char *text) {
 
 static int confit_target_kernel_role_valid(const char *text) {
   static const char *const roles[] = {
-      "elf", "map", "kapi", "driverdb", "sysinitdb", "release_report"};
+      "elf", "map", "kapi", "driverdb", "sysinitdb", "release_report",
+      "boot_dtb"};
   const char *separator = text != 0 ? strchr(text, '=') : 0;
   size_t role_index;
   if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
       !confit_target_relative_path_valid(separator + 1)) return 0;
+  for (role_index = 0U; role_index < sizeof(roles) / sizeof(roles[0]);
+       ++role_index) {
+    const size_t size = strlen(roles[role_index]);
+    if ((size_t)(separator - text) == size &&
+        memcmp(text, roles[role_index], size) == 0) return 1;
+  }
+  return 0;
+}
+
+static int confit_target_image_role_valid(const char *text) {
+  static const char *const roles[] = {
+      "kernel_payload", "package", "manifest", "terminal",
+      "firmware_kernel", "firmware_config", "firmware_cmdline",
+      "firmware_dtb"};
+  const char *separator = text != 0 ? strchr(text, '=') : 0;
+  size_t role_index;
+  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
+      !confit_target_relative_path_valid(separator + 1)) return 0;
+  for (role_index = 0U; role_index < sizeof(roles) / sizeof(roles[0]);
+       ++role_index) {
+    const size_t size = strlen(roles[role_index]);
+    if ((size_t)(separator - text) == size &&
+        memcmp(text, roles[role_index], size) == 0) return 1;
+  }
+  return 0;
+}
+
+static int confit_target_package_digest_valid(const char *text) {
+  static const char *const roles[] = {
+      "firmware_config", "firmware_cmdline", "firmware_dtb"};
+  const char *separator = text != 0 ? strchr(text, '=') : 0;
+  size_t role_index;
+  size_t index;
+  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
+      strlen(separator + 1) != 64U) return 0;
+  for (index = 0U; index < 64U; ++index) {
+    const unsigned char value = (unsigned char)separator[1U + index];
+    if (!((value >= '0' && value <= '9') || (value >= 'a' && value <= 'f'))) {
+      return 0;
+    }
+  }
   for (role_index = 0U; role_index < sizeof(roles) / sizeof(roles[0]);
        ++role_index) {
     const size_t size = strlen(roles[role_index]);
@@ -331,10 +373,11 @@ static ConfitStatus confit_target_parse_build(
   static const char *const target_fields[] = {"name", "schema_version"};
   static const char *const build_fields[] = {
       "isa", "abi", "cpu_profile", "entry_profile", "toolchain",
-      "linker_script", "image_kind", "package_profile", "machine_profile",
+      "linker_script", "image_artifact_profile", "image_artifact_roles",
+      "package_profile", "machine_profile",
       "expected_component", "expected_capability", "output_stem",
       "required_profile", "private_includes", "max_image_bytes", "dts",
-      "dtc", "package_source", "kernel_artifact_profile",
+      "dtc", "package_source", "package_input_digests", "kernel_artifact_profile",
       "kernel_artifact_roles", "max_kernel_bytes", "world_artifact_profile",
       "compile_tuple", "world_boot_component", "world_artifact_entry",
       "world_artifact_linker_script", "world_artifact_roles",
@@ -374,6 +417,10 @@ static ConfitStatus confit_target_parse_build(
   size_t artifact_role_count = 0U;
   char **kernel_roles = 0;
   size_t kernel_role_count = 0U;
+  char **image_roles = 0;
+  size_t image_role_count = 0U;
+  char **package_input_digests = 0;
+  size_t package_input_digest_count = 0U;
   size_t index;
   ConfitStatus status;
 
@@ -430,7 +477,7 @@ static ConfitStatus confit_target_parse_build(
   CONFIT_TARGET_BUILD_STRING("cpu_profile", cpu_profile);
   CONFIT_TARGET_BUILD_STRING("entry_profile", entry_profile);
   CONFIT_TARGET_BUILD_STRING("toolchain", toolchain_id);
-  CONFIT_TARGET_BUILD_STRING("image_kind", image_kind);
+  CONFIT_TARGET_BUILD_STRING("image_artifact_profile", image_artifact_profile);
   CONFIT_TARGET_BUILD_STRING("package_profile", package_profile);
   CONFIT_TARGET_BUILD_STRING("machine_profile", machine_profile);
   CONFIT_TARGET_BUILD_STRING("expected_component", expected_component);
@@ -492,6 +539,12 @@ static ConfitStatus confit_target_parse_build(
       build, "kernel_artifact_roles", &kernel_roles, &kernel_role_count, path,
       diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string_list(
+      build, "image_artifact_roles", &image_roles, &image_role_count, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string_list(
+      build, "package_input_digests", &package_input_digests,
+      &package_input_digest_count, path, diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string_list(
       build, "world_artifact_roles", &artifact_roles, &artifact_role_count,
       path, diagnostic);
 #undef CONFIT_TARGET_BUILD_STRING
@@ -531,7 +584,7 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_atom_valid(plan->cpu_profile) ||
        !confit_target_atom_valid(plan->entry_profile) ||
        !confit_target_atom_valid(plan->toolchain_id) ||
-       !confit_target_atom_valid(plan->image_kind) ||
+       !confit_target_atom_valid(plan->image_artifact_profile) ||
        !confit_target_atom_valid(plan->package_profile) ||
        !confit_target_atom_valid(plan->machine_profile) ||
        !confit_target_atom_valid(plan->expected_component) ||
@@ -578,9 +631,9 @@ static ConfitStatus confit_target_parse_build(
                           "target build tuple contradicts typed target selection");
   }
   if (status == CONFIT_OK &&
-      (strcmp(plan->image_kind, "elf-flat-v1") != 0 ||
-       (strcmp(plan->package_profile, "manifest-v1") != 0 &&
-        strcmp(plan->package_profile, "rpi5-firmware-v1") != 0) ||
+      (strcmp(plan->image_artifact_profile, "imagegen-v1") != 0 ||
+       (strcmp(plan->package_profile, "container-v1") != 0 &&
+        strcmp(plan->package_profile, "firmware-directory-v1") != 0) ||
        strcmp(plan->required_profile, "release") != 0 ||
        strcmp(plan->kernel_artifact_profile, "elf-v1") != 0 ||
        (strcmp(plan->world_artifact_profile, "none") != 0 &&
@@ -601,11 +654,24 @@ static ConfitStatus confit_target_parse_build(
         &plan->world_artifact_linker_script, diagnostic);
   }
   if (status == CONFIT_OK && strcmp(plan->package_profile,
-                                    "rpi5-firmware-v1") == 0 &&
+                                    "firmware-directory-v1") == 0 &&
       plan->package_source == 0) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "firmware package profile requires package_source");
+  }
+  if (status == CONFIT_OK &&
+      strcmp(plan->package_profile, "firmware-directory-v1") == 0 &&
+      package_input_digest_count != 3U) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "firmware package profile requires three sealed input digests");
+  }
+  if (status == CONFIT_OK && strcmp(plan->package_profile, "container-v1") == 0 &&
+      package_input_digest_count != 0U) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "container package profile forbids firmware input digests");
   }
   if (status == CONFIT_OK && plan->dts_path != 0) {
     char *dtc_name = 0;
@@ -658,10 +724,11 @@ static ConfitStatus confit_target_parse_build(
       }
     }
   }
-  if (status == CONFIT_OK && kernel_role_count != 6U) {
+  if (status == CONFIT_OK &&
+      kernel_role_count != 6U + (dts_relative != 0 ? 1U : 0U)) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
-                          "kernel artifact profile requires six exact roles");
+                          "kernel artifact profile has an incomplete exact role set");
   }
   for (index = 0U; status == CONFIT_OK && index < kernel_role_count; ++index) {
     size_t prior;
@@ -684,6 +751,123 @@ static ConfitStatus confit_target_parse_build(
                               "kernel artifact role name is duplicated");
         break;
       }
+    }
+  }
+  {
+    const size_t required = 4U +
+        (strcmp(plan->package_profile, "firmware-directory-v1") == 0 ? 4U : 0U);
+    if (status == CONFIT_OK && image_role_count != required) {
+      status = CONFIT_ERR_SCHEMA;
+      confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                            "ImageGEN profile has an incomplete exact role set");
+    }
+  }
+  for (index = 0U; status == CONFIT_OK && index < image_role_count; ++index) {
+    size_t prior;
+    const char *separator;
+    if (!confit_target_image_role_valid(image_roles[index])) {
+      status = CONFIT_ERR_SCHEMA;
+      confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                            "ImageGEN artifact role is unknown or unsafe");
+      break;
+    }
+    separator = strchr(image_roles[index], '=');
+    for (prior = 0U; prior < index; ++prior) {
+      const char *prior_separator = strchr(image_roles[prior], '=');
+      if ((size_t)(separator - image_roles[index]) ==
+              (size_t)(prior_separator - image_roles[prior]) &&
+          memcmp(image_roles[index], image_roles[prior],
+                 (size_t)(separator - image_roles[index])) == 0) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "ImageGEN artifact role name is duplicated");
+        break;
+      }
+    }
+  }
+  if (status == CONFIT_OK) {
+    static const char *const base_roles[] = {
+        "kernel_payload", "package", "manifest", "terminal"};
+    size_t required_index;
+    for (required_index = 0U; status == CONFIT_OK &&
+                              required_index < sizeof(base_roles) / sizeof(base_roles[0]);
+         ++required_index) {
+      int found = 0;
+      for (index = 0U; index < image_role_count; ++index) {
+        const char *separator = strchr(image_roles[index], '=');
+        if ((size_t)(separator - image_roles[index]) == strlen(base_roles[required_index]) &&
+            memcmp(image_roles[index], base_roles[required_index],
+                   strlen(base_roles[required_index])) == 0) found = 1;
+      }
+      if (!found) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "ImageGEN profile omits a required base role");
+      }
+    }
+  }
+  if (status == CONFIT_OK && dts_relative != 0) {
+    int found = 0;
+    for (index = 0U; index < kernel_role_count; ++index) {
+      if (strncmp(kernel_roles[index], "boot_dtb=", 9U) == 0) found = 1;
+    }
+    if (!found) status = CONFIT_ERR_SCHEMA;
+  }
+  if (status == CONFIT_OK &&
+      strcmp(plan->package_profile, "firmware-directory-v1") == 0) {
+    static const char *const firmware_roles[] = {
+        "firmware_kernel", "firmware_config", "firmware_cmdline",
+        "firmware_dtb"};
+    size_t required_index;
+    for (required_index = 0U; status == CONFIT_OK &&
+                              required_index < sizeof(firmware_roles) / sizeof(firmware_roles[0]);
+         ++required_index) {
+      int found = 0;
+      for (index = 0U; index < image_role_count; ++index) {
+        const char *separator = strchr(image_roles[index], '=');
+        if ((size_t)(separator - image_roles[index]) == strlen(firmware_roles[required_index]) &&
+            memcmp(image_roles[index], firmware_roles[required_index],
+                   strlen(firmware_roles[required_index])) == 0) found = 1;
+      }
+      if (!found) status = CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; status == CONFIT_OK &&
+                      index < package_input_digest_count; ++index) {
+      const char *separator;
+      size_t prior;
+      if (!confit_target_package_digest_valid(package_input_digests[index])) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "firmware input digest is not role=lowercase-sha256");
+        break;
+      }
+      separator = strchr(package_input_digests[index], '=');
+      for (prior = 0U; prior < index; ++prior) {
+        const char *prior_separator = strchr(package_input_digests[prior], '=');
+        if ((size_t)(separator - package_input_digests[index]) ==
+                (size_t)(prior_separator - package_input_digests[prior]) &&
+            memcmp(package_input_digests[index], package_input_digests[prior],
+                   (size_t)(separator - package_input_digests[index])) == 0) {
+          status = CONFIT_ERR_SCHEMA;
+          confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                                "firmware input digest role is duplicated");
+          break;
+        }
+      }
+    }
+    for (index = 0U; status == CONFIT_OK && index < 3U; ++index) {
+      static const char *const digest_roles[] = {
+          "firmware_config", "firmware_cmdline", "firmware_dtb"};
+      size_t candidate;
+      int found = 0;
+      for (candidate = 0U; candidate < package_input_digest_count; ++candidate) {
+        const char *separator = strchr(package_input_digests[candidate], '=');
+        if ((size_t)(separator - package_input_digests[candidate]) ==
+                strlen(digest_roles[index]) &&
+            memcmp(package_input_digests[candidate], digest_roles[index],
+                   strlen(digest_roles[index])) == 0) found = 1;
+      }
+      if (!found) status = CONFIT_ERR_SCHEMA;
     }
   }
   if (status == CONFIT_OK && strcmp(plan->world_artifact_profile, "none") == 0 &&
@@ -730,6 +914,14 @@ static ConfitStatus confit_target_parse_build(
     plan->kernel_artifact_role_count = kernel_role_count;
     kernel_roles = 0;
     kernel_role_count = 0U;
+    plan->image_artifact_roles = image_roles;
+    plan->image_artifact_role_count = image_role_count;
+    image_roles = 0;
+    image_role_count = 0U;
+    plan->package_input_digests = package_input_digests;
+    plan->package_input_digest_count = package_input_digest_count;
+    package_input_digests = 0;
+    package_input_digest_count = 0U;
     plan->compile_tuple = compile_tuple;
     plan->compile_tuple_count = compile_tuple_count;
     compile_tuple = 0;
@@ -760,6 +952,16 @@ done:
   if (kernel_roles != 0) {
     for (index = 0U; index < kernel_role_count; ++index) free(kernel_roles[index]);
     free(kernel_roles);
+  }
+  if (image_roles != 0) {
+    for (index = 0U; index < image_role_count; ++index) free(image_roles[index]);
+    free(image_roles);
+  }
+  if (package_input_digests != 0) {
+    for (index = 0U; index < package_input_digest_count; ++index) {
+      free(package_input_digests[index]);
+    }
+    free(package_input_digests);
   }
   confit_v2_toml_document_free(document);
   return status;
@@ -1079,7 +1281,7 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(sysroot_path);
   CONFIT_TARGET_FREE(link_emulation);
   CONFIT_TARGET_FREE(linker_script);
-  CONFIT_TARGET_FREE(image_kind);
+  CONFIT_TARGET_FREE(image_artifact_profile);
   CONFIT_TARGET_FREE(package_profile);
   CONFIT_TARGET_FREE(machine_profile);
   CONFIT_TARGET_FREE(machine_runner);
@@ -1121,6 +1323,14 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
     free(plan->kernel_artifact_roles[index]);
   }
   free(plan->kernel_artifact_roles);
+  for (index = 0U; index < plan->image_artifact_role_count; ++index) {
+    free(plan->image_artifact_roles[index]);
+  }
+  free(plan->image_artifact_roles);
+  for (index = 0U; index < plan->package_input_digest_count; ++index) {
+    free(plan->package_input_digests[index]);
+  }
+  free(plan->package_input_digests);
   for (index = 0U; index < plan->world_artifact_role_count; ++index) {
     free(plan->world_artifact_roles[index]);
   }

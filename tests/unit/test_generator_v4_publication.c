@@ -214,8 +214,17 @@ int main(void) {
   target_plan.sysroot_path = "lib/libc/novel64-unknown-none-elf";
   target_plan.link_emulation = "novel64elf";
   target_plan.linker_script = "targets/novel64/synthetic/linker.ld";
-  target_plan.image_kind = "elf-flat-v1";
-  target_plan.package_profile = "manifest-v1";
+  {
+    static char *image_roles[] = {
+        "kernel_payload=artifacts/kernel.img",
+        "package=artifacts/image.pkg",
+        "manifest=manifest/imagegen.v1",
+        "terminal=seal/imagegen.v1"};
+    target_plan.image_artifact_profile = "imagegen-v1";
+    target_plan.image_artifact_roles = image_roles;
+    target_plan.image_artifact_role_count = 4U;
+  }
+  target_plan.package_profile = "container-v1";
   target_plan.machine_profile = "synthetic-novel64-v1";
   target_plan.machine_runner = "qemu-v1";
   target_plan.machine_architecture = "novel64";
@@ -283,7 +292,58 @@ int main(void) {
                             "PARUS_TARGET_WORLD_ARTIFACT_ROLE_service:= artifacts/services") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_WORLD_BOOT_COMPONENT:= world.service.synthetic.init") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_IMAGE_ARTIFACT_PROFILE:= imagegen-v1") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_IMAGE_ARTIFACT_ROLE_package:= artifacts/image.pkg") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_PACKAGE_INPUT_DIGEST_ROLES:=\n") != 0);
   confit_v4_artifact_set_clear(&targeted);
+  {
+    static char *firmware_roles[] = {
+        "kernel_payload=artifacts/kernel.img",
+        "package=artifacts/image.pkg",
+        "manifest=firmware/package.v1",
+        "terminal=seal/imagegen.v1",
+        "firmware_kernel=firmware/kernel.img",
+        "firmware_config=firmware/config.txt",
+        "firmware_cmdline=firmware/cmdline.txt",
+        "firmware_dtb=firmware/board.dtb"};
+    static char *firmware_digests[] = {
+        "firmware_config=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "firmware_cmdline=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "firmware_dtb=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"};
+    target_plan.image_artifact_roles = firmware_roles;
+    target_plan.image_artifact_role_count =
+        sizeof(firmware_roles) / sizeof(firmware_roles[0]);
+    target_plan.package_profile = "firmware-directory-v1";
+    target_plan.package_source = "targets/novel64/synthetic/package";
+    target_plan.package_input_digests = firmware_digests;
+    target_plan.package_input_digest_count =
+        sizeof(firmware_digests) / sizeof(firmware_digests[0]);
+    CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
+                           snapshot, &targeted_options, &targeted,
+                           &diagnostic) == CONFIT_OK);
+    CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                              "PARUS_TARGET_PACKAGE_INPUT_DIGEST_ROLES:= firmware_config firmware_cmdline firmware_dtb") != 0);
+    CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                              "PARUS_TARGET_IMAGE_ARTIFACT_ROLE_firmware_dtb:= firmware/board.dtb") != 0);
+    confit_v4_artifact_set_clear(&targeted);
+  }
+  {
+    static char *container_roles[] = {
+        "kernel_payload=artifacts/kernel.img",
+        "package=artifacts/image.pkg",
+        "manifest=manifest/imagegen.v1",
+        "terminal=seal/imagegen.v1"};
+    target_plan.image_artifact_roles = container_roles;
+    target_plan.image_artifact_role_count =
+        sizeof(container_roles) / sizeof(container_roles[0]);
+  }
+  target_plan.package_profile = "container-v1";
+  target_plan.package_source = 0;
+  target_plan.package_input_digests = 0;
+  target_plan.package_input_digest_count = 0U;
   target_plan.machine_executable_sha256 =
       "g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
