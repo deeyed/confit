@@ -64,6 +64,10 @@ typedef struct ConfitTargetPlan {
   char *dtc_sha256;
   char *dtc_version;
   char *package_source;
+  char *kernel_artifact_profile;
+  char **kernel_artifact_roles;
+  size_t kernel_artifact_role_count;
+  size_t max_kernel_bytes;
   char *user_artifact_profile;
   char *user_artifact_output;
   char *user_artifact_entry;

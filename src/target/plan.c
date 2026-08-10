@@ -112,6 +112,22 @@ static int confit_target_relative_path_valid(const char *text) {
   return 1;
 }
 
+static int confit_target_kernel_role_valid(const char *text) {
+  static const char *const roles[] = {
+      "elf", "map", "kapi", "driverdb", "sysinitdb", "release_report"};
+  const char *separator = text != 0 ? strchr(text, '=') : 0;
+  size_t role_index;
+  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
+      !confit_target_relative_path_valid(separator + 1)) return 0;
+  for (role_index = 0U; role_index < sizeof(roles) / sizeof(roles[0]);
+       ++role_index) {
+    const size_t size = strlen(roles[role_index]);
+    if ((size_t)(separator - text) == size &&
+        memcmp(text, roles[role_index], size) == 0) return 1;
+  }
+  return 0;
+}
+
 static int confit_target_table_only(const ConfitV2TomlValue *table,
                                     const char *const *fields,
                                     size_t field_count) {
@@ -317,7 +333,8 @@ static ConfitStatus confit_target_parse_build(
       "linker_script", "image_kind", "package_profile", "machine_profile",
       "expected_component", "expected_capability", "output_stem",
       "required_profile", "private_includes", "max_image_bytes", "dts",
-      "dtc", "package_source", "user_artifact_profile",
+      "dtc", "package_source", "kernel_artifact_profile",
+      "kernel_artifact_roles", "max_kernel_bytes", "user_artifact_profile",
       "compile_tuple", "user_artifact_output", "user_artifact_entry",
       "user_artifact_linker_script", "user_artifact_roles"};
   static const char *const machine_fields[] = {
@@ -333,11 +350,13 @@ static ConfitStatus confit_target_parse_build(
   const ConfitV2TomlValue *name;
   const ConfitV2TomlValue *schema;
   const ConfitV2TomlValue *max_image;
+  const ConfitV2TomlValue *max_kernel;
   const ConfitV2TomlValue *machine_memory;
   const char *name_text;
   size_t name_size;
   int64_t schema_version;
   int64_t max_image_bytes;
+  int64_t max_kernel_bytes;
   int64_t machine_memory_mib = 0;
   char *linker_relative = 0;
   char *dts_relative = 0;
@@ -349,6 +368,8 @@ static ConfitStatus confit_target_parse_build(
   size_t compile_tuple_count = 0U;
   char **artifact_roles = 0;
   size_t artifact_role_count = 0U;
+  char **kernel_roles = 0;
+  size_t kernel_role_count = 0U;
   size_t index;
   ConfitStatus status;
 
@@ -412,6 +433,7 @@ static ConfitStatus confit_target_parse_build(
   CONFIT_TARGET_BUILD_STRING("expected_capability", expected_capability);
   CONFIT_TARGET_BUILD_STRING("output_stem", output_stem);
   CONFIT_TARGET_BUILD_STRING("required_profile", required_profile);
+  CONFIT_TARGET_BUILD_STRING("kernel_artifact_profile", kernel_artifact_profile);
   CONFIT_TARGET_BUILD_STRING("user_artifact_profile", user_artifact_profile);
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "user_artifact_output", 0, &plan->user_artifact_output, path,
@@ -463,10 +485,14 @@ static ConfitStatus confit_target_parse_build(
       build, "compile_tuple", &compile_tuple, &compile_tuple_count, path,
       diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string_list(
+      build, "kernel_artifact_roles", &kernel_roles, &kernel_role_count, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string_list(
       build, "user_artifact_roles", &artifact_roles, &artifact_role_count,
       path, diagnostic);
 #undef CONFIT_TARGET_BUILD_STRING
   max_image = confit_v2_toml_table_find(build, "max_image_bytes");
+  max_kernel = confit_v2_toml_table_find(build, "max_kernel_bytes");
   if (status == CONFIT_OK &&
       (max_image == 0 || !confit_v2_toml_value_int64(max_image, &max_image_bytes) ||
        max_image_bytes <= 0 ||
@@ -476,6 +502,15 @@ static ConfitStatus confit_target_parse_build(
                           "target max_image_bytes is outside the closed limit");
   }
   if (status == CONFIT_OK) plan->max_image_bytes = (size_t)max_image_bytes;
+  if (status == CONFIT_OK &&
+      (max_kernel == 0 ||
+       !confit_v2_toml_value_int64(max_kernel, &max_kernel_bytes) ||
+       max_kernel_bytes <= 0 || max_kernel_bytes > CONFIT_TARGET_IMAGE_LIMIT_MAX)) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "target max_kernel_bytes is outside the closed limit");
+  }
+  if (status == CONFIT_OK) plan->max_kernel_bytes = (size_t)max_kernel_bytes;
   if (status == CONFIT_OK &&
       (!confit_target_atom_valid(plan->isa) ||
        !confit_target_atom_valid(plan->abi) ||
@@ -489,6 +524,7 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_atom_valid(plan->expected_capability) ||
        !confit_target_atom_valid(plan->output_stem) ||
        !confit_target_atom_valid(plan->required_profile) ||
+       !confit_target_atom_valid(plan->kernel_artifact_profile) ||
        !confit_target_atom_valid(plan->user_artifact_profile) ||
        (machine != 0 &&
         (!confit_target_atom_valid(plan->machine_runner) ||
@@ -532,6 +568,7 @@ static ConfitStatus confit_target_parse_build(
        (strcmp(plan->package_profile, "manifest-v1") != 0 &&
         strcmp(plan->package_profile, "rpi5-firmware-v1") != 0) ||
        strcmp(plan->required_profile, "release") != 0 ||
+       strcmp(plan->kernel_artifact_profile, "elf-v1") != 0 ||
        (strcmp(plan->user_artifact_profile, "none") != 0 &&
         strcmp(plan->user_artifact_profile, "elf-v1") != 0))) {
     status = CONFIT_ERR_UNSUPPORTED;
@@ -607,6 +644,34 @@ static ConfitStatus confit_target_parse_build(
       }
     }
   }
+  if (status == CONFIT_OK && kernel_role_count != 6U) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "kernel artifact profile requires six exact roles");
+  }
+  for (index = 0U; status == CONFIT_OK && index < kernel_role_count; ++index) {
+    size_t prior;
+    const char *separator;
+    if (!confit_target_kernel_role_valid(kernel_roles[index])) {
+      status = CONFIT_ERR_SCHEMA;
+      confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                            "kernel artifact role is unknown or has an unsafe path");
+      break;
+    }
+    separator = strchr(kernel_roles[index], '=');
+    for (prior = 0U; prior < index; ++prior) {
+      const char *prior_separator = strchr(kernel_roles[prior], '=');
+      if ((size_t)(separator - kernel_roles[index]) ==
+              (size_t)(prior_separator - kernel_roles[prior]) &&
+          memcmp(kernel_roles[index], kernel_roles[prior],
+                 (size_t)(separator - kernel_roles[index])) == 0) {
+        status = CONFIT_ERR_SCHEMA;
+        confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                              "kernel artifact role name is duplicated");
+        break;
+      }
+    }
+  }
   if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "none") == 0 &&
       (plan->user_artifact_output != 0 || plan->user_artifact_entry != 0 ||
        plan->user_artifact_linker_script != 0 || artifact_role_count != 0U)) {
@@ -648,6 +713,10 @@ static ConfitStatus confit_target_parse_build(
     }
   }
   if (status == CONFIT_OK) {
+    plan->kernel_artifact_roles = kernel_roles;
+    plan->kernel_artifact_role_count = kernel_role_count;
+    kernel_roles = 0;
+    kernel_role_count = 0U;
     plan->compile_tuple = compile_tuple;
     plan->compile_tuple_count = compile_tuple_count;
     compile_tuple = 0;
@@ -674,6 +743,10 @@ done:
   if (artifact_roles != 0) {
     for (index = 0U; index < artifact_role_count; ++index) free(artifact_roles[index]);
     free(artifact_roles);
+  }
+  if (kernel_roles != 0) {
+    for (index = 0U; index < kernel_role_count; ++index) free(kernel_roles[index]);
+    free(kernel_roles);
   }
   confit_v2_toml_document_free(document);
   return status;
@@ -1015,6 +1088,7 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(dtc_sha256);
   CONFIT_TARGET_FREE(dtc_version);
   CONFIT_TARGET_FREE(package_source);
+  CONFIT_TARGET_FREE(kernel_artifact_profile);
   CONFIT_TARGET_FREE(user_artifact_profile);
   CONFIT_TARGET_FREE(user_artifact_output);
   CONFIT_TARGET_FREE(user_artifact_entry);
@@ -1030,6 +1104,10 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
     free(plan->compile_tuple[index]);
   }
   free(plan->compile_tuple);
+  for (index = 0U; index < plan->kernel_artifact_role_count; ++index) {
+    free(plan->kernel_artifact_roles[index]);
+  }
+  free(plan->kernel_artifact_roles);
   for (index = 0U; index < plan->user_artifact_role_count; ++index) {
     free(plan->user_artifact_roles[index]);
   }

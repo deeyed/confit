@@ -190,14 +190,14 @@ int main(void) {
   /* Make injection과 path escape는 resolver 밖에서 artifact adapter를 직접
    * 호출하더라도 fail-closed여야 한다. 이 fixture는 target selection 의미를
    * 주장하지 않고 target.mk serializer의 closed byte vocabulary만 검증한다. */
-  target_plan.target_id = "synthetic-arm64";
-  target_plan.isa = "arm64";
-  target_plan.abi = "aapcs64";
-  target_plan.cpu_profile = "cortex-a72";
-  target_plan.entry_profile = "arm64-fdt-v1";
-  target_plan.toolchain_id = "aarch64-none-elf";
+  target_plan.target_id = "synthetic-novel64";
+  target_plan.isa = "novel64";
+  target_plan.abi = "novel64-abi";
+  target_plan.cpu_profile = "novel64-generic";
+  target_plan.entry_profile = "novel64-boot-v1";
+  target_plan.toolchain_id = "novel64-none-elf";
   target_plan.toolchain_kind = "clang-lld-v1";
-  target_plan.target_triple = "aarch64-none-elf";
+  target_plan.target_triple = "novel64-none-elf";
   target_plan.compiler_path = "/usr/bin/clang";
   target_plan.compiler_sha256 =
       "1123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -211,36 +211,65 @@ int main(void) {
       "3123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   target_plan.linker_version = "22.1.8";
   target_plan.resource_include_path = "/usr/lib/clang/include";
-  target_plan.sysroot_path = "lib/libc/aarch64-unknown-none-elf";
-  target_plan.link_emulation = "aarch64elf";
-  target_plan.linker_script = "targets/arm64/synthetic/linker.ld";
+  target_plan.sysroot_path = "lib/libc/novel64-unknown-none-elf";
+  target_plan.link_emulation = "novel64elf";
+  target_plan.linker_script = "targets/novel64/synthetic/linker.ld";
   target_plan.image_kind = "elf-flat-v1";
   target_plan.package_profile = "manifest-v1";
-  target_plan.machine_profile = "synthetic-arm64-v1";
+  target_plan.machine_profile = "synthetic-novel64-v1";
   target_plan.machine_runner = "qemu-v1";
-  target_plan.machine_architecture = "arm64";
-  target_plan.machine_executable = "qemu-system-aarch64";
-  target_plan.machine_executable_path = "/usr/bin/qemu-system-aarch64";
+  target_plan.machine_architecture = "novel64";
+  target_plan.machine_executable = "qemu-system-novel64";
+  target_plan.machine_executable_path = "/usr/bin/qemu-system-novel64";
   target_plan.machine_executable_sha256 =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   target_plan.machine_executable_version = "11.0.2";
   target_plan.machine_name = "virt";
-  target_plan.machine_cpu = "cortex-a72";
+  target_plan.machine_cpu = "novel64-generic";
   target_plan.machine_serial = "stdio-v1";
   target_plan.machine_artifact = "flat-image-v1";
   target_plan.machine_memory_mib = 1024U;
-  target_plan.expected_component = "target.arm64.synthetic";
-  target_plan.expected_capability = "image.arm64.synthetic@1";
-  target_plan.output_stem = "parus-synthetic-arm64";
+  target_plan.expected_component = "sys.board.novel64.synthetic";
+  target_plan.expected_capability = "image.novel64.synthetic@1";
+  target_plan.output_stem = "parus-synthetic-novel64";
   target_plan.required_profile = "release";
-  target_plan.user_artifact_profile = "none";
+  {
+    static char *kernel_roles[] = {
+        "elf=kernel.elf", "map=kernel.map", "kapi=metadata/kapi.v2.stamp",
+        "driverdb=metadata/driverdb.o", "sysinitdb=metadata/sysinitdb.o",
+        "release_report=kernel.release.v1"};
+    target_plan.kernel_artifact_profile = "elf-v1";
+    target_plan.kernel_artifact_roles = kernel_roles;
+    target_plan.kernel_artifact_role_count =
+        sizeof(kernel_roles) / sizeof(kernel_roles[0]);
+  }
+  target_plan.max_kernel_bytes = 8388608U;
+  target_plan.user_artifact_profile = "elf-v1";
+  target_plan.user_artifact_output = "synthetic-init";
+  target_plan.user_artifact_entry = "parus_novel64_entry";
+  target_plan.user_artifact_linker_script =
+      "targets/novel64/synthetic/user.ld";
+  {
+    static char *user_roles[] = {
+        "runtime=user.arch.novel64.runtime",
+        "program=user.bin.synthetic.init"};
+    target_plan.user_artifact_roles = user_roles;
+    target_plan.user_artifact_role_count =
+        sizeof(user_roles) / sizeof(user_roles[0]);
+  }
   target_plan.max_image_bytes = 67108864U;
   targeted_options.target_plan = &target_plan;
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
                          snapshot, &targeted_options, &targeted,
                          &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
-                            "PARUS_TARGET_PLAN_ABI:= 1") != 0);
+                            "PARUS_TARGET_PLAN_ABI:= 2") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_KERNEL_ARTIFACT_ROLE_elf:= kernel.elf") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_ISA:= novel64") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_EXPECTED_COMPONENT:= sys.board.novel64.synthetic") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_MACHINE_RUNNER:= qemu-v1") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
@@ -248,7 +277,7 @@ int main(void) {
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_MACHINE_EXECUTABLE_VERSION:= 11.0.2") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
-                            "PARUS_TARGET_USER_ARTIFACT_LINKER_SCRIPT:= none") != 0);
+                            "PARUS_TARGET_USER_ARTIFACT_ROLE_runtime:= user.arch.novel64.runtime") != 0);
   confit_v4_artifact_set_clear(&targeted);
   target_plan.machine_executable_sha256 =
       "g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -261,7 +290,7 @@ int main(void) {
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
                          snapshot, &targeted_options, &targeted,
                          &diagnostic) == CONFIT_ERR_SCHEMA);
-  target_plan.linker_script = "targets/arm64/synthetic/linker.ld";
+  target_plan.linker_script = "targets/novel64/synthetic/linker.ld";
   target_plan.compiler_path = "/usr/bin/clang$(touch_bad)";
   confit_diagnostic_clear(&diagnostic);
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
