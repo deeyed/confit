@@ -66,20 +66,6 @@ static int confit_target_compile_atom_valid(const char *text) {
   return 1;
 }
 
-static int confit_target_artifact_role_valid(const char *text) {
-  const char *separator = text != 0 ? strchr(text, '=') : 0;
-  size_t index;
-  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
-      (size_t)(separator - text) >= 64U ||
-      !confit_target_atom_valid(separator + 1)) return 0;
-  for (index = 0U; text + index < separator; ++index) {
-    const unsigned char value = (unsigned char)text[index];
-    if (!((value >= 'a' && value <= 'z') ||
-          (value >= '0' && value <= '9') || value == '_')) return 0;
-  }
-  return 1;
-}
-
 static int confit_target_relative_path_valid(const char *text) {
   const char *segment;
   const char *cursor;
@@ -110,6 +96,21 @@ static int confit_target_relative_path_valid(const char *text) {
     cursor += 1;
   }
   return 1;
+}
+
+static int confit_target_world_role_valid(const char *text) {
+  static const char *const roles[] = {
+      "service", "library_private", "install_plan", "terminal"};
+  const char *separator = text != 0 ? strchr(text, '=') : 0;
+  size_t index;
+  if (separator == 0 || separator == text || strchr(separator + 1, '=') != 0 ||
+      !confit_target_relative_path_valid(separator + 1)) return 0;
+  for (index = 0U; index < sizeof(roles) / sizeof(roles[0]); ++index) {
+    const size_t role_size = strlen(roles[index]);
+    if ((size_t)(separator - text) == role_size &&
+        memcmp(text, roles[index], role_size) == 0) return 1;
+  }
+  return 0;
 }
 
 static int confit_target_kernel_role_valid(const char *text) {
@@ -334,9 +335,10 @@ static ConfitStatus confit_target_parse_build(
       "expected_component", "expected_capability", "output_stem",
       "required_profile", "private_includes", "max_image_bytes", "dts",
       "dtc", "package_source", "kernel_artifact_profile",
-      "kernel_artifact_roles", "max_kernel_bytes", "user_artifact_profile",
-      "compile_tuple", "user_artifact_output", "user_artifact_entry",
-      "user_artifact_linker_script", "user_artifact_roles"};
+      "kernel_artifact_roles", "max_kernel_bytes", "world_artifact_profile",
+      "compile_tuple", "world_boot_component", "world_artifact_entry",
+      "world_artifact_linker_script", "world_artifact_roles",
+      "max_world_bytes"};
   static const char *const machine_fields[] = {
       "runner", "architecture", "executable", "machine", "cpu",
       "memory_mib", "serial", "artifact"};
@@ -351,17 +353,19 @@ static ConfitStatus confit_target_parse_build(
   const ConfitV2TomlValue *schema;
   const ConfitV2TomlValue *max_image;
   const ConfitV2TomlValue *max_kernel;
+  const ConfitV2TomlValue *max_world;
   const ConfitV2TomlValue *machine_memory;
   const char *name_text;
   size_t name_size;
   int64_t schema_version;
   int64_t max_image_bytes;
   int64_t max_kernel_bytes;
+  int64_t max_world_bytes;
   int64_t machine_memory_mib = 0;
   char *linker_relative = 0;
   char *dts_relative = 0;
   char *package_relative = 0;
-  char *user_artifact_linker_relative = 0;
+  char *world_artifact_linker_relative = 0;
   char **private_relatives = 0;
   size_t private_count = 0U;
   char **compile_tuple = 0;
@@ -406,7 +410,7 @@ static ConfitStatus confit_target_parse_build(
       strlen(target_id) != name_size ||
       memcmp(name_text, target_id, name_size) != 0 ||
       !confit_v2_toml_value_int64(schema, &schema_version) ||
-      schema_version != 2) {
+      schema_version != 3) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target descriptor identity or schema is invalid");
@@ -434,16 +438,16 @@ static ConfitStatus confit_target_parse_build(
   CONFIT_TARGET_BUILD_STRING("output_stem", output_stem);
   CONFIT_TARGET_BUILD_STRING("required_profile", required_profile);
   CONFIT_TARGET_BUILD_STRING("kernel_artifact_profile", kernel_artifact_profile);
-  CONFIT_TARGET_BUILD_STRING("user_artifact_profile", user_artifact_profile);
+  CONFIT_TARGET_BUILD_STRING("world_artifact_profile", world_artifact_profile);
   if (status == CONFIT_OK) status = confit_target_get_string(
-      build, "user_artifact_output", 0, &plan->user_artifact_output, path,
+      build, "world_boot_component", 0, &plan->world_boot_component, path,
       diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
-      build, "user_artifact_entry", 0, &plan->user_artifact_entry, path,
+      build, "world_artifact_entry", 0, &plan->world_artifact_entry, path,
       diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
-      build, "user_artifact_linker_script", 0,
-      &user_artifact_linker_relative, path, diagnostic);
+      build, "world_artifact_linker_script", 0,
+      &world_artifact_linker_relative, path, diagnostic);
   if (status == CONFIT_OK && machine != 0) {
     status = confit_target_get_string(machine, "runner", 1,
                                       &plan->machine_runner, path, diagnostic);
@@ -488,11 +492,12 @@ static ConfitStatus confit_target_parse_build(
       build, "kernel_artifact_roles", &kernel_roles, &kernel_role_count, path,
       diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string_list(
-      build, "user_artifact_roles", &artifact_roles, &artifact_role_count,
+      build, "world_artifact_roles", &artifact_roles, &artifact_role_count,
       path, diagnostic);
 #undef CONFIT_TARGET_BUILD_STRING
   max_image = confit_v2_toml_table_find(build, "max_image_bytes");
   max_kernel = confit_v2_toml_table_find(build, "max_kernel_bytes");
+  max_world = confit_v2_toml_table_find(build, "max_world_bytes");
   if (status == CONFIT_OK &&
       (max_image == 0 || !confit_v2_toml_value_int64(max_image, &max_image_bytes) ||
        max_image_bytes <= 0 ||
@@ -512,6 +517,15 @@ static ConfitStatus confit_target_parse_build(
   }
   if (status == CONFIT_OK) plan->max_kernel_bytes = (size_t)max_kernel_bytes;
   if (status == CONFIT_OK &&
+      (max_world == 0 ||
+       !confit_v2_toml_value_int64(max_world, &max_world_bytes) ||
+       max_world_bytes <= 0 || max_world_bytes > CONFIT_TARGET_IMAGE_LIMIT_MAX)) {
+    status = CONFIT_ERR_SCHEMA;
+    confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
+                          "target max_world_bytes is outside the closed limit");
+  }
+  if (status == CONFIT_OK) plan->max_world_bytes = (size_t)max_world_bytes;
+  if (status == CONFIT_OK &&
       (!confit_target_atom_valid(plan->isa) ||
        !confit_target_atom_valid(plan->abi) ||
        !confit_target_atom_valid(plan->cpu_profile) ||
@@ -525,7 +539,7 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_atom_valid(plan->output_stem) ||
        !confit_target_atom_valid(plan->required_profile) ||
        !confit_target_atom_valid(plan->kernel_artifact_profile) ||
-       !confit_target_atom_valid(plan->user_artifact_profile) ||
+       !confit_target_atom_valid(plan->world_artifact_profile) ||
        (machine != 0 &&
         (!confit_target_atom_valid(plan->machine_runner) ||
          !confit_target_atom_valid(plan->machine_architecture) ||
@@ -569,8 +583,8 @@ static ConfitStatus confit_target_parse_build(
         strcmp(plan->package_profile, "rpi5-firmware-v1") != 0) ||
        strcmp(plan->required_profile, "release") != 0 ||
        strcmp(plan->kernel_artifact_profile, "elf-v1") != 0 ||
-       (strcmp(plan->user_artifact_profile, "none") != 0 &&
-        strcmp(plan->user_artifact_profile, "elf-v1") != 0))) {
+       (strcmp(plan->world_artifact_profile, "none") != 0 &&
+        strcmp(plan->world_artifact_profile, "world-v1") != 0))) {
     status = CONFIT_ERR_UNSUPPORTED;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target descriptor uses an unknown image or package kind");
@@ -581,10 +595,10 @@ static ConfitStatus confit_target_parse_build(
       project, dts_relative, 0, &plan->dts_path, diagnostic);
   if (status == CONFIT_OK && package_relative != 0) status = confit_target_repo_path(
       project, package_relative, 1, &plan->package_source, diagnostic);
-  if (status == CONFIT_OK && user_artifact_linker_relative != 0) {
+  if (status == CONFIT_OK && world_artifact_linker_relative != 0) {
     status = confit_target_repo_path(
-        project, user_artifact_linker_relative, 0,
-        &plan->user_artifact_linker_script, diagnostic);
+        project, world_artifact_linker_relative, 0,
+        &plan->world_artifact_linker_script, diagnostic);
   }
   if (status == CONFIT_OK && strcmp(plan->package_profile,
                                     "rpi5-firmware-v1") == 0 &&
@@ -672,30 +686,29 @@ static ConfitStatus confit_target_parse_build(
       }
     }
   }
-  if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "none") == 0 &&
-      (plan->user_artifact_output != 0 || plan->user_artifact_entry != 0 ||
-       plan->user_artifact_linker_script != 0 || artifact_role_count != 0U)) {
+  if (status == CONFIT_OK && strcmp(plan->world_artifact_profile, "none") == 0 &&
+      (plan->world_boot_component != 0 || plan->world_artifact_entry != 0 ||
+       plan->world_artifact_linker_script != 0 || artifact_role_count != 0U)) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
-                          "none user artifact profile must not publish roles");
+                          "none World artifact profile must not publish roles");
   }
-  if (status == CONFIT_OK && strcmp(plan->user_artifact_profile, "elf-v1") == 0 &&
-      (plan->user_artifact_output == 0 || plan->user_artifact_entry == 0 ||
-       plan->user_artifact_linker_script == 0 ||
-       artifact_role_count == 0U ||
-       !confit_target_atom_valid(plan->user_artifact_output) ||
-       !confit_target_atom_valid(plan->user_artifact_entry))) {
+  if (status == CONFIT_OK && strcmp(plan->world_artifact_profile, "world-v1") == 0 &&
+      (plan->world_boot_component == 0 || plan->world_artifact_entry == 0 ||
+       plan->world_artifact_linker_script == 0 || artifact_role_count != 4U ||
+       !confit_target_atom_valid(plan->world_boot_component) ||
+       !confit_target_atom_valid(plan->world_artifact_entry))) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
-                          "elf user artifact profile has no sealed output, entry, or roles");
+                          "World artifact profile has no boot service, entry, or four roles");
   }
   for (index = 0U; status == CONFIT_OK && index < artifact_role_count; ++index) {
     size_t prior;
     const char *separator;
-    if (!confit_target_artifact_role_valid(artifact_roles[index])) {
+    if (!confit_target_world_role_valid(artifact_roles[index])) {
       status = CONFIT_ERR_SCHEMA;
       confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
-                            "user artifact role is not role=component");
+                            "World artifact role is not role=relative-path");
       break;
     }
     separator = strchr(artifact_roles[index], '=');
@@ -707,7 +720,7 @@ static ConfitStatus confit_target_parse_build(
                  (size_t)(separator - artifact_roles[index])) == 0) {
         status = CONFIT_ERR_SCHEMA;
         confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
-                              "user artifact role name is duplicated");
+                              "World artifact role name is duplicated");
         break;
       }
     }
@@ -721,8 +734,8 @@ static ConfitStatus confit_target_parse_build(
     plan->compile_tuple_count = compile_tuple_count;
     compile_tuple = 0;
     compile_tuple_count = 0U;
-    plan->user_artifact_roles = artifact_roles;
-    plan->user_artifact_role_count = artifact_role_count;
+    plan->world_artifact_roles = artifact_roles;
+    plan->world_artifact_role_count = artifact_role_count;
     artifact_roles = 0;
     artifact_role_count = 0U;
   }
@@ -731,7 +744,7 @@ done:
   free(linker_relative);
   free(dts_relative);
   free(package_relative);
-  free(user_artifact_linker_relative);
+  free(world_artifact_linker_relative);
   if (private_relatives != 0) {
     for (index = 0U; index < private_count; ++index) free(private_relatives[index]);
     free(private_relatives);
@@ -1089,10 +1102,10 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(dtc_version);
   CONFIT_TARGET_FREE(package_source);
   CONFIT_TARGET_FREE(kernel_artifact_profile);
-  CONFIT_TARGET_FREE(user_artifact_profile);
-  CONFIT_TARGET_FREE(user_artifact_output);
-  CONFIT_TARGET_FREE(user_artifact_entry);
-  CONFIT_TARGET_FREE(user_artifact_linker_script);
+  CONFIT_TARGET_FREE(world_artifact_profile);
+  CONFIT_TARGET_FREE(world_boot_component);
+  CONFIT_TARGET_FREE(world_artifact_entry);
+  CONFIT_TARGET_FREE(world_artifact_linker_script);
   CONFIT_TARGET_FREE(target_descriptor_path);
   CONFIT_TARGET_FREE(toolchain_descriptor_path);
 #undef CONFIT_TARGET_FREE
@@ -1108,10 +1121,10 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
     free(plan->kernel_artifact_roles[index]);
   }
   free(plan->kernel_artifact_roles);
-  for (index = 0U; index < plan->user_artifact_role_count; ++index) {
-    free(plan->user_artifact_roles[index]);
+  for (index = 0U; index < plan->world_artifact_role_count; ++index) {
+    free(plan->world_artifact_roles[index]);
   }
-  free(plan->user_artifact_roles);
+  free(plan->world_artifact_roles);
   memset(plan, 0, sizeof(*plan));
 }
 
@@ -1142,10 +1155,9 @@ ConfitStatus confit_target_plan_validate_selection(
         "target expected component/capability is not the selected provider");
     return CONFIT_ERR_CONFLICT;
   }
-  for (index = 0U; index < plan->user_artifact_role_count; ++index) {
-    const char *separator = strchr(plan->user_artifact_roles[index], '=');
-    const ConfitComponent *role_component = separator != 0
-        ? confit_component_catalog_find(catalog, separator + 1) : 0;
+  if (strcmp(plan->world_artifact_profile, "world-v1") == 0) {
+    const ConfitComponent *role_component = confit_component_catalog_find(
+        catalog, plan->world_boot_component);
     size_t selected_index;
     int role_selected = 0;
     for (selected_index = 0U; role_component != 0 &&
@@ -1155,10 +1167,11 @@ ConfitStatus confit_target_plan_validate_selection(
         break;
       }
     }
-    if (!role_selected) {
+    if (!role_selected ||
+        role_component->kind != CONFIT_COMPONENT_KIND_WORLD_SERVICE) {
       confit_diagnostic_set(
-          diagnostic, CONFIT_ERR_CONFLICT, "target-plan.user-artifact", 0U, 0U,
-          "user artifact role does not name one selected production component");
+          diagnostic, CONFIT_ERR_CONFLICT, "target-plan.world-artifact", 0U, 0U,
+          "World boot component is not one selected World service");
       return CONFIT_ERR_CONFLICT;
     }
   }

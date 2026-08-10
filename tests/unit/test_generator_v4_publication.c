@@ -244,26 +244,29 @@ int main(void) {
         sizeof(kernel_roles) / sizeof(kernel_roles[0]);
   }
   target_plan.max_kernel_bytes = 8388608U;
-  target_plan.user_artifact_profile = "elf-v1";
-  target_plan.user_artifact_output = "synthetic-init";
-  target_plan.user_artifact_entry = "parus_novel64_entry";
-  target_plan.user_artifact_linker_script =
-      "targets/novel64/synthetic/user.ld";
+  target_plan.world_artifact_profile = "world-v1";
+  target_plan.world_boot_component = "world.service.synthetic.init";
+  target_plan.world_artifact_entry = "_start";
+  target_plan.world_artifact_linker_script =
+      "world/linker/novel64/user.ld";
   {
-    static char *user_roles[] = {
-        "runtime=user.arch.novel64.runtime",
-        "program=user.bin.synthetic.init"};
-    target_plan.user_artifact_roles = user_roles;
-    target_plan.user_artifact_role_count =
-        sizeof(user_roles) / sizeof(user_roles[0]);
+    static char *world_roles[] = {
+        "service=artifacts/services",
+        "library_private=artifacts/lib/private",
+        "install_plan=install-plan.v1",
+        "terminal=seal/worldgen.v1"};
+    target_plan.world_artifact_roles = world_roles;
+    target_plan.world_artifact_role_count =
+        sizeof(world_roles) / sizeof(world_roles[0]);
   }
+  target_plan.max_world_bytes = 20971520U;
   target_plan.max_image_bytes = 67108864U;
   targeted_options.target_plan = &target_plan;
   CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
                          snapshot, &targeted_options, &targeted,
                          &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
-                            "PARUS_TARGET_PLAN_ABI:= 2") != 0);
+                            "PARUS_TARGET_PLAN_ABI:= 3") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_KERNEL_ARTIFACT_ROLE_elf:= kernel.elf") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
@@ -277,7 +280,9 @@ int main(void) {
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_MACHINE_EXECUTABLE_VERSION:= 11.0.2") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
-                            "PARUS_TARGET_USER_ARTIFACT_ROLE_runtime:= user.arch.novel64.runtime") != 0);
+                            "PARUS_TARGET_WORLD_ARTIFACT_ROLE_service:= artifacts/services") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_WORLD_BOOT_COMPONENT:= world.service.synthetic.init") != 0);
   confit_v4_artifact_set_clear(&targeted);
   target_plan.machine_executable_sha256 =
       "g123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
