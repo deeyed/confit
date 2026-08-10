@@ -180,7 +180,9 @@ int main(void) {
     CONFIT_TEST_ASSERT(strstr(component_first.component_catalog_json,
                               "confit-component-catalog-v3") != 0);
     CONFIT_TEST_ASSERT(strstr(component_first.tests_mk,
-                              "not selectable schema v3 components") != 0);
+                              "PARUS_TEST_IDS:=") != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.nucleus_mk,
+                              "PARUS_NUCLEUS_UNIT_IDS:=") != 0);
     confit_v4_artifact_set_clear(&component_first);
     confit_v4_artifact_set_clear(&component_second);
   }
@@ -330,7 +332,7 @@ int main(void) {
         "config.h", "config.mk", "config.values.mk",
         "config.selection.json", "config.inputs.json", "config.reason.json",
         "config.report.json", "config.bundle.json", "components.mk",
-        "component.catalog.json", "tests.mk", "target.mk"};
+        "component.catalog.json", "nucleus.mk", "tests.mk", "target.mk"};
     static const char stale_digest[] =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     size_t artifact_index;

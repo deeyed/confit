@@ -13,6 +13,7 @@
 #include "confit/parser_v2.h"
 #include "confit/resolver_v2.h"
 #include "confit/schema_v2.h"
+#include "confit/source_catalog.h"
 #include "confit/status.h"
 #include "confit/version.h"
 
@@ -474,6 +475,8 @@ static ConfitStatus confit_cli_v4_input_set_add_directory(
 static ConfitStatus confit_cli_v4_collect_inputs(
     const ConfitCliV2Args *args, const ConfitCliV2Context *context,
     const ConfitComponentCatalog *catalog,
+    const ConfitNucleusCatalog *nucleus,
+    const ConfitTestCatalog *tests,
     ConfitCliV4InputSet *out_inputs, ConfitDiagnostic *diagnostic) {
   const ConfitV2Project *project = context->project;
   ConfitStatus status;
@@ -529,6 +532,28 @@ static ConfitStatus confit_cli_v4_collect_inputs(
     if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
         out_inputs, catalog->components[index].makefile_path, physical_path,
         "component-make", diagnostic);
+  }
+  for (index = 0U; status == CONFIT_OK && nucleus != 0 &&
+                         index < nucleus->unit_count; ++index) {
+    char physical_path[4096];
+    status = confit_host_path_join(physical_path, sizeof(physical_path),
+                                   nucleus->project_root,
+                                   nucleus->units[index].makefile_path,
+                                   diagnostic);
+    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
+        out_inputs, nucleus->units[index].makefile_path, physical_path,
+        "nucleus-make", diagnostic);
+  }
+  for (index = 0U; status == CONFIT_OK && tests != 0 &&
+                         index < tests->test_count; ++index) {
+    char physical_path[4096];
+    status = confit_host_path_join(physical_path, sizeof(physical_path),
+                                   tests->project_root,
+                                   tests->tests[index].makefile_path,
+                                   diagnostic);
+    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
+        out_inputs, tests->tests[index].makefile_path, physical_path,
+        "test-make", diagnostic);
   }
   for (index = 0U; status == CONFIT_OK && index < args->set_count; ++index) {
     char logical_path[64];
@@ -644,21 +669,52 @@ static ConfitStatus confit_cli_v2_parse(const char *command, int argc,
 }
 
 static ConfitStatus confit_cli_v2_resolve_component_closure(
-    const ConfitCliV2Context *context, const ConfitComponentCatalog *catalog,
+    const ConfitCliV2Args *args, const ConfitCliV2Context *context,
+    const ConfitComponentCatalog *catalog,
     ConfitComponentClosure *closure, ConfitDiagnostic *diagnostic) {
   char **required_features = 0;
   char **optional_features = 0;
   size_t required_feature_count = 0U;
   size_t optional_feature_count = 0U;
   ConfitStatus status;
-  status = confit_v2_snapshot_collect_component_capability_requests(
-      context->compiled, context->snapshot, &required_features,
-      &required_feature_count, &optional_features, &optional_feature_count,
-      diagnostic);
-  if (status == CONFIT_OK) status = confit_component_catalog_resolve_features(
-      catalog, (const char *const *)required_features, required_feature_count,
-      (const char *const *)optional_features, optional_feature_count, 0, 0U,
-      closure, diagnostic);
+  if (context->project->selection_dirs.count != 0U) {
+    char directory[4096];
+    char filename[256];
+    char profile_path[4096];
+    int written;
+    if (context->project->selection_dirs.count != 1U || args->profile == 0 ||
+        args->target == 0 ||
+        strchr(args->profile, '/') != 0 || strchr(args->profile, '\\') != 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
+                            context->project->span.path, 0U, 0U,
+                            "project must select one bounded v3 profile root");
+      return CONFIT_ERR_SCHEMA;
+    }
+    if (strchr(args->target, '/') != 0 || strchr(args->target, '\\') != 0)
+      return CONFIT_ERR_INVALID_ARGUMENT;
+    written = snprintf(filename, sizeof(filename), "%s/%s.toml", args->target,
+                       args->profile);
+    if (written <= 0 || (size_t)written >= sizeof(filename))
+      return CONFIT_ERR_INVALID_ARGUMENT;
+    status = confit_host_path_join(
+        directory, sizeof(directory), context->project->config_root,
+        context->project->selection_dirs.items[0], diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_host_path_join(profile_path, sizeof(profile_path),
+                                     directory, filename, diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_component_catalog_resolve_profile_file(
+          catalog, profile_path, closure, diagnostic);
+  } else {
+    status = confit_v2_snapshot_collect_component_capability_requests(
+        context->compiled, context->snapshot, &required_features,
+        &required_feature_count, &optional_features, &optional_feature_count,
+        diagnostic);
+    if (status == CONFIT_OK) status = confit_component_catalog_resolve_features(
+        catalog, (const char *const *)required_features, required_feature_count,
+        (const char *const *)optional_features, optional_feature_count, 0, 0U,
+        closure, diagnostic);
+  }
   confit_host_string_list_free(required_features, required_feature_count);
   confit_host_string_list_free(optional_features, optional_feature_count);
   return status;
@@ -675,7 +731,7 @@ static ConfitStatus confit_cli_v2_component_context_load(
   if (status == CONFIT_OK) status = confit_component_catalog_load(context->project,
                                                                    catalog, diagnostic);
   if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
-      context, catalog, closure, diagnostic);
+      args, context, catalog, closure, diagnostic);
   return status;
 }
 
@@ -738,6 +794,41 @@ static ConfitStatus confit_cli_v2_write_why_chain(
   }
   free(chain);
   return status;
+}
+
+static ConfitStatus confit_cli_v2_selected_provider_choices(
+    const ConfitComponentClosure *closure,
+    ConfitComponentProviderChoice **out_choices, size_t *out_count) {
+  ConfitComponentProviderChoice *choices;
+  size_t count = 0U;
+  size_t index;
+  if (closure == 0 || out_choices == 0 || out_count == 0)
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  *out_choices = 0;
+  *out_count = 0U;
+  choices = (ConfitComponentProviderChoice *)calloc(
+      closure->reason_count == 0U ? 1U : closure->reason_count,
+      sizeof(*choices));
+  if (choices == 0) return CONFIT_ERR_INTERNAL;
+  for (index = 0U; index < closure->reason_count; ++index) {
+    const ConfitComponentReason *reason = &closure->reasons[index];
+    size_t existing;
+    if (reason->provider_selection !=
+        CONFIT_COMPONENT_PROVIDER_SELECTION_EXPLICIT)
+      continue;
+    for (existing = 0U; existing < count; ++existing)
+      if (strcmp(choices[existing].feature, reason->requirement) == 0) break;
+    if (existing != count) continue;
+    choices[count].feature = reason->requirement;
+    choices[count].component_id = reason->component_id;
+    choices[count].source_path = reason->source_path;
+    choices[count].source_line = reason->source_line;
+    choices[count].source_column = reason->source_column;
+    ++count;
+  }
+  *out_choices = choices;
+  *out_count = count;
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
@@ -838,9 +929,15 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
                       : confit_host_stdout_write_line("not-selected");
   } else if (status == CONFIT_OK && strcmp(args->component_action, "deps") == 0) {
     ConfitComponentClosure dependency_closure;
+    ConfitComponentProviderChoice *choices = 0;
+    size_t choice_count = 0U;
     memset(&dependency_closure, 0, sizeof(dependency_closure));
-    status = confit_component_catalog_resolve_component_diagnostic(
-        &catalog, requested->id, 0, 0U, &dependency_closure, diagnostic);
+    status = confit_cli_v2_selected_provider_choices(
+        &closure, &choices, &choice_count);
+    if (status == CONFIT_OK)
+      status = confit_component_catalog_resolve_component_diagnostic(
+          &catalog, requested->id, choices, choice_count, &dependency_closure,
+          diagnostic);
     for (index = 0U; status == CONFIT_OK &&
                     index < dependency_closure.component_count; ++index) {
       const ConfitComponent *dependency = dependency_closure.ordered[index];
@@ -862,7 +959,12 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
                    ? CONFIT_ERR_INTERNAL : confit_host_stdout_write(line);
     }
     confit_component_closure_clear(&dependency_closure);
+    free(choices);
   } else if (status == CONFIT_OK && strcmp(args->component_action, "rdeps") == 0) {
+    ConfitComponentProviderChoice *choices = 0;
+    size_t choice_count = 0U;
+    status = confit_cli_v2_selected_provider_choices(
+        &closure, &choices, &choice_count);
     for (index = 0U; status == CONFIT_OK && index < catalog.component_count; ++index) {
       ConfitComponentClosure candidate_closure;
       size_t member;
@@ -872,8 +974,8 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
       if (&catalog.components[index] == requested) continue;
       memset(&candidate_closure, 0, sizeof(candidate_closure));
       status = confit_component_catalog_resolve_component_diagnostic(
-          &catalog, catalog.components[index].id, 0, 0U, &candidate_closure,
-          diagnostic);
+          &catalog, catalog.components[index].id, choices, choice_count,
+          &candidate_closure, diagnostic);
       for (member = 0U; status == CONFIT_OK && member < candidate_closure.component_count;
            ++member) if (candidate_closure.ordered[member] == requested) reaches = 1;
       for (edge = 0U; reaches && edge < candidate_closure.reason_count; ++edge) {
@@ -891,6 +993,7 @@ static ConfitStatus confit_cli_v2_run_component(const ConfitCliV2Args *args,
       }
       confit_component_closure_clear(&candidate_closure);
     }
+    free(choices);
   } else if (status == CONFIT_OK && strcmp(args->component_action, "providers") == 0) {
     for (index = 0U; status == CONFIT_OK && index < catalog.component_count; ++index) {
       size_t item;
@@ -1145,7 +1248,7 @@ static ConfitStatus confit_cli_v2_run_check(const ConfitCliV2Args *args,
   if (status == CONFIT_OK) status = confit_component_catalog_load(context.project,
                                                                    &catalog, diagnostic);
   if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
-      &context, &catalog, &closure, diagnostic);
+      args, &context, &catalog, &closure, diagnostic);
   if (status == CONFIT_OK) status = confit_host_stdout_write_line("check ok");
   confit_component_closure_clear(&closure);
   confit_component_catalog_clear(&catalog);
@@ -1178,6 +1281,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   ConfitTargetPlan target_plan;
   ConfitComponentCatalog catalog;
   ConfitComponentClosure closure;
+  ConfitNucleusCatalog nucleus;
+  ConfitTestCatalog tests;
   size_t changed = 0U;
   ConfitStatus status;
 
@@ -1200,11 +1305,20 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   memset(&target_plan, 0, sizeof(target_plan));
   memset(&catalog, 0, sizeof(catalog));
   memset(&closure, 0, sizeof(closure));
+  memset(&nucleus, 0, sizeof(nucleus));
+  memset(&tests, 0, sizeof(tests));
   if (status == CONFIT_OK) {
     status = confit_component_catalog_load(context.project, &catalog, diagnostic);
   }
   if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
-      &context, &catalog, &closure, diagnostic);
+      args, &context, &catalog, &closure, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_nucleus_catalog_load(context.project, &nucleus, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_test_catalog_load(context.project, &tests, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_test_catalog_validate_owners(&tests, &nucleus, &catalog,
+                                                 diagnostic);
   if (status == CONFIT_OK &&
       confit_v2_snapshot_target_name(context.snapshot) != 0) {
     status = confit_target_plan_load(
@@ -1212,8 +1326,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
         &target_plan, diagnostic);
   }
   if (status == CONFIT_OK) {
-    status = confit_cli_v4_collect_inputs(args, &context, &catalog, &inputs,
-                                          diagnostic);
+    status = confit_cli_v4_collect_inputs(args, &context, &catalog, &nucleus,
+                                          &tests, &inputs, diagnostic);
   }
   if (status == CONFIT_OK && target_plan.toolchain_descriptor_path != 0) {
     status = confit_cli_v4_input_set_add_project_file(
@@ -1233,6 +1347,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
     artifact_options.tool_identity = "confit-" CONFIT_VERSION_RELEASE;
     artifact_options.component_catalog = &catalog;
     artifact_options.component_closure = &closure;
+    artifact_options.nucleus_catalog = &nucleus;
+    artifact_options.test_catalog = &tests;
     artifact_options.target_plan = target_plan.target_id != 0 ? &target_plan : 0;
     status = confit_v4_generate_artifacts(context.snapshot, &artifact_options,
                                            &artifacts, diagnostic);
@@ -1255,6 +1371,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   confit_cli_v4_input_set_clear(&inputs);
   confit_component_closure_clear(&closure);
   confit_component_catalog_clear(&catalog);
+  confit_nucleus_catalog_clear(&nucleus);
+  confit_test_catalog_clear(&tests);
   confit_cli_v2_context_clear(&context);
   return status;
 }

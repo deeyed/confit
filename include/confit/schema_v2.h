@@ -309,6 +309,10 @@ typedef struct ConfitV2Project {
   ConfitV2StringList target_dirs;
   /** canonical project root 기준 bounded component catalog roots다. */
   ConfitV2StringList component_roots;
+  /** mandatory kernel source graph의 exact restricted Make roots다. */
+  ConfitV2StringList nucleus_roots;
+  /** owner-local restricted test Makefile을 bounded discovery할 roots다. */
+  ConfitV2StringList test_roots;
   ConfitV2StringList selection_dirs;
   ConfitV2Symbol *symbols;
   size_t symbol_count;

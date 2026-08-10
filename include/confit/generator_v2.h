@@ -7,6 +7,7 @@
 #include "confit/constraint_v2.h"
 #include "confit/diagnostic.h"
 #include "confit/resolver_v2.h"
+#include "confit/source_catalog.h"
 #include "confit/status.h"
 #include "confit/target_plan.h"
 
@@ -35,6 +36,10 @@ typedef struct ConfitV4ArtifactOptions {
   const ConfitComponentCatalog *component_catalog;
   /** catalog에서 resolved한 exact root closure. catalog와 함께만 유효하다. */
   const ConfitComponentClosure *component_closure;
+  /** mandatory Make-owned kernel source graph다. */
+  const ConfitNucleusCatalog *nucleus_catalog;
+  /** owner-local test Makefile에서 얻은 complete test graph다. */
+  const ConfitTestCatalog *test_catalog;
   /** selected target/toolchain의 closed build tuple이다. */
   const ConfitTargetPlan *target_plan;
 } ConfitV4ArtifactOptions;
@@ -49,6 +54,7 @@ typedef struct ConfitV4ArtifactSet {
   char *config_mk;
   char *config_values_mk;
   char *components_mk;
+  char *nucleus_mk;
   char *target_mk;
   char *tests_mk;
   char *component_catalog_json;

@@ -21,8 +21,9 @@ snapshot과 serialization 검증만 수행하며 public output을 만들지 않�
 
 `component check|list|explain|why|deps|rdeps|providers`는 catalog/closure diagnostic
 interface다. `why`는 immutable selection reason을, `deps`와 `rdeps`는 direct/transitive
-edge를, `providers`는 versioned capability와 KAPI의 unique provider를 출력한다. Component
-Makefile은 실행하지 않고 bounded Build API v2 source list와 public include를 검증한다.
+edge를, `providers`는 versioned feature/KAPI candidate와 선택 이유를 출력한다. Component,
+nucleus와 test Makefile은 실행하지 않고 bounded API 3 source-owner data와 public include를
+검증한다.
 
 ID를 받는 action은 positional exact ID 하나를 사용한다. 예를 들어
 `confit component why sys.kern.vm --project /source --profile release --target qemu-virt-aarch64`

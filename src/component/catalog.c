@@ -1461,8 +1461,6 @@ static ConfitStatus confit_component_validate_choices(
     component = confit_component_catalog_find(catalog,
                                                choices[index].component_id);
     if (component == 0 ||
-        (component->kind != CONFIT_COMPONENT_KIND_KERNEL_PROVIDER &&
-         component->kind != CONFIT_COMPONENT_KIND_WORLD_SERVICE) ||
         !confit_component_list_contains(component->feature_provides,
                                         component->feature_provide_count,
                                         choices[index].feature)) {

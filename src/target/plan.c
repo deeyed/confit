@@ -311,6 +311,7 @@ static ConfitStatus confit_target_parse_build(
     const ConfitV2Project *project, const char *target_id,
     ConfitTargetPlan *plan, ConfitDiagnostic *diagnostic) {
   static const char *const root_fields[] = {"target", "values", "build", "machine"};
+  static const char *const target_fields[] = {"name", "schema_version"};
   static const char *const build_fields[] = {
       "isa", "abi", "cpu_profile", "entry_profile", "toolchain",
       "linker_script", "image_kind", "package_profile", "machine_profile",
@@ -331,7 +332,6 @@ static ConfitStatus confit_target_parse_build(
   const ConfitV2TomlValue *machine;
   const ConfitV2TomlValue *name;
   const ConfitV2TomlValue *schema;
-  const ConfitV2TomlValue *capabilities;
   const ConfitV2TomlValue *max_image;
   const ConfitV2TomlValue *machine_memory;
   const char *name_text;
@@ -365,6 +365,8 @@ static ConfitStatus confit_target_parse_build(
   if (!confit_target_table_only(root, root_fields,
                                 sizeof(root_fields) / sizeof(root_fields[0])) ||
       target == 0 || values == 0 ||
+      !confit_target_table_only(target, target_fields,
+                                sizeof(target_fields) / sizeof(target_fields[0])) ||
       confit_v2_toml_value_type(values) != CONFIT_V2_TOML_VALUE_TABLE ||
       !confit_target_table_only(build, build_fields,
                                 sizeof(build_fields) / sizeof(build_fields[0])) ||
@@ -378,7 +380,6 @@ static ConfitStatus confit_target_parse_build(
   }
   name = confit_v2_toml_table_find(target, "name");
   schema = confit_v2_toml_table_find(target, "schema_version");
-  capabilities = confit_v2_toml_table_find(target, "required_capabilities");
   if (name == 0 || schema == 0 ||
       !confit_v2_toml_value_string(name, &name_text, &name_size) ||
       strlen(target_id) != name_size ||
@@ -521,9 +522,7 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_value_matches(values, "parus.target.cpu", plan->cpu_profile) ||
        !confit_target_value_matches(values, "parus.target.entry_abi", plan->entry_profile) ||
        !confit_target_value_matches(values, "parus.toolchain.id", plan->toolchain_id) ||
-       !confit_target_value_matches(values, "parus.target.output_name", plan->output_stem) ||
-       !confit_target_string_list_contains(capabilities,
-                                           plan->expected_capability))) {
+       !confit_target_value_matches(values, "parus.target.output_name", plan->output_stem))) {
     status = CONFIT_ERR_CONFLICT;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target build tuple contradicts typed target selection");

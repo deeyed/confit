@@ -1927,10 +1927,11 @@ static ConfitStatus confit_v2_find_config_root(
 static ConfitStatus confit_v2_parse_project_document(
     ConfitV2Project *project, const char *config_root, const char *project_path,
     ConfitDiagnostic *diagnostic) {
-  static const char *const kFields[] = {"name", "namespace", "version",
-                                         "default_target", "schema_version", "imports",
-                                         "profile_dirs", "target_dirs", "component_roots",
-                                         "selection_dirs"};
+  static const char *const kFields[] = {
+      "name",          "namespace",      "version",
+      "default_target", "schema_version", "imports",
+      "profile_dirs",  "target_dirs",    "component_roots",
+      "nucleus_roots", "test_roots",     "selection_dirs"};
   ConfitV2TomlDocument *document;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *table;
@@ -2037,6 +2038,22 @@ static ConfitStatus confit_v2_parse_project_document(
   if (value != 0 &&
       (status = confit_v2_parse_string_list(project, value, 1, 1,
                                              &project->component_roots,
+                                             diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
+  value = confit_v2_toml_table_find(table, "nucleus_roots");
+  if (value != 0 &&
+      (status = confit_v2_parse_string_list(project, value, 1, 1,
+                                             &project->nucleus_roots,
+                                             diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
+  value = confit_v2_toml_table_find(table, "test_roots");
+  if (value != 0 &&
+      (status = confit_v2_parse_string_list(project, value, 1, 1,
+                                             &project->test_roots,
                                              diagnostic)) != CONFIT_OK) {
     confit_v2_toml_document_free(document);
     return status;

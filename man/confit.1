@@ -30,10 +30,9 @@ resolver의 source schema는 독립적으로 version 2이며 두 문법을 자�
 fallback으로 쓰지 않는다. Unknown version, migration command, partial artifact 및
 unrecognized command는 실패한다.
 .PP
-Host build engine은 pinned BSD
-.B bmake 20240909
-하나다. 다른 make implementation이나 임의 bmake version은 canonical build input이
-아니다.
+Host build engine은 reviewed feature baseline 20240909 이상인 BSD
+.B bmake
+하나다. 다른 make implementation은 canonical build input이 아니다.
 .SH 명령
 .TP
 .B help
@@ -89,6 +88,12 @@ Sibling Makefile은 정확히
 및 kind에 맞는 one final include만 허용한다. Recipe, variable expansion, raw flag,
 path traversal, symlinked owner file은 실패한다.
 .PP
+Mandatory nucleus는 manifest를 갖지 않고 declared root의
+.B KERN_SUBDIRS/KERN_UNIT/SRCS/KERN_USES/KAPI_EXPORTS
+grammar를 사용한다. Test도 component kind가 아니며 owner-local
+.B TEST_ID/TEST_OWNER/TEST_LANE/TEST_EVIDENCE_CLASS/TEST_TIMEOUT_MS/TEST_SRCS
+grammar와 exact test include를 사용한다.
+.PP
 Schema v3 profile은 high-level
 .B [features].enable
 과 ambiguous feature용 explicit
@@ -106,6 +111,8 @@ build/link selection record일 뿐 runtime capability grant가 아니다.
   config.mk
   config.values.mk
   components.mk
+  nucleus.mk
+  tests.mk
   component.catalog.json
   config.bundle.json
 <out>/selected

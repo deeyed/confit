@@ -188,12 +188,17 @@ static void expect_explicit_provider_and_ambiguity(void) {
   ConfitComponentCatalog catalog;
   ConfitComponentClosure closure;
   const char *required[] = {"driver.example@1"};
+  const char *world_required[] = {"world.runtime@1"};
   ConfitComponentProviderChoice choice;
 
   setup_valid_catalog(root, sizeof(root));
   write_component(root, "driver_alt", "driver.example.alt", "kernel_provider",
                   "\"kernel.foundation@1\"", "\"driver.example@1\"", "",
                   "\"parus.foundation.v1\"", "", "parus.driver.mk");
+  write_component(root, "runtime_a", "world.runtime.a", "world_feature", "",
+                  "\"world.runtime@1\"", "", "", "", "parus.world.mk");
+  write_component(root, "runtime_b", "world.runtime.b", "world_feature", "",
+                  "\"world.runtime@1\"", "", "", "", "parus.world.mk");
   confit_diagnostic_init(&diagnostic);
   project = load_project(root, &diagnostic);
   memset(&catalog, 0, sizeof(catalog));
@@ -218,6 +223,13 @@ static void expect_explicit_provider_and_ambiguity(void) {
   CONFIT_TEST_ASSERT(strcmp(closure.ordered[1]->id, "driver.example.alt") == 0);
   CONFIT_TEST_ASSERT(closure.reasons[0].provider_selection ==
                      CONFIT_COMPONENT_PROVIDER_SELECTION_EXPLICIT);
+  confit_component_closure_clear(&closure);
+  choice.feature = "world.runtime@1";
+  choice.component_id = "world.runtime.a";
+  CONFIT_TEST_ASSERT(confit_component_catalog_resolve_features(
+                         &catalog, world_required, 1U, 0, 0U, &choice, 1U,
+                         &closure, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(strcmp(closure.ordered[0]->id, "world.runtime.a") == 0);
   CONFIT_TEST_ASSERT(strcmp(closure.reasons[0].source_path, "profile.toml") == 0);
   confit_component_closure_clear(&closure);
   join_path(profile_path, sizeof(profile_path), root, "explicit-profile.toml");
