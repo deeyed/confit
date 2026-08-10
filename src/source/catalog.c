@@ -1086,6 +1086,14 @@ ConfitStatus confit_test_catalog_validate_owners(
     }
     if (!found && confit_component_catalog_find(components, test->owner) != NULL)
       found = 1;
+    /* EnvGEN mandatory units do not become selectable components merely to own
+       tests. Their stable owner namespace is accepted only for tests physically
+       colocated below the project's env/ tree. */
+    if (!found && strncmp(test->owner, "env.", 4U) == 0) {
+      if (strncmp(test->directory, "env/", 4U) == 0) {
+        found = 1;
+      }
+    }
     if (!found && strcmp(test->target, "none") != 0) {
       char target_owner[256];
       const int written = snprintf(target_owner, sizeof(target_owner),

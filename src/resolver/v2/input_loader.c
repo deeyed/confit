@@ -911,7 +911,10 @@ static ConfitStatus confit_v2_input_parse_document(
   schema_version = confit_v2_toml_table_find(section, "schema_version");
   if (name == 0 || schema_version == 0 ||
       !confit_v2_toml_value_string(name, &text, &text_size) || text_size == 0U ||
-      !confit_v2_toml_value_int64(schema_version, &version) || version != 2) {
+      !confit_v2_toml_value_int64(schema_version, &version) ||
+      (kind == CONFIT_V2_INPUT_KIND_PROFILE
+           ? version != 2
+           : (version != 2 && version != 3))) {
     confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(section),
                                 confit_v2_toml_value_column(section),
                                 CONFIT_ERR_SCHEMA, kMissingInputField, diagnostic);
