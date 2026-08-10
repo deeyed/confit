@@ -99,9 +99,12 @@ int main(void) {
                             "/target.mk\"") != 0);
   CONFIT_TEST_ASSERT(strstr(artifacts.config_mk,
                             "/tests.mk\"") != 0);
+  CONFIT_TEST_ASSERT(strstr(artifacts.config_mk,
+                            "/generators.mk\"") != 0);
   CONFIT_TEST_ASSERT(strstr(artifacts.target_mk,
                             "PARUS_TARGET_PLAN_ABI:= 0") != 0);
-  CONFIT_TEST_ASSERT(artifacts.reason_json != 0 && artifacts.tests_mk != 0);
+  CONFIT_TEST_ASSERT(artifacts.reason_json != 0 && artifacts.tests_mk != 0 &&
+                     artifacts.generators_mk != 0);
 
   /* schema v3 component selection은 catalog/profile digest, KAPI 의미와
    * deterministic ordering을 selected bundle에 함께 봉인한다. */
@@ -426,7 +429,8 @@ int main(void) {
         "config.h", "config.mk", "config.values.mk",
         "config.selection.json", "config.inputs.json", "config.reason.json",
         "config.report.json", "config.bundle.json", "components.mk",
-        "component.catalog.json", "nucleus.mk", "tests.mk", "target.mk"};
+        "component.catalog.json", "generators.mk", "nucleus.mk", "tests.mk",
+        "target.mk"};
     static const char stale_digest[] =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     size_t artifact_index;

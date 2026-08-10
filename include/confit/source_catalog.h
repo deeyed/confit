@@ -60,6 +60,26 @@ typedef struct ConfitTestCatalog {
   size_t test_count;
 } ConfitTestCatalog;
 
+/** @brief reviewed typed generator Makefile 하나의 immutable action record다. */
+typedef struct ConfitGeneratorUnit {
+  char *id;
+  char *tool_role;
+  char *directory;
+  char *makefile_path;
+  char **inputs;
+  size_t input_count;
+  char **outputs;
+  size_t output_count;
+  uint32_t max_bytes;
+} ConfitGeneratorUnit;
+
+/** @brief arbitrary argv 없이 owner-local generator action을 봉인한 catalog다. */
+typedef struct ConfitGeneratorCatalog {
+  char *project_root;
+  ConfitGeneratorUnit *generators;
+  size_t generator_count;
+} ConfitGeneratorCatalog;
+
 /** @brief project의 declared nucleus roots를 bounded traversal하여 검증한다. */
 ConfitStatus confit_nucleus_catalog_load(const ConfitV2Project *project,
                                          ConfitNucleusCatalog *out_catalog,
@@ -92,6 +112,14 @@ ConfitStatus confit_test_catalog_validate_owners(
 
 /** @brief test catalog allocation을 해제한다. */
 void confit_test_catalog_clear(ConfitTestCatalog *catalog);
+
+/** @brief project의 generator roots에서 restricted generator Makefile을 발견한다. */
+ConfitStatus confit_generator_catalog_load(
+    const ConfitV2Project *project, ConfitGeneratorCatalog *out_catalog,
+    ConfitDiagnostic *diagnostic);
+
+/** @brief generator catalog allocation을 해제한다. */
+void confit_generator_catalog_clear(ConfitGeneratorCatalog *catalog);
 
 #ifdef __cplusplus
 }

@@ -477,6 +477,7 @@ static ConfitStatus confit_cli_v4_collect_inputs(
     const ConfitComponentCatalog *catalog,
     const ConfitNucleusCatalog *nucleus,
     const ConfitTestCatalog *tests,
+    const ConfitGeneratorCatalog *generators,
     ConfitCliV4InputSet *out_inputs, ConfitDiagnostic *diagnostic) {
   const ConfitV2Project *project = context->project;
   ConfitStatus status;
@@ -554,6 +555,44 @@ static ConfitStatus confit_cli_v4_collect_inputs(
     if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
         out_inputs, tests->tests[index].makefile_path, physical_path,
         "test-make", diagnostic);
+  }
+  for (index = 0U; status == CONFIT_OK && generators != 0 &&
+                         index < generators->generator_count; ++index) {
+    const ConfitGeneratorUnit *generator = &generators->generators[index];
+    char physical_path[4096];
+    size_t input_index;
+    status = confit_host_path_join(physical_path, sizeof(physical_path),
+                                   generators->project_root,
+                                   generator->makefile_path, diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_cli_v4_input_set_add_file(
+          out_inputs, generator->makefile_path, physical_path,
+          "generator-make", diagnostic);
+    for (input_index = 0U; status == CONFIT_OK &&
+                           input_index < generator->input_count;
+         ++input_index) {
+      char directory[4096];
+      char logical_path[2048];
+      const int written = snprintf(logical_path, sizeof(logical_path), "%s/%s",
+                                   generator->directory,
+                                   generator->inputs[input_index]);
+      if (written <= 0 || (size_t)written >= sizeof(logical_path)) {
+        status = CONFIT_ERR_INTERNAL;
+        break;
+      }
+      status = confit_host_path_join(directory, sizeof(directory),
+                                     generators->project_root,
+                                     generator->directory, diagnostic);
+      if (status == CONFIT_OK)
+        status = confit_host_path_join(physical_path, sizeof(physical_path),
+                                       directory,
+                                       generator->inputs[input_index],
+                                       diagnostic);
+      if (status == CONFIT_OK)
+        status = confit_cli_v4_input_set_add_file(
+            out_inputs, logical_path, physical_path, "generator-input",
+            diagnostic);
+    }
   }
   for (index = 0U; status == CONFIT_OK && index < args->set_count; ++index) {
     char logical_path[64];
@@ -1283,6 +1322,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   ConfitComponentClosure closure;
   ConfitNucleusCatalog nucleus;
   ConfitTestCatalog tests;
+  ConfitGeneratorCatalog generators;
   size_t changed = 0U;
   ConfitStatus status;
 
@@ -1307,6 +1347,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   memset(&closure, 0, sizeof(closure));
   memset(&nucleus, 0, sizeof(nucleus));
   memset(&tests, 0, sizeof(tests));
+  memset(&generators, 0, sizeof(generators));
   if (status == CONFIT_OK) {
     status = confit_component_catalog_load(context.project, &catalog, diagnostic);
   }
@@ -1321,6 +1362,9 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (status == CONFIT_OK)
     status = confit_test_catalog_validate_owners(&tests, &nucleus, &catalog,
                                                  diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_generator_catalog_load(context.project, &generators,
+                                           diagnostic);
   if (status == CONFIT_OK &&
       confit_v2_snapshot_target_name(context.snapshot) != 0) {
     status = confit_target_plan_load(
@@ -1329,7 +1373,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   }
   if (status == CONFIT_OK) {
     status = confit_cli_v4_collect_inputs(args, &context, &catalog, &nucleus,
-                                          &tests, &inputs, diagnostic);
+                                          &tests, &generators, &inputs,
+                                          diagnostic);
   }
   if (status == CONFIT_OK && target_plan.toolchain_descriptor_path != 0) {
     status = confit_cli_v4_input_set_add_project_file(
@@ -1351,6 +1396,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
     artifact_options.component_closure = &closure;
     artifact_options.nucleus_catalog = &nucleus;
     artifact_options.test_catalog = &tests;
+    artifact_options.generator_catalog = &generators;
     artifact_options.target_plan = target_plan.target_id != 0 ? &target_plan : 0;
     status = confit_v4_generate_artifacts(context.snapshot, &artifact_options,
                                            &artifacts, diagnostic);
@@ -1375,6 +1421,7 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   confit_component_catalog_clear(&catalog);
   confit_nucleus_catalog_clear(&nucleus);
   confit_test_catalog_clear(&tests);
+  confit_generator_catalog_clear(&generators);
   confit_cli_v2_context_clear(&context);
   return status;
 }

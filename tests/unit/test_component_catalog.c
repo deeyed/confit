@@ -18,6 +18,10 @@ static void join_path(char *out, size_t out_size, const char *left,
   CONFIT_TEST_ASSERT(confit_test_fs_path_join(out, out_size, left, right));
 }
 
+static void setup_valid_catalog(char *root, size_t root_size);
+static ConfitV2Project *load_project(const char *root,
+                                     ConfitDiagnostic *diagnostic);
+
 static void write_project(const char *root) {
   char config[4096];
   char path[4096];
@@ -30,7 +34,123 @@ static void write_project(const char *root) {
       "name = \"component_v3_test\"\n"
       "namespace = \"component_v3_test\"\n"
       "schema_version = 2\n"
-      "component_roots = [\"components\"]\n"));
+      "component_roots = [\"components\"]\n"
+      "generator_roots = [\"generators\"]\n"));
+}
+
+static void write_generator(const char *root, const char *tool,
+                            const char *inputs, const char *outputs,
+                            const char *max_bytes, const char *extra) {
+  char directory[4096];
+  char path[4096];
+  char makefile[4096];
+  join_path(directory, sizeof(directory), root, "generators/virtio_ids");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(directory));
+  join_path(path, sizeof(path), directory, "virtio_ids.def");
+  CONFIT_TEST_ASSERT(
+      confit_test_fs_write_file(path, "VIRTIO_DEVICE_NET = 1\n"));
+  CONFIT_TEST_ASSERT(snprintf(
+      makefile, sizeof(makefile),
+      "# 이 fixture는 reviewed tool role과 bounded 파일 집합만 선언한다.\n"
+      "PARUS_MK_API = 3\n"
+      "GENERATOR = virtio_ids\n"
+      "GENERATOR_TOOL = %s\n"
+      "GENERATOR_INPUTS = %s\n"
+      "GENERATOR_OUTPUTS = %s\n"
+      "GENERATOR_MAX_BYTES = %s\n"
+      "%s"
+      ".include <parus.generator.mk>\n",
+      tool, inputs, outputs, max_bytes, extra) > 0);
+  join_path(path, sizeof(path), directory, "Makefile");
+  CONFIT_TEST_ASSERT(confit_test_fs_write_file(path, makefile));
+}
+
+static void expect_generator_catalog_policy(void) {
+  char root[4096] = {0};
+  char path[4096];
+  ConfitDiagnostic diagnostic;
+  ConfitV2Project *project;
+  ConfitGeneratorCatalog catalog;
+
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.virtio-idgen", "virtio_ids.def",
+                  "virtio_ids.inc", "65536", "");
+  confit_diagnostic_init(&diagnostic);
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(catalog.generator_count == 1U);
+  CONFIT_TEST_ASSERT(strcmp(catalog.generators[0].id, "virtio_ids") == 0);
+  CONFIT_TEST_ASSERT(strcmp(catalog.generators[0].tool_role,
+                            "tool.virtio-idgen") == 0);
+  CONFIT_TEST_ASSERT(catalog.generators[0].input_count == 1U);
+  CONFIT_TEST_ASSERT(catalog.generators[0].output_count == 1U);
+  CONFIT_TEST_ASSERT(catalog.generators[0].max_bytes == 65536U);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.vendor-shell", "virtio_ids.def",
+                  "virtio_ids.inc", "65536", "");
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) != CONFIT_OK);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.virtio-idgen", "virtio_ids.def",
+                  "../escape.inc", "65536", "");
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) != CONFIT_OK);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.virtio-idgen", "virtio_ids.def",
+                  "virtio_ids.inc", "1048577", "");
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) != CONFIT_OK);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.virtio-idgen", "virtio_ids.def",
+                  "virtio_ids.inc", "65536", "SRCS += injected.c\n");
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) != CONFIT_OK);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+#if !defined(_WIN32)
+  setup_valid_catalog(root, sizeof(root));
+  write_generator(root, "tool.virtio-idgen", "virtio_ids.def",
+                  "virtio_ids.inc", "65536", "");
+  join_path(path, sizeof(path), root,
+            "generators/virtio_ids/virtio_ids.def");
+  CONFIT_TEST_ASSERT(unlink(path) == 0);
+  CONFIT_TEST_ASSERT(symlink("Makefile", path) == 0);
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  CONFIT_TEST_ASSERT(confit_generator_catalog_load(
+                         project, &catalog, &diagnostic) != CONFIT_OK);
+  confit_generator_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+#endif
 }
 
 static void write_component(const char *root, const char *directory_name,
@@ -712,6 +832,7 @@ static void expect_catalog_node_budget_rejection(void) {
 }
 
 int main(void) {
+  expect_generator_catalog_policy();
   expect_valid_selection_and_reason_graph();
   expect_explicit_provider_and_ambiguity();
   expect_old_and_injected_schema_rejection();

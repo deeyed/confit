@@ -1931,7 +1931,8 @@ static ConfitStatus confit_v2_parse_project_document(
       "name",          "namespace",      "version",
       "default_target", "schema_version", "imports",
       "profile_dirs",  "target_dirs",    "component_roots",
-      "nucleus_roots", "test_roots",     "selection_dirs"};
+      "nucleus_roots", "test_roots",     "generator_roots",
+      "selection_dirs"};
   ConfitV2TomlDocument *document;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *table;
@@ -2054,6 +2055,14 @@ static ConfitStatus confit_v2_parse_project_document(
   if (value != 0 &&
       (status = confit_v2_parse_string_list(project, value, 1, 1,
                                              &project->test_roots,
+                                             diagnostic)) != CONFIT_OK) {
+    confit_v2_toml_document_free(document);
+    return status;
+  }
+  value = confit_v2_toml_table_find(table, "generator_roots");
+  if (value != 0 &&
+      (status = confit_v2_parse_string_list(project, value, 1, 1,
+                                             &project->generator_roots,
                                              diagnostic)) != CONFIT_OK) {
     confit_v2_toml_document_free(document);
     return status;

@@ -359,6 +359,7 @@ void confit_v2_project_free(ConfitV2Project *project) {
   confit_v2_string_list_clear(allocator, &project->component_roots);
   confit_v2_string_list_clear(allocator, &project->nucleus_roots);
   confit_v2_string_list_clear(allocator, &project->test_roots);
+  confit_v2_string_list_clear(allocator, &project->generator_roots);
   confit_v2_string_list_clear(allocator, &project->selection_dirs);
   for (index = 0U; index < project->symbol_count; ++index) {
     confit_v2_symbol_clear(allocator, &project->symbols[index]);

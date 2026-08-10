@@ -16,6 +16,7 @@
 #define CONFIT_SOURCE_MAX_UNITS 256U
 #define CONFIT_SOURCE_MAX_EDGES 2048U
 #define CONFIT_SOURCE_MAX_TESTS 256U
+#define CONFIT_SOURCE_MAX_GENERATORS 256U
 #define CONFIT_SOURCE_MAX_ATOM 127U
 
 typedef struct ConfitRestrictedMake {
@@ -43,6 +44,14 @@ typedef struct ConfitRestrictedMake {
   char *test_receipt;
   uint32_t test_timeout_ms;
   int has_timeout;
+  char *generator_id;
+  char *generator_tool;
+  char **generator_inputs;
+  size_t generator_input_count;
+  char **generator_outputs;
+  size_t generator_output_count;
+  uint32_t generator_max_bytes;
+  int has_generator_max_bytes;
 } ConfitRestrictedMake;
 
 static char *source_strdup(const char *text) {
@@ -173,6 +182,10 @@ static void restricted_make_clear(ConfitRestrictedMake *make) {
   free(make->test_target);
   free(make->test_machine);
   free(make->test_receipt);
+  free(make->generator_id);
+  free(make->generator_tool);
+  source_list_clear(make->generator_inputs, make->generator_input_count);
+  source_list_clear(make->generator_outputs, make->generator_output_count);
   memset(make, 0, sizeof(*make));
 }
 
@@ -246,6 +259,44 @@ static ConfitStatus source_parse_list(char *value, char ***items,
   return CONFIT_OK;
 }
 
+static int source_generator_path(const char *text, int output) {
+  size_t index;
+  if (!source_relative(text, 1)) return 0;
+  if (output && strchr(text, '/') != NULL) return 0;
+  for (index = 0U; text[index] != '\0'; ++index)
+    if (text[index] == ':' || text[index] == '=' || text[index] == ',') return 0;
+  return 1;
+}
+
+static ConfitStatus source_parse_generator_list(
+    char *value, char ***items, size_t *count, int output, const char *path,
+    size_t line, ConfitDiagnostic *diagnostic) {
+  char *cursor = value;
+  if (cursor[0] == '\0' || cursor[0] == ' ' ||
+      cursor[strlen(cursor) - 1U] == ' ')
+    return source_error(diagnostic, path, line,
+                        "generator list has non-canonical spacing");
+  while (*cursor != '\0') {
+    char *space = strchr(cursor, ' ');
+    ConfitStatus status;
+    if (space != NULL) *space = '\0';
+    if (!source_generator_path(cursor, output)) {
+      if (space != NULL) *space = ' ';
+      return source_error(diagnostic, path, line,
+                          "generator list contains an unsafe path");
+    }
+    status = source_list_append(items, count, cursor, path, line, diagnostic);
+    if (space != NULL) *space = ' ';
+    if (status != CONFIT_OK) return status;
+    if (space == NULL) break;
+    cursor = space + 1U;
+    if (*cursor == ' ')
+      return source_error(diagnostic, path, line,
+                          "generator list has non-canonical spacing");
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus source_assign_once(char **out, const char *value,
                                        int feature, const char *path,
                                        size_t line,
@@ -277,6 +328,11 @@ static ConfitStatus source_parse_statement(
   static const char test_machine[] = "TEST_MACHINE_PROFILE = ";
   static const char test_receipt[] = "TEST_RECEIPT_PROFILE = ";
   static const char test_sources[] = "TEST_SRCS += ";
+  static const char generator_id[] = "GENERATOR = ";
+  static const char generator_tool[] = "GENERATOR_TOOL = ";
+  static const char generator_inputs[] = "GENERATOR_INPUTS = ";
+  static const char generator_outputs[] = "GENERATOR_OUTPUTS = ";
+  static const char generator_max[] = "GENERATOR_MAX_BYTES = ";
   static const char include_prefix[] = ".include <";
   const size_t size = strlen(statement);
   char *value;
@@ -368,6 +424,41 @@ static ConfitStatus source_parse_statement(
                           "test timeout is outside the bounded range");
     make->test_timeout_ms = (uint32_t)parsed;
     make->has_timeout = 1;
+    return CONFIT_OK;
+  }
+  if (strncmp(statement, generator_id, sizeof(generator_id) - 1U) == 0)
+    return source_assign_once(&make->generator_id,
+                              statement + sizeof(generator_id) - 1U, 0, path,
+                              line, diagnostic);
+  if (strncmp(statement, generator_tool, sizeof(generator_tool) - 1U) == 0)
+    return source_assign_once(&make->generator_tool,
+                              statement + sizeof(generator_tool) - 1U, 0,
+                              path, line, diagnostic);
+  if (strncmp(statement, generator_inputs,
+              sizeof(generator_inputs) - 1U) == 0)
+    return source_parse_generator_list(
+        statement + sizeof(generator_inputs) - 1U, &make->generator_inputs,
+        &make->generator_input_count, 0, path, line, diagnostic);
+  if (strncmp(statement, generator_outputs,
+              sizeof(generator_outputs) - 1U) == 0)
+    return source_parse_generator_list(
+        statement + sizeof(generator_outputs) - 1U, &make->generator_outputs,
+        &make->generator_output_count, 1, path, line, diagnostic);
+  if (strncmp(statement, generator_max, sizeof(generator_max) - 1U) == 0) {
+    char *end = NULL;
+    unsigned long parsed;
+    if (make->has_generator_max_bytes)
+      return source_error(diagnostic, path, line,
+                          "generator byte cap is declared more than once");
+    errno = 0;
+    value = statement + sizeof(generator_max) - 1U;
+    parsed = strtoul(value, &end, 10);
+    if (errno != 0 || end == value || *end != '\0' || parsed == 0U ||
+        parsed > 1048576U)
+      return source_error(diagnostic, path, line,
+                          "generator byte cap is outside the bounded range");
+    make->generator_max_bytes = (uint32_t)parsed;
+    make->has_generator_max_bytes = 1;
     return CONFIT_OK;
   }
   if (size > sizeof(include_prefix) &&
@@ -893,6 +984,109 @@ void confit_test_catalog_clear(ConfitTestCatalog *catalog) {
   memset(catalog, 0, sizeof(*catalog));
 }
 
+static void generator_unit_clear(ConfitGeneratorUnit *generator) {
+  free(generator->id);
+  free(generator->tool_role);
+  free(generator->directory);
+  free(generator->makefile_path);
+  source_list_clear(generator->inputs, generator->input_count);
+  source_list_clear(generator->outputs, generator->output_count);
+  memset(generator, 0, sizeof(*generator));
+}
+
+void confit_generator_catalog_clear(ConfitGeneratorCatalog *catalog) {
+  size_t index;
+  if (catalog == NULL) return;
+  for (index = 0U; index < catalog->generator_count; ++index)
+    generator_unit_clear(&catalog->generators[index]);
+  free(catalog->generators);
+  free(catalog->project_root);
+  memset(catalog, 0, sizeof(*catalog));
+}
+
+static int generator_compare(const void *left, const void *right) {
+  const ConfitGeneratorUnit *a = (const ConfitGeneratorUnit *)left;
+  const ConfitGeneratorUnit *b = (const ConfitGeneratorUnit *)right;
+  return strcmp(a->id, b->id);
+}
+
+static ConfitStatus generator_append(ConfitGeneratorCatalog *catalog,
+                                     const char *directory,
+                                     const char *makefile,
+                                     ConfitRestrictedMake *parsed,
+                                     ConfitDiagnostic *diagnostic) {
+  ConfitGeneratorUnit *grown;
+  ConfitGeneratorUnit *generator;
+  char *relative_directory;
+  char *relative_makefile;
+  size_t index;
+  if (catalog->generator_count >= CONFIT_SOURCE_MAX_GENERATORS)
+    return source_error(diagnostic, makefile, 0U,
+                        "generator count exceeds the supported bound");
+  if (parsed->generator_id == NULL || parsed->generator_tool == NULL ||
+      parsed->generator_input_count == 0U ||
+      parsed->generator_input_count > 64U ||
+      parsed->generator_output_count == 0U ||
+      parsed->generator_output_count > 16U ||
+      !parsed->has_generator_max_bytes || parsed->unit != NULL ||
+      parsed->subdir_count != 0U || parsed->source_count != 0U ||
+      parsed->test_id != NULL || parsed->use_count != 0U ||
+      parsed->kapi_import_count != 0U || parsed->kapi_export_count != 0U ||
+      parsed->public_header_count != 0U)
+    return source_error(diagnostic, makefile, 0U,
+                        "generator Makefile has incomplete or mixed authority");
+  if (strcmp(parsed->generator_tool, "tool.virtio-idgen") != 0)
+    return source_error(diagnostic, makefile, 0U,
+                        "generator Makefile names an unreviewed tool role");
+  for (index = 0U; index < catalog->generator_count; ++index)
+    if (strcmp(catalog->generators[index].id, parsed->generator_id) == 0)
+      return source_error(diagnostic, makefile, 0U,
+                          "generator ID has multiple local owners");
+  for (index = 0U; index < parsed->generator_output_count; ++index)
+    if (source_list_has(parsed->generator_inputs,
+                        parsed->generator_input_count,
+                        parsed->generator_outputs[index]))
+      return source_error(diagnostic, makefile, 0U,
+                          "generator input and output names overlap");
+  relative_directory =
+      source_strdup(directory + strlen(catalog->project_root) + 1U);
+  relative_makefile =
+      source_strdup(makefile + strlen(catalog->project_root) + 1U);
+  if (relative_directory == NULL || relative_makefile == NULL) {
+    free(relative_directory);
+    free(relative_makefile);
+    return CONFIT_ERR_INTERNAL;
+  }
+  grown = (ConfitGeneratorUnit *)realloc(
+      catalog->generators,
+      (catalog->generator_count + 1U) * sizeof(*grown));
+  if (grown == NULL) {
+    free(relative_directory);
+    free(relative_makefile);
+    return CONFIT_ERR_INTERNAL;
+  }
+  catalog->generators = grown;
+  generator = &catalog->generators[catalog->generator_count];
+  memset(generator, 0, sizeof(*generator));
+  generator->id = parsed->generator_id;
+  parsed->generator_id = NULL;
+  generator->tool_role = parsed->generator_tool;
+  parsed->generator_tool = NULL;
+  generator->directory = relative_directory;
+  generator->makefile_path = relative_makefile;
+  generator->inputs = parsed->generator_inputs;
+  generator->input_count = parsed->generator_input_count;
+  parsed->generator_inputs = NULL;
+  parsed->generator_input_count = 0U;
+  generator->outputs = parsed->generator_outputs;
+  generator->output_count = parsed->generator_output_count;
+  parsed->generator_outputs = NULL;
+  parsed->generator_output_count = 0U;
+  generator->max_bytes = parsed->generator_max_bytes;
+  ++catalog->generator_count;
+  return CONFIT_OK;
+}
+
 static int test_compare(const void *left, const void *right) {
   const ConfitTestUnit *a = (const ConfitTestUnit *)left;
   const ConfitTestUnit *b = (const ConfitTestUnit *)right;
@@ -1068,6 +1262,89 @@ ConfitStatus confit_test_catalog_load(const ConfitV2Project *project,
   return status;
 }
 
+ConfitStatus confit_generator_catalog_load(
+    const ConfitV2Project *project, ConfitGeneratorCatalog *out_catalog,
+    ConfitDiagnostic *diagnostic) {
+  size_t root_index;
+  ConfitStatus status = CONFIT_OK;
+  if (project == NULL || project->project_root == NULL || out_catalog == NULL)
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  memset(out_catalog, 0, sizeof(*out_catalog));
+  if (project->generator_roots.count == 0U) return CONFIT_OK;
+  if (project->generator_roots.count > CONFIT_SOURCE_MAX_ITEMS)
+    return source_error(diagnostic, project->span.path, 0U,
+                        "project must declare bounded generator_roots");
+  out_catalog->project_root = source_strdup(project->project_root);
+  if (out_catalog->project_root == NULL) return CONFIT_ERR_INTERNAL;
+  for (root_index = 0U; status == CONFIT_OK &&
+                        root_index < project->generator_roots.count;
+       ++root_index) {
+    char root[4096];
+    char **paths = NULL;
+    size_t path_count = 0U;
+    size_t path_index;
+    if (!source_relative(project->generator_roots.items[root_index], 1)) {
+      status = source_error(diagnostic, project->span.path, 0U,
+                            "project generator root is unsafe");
+      break;
+    }
+    status = confit_host_path_join(root, sizeof(root), project->project_root,
+                                   project->generator_roots.items[root_index],
+                                   diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_host_list_named_files_recursive(
+          root, "Makefile", CONFIT_SOURCE_MAX_DEPTH, 4096U,
+          CONFIT_SOURCE_MAX_BYTES, &paths, &path_count, diagnostic);
+    for (path_index = 0U; status == CONFIT_OK && path_index < path_count;
+         ++path_index) {
+      char *text = NULL;
+      size_t size = 0U;
+      ConfitRestrictedMake parsed;
+      const char *separator;
+      char directory[4096];
+      status = confit_host_read_text_file(paths[path_index], &text, &size,
+                                          diagnostic);
+      if (status != CONFIT_OK) break;
+      if (strstr(text, ".include <parus.generator.mk>") == NULL) {
+        confit_host_free(text);
+        continue;
+      }
+      confit_host_free(text);
+      separator = strrchr(paths[path_index], '/');
+      if (separator == NULL ||
+          (size_t)(separator - paths[path_index]) >= sizeof(directory)) {
+        status = CONFIT_ERR_INTERNAL;
+        break;
+      }
+      memcpy(directory, paths[path_index],
+             (size_t)(separator - paths[path_index]));
+      directory[separator - paths[path_index]] = '\0';
+      status = source_parse_makefile(paths[path_index], &parsed, diagnostic);
+      if (status == CONFIT_OK &&
+          strcmp(parsed.include_name, "parus.generator.mk") != 0)
+        status = source_error(diagnostic, paths[path_index], 0U,
+                              "generator Makefile uses a non-generator public include");
+      if (status == CONFIT_OK)
+        status = source_validate_owned_files(
+            project->project_root, directory, paths[path_index],
+            parsed.generator_inputs, parsed.generator_input_count, diagnostic);
+      if (status == CONFIT_OK)
+        status = generator_append(out_catalog, directory, paths[path_index],
+                                  &parsed, diagnostic);
+      restricted_make_clear(&parsed);
+    }
+    confit_host_string_list_free(paths, path_count);
+  }
+  if (status == CONFIT_OK && out_catalog->generator_count == 0U)
+    status = source_error(diagnostic, project->span.path, 0U,
+                          "generator graph contains no local actions");
+  if (status == CONFIT_OK)
+    qsort(out_catalog->generators, out_catalog->generator_count,
+          sizeof(*out_catalog->generators), generator_compare);
+  if (status != CONFIT_OK) confit_generator_catalog_clear(out_catalog);
+  return status;
+}
+
 ConfitStatus confit_test_catalog_validate_owners(
     const ConfitTestCatalog *tests, const ConfitNucleusCatalog *nucleus,
     const ConfitComponentCatalog *components, ConfitDiagnostic *diagnostic) {
@@ -1102,9 +1379,18 @@ ConfitStatus confit_test_catalog_validate_owners(
           strcmp(test->owner, target_owner) == 0)
         found = 1;
     }
-    if (!found)
-      return source_error(diagnostic, test->makefile_path, 0U,
-                          "test owner is not an exact nucleus, selectable component, or target identity");
+    if (!found) {
+      static char message[384];
+      const int written = snprintf(
+          message, sizeof(message),
+          "test owner `%s` is not an exact nucleus, selectable component, or target identity",
+          test->owner);
+      return source_error(
+          diagnostic, "test-owner", 0U,
+          written > 0 && (size_t)written < sizeof(message)
+              ? message
+              : "test owner is not an exact declared identity");
+    }
   }
   return CONFIT_OK;
 }

@@ -40,6 +40,8 @@ typedef struct ConfitV4ArtifactOptions {
   const ConfitNucleusCatalog *nucleus_catalog;
   /** owner-local test Makefile에서 얻은 complete test graph다. */
   const ConfitTestCatalog *test_catalog;
+  /** reviewed typed generator Makefile에서 얻은 complete action graph다. */
+  const ConfitGeneratorCatalog *generator_catalog;
   /** selected target/toolchain의 closed build tuple이다. */
   const ConfitTargetPlan *target_plan;
 } ConfitV4ArtifactOptions;
@@ -57,6 +59,7 @@ typedef struct ConfitV4ArtifactSet {
   char *nucleus_mk;
   char *target_mk;
   char *tests_mk;
+  char *generators_mk;
   char *component_catalog_json;
   char *bundle_json;
   /** lower-case SHA-256 digest without a `sha256:` prefix다. */

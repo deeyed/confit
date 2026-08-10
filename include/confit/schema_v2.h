@@ -313,6 +313,8 @@ typedef struct ConfitV2Project {
   ConfitV2StringList nucleus_roots;
   /** owner-local restricted test Makefile을 bounded discovery할 roots다. */
   ConfitV2StringList test_roots;
+  /** reviewed typed generator Makefile을 bounded discovery할 roots다. */
+  ConfitV2StringList generator_roots;
   ConfitV2StringList selection_dirs;
   ConfitV2Symbol *symbols;
   size_t symbol_count;
