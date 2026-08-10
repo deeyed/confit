@@ -1031,9 +1031,62 @@ static ConfitStatus confit_v4_component_make_identifier(
   return CONFIT_OK;
 }
 
+static int confit_v4_list_has(char *const *items, size_t count,
+                              const char *value) {
+  size_t index;
+  for (index = 0U; index < count; ++index)
+    if (strcmp(items[index], value) == 0) return 1;
+  return 0;
+}
+
+static ConfitStatus confit_v4_kapi_facade_directory(
+    const ConfitComponentClosure *closure,
+    const ConfitNucleusCatalog *nucleus, const char *kapi,
+    char *out, size_t out_size, ConfitDiagnostic *diagnostic) {
+  const char *directory = NULL;
+  size_t directory_size = 0U;
+  size_t providers = 0U;
+  size_t index;
+  for (index = 0U; closure != NULL && index < closure->component_count;
+       ++index) {
+    const ConfitComponent *component = closure->ordered[index];
+    if (confit_v4_list_has(component->kapi_provides,
+                           component->kapi_provide_count, kapi)) {
+      const char *separator = strrchr(component->makefile_path, '/');
+      if (separator == NULL) return CONFIT_ERR_SCHEMA;
+      directory = component->makefile_path;
+      directory_size = (size_t)(separator - component->makefile_path);
+      ++providers;
+    }
+  }
+  for (index = 0U; nucleus != NULL && index < nucleus->unit_count; ++index) {
+    const ConfitNucleusUnit *unit = &nucleus->units[index];
+    if (confit_v4_list_has(unit->kapi_exports, unit->kapi_export_count, kapi)) {
+      directory = unit->directory;
+      directory_size = strlen(unit->directory);
+      ++providers;
+    }
+  }
+  if (providers != 1U || directory == NULL || directory_size == 0U ||
+      directory_size + sizeof("/kapi/include") > out_size) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, kapi, 0U, 0U,
+                          "KAPI provider has no exact bounded facade directory");
+    return CONFIT_ERR_SCHEMA;
+  }
+  memcpy(out, directory, directory_size);
+  memcpy(out + directory_size, "/kapi/include", sizeof("/kapi/include"));
+  if (!confit_v4_is_safe_atom(out, 1)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, kapi, 0U, 0U,
+                          "unsafe KAPI facade path cannot enter generated Make syntax");
+    return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_v4_generate_components_mk(
     const ConfitComponentCatalog *catalog, const ConfitComponentClosure *closure,
-    char **out, ConfitDiagnostic *diagnostic) {
+    const ConfitNucleusCatalog *nucleus, char **out,
+    ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
   size_t index;
@@ -1157,34 +1210,13 @@ static ConfitStatus confit_v4_generate_components_mk(
         &builder, "\nPARUS_COMPONENT_%s_KAPI_INCLUDE_ROOTS:=", identifier);
     for (source_index = 0U; status == CONFIT_OK &&
          source_index < component->kapi_requirement_count; ++source_index) {
-      const ConfitComponent *provider = confit_component_closure_find_kapi_provider(
-          closure, component->kapi_requires[source_index]);
-      const char *provider_separator =
-          provider != 0 ? strrchr(provider->makefile_path, '/') : 0;
       char provider_directory[1024];
-      size_t provider_directory_size = provider_separator != 0
-          ? (size_t)(provider_separator - provider->makefile_path) : 0U;
-      if (provider == 0 || provider_directory_size == 0U ||
-          provider_directory_size + sizeof("/kapi/include") >
-              sizeof(provider_directory)) {
-        confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id, 0U,
-                              0U, "KAPI provider has no bounded facade directory");
-        status = CONFIT_ERR_SCHEMA;
-      } else {
-        memcpy(provider_directory, provider->makefile_path,
-               provider_directory_size);
-        memcpy(provider_directory + provider_directory_size, "/kapi/include",
-               sizeof("/kapi/include"));
-        if (!confit_v4_is_safe_atom(provider_directory, 1)) {
-          confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, component->id,
-                                0U, 0U,
-                                "unsafe KAPI facade path cannot enter generated Make syntax");
-          status = CONFIT_ERR_SCHEMA;
-        } else {
-          status = confit_v2_builder_appendf(&builder, " %s",
-                                             provider_directory);
-        }
-      }
+      status = confit_v4_kapi_facade_directory(
+          closure, nucleus, component->kapi_requires[source_index],
+          provider_directory, sizeof(provider_directory), diagnostic);
+      if (status == CONFIT_OK)
+        status = confit_v2_builder_appendf(&builder, " %s",
+                                           provider_directory);
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
         &builder, "\nPARUS_COMPONENT_%s_KAPI_PROVIDES:=", identifier);
@@ -1712,7 +1744,8 @@ static ConfitStatus confit_v4_generate_target_mk(
 }
 
 static ConfitStatus confit_v4_generate_nucleus_mk(
-    const ConfitNucleusCatalog *catalog, char **out,
+    const ConfitNucleusCatalog *catalog,
+    const ConfitComponentClosure *components, char **out,
     ConfitDiagnostic *diagnostic) {
   ConfitV2ArtifactBuilder builder;
   ConfitStatus status;
@@ -1747,6 +1780,24 @@ static ConfitStatus confit_v4_generate_nucleus_mk(
         &builder, "\nPARUS_NUCLEUS_%s_USES:=", identifier);
     for (item = 0U; status == CONFIT_OK && item < unit->use_count; ++item)
       status = confit_v2_builder_appendf(&builder, " %s", unit->uses[item]);
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_NUCLEUS_%s_KAPI_IMPORTS:=", identifier);
+    for (item = 0U; status == CONFIT_OK &&
+                    item < unit->kapi_import_count; ++item)
+      status = confit_v2_builder_appendf(&builder, " %s",
+                                         unit->kapi_imports[item]);
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_NUCLEUS_%s_KAPI_INCLUDE_ROOTS:=", identifier);
+    for (item = 0U; status == CONFIT_OK &&
+                    item < unit->kapi_import_count; ++item) {
+      char provider_directory[1024];
+      status = confit_v4_kapi_facade_directory(
+          components, catalog, unit->kapi_imports[item], provider_directory,
+          sizeof(provider_directory), diagnostic);
+      if (status == CONFIT_OK)
+        status = confit_v2_builder_appendf(&builder, " %s",
+                                           provider_directory);
+    }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
         &builder, "\nPARUS_NUCLEUS_%s_KAPI_EXPORTS:=", identifier);
     for (item = 0U; status == CONFIT_OK && item < unit->kapi_export_count; ++item)
@@ -1994,9 +2045,11 @@ ConfitStatus confit_v4_generate_artifacts(
                                             diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_components_mk(
         options->component_catalog, options->component_closure,
+        options->nucleus_catalog,
         &out_artifacts->components_mk, diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_nucleus_mk(
-        options->nucleus_catalog, &out_artifacts->nucleus_mk, diagnostic);
+        options->nucleus_catalog, options->component_closure,
+        &out_artifacts->nucleus_mk, diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_target_mk(
         options->target_plan, &out_artifacts->target_mk, diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_tests_mk(

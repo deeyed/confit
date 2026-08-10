@@ -11,6 +11,7 @@
 
 #include "confit/component_catalog.h"
 #include "confit/host.h"
+#include "confit/source_catalog.h"
 
 static void join_path(char *out, size_t out_size, const char *left,
                       const char *right) {
@@ -487,6 +488,7 @@ static void expect_kapi_and_conflict_rejection(void) {
   ConfitV2Project *project;
   ConfitComponentCatalog catalog;
   ConfitComponentClosure closure;
+  ConfitNucleusCatalog nucleus;
   const char *required[] = {"driver.example@1"};
   char path[4096];
 
@@ -503,11 +505,37 @@ static void expect_kapi_and_conflict_rejection(void) {
   project = load_project(root, &diagnostic);
   memset(&catalog, 0, sizeof(catalog));
   memset(&closure, 0, sizeof(closure));
+  memset(&nucleus, 0, sizeof(nucleus));
   CONFIT_TEST_ASSERT(
       confit_component_catalog_load(project, &catalog, &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(confit_component_catalog_resolve_features(
                          &catalog, required, 1U, 0, 0U, 0, 0U, &closure,
-                         &diagnostic) == CONFIT_ERR_SCHEMA);
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_static_kapi_validate(
+                         &closure, &nucleus, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_component_closure_clear(&closure);
+  confit_component_catalog_clear(&catalog);
+  confit_v2_project_free(project);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+
+  setup_valid_catalog(root, sizeof(root));
+  write_component(root, "duplicate-kapi", "kernel.duplicate.kapi",
+                  "kernel_provider", "", "\"kernel.duplicate.kapi@1\"",
+                  "", "", "\"parus.foundation.v1\"",
+                  "parus.component.mk");
+  confit_diagnostic_init(&diagnostic);
+  project = load_project(root, &diagnostic);
+  memset(&catalog, 0, sizeof(catalog));
+  memset(&closure, 0, sizeof(closure));
+  CONFIT_TEST_ASSERT(
+      confit_component_catalog_load(project, &catalog, &diagnostic) == CONFIT_OK);
+  {
+    const char *duplicate_kapi[] = {
+        "driver.example@1", "kernel.duplicate.kapi@1"};
+    CONFIT_TEST_ASSERT(confit_component_catalog_resolve_features(
+                           &catalog, duplicate_kapi, 2U, 0, 0U, 0, 0U,
+                           &closure, &diagnostic) == CONFIT_ERR_SCHEMA);
+  }
   confit_component_closure_clear(&closure);
   confit_component_catalog_clear(&catalog);
   confit_v2_project_free(project);

@@ -28,6 +28,8 @@ typedef struct ConfitRestrictedMake {
   size_t source_count;
   char **uses;
   size_t use_count;
+  char **kapi_imports;
+  size_t kapi_import_count;
   char **kapi_exports;
   size_t kapi_export_count;
   char **public_headers;
@@ -161,6 +163,7 @@ static void restricted_make_clear(ConfitRestrictedMake *make) {
   source_list_clear(make->subdirs, make->subdir_count);
   source_list_clear(make->sources, make->source_count);
   source_list_clear(make->uses, make->use_count);
+  source_list_clear(make->kapi_imports, make->kapi_import_count);
   source_list_clear(make->kapi_exports, make->kapi_export_count);
   source_list_clear(make->public_headers, make->public_header_count);
   free(make->test_id);
@@ -262,6 +265,7 @@ static ConfitStatus source_parse_statement(
   static const char kern_subdirs[] = "KERN_SUBDIRS += ";
   static const char sources[] = "SRCS += ";
   static const char kern_uses[] = "KERN_USES += ";
+  static const char kapi_imports[] = "KAPI_IMPORTS += ";
   static const char kapi_exports[] = "KAPI_EXPORTS += ";
   static const char public_headers[] = "PUBLIC_HEADERS += ";
   static const char test_id[] = "TEST_ID = ";
@@ -305,6 +309,10 @@ static ConfitStatus source_parse_statement(
   if (strncmp(statement, kern_uses, sizeof(kern_uses) - 1U) == 0)
     return source_parse_list(statement + sizeof(kern_uses) - 1U, &make->uses,
                              &make->use_count, 1, 0, path, line, diagnostic);
+  if (strncmp(statement, kapi_imports, sizeof(kapi_imports) - 1U) == 0)
+    return source_parse_list(statement + sizeof(kapi_imports) - 1U,
+                             &make->kapi_imports, &make->kapi_import_count, 1,
+                             0, path, line, diagnostic);
   if (strncmp(statement, kapi_exports, sizeof(kapi_exports) - 1U) == 0)
     return source_parse_list(statement + sizeof(kapi_exports) - 1U,
                              &make->kapi_exports, &make->kapi_export_count, 1,
@@ -494,6 +502,7 @@ static void nucleus_unit_clear(ConfitNucleusUnit *unit) {
   free(unit->makefile_path);
   source_list_clear(unit->sources, unit->source_count);
   source_list_clear(unit->uses, unit->use_count);
+  source_list_clear(unit->kapi_imports, unit->kapi_import_count);
   source_list_clear(unit->kapi_exports, unit->kapi_export_count);
   source_list_clear(unit->public_headers, unit->public_header_count);
   memset(unit, 0, sizeof(*unit));
@@ -544,6 +553,10 @@ static ConfitStatus nucleus_append(ConfitNucleusCatalog *catalog,
   unit->use_count = parsed->use_count;
   parsed->uses = NULL;
   parsed->use_count = 0U;
+  unit->kapi_imports = parsed->kapi_imports;
+  unit->kapi_import_count = parsed->kapi_import_count;
+  parsed->kapi_imports = NULL;
+  parsed->kapi_import_count = 0U;
   unit->kapi_exports = parsed->kapi_exports;
   unit->kapi_export_count = parsed->kapi_export_count;
   parsed->kapi_exports = NULL;
@@ -783,6 +796,77 @@ ConfitStatus confit_nucleus_catalog_load(const ConfitV2Project *project,
   }
   if (status != CONFIT_OK) confit_nucleus_catalog_clear(out_catalog);
   return status;
+}
+
+static int source_list_has(char *const *items, size_t count,
+                           const char *value) {
+  size_t index;
+  for (index = 0U; index < count; ++index)
+    if (strcmp(items[index], value) == 0) return 1;
+  return 0;
+}
+
+static size_t static_kapi_provider_count(
+    const ConfitComponentClosure *components,
+    const ConfitNucleusCatalog *nucleus, const char *kapi) {
+  size_t count = 0U;
+  size_t index;
+  for (index = 0U; components != NULL && index < components->component_count;
+       ++index) {
+    const ConfitComponent *component = components->ordered[index];
+    if (source_list_has(component->kapi_provides,
+                        component->kapi_provide_count, kapi))
+      ++count;
+  }
+  for (index = 0U; nucleus != NULL && index < nucleus->unit_count; ++index)
+    if (source_list_has(nucleus->units[index].kapi_exports,
+                        nucleus->units[index].kapi_export_count, kapi))
+      ++count;
+  return count;
+}
+
+ConfitStatus confit_static_kapi_validate(
+    const ConfitComponentClosure *components,
+    const ConfitNucleusCatalog *nucleus,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+  if (components == NULL || nucleus == NULL)
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  for (index = 0U; index < components->component_count; ++index) {
+    const ConfitComponent *component = components->ordered[index];
+    size_t item;
+    for (item = 0U; item < component->kapi_provide_count; ++item) {
+      if (static_kapi_provider_count(components, nucleus,
+                                     component->kapi_provides[item]) != 1U)
+        return source_error(diagnostic, component->manifest_path,
+                            component->kapi_provide_spans[item].line,
+                            "static KAPI has multiple selected providers");
+    }
+    for (item = 0U; item < component->kapi_requirement_count; ++item) {
+      if (static_kapi_provider_count(components, nucleus,
+                                     component->kapi_requires[item]) != 1U)
+        return source_error(diagnostic, component->manifest_path,
+                            component->kapi_requirement_spans[item].line,
+                            "selected KAPI import has no exact provider");
+    }
+  }
+  for (index = 0U; index < nucleus->unit_count; ++index) {
+    const ConfitNucleusUnit *unit = &nucleus->units[index];
+    size_t item;
+    for (item = 0U; item < unit->kapi_export_count; ++item) {
+      if (static_kapi_provider_count(components, nucleus,
+                                     unit->kapi_exports[item]) != 1U)
+        return source_error(diagnostic, unit->makefile_path, 0U,
+                            "nucleus KAPI has multiple selected providers");
+    }
+    for (item = 0U; item < unit->kapi_import_count; ++item) {
+      if (static_kapi_provider_count(components, nucleus,
+                                     unit->kapi_imports[item]) != 1U)
+        return source_error(diagnostic, unit->makefile_path, 0U,
+                            "nucleus KAPI import has no exact provider");
+    }
+  }
+  return CONFIT_OK;
 }
 
 static void test_unit_clear(ConfitTestUnit *test) {

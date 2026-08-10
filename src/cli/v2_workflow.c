@@ -1315,6 +1315,8 @@ static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
   if (status == CONFIT_OK)
     status = confit_nucleus_catalog_load(context.project, &nucleus, diagnostic);
   if (status == CONFIT_OK)
+    status = confit_static_kapi_validate(&closure, &nucleus, diagnostic);
+  if (status == CONFIT_OK)
     status = confit_test_catalog_load(context.project, &tests, diagnostic);
   if (status == CONFIT_OK)
     status = confit_test_catalog_validate_owners(&tests, &nucleus, &catalog,

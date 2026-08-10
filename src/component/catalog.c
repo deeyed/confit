@@ -1356,20 +1356,18 @@ static ConfitStatus confit_component_validate_selected_closure(
       const ConfitComponent *provider = 0;
       size_t provider_count = confit_component_closure_kapi_provider_count(
           closure, component->kapi_requires[item], &provider);
-      if (provider_count != 1U) {
+      if (provider_count > 1U) {
         confit_component_diagnostic_set(
             diagnostic, CONFIT_ERR_SCHEMA, component->manifest_path,
             component->kapi_requirement_spans[item].line,
             component->kapi_requirement_spans[item].column,
-            provider_count == 0U
-                ? "selected component KAPI requirement has no selected provider"
-                : "selected component KAPI requirement has multiple selected providers");
+            "selected component KAPI requirement has multiple selected providers");
         status = CONFIT_ERR_SCHEMA;
       } else {
         status = confit_component_closure_append_string(
             &closure->kapi_requires, &closure->kapi_requirement_count,
             component->kapi_requires[item]);
-        if (status == CONFIT_OK) {
+        if (status == CONFIT_OK && provider != 0) {
           status = confit_component_reason_append(
               closure, CONFIT_COMPONENT_REASON_KAPI_REQUIREMENT,
               CONFIT_COMPONENT_PROVIDER_SELECTION_NONE, provider->id,

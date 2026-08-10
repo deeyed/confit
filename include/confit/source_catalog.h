@@ -22,6 +22,8 @@ typedef struct ConfitNucleusUnit {
   size_t source_count;
   char **uses;
   size_t use_count;
+  char **kapi_imports;
+  size_t kapi_import_count;
   char **kapi_exports;
   size_t kapi_export_count;
   char **public_headers;
@@ -65,6 +67,18 @@ ConfitStatus confit_nucleus_catalog_load(const ConfitV2Project *project,
 
 /** @brief nucleus catalog allocation을 해제한다. */
 void confit_nucleus_catalog_clear(ConfitNucleusCatalog *catalog);
+
+/**
+ * @brief selected composition과 nucleus publication을 하나의 closed KAPI graph로 검증한다.
+ *
+ * Nucleus unit은 selectable component가 아니지만 selected consumer/provider와 동일한
+ * static image 안에서 versioned publication을 교환할 수 있다. 이 함수는 두 catalog의
+ * provider uniqueness와 모든 explicit import의 exact provider 존재를 검증한다.
+ */
+ConfitStatus confit_static_kapi_validate(
+    const ConfitComponentClosure *components,
+    const ConfitNucleusCatalog *nucleus,
+    ConfitDiagnostic *diagnostic);
 
 /** @brief project의 test roots에서 restricted local test Makefile을 발견한다. */
 ConfitStatus confit_test_catalog_load(const ConfitV2Project *project,
