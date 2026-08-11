@@ -85,42 +85,42 @@ static int confit_v2_input_capability_valid(const char *text) {
 }
 
 static ConfitStatus confit_v2_input_parse_component_roots(
-    const ConfitV2TomlValue *value, ConfitV2StringList *out,
+    const ConfitTomlValue *value, ConfitV2StringList *out,
     const char *path, ConfitDiagnostic *diagnostic) {
   size_t index;
   if (value == 0) return CONFIT_OK;
-  if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
-      confit_v2_toml_array_size(value) > 128U) {
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(value),
-                                confit_v2_toml_value_column(value),
+  if (confit_toml_value_type(value) != CONFIT_TOML_VALUE_ARRAY ||
+      confit_toml_array_size(value) > 128U) {
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(value),
+                                confit_toml_value_column(value),
                                 CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
-  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
-    const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+  for (index = 0U; index < confit_toml_array_size(value); ++index) {
+    const ConfitTomlValue *item = confit_toml_array_at(value, index);
     const char *text;
     size_t size;
     char buffer[193];
     ConfitStatus status;
-    if (!confit_v2_toml_value_string(item, &text, &size) || size == 0U ||
+    if (!confit_toml_value_string(item, &text, &size) || size == 0U ||
         size >= sizeof(buffer)) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     memcpy(buffer, text, size);
     buffer[size] = '\0';
     if (!confit_v2_input_component_id_valid(buffer)) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kInvalidInputValue, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     status = confit_v2_input_root_list_append(out, buffer);
     if (status != CONFIT_OK) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item), status,
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item), status,
                                   kInvalidInputValue, diagnostic);
       return status;
     }
@@ -129,42 +129,42 @@ static ConfitStatus confit_v2_input_parse_component_roots(
 }
 
 static ConfitStatus confit_v2_input_parse_capability_requests(
-    const ConfitV2TomlValue *value, ConfitV2StringList *out, const char *path,
+    const ConfitTomlValue *value, ConfitV2StringList *out, const char *path,
     ConfitDiagnostic *diagnostic) {
   size_t index;
   if (value == 0) return CONFIT_OK;
-  if (confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
-      confit_v2_toml_array_size(value) > 128U) {
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(value),
-                                confit_v2_toml_value_column(value),
+  if (confit_toml_value_type(value) != CONFIT_TOML_VALUE_ARRAY ||
+      confit_toml_array_size(value) > 128U) {
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(value),
+                                confit_toml_value_column(value),
                                 CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
-  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
-    const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+  for (index = 0U; index < confit_toml_array_size(value); ++index) {
+    const ConfitTomlValue *item = confit_toml_array_at(value, index);
     const char *text;
     size_t size;
     char buffer[193];
     ConfitStatus status;
-    if (!confit_v2_toml_value_string(item, &text, &size) || size == 0U ||
+    if (!confit_toml_value_string(item, &text, &size) || size == 0U ||
         size >= sizeof(buffer)) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     memcpy(buffer, text, size);
     buffer[size] = '\0';
     if (!confit_v2_input_capability_valid(buffer)) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kInvalidInputValue, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     status = confit_v2_input_root_list_append(out, buffer);
     if (status != CONFIT_OK) {
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item), status,
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item), status,
                                   kInvalidInputValue, diagnostic);
       return status;
     }
@@ -403,18 +403,18 @@ ConfitStatus confit_v2_ledger_validate_value(
 }
 
 static ConfitStatus confit_v2_ledger_parse_string_list(
-    const ConfitV2TomlValue *source, ConfitV2Value *out,
+    const ConfitTomlValue *source, ConfitV2Value *out,
     const char *path, ConfitDiagnostic *diagnostic) {
   size_t index;
 
-  if (confit_v2_toml_value_type(source) != CONFIT_V2_TOML_VALUE_ARRAY) {
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(source),
-                                confit_v2_toml_value_column(source),
+  if (confit_toml_value_type(source) != CONFIT_TOML_VALUE_ARRAY) {
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(source),
+                                confit_toml_value_column(source),
                                 CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
   out->kind = CONFIT_V2_VALUE_STRING_LIST;
-  out->as.string_list.count = confit_v2_toml_array_size(source);
+  out->as.string_list.count = confit_toml_array_size(source);
   if (out->as.string_list.count > 0U) {
     out->as.string_list.items = (char **)calloc(
         out->as.string_list.count, sizeof(*out->as.string_list.items));
@@ -425,11 +425,11 @@ static ConfitStatus confit_v2_ledger_parse_string_list(
   for (index = 0U; index < out->as.string_list.count; ++index) {
     const char *text;
     size_t size;
-    if (!confit_v2_toml_value_string(confit_v2_toml_array_at(source, index),
+    if (!confit_toml_value_string(confit_toml_array_at(source, index),
                                       &text, &size)) {
       confit_v2_ledger_value_clear(out);
-      confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(source),
-                                  confit_v2_toml_value_column(source),
+      confit_v2_ledger_diagnostic(path, confit_toml_value_line(source),
+                                  confit_toml_value_column(source),
                                   CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
@@ -445,9 +445,9 @@ static ConfitStatus confit_v2_ledger_parse_string_list(
 }
 
 ConfitStatus confit_v2_ledger_parse_toml_value(
-    const ConfitV2Symbol *symbol, const ConfitV2TomlValue *source,
+    const ConfitV2Symbol *symbol, const ConfitTomlValue *source,
     ConfitV2Value *out, ConfitDiagnostic *diagnostic) {
-  const char *path = confit_v2_toml_value_source(source);
+  const char *path = confit_toml_value_source(source);
   const ConfitV2TypeDescriptor *descriptor;
   int64_t integer;
   double floating;
@@ -466,14 +466,14 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
   out->kind = descriptor->value_kind;
   switch (symbol->type) {
   case CONFIT_V2_OPTION_TYPE_BOOL:
-    if (!confit_v2_toml_value_bool(source, &out->as.bool_value)) {
+    if (!confit_toml_value_bool(source, &out->as.bool_value)) {
       status = CONFIT_ERR_SCHEMA;
       break;
     }
     status = CONFIT_OK;
     break;
   case CONFIT_V2_OPTION_TYPE_TRISTATE:
-    if (!confit_v2_toml_value_string(source, &text, &size) || size != 1U ||
+    if (!confit_toml_value_string(source, &text, &size) || size != 1U ||
         (text[0] != 'n' && text[0] != 'm' && text[0] != 'y')) {
       status = CONFIT_ERR_SCHEMA;
       break;
@@ -482,7 +482,7 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
     status = CONFIT_OK;
     break;
   case CONFIT_V2_OPTION_TYPE_INT:
-    if (!confit_v2_toml_value_int64(source, &integer)) {
+    if (!confit_toml_value_int64(source, &integer)) {
       status = CONFIT_ERR_SCHEMA;
       break;
     }
@@ -491,7 +491,7 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
     break;
   case CONFIT_V2_OPTION_TYPE_UINT:
   case CONFIT_V2_OPTION_TYPE_HEX:
-    if (!confit_v2_toml_value_int64(source, &integer) || integer < 0) {
+    if (!confit_toml_value_int64(source, &integer) || integer < 0) {
       status = CONFIT_ERR_SCHEMA;
       break;
     }
@@ -499,10 +499,10 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
     status = CONFIT_OK;
     break;
   case CONFIT_V2_OPTION_TYPE_FLOAT:
-    if (confit_v2_toml_value_float64(source, &floating)) {
+    if (confit_toml_value_float64(source, &floating)) {
       out->as.float_value = floating;
       status = CONFIT_OK;
-    } else if (confit_v2_toml_value_int64(source, &integer)) {
+    } else if (confit_toml_value_int64(source, &integer)) {
       out->as.float_value = (double)integer;
       status = CONFIT_OK;
     } else {
@@ -512,7 +512,7 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
   case CONFIT_V2_OPTION_TYPE_STRING:
   case CONFIT_V2_OPTION_TYPE_ENUM:
   case CONFIT_V2_OPTION_TYPE_PATH:
-    if (!confit_v2_toml_value_string(source, &text, &size)) {
+    if (!confit_toml_value_string(source, &text, &size)) {
       status = CONFIT_ERR_SCHEMA;
       break;
     }
@@ -535,21 +535,21 @@ ConfitStatus confit_v2_ledger_parse_toml_value(
   }
   if (status != CONFIT_OK) {
     confit_v2_ledger_value_clear(out);
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(source),
-                                confit_v2_toml_value_column(source),
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(source),
+                                confit_toml_value_column(source),
                                 CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
   return confit_v2_ledger_validate_value(
-      symbol, out, path, confit_v2_toml_value_line(source),
-      confit_v2_toml_value_column(source), diagnostic);
+      symbol, out, path, confit_toml_value_line(source),
+      confit_toml_value_column(source), diagnostic);
 }
 
 ConfitStatus confit_v2_ledger_parse_user_value(
     const ConfitV2Symbol *symbol, const char *text, ConfitV2Value *out,
     ConfitDiagnostic *diagnostic) {
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *source;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *source;
   char *toml;
   size_t size;
   ConfitStatus status;
@@ -583,31 +583,31 @@ ConfitStatus confit_v2_ledger_parse_user_value(
   }
   memcpy(toml, "value = ", 8U);
   memcpy(toml + 8U, text, size + 1U);
-  status = confit_v2_toml_parse_text("cli --set", toml, size + 8U, &document,
+  status = confit_toml_parse_text("cli --set", toml, size + 8U, &document,
                                       diagnostic);
   free(toml);
   if (status != CONFIT_OK) {
     return status;
   }
-  source = confit_v2_toml_table_find(confit_v2_toml_document_root(document),
+  source = confit_toml_table_find(confit_toml_document_root(document),
                                      "value");
   status = source != 0 ? confit_v2_ledger_parse_toml_value(symbol, source, out,
                                                              diagnostic)
                        : CONFIT_ERR_INTERNAL;
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return status;
 }
 
-static int confit_v2_input_table_only(const ConfitV2TomlValue *table,
+static int confit_v2_input_table_only(const ConfitTomlValue *table,
                                       const char *const *fields,
                                       size_t field_count) {
   size_t index;
 
-  if (confit_v2_toml_value_type(table) != CONFIT_V2_TOML_VALUE_TABLE) {
+  if (confit_toml_value_type(table) != CONFIT_TOML_VALUE_TABLE) {
     return 0;
   }
-  for (index = 0U; index < confit_v2_toml_table_size(table); ++index) {
-    const char *key = confit_v2_toml_table_key_at(table, index);
+  for (index = 0U; index < confit_toml_table_size(table); ++index) {
+    const char *key = confit_toml_table_key_at(table, index);
     size_t field_index;
     int known = 0;
     for (field_index = 0U; field_index < field_count; ++field_index) {
@@ -742,38 +742,38 @@ static ConfitStatus confit_v2_input_validate_writer(
 
 static ConfitStatus confit_v2_input_parse_values(
     const ConfitV2LinkedProject *linked, ConfitV2InputKind kind,
-    ConfitV2InputDocument *document, const ConfitV2TomlValue *values,
+    ConfitV2InputDocument *document, const ConfitTomlValue *values,
     ConfitDiagnostic *diagnostic) {
   size_t index;
 
   if (values == 0) {
     return CONFIT_OK;
   }
-  if (confit_v2_toml_value_type(values) != CONFIT_V2_TOML_VALUE_TABLE) {
-    confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(values),
-                                confit_v2_toml_value_column(values),
+  if (confit_toml_value_type(values) != CONFIT_TOML_VALUE_TABLE) {
+    confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(values),
+                                confit_toml_value_column(values),
                                 CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
-  for (index = 0U; index < confit_v2_toml_table_size(values); ++index) {
-    const char *id = confit_v2_toml_table_key_at(values, index);
-    const ConfitV2TomlValue *value =
-        confit_v2_toml_table_value_at(values, index);
+  for (index = 0U; index < confit_toml_table_size(values); ++index) {
+    const char *id = confit_toml_table_key_at(values, index);
+    const ConfitTomlValue *value =
+        confit_toml_table_value_at(values, index);
     const ConfitV2Symbol *symbol =
         confit_v2_linked_project_find_symbol(linked, id);
     ConfitV2Value parsed;
     ConfitStatus status;
 
     if (symbol == 0) {
-      confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(value),
-                                  confit_v2_toml_value_column(value),
+      confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(value),
+                                  confit_toml_value_column(value),
                                   CONFIT_ERR_SCHEMA, kUnknownInputOption,
                                   diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     status = confit_v2_input_validate_writer(
-        linked, kind, symbol, document->path, confit_v2_toml_value_line(value),
-        confit_v2_toml_value_column(value), 0, diagnostic);
+        linked, kind, symbol, document->path, confit_toml_value_line(value),
+        confit_toml_value_column(value), 0, diagnostic);
     if (status != CONFIT_OK) {
       return status;
     }
@@ -781,8 +781,8 @@ static ConfitStatus confit_v2_input_parse_values(
     status = confit_v2_ledger_parse_toml_value(symbol, value, &parsed, diagnostic);
     if (status == CONFIT_OK) {
       status = confit_v2_input_append_assignment(
-          document, symbol, &parsed, 0, confit_v2_toml_value_line(value),
-          confit_v2_toml_value_column(value), diagnostic);
+          document, symbol, &parsed, 0, confit_toml_value_line(value),
+          confit_toml_value_column(value), diagnostic);
     }
     confit_v2_ledger_value_clear(&parsed);
     if (status != CONFIT_OK) {
@@ -794,10 +794,10 @@ static ConfitStatus confit_v2_input_parse_values(
 
 static ConfitStatus confit_v2_input_parse_unset(
     const ConfitV2LinkedProject *linked, ConfitV2InputKind kind,
-    ConfitV2InputDocument *document, const ConfitV2TomlValue *unset,
+    ConfitV2InputDocument *document, const ConfitTomlValue *unset,
     ConfitDiagnostic *diagnostic) {
   static const char *const kUnsetFields[] = {"options"};
-  const ConfitV2TomlValue *options;
+  const ConfitTomlValue *options;
   size_t index;
 
   if (unset == 0) {
@@ -805,49 +805,49 @@ static ConfitStatus confit_v2_input_parse_unset(
   }
   if (!confit_v2_input_table_only(unset, kUnsetFields,
                                   sizeof(kUnsetFields) / sizeof(kUnsetFields[0]))) {
-    confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(unset),
-                                confit_v2_toml_value_column(unset),
+    confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(unset),
+                                confit_toml_value_column(unset),
                                 CONFIT_ERR_SCHEMA, kUnknownInputField, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
-  options = confit_v2_toml_table_find(unset, "options");
-  if (options == 0 || confit_v2_toml_value_type(options) !=
-                          CONFIT_V2_TOML_VALUE_ARRAY) {
-    confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(unset),
-                                confit_v2_toml_value_column(unset),
+  options = confit_toml_table_find(unset, "options");
+  if (options == 0 || confit_toml_value_type(options) !=
+                          CONFIT_TOML_VALUE_ARRAY) {
+    confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(unset),
+                                confit_toml_value_column(unset),
                                 CONFIT_ERR_SCHEMA, kMissingInputField, diagnostic);
     return CONFIT_ERR_SCHEMA;
   }
-  for (index = 0U; index < confit_v2_toml_array_size(options); ++index) {
-    const ConfitV2TomlValue *item = confit_v2_toml_array_at(options, index);
+  for (index = 0U; index < confit_toml_array_size(options); ++index) {
+    const ConfitTomlValue *item = confit_toml_array_at(options, index);
     const char *id;
     size_t size;
     const ConfitV2Symbol *symbol;
     ConfitStatus status;
 
-    if (!confit_v2_toml_value_string(item, &id, &size) || size == 0U) {
-      confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+    if (!confit_toml_value_string(item, &id, &size) || size == 0U) {
+      confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kWrongInputType, diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     symbol = confit_v2_linked_project_find_symbol(linked, id);
     if (symbol == 0) {
-      confit_v2_ledger_diagnostic(document->path, confit_v2_toml_value_line(item),
-                                  confit_v2_toml_value_column(item),
+      confit_v2_ledger_diagnostic(document->path, confit_toml_value_line(item),
+                                  confit_toml_value_column(item),
                                   CONFIT_ERR_SCHEMA, kUnknownInputOption,
                                   diagnostic);
       return CONFIT_ERR_SCHEMA;
     }
     status = confit_v2_input_validate_writer(
-        linked, kind, symbol, document->path, confit_v2_toml_value_line(item),
-        confit_v2_toml_value_column(item), 1, diagnostic);
+        linked, kind, symbol, document->path, confit_toml_value_line(item),
+        confit_toml_value_column(item), 1, diagnostic);
     if (status != CONFIT_OK) {
       return status;
     }
     status = confit_v2_input_append_assignment(
-        document, symbol, 0, 1, confit_v2_toml_value_line(item),
-        confit_v2_toml_value_column(item), diagnostic);
+        document, symbol, 0, 1, confit_toml_value_line(item),
+        confit_toml_value_column(item), diagnostic);
     if (status != CONFIT_OK) {
       return status;
     }
@@ -865,13 +865,13 @@ static ConfitStatus confit_v2_input_parse_document(
   static const char *const kTargetFields[] = {
       "name", "schema_version", "base", "claim", "root_components",
       "required_capabilities", "optional_capabilities"};
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *root;
-  const ConfitV2TomlValue *section;
-  const ConfitV2TomlValue *name;
-  const ConfitV2TomlValue *schema_version;
-  const ConfitV2TomlValue *base;
-  const ConfitV2TomlValue *target;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *section;
+  const ConfitTomlValue *name;
+  const ConfitTomlValue *schema_version;
+  const ConfitTomlValue *base;
+  const ConfitTomlValue *target;
   int64_t version;
   const char *text;
   size_t text_size;
@@ -882,13 +882,13 @@ static ConfitStatus confit_v2_input_parse_document(
   if (out_document->path == 0) {
     return CONFIT_ERR_INTERNAL;
   }
-  status = confit_v2_toml_parse_file(path, &document, diagnostic);
+  status = confit_toml_parse_file(path, &document, diagnostic);
   if (status != CONFIT_OK) {
     confit_v2_input_document_clear(out_document);
     return status;
   }
-  root = confit_v2_toml_document_root(document);
-  section = confit_v2_toml_table_find(root,
+  root = confit_toml_document_root(document);
+  section = confit_toml_table_find(root,
                                       kind == CONFIT_V2_INPUT_KIND_PROFILE
                                           ? "profile"
                                           : "target");
@@ -899,40 +899,40 @@ static ConfitStatus confit_v2_input_parse_document(
           kind == CONFIT_V2_INPUT_KIND_PROFILE
               ? sizeof(kProfileFields) / sizeof(kProfileFields[0])
               : sizeof(kTargetFields) / sizeof(kTargetFields[0]))) {
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(root),
-                                confit_v2_toml_value_column(root),
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(root),
+                                confit_toml_value_column(root),
                                 CONFIT_ERR_SCHEMA, kInvalidInputDocument,
                                 diagnostic);
-    confit_v2_toml_document_free(document);
+    confit_toml_document_free(document);
     confit_v2_input_document_clear(out_document);
     return CONFIT_ERR_SCHEMA;
   }
-  name = confit_v2_toml_table_find(section, "name");
-  schema_version = confit_v2_toml_table_find(section, "schema_version");
+  name = confit_toml_table_find(section, "name");
+  schema_version = confit_toml_table_find(section, "schema_version");
   if (name == 0 || schema_version == 0 ||
-      !confit_v2_toml_value_string(name, &text, &text_size) || text_size == 0U ||
-      !confit_v2_toml_value_int64(schema_version, &version) ||
+      !confit_toml_value_string(name, &text, &text_size) || text_size == 0U ||
+      !confit_toml_value_int64(schema_version, &version) ||
       (kind == CONFIT_V2_INPUT_KIND_PROFILE
            ? version != 2
            : (version != 2 && version != 3))) {
-    confit_v2_ledger_diagnostic(path, confit_v2_toml_value_line(section),
-                                confit_v2_toml_value_column(section),
+    confit_v2_ledger_diagnostic(path, confit_toml_value_line(section),
+                                confit_toml_value_column(section),
                                 CONFIT_ERR_SCHEMA, kMissingInputField, diagnostic);
-    confit_v2_toml_document_free(document);
+    confit_toml_document_free(document);
     confit_v2_input_document_clear(out_document);
     return CONFIT_ERR_SCHEMA;
   }
   out_document->name = (char *)malloc(text_size + 1U);
   if (out_document->name == 0) {
-    confit_v2_toml_document_free(document);
+    confit_toml_document_free(document);
     confit_v2_input_document_clear(out_document);
     return CONFIT_ERR_INTERNAL;
   }
   memcpy(out_document->name, text, text_size);
   out_document->name[text_size] = '\0';
-  base = confit_v2_toml_table_find(section, "base");
+  base = confit_toml_table_find(section, "base");
   if (base != 0) {
-    if (!confit_v2_toml_value_string(base, &text, &text_size) || text_size == 0U) {
+    if (!confit_toml_value_string(base, &text, &text_size) || text_size == 0U) {
       status = CONFIT_ERR_SCHEMA;
       goto fail;
     }
@@ -945,10 +945,10 @@ static ConfitStatus confit_v2_input_parse_document(
     out_document->base[text_size] = '\0';
   }
   target = kind == CONFIT_V2_INPUT_KIND_PROFILE
-               ? confit_v2_toml_table_find(section, "target")
+               ? confit_toml_table_find(section, "target")
                : 0;
   if (target != 0) {
-    if (!confit_v2_toml_value_string(target, &text, &text_size) || text_size == 0U) {
+    if (!confit_toml_value_string(target, &text, &text_size) || text_size == 0U) {
       status = CONFIT_ERR_SCHEMA;
       goto fail;
     }
@@ -959,32 +959,32 @@ static ConfitStatus confit_v2_input_parse_document(
     }
     memcpy(out_document->target, text, text_size);
     out_document->target[text_size] = '\0';
-    out_document->target_line = confit_v2_toml_value_line(target);
-    out_document->target_column = confit_v2_toml_value_column(target);
+    out_document->target_line = confit_toml_value_line(target);
+    out_document->target_column = confit_toml_value_column(target);
   }
   status = confit_v2_input_parse_component_roots(
-      confit_v2_toml_table_find(section, "root_components"),
+      confit_toml_table_find(section, "root_components"),
       &out_document->root_components, path, diagnostic);
   if (status == CONFIT_OK) status = confit_v2_input_parse_capability_requests(
-      confit_v2_toml_table_find(section, "required_capabilities"),
+      confit_toml_table_find(section, "required_capabilities"),
       &out_document->required_capabilities, path, diagnostic);
   if (status == CONFIT_OK) status = confit_v2_input_parse_capability_requests(
-      confit_v2_toml_table_find(section, "optional_capabilities"),
+      confit_toml_table_find(section, "optional_capabilities"),
       &out_document->optional_capabilities, path, diagnostic);
   if (status != CONFIT_OK) goto fail;
   status = confit_v2_input_parse_values(
-      linked, kind, out_document, confit_v2_toml_table_find(root, "values"),
+      linked, kind, out_document, confit_toml_table_find(root, "values"),
       diagnostic);
   if (status == CONFIT_OK) {
     status = confit_v2_input_parse_unset(
-        linked, kind, out_document, confit_v2_toml_table_find(root, "unset"),
+        linked, kind, out_document, confit_toml_table_find(root, "unset"),
         diagnostic);
   }
   if (status == CONFIT_OK) {
     size_t root_index;
-    for (root_index = 0U; root_index < confit_v2_toml_table_size(root);
+    for (root_index = 0U; root_index < confit_toml_table_size(root);
          ++root_index) {
-      const char *key = confit_v2_toml_table_key_at(root, root_index);
+      const char *key = confit_toml_table_key_at(root, root_index);
       if (strcmp(key, kind == CONFIT_V2_INPUT_KIND_PROFILE ? "profile" : "target") !=
               0 &&
           strcmp(key, "values") != 0 && strcmp(key, "unset") != 0 &&
@@ -993,15 +993,15 @@ static ConfitStatus confit_v2_input_parse_document(
              strcmp(key, "machine") == 0))) {
         status = CONFIT_ERR_SCHEMA;
         confit_v2_ledger_diagnostic(
-            path, confit_v2_toml_value_line(root),
-            confit_v2_toml_value_column(root), CONFIT_ERR_SCHEMA,
+            path, confit_toml_value_line(root),
+            confit_toml_value_column(root), CONFIT_ERR_SCHEMA,
             kUnknownInputField, diagnostic);
         break;
       }
     }
   }
 fail:
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   if (status != CONFIT_OK) {
     if (diagnostic != 0 && diagnostic->status == CONFIT_OK) {
       confit_v2_ledger_diagnostic(path, 0U, 0U, status,

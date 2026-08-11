@@ -3,7 +3,7 @@
 
 #include "confit/diagnostic.h"
 #include "confit/host.h"
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 #include "confit/status.h"
 
 #include "test_fs.h"
@@ -20,27 +20,27 @@ static uint32_t next_state(uint32_t *state) {
 }
 
 static int parse_one(const char *source_name, const char *text, size_t size) {
-  ConfitV2TomlDocument *document = 0;
+  ConfitTomlDocument *document = 0;
   ConfitDiagnostic diagnostic;
   ConfitStatus status;
 
   confit_diagnostic_init(&diagnostic);
-  status = confit_v2_toml_parse_text(source_name, text, size, &document,
+  status = confit_toml_parse_text(source_name, text, size, &document,
                                      &diagnostic);
   if (status == CONFIT_OK) {
-    const ConfitV2TomlValue *root = confit_v2_toml_document_root(document);
+    const ConfitTomlValue *root = confit_toml_document_root(document);
 
     if (document == 0 || root == 0 ||
-        confit_v2_toml_value_type(root) != CONFIT_V2_TOML_VALUE_TABLE) {
-      confit_v2_toml_document_free(document);
+        confit_toml_value_type(root) != CONFIT_TOML_VALUE_TABLE) {
+      confit_toml_document_free(document);
       return 0;
     }
   } else if (document != 0 ||
              (status != CONFIT_ERR_PARSE && status != CONFIT_ERR_INTERNAL)) {
-    confit_v2_toml_document_free(document);
+    confit_toml_document_free(document);
     return 0;
   }
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return 1;
 }
 
@@ -54,7 +54,7 @@ static int parse_seed_file(const char *name) {
 
   confit_diagnostic_init(&diagnostic);
   if (confit_host_path_join(corpus, sizeof(corpus), CONFIT_TEST_SOURCE_DIR,
-                            "tests/fuzz/corpus/parser-v2", &diagnostic) !=
+                            "tests/fuzz/corpus/toml", &diagnostic) !=
           CONFIT_OK ||
       confit_host_path_join(path, sizeof(path), corpus, name, &diagnostic) !=
           CONFIT_OK) {
@@ -82,7 +82,7 @@ int main(void) {
   if (!parse_seed_file("valid-basic.toml") ||
       !parse_seed_file("valid-nested.toml") ||
       !parse_seed_file("invalid-unclosed.toml") ||
-      !parse_one("parser-v2-invalid-utf8", invalid_utf8,
+      !parse_one("toml-invalid-utf8", invalid_utf8,
                  sizeof(invalid_utf8) - 1U)) {
     return 2;
   }
@@ -95,7 +95,7 @@ int main(void) {
       generated[cursor] = alphabet[next_state(&state) % (sizeof(alphabet) - 1U)];
     }
     generated[length] = '\0';
-    if (!parse_one("parser-v2-generated", generated, length)) {
+    if (!parse_one("toml-generated", generated, length)) {
       return 3;
     }
   }

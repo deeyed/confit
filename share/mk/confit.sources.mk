@@ -18,10 +18,11 @@ CONFIT_HOST_SOURCES= \
 
 CONFIT_PARSER_SOURCES= \
 	vendor/tomlc17/tomlc17.c \
-	src/parser/v2/tomlc17_adapter.c
+	src/parser/tomlc17_adapter.c
 
 CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 	src/model/v2/model.c \
+	src/schema/v4/config.c \
 	src/component/catalog.c \
 	src/source/catalog.c \
 	src/target/build_policy.c \
@@ -41,6 +42,7 @@ CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
 	src/constraint/v2/validate.c
 
 CONFIT_RESOLVER_SOURCES= \
+	src/resolver/v4/evaluate.c \
 	src/resolver/v2/input_loader.c \
 	src/resolver/v2/plan.c \
 	src/resolver/v2/evaluate.c \
@@ -60,9 +62,10 @@ CONFIT_TEST_SUPPORT_SOURCES= \
 	tests/support/test_process.c
 
 CONFIT_UNIT_TEST_SOURCES= \
+	tests/unit/test_config_v4.c \
 	tests/unit/test_status_diagnostic.c \
 	tests/unit/test_host_boundary.c \
-	tests/unit/test_parser_v2_adapter.c \
+	tests/unit/test_toml_adapter.c \
 	tests/unit/test_schema_v2_model.c \
 	tests/unit/test_schema_v2_linker.c \
 	tests/unit/test_constraint_v2.c \
@@ -79,6 +82,6 @@ CONFIT_UNIT_TEST_SOURCES= \
 
 CONFIT_FUZZ_TEST_SOURCES= \
 	tests/fuzz/test_expression_v2_fuzz.c \
-	tests/fuzz/test_parser_v2_fuzz.c
+	tests/fuzz/test_toml_fuzz.c
 
 .endif

@@ -1,4 +1,4 @@
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -8,29 +8,29 @@
 #include "confit/host.h"
 #include "tomlc17.h"
 
-struct ConfitV2TomlDocument {
+struct ConfitTomlDocument {
   char *source_text;
   size_t source_size;
   toml_result_t result;
 };
 
-static const char kConfitV2TomlInvalidArgument[] = "invalid v2 TOML argument";
-static const char kConfitV2TomlInvalidUtf8[] = "v2 TOML source is not valid UTF-8";
-static const char kConfitV2TomlParseFailed[] = "tomlc17 rejected TOML input";
-static const char kConfitV2TomlOutOfMemory[] = "failed to allocate v2 TOML document";
-static const char kConfitV2TomlTooLarge[] = "v2 TOML source exceeds parser size limit";
+static const char kConfitTomlInvalidArgument[] = "invalid TOML argument";
+static const char kConfitTomlInvalidUtf8[] = "TOML source is not valid UTF-8";
+static const char kConfitTomlParseFailed[] = "tomlc17 rejected TOML input";
+static const char kConfitTomlOutOfMemory[] = "failed to allocate TOML document";
+static const char kConfitTomlTooLarge[] = "TOML source exceeds parser size limit";
 
-static const toml_datum_t *confit_v2_toml_as_datum(
-    const ConfitV2TomlValue *value) {
+static const toml_datum_t *confit_toml_as_datum(
+    const ConfitTomlValue *value) {
   return (const toml_datum_t *)(const void *)value;
 }
 
-static const ConfitV2TomlValue *
-confit_v2_toml_as_value(const toml_datum_t *datum) {
-  return (const ConfitV2TomlValue *)(const void *)datum;
+static const ConfitTomlValue *
+confit_toml_as_value(const toml_datum_t *datum) {
+  return (const ConfitTomlValue *)(const void *)datum;
 }
 
-static char *confit_v2_toml_copy_text(const char *text, size_t text_size) {
+static char *confit_toml_copy_text(const char *text, size_t text_size) {
   char *copy;
 
   copy = (char *)malloc(text_size + 1U);
@@ -44,11 +44,11 @@ static char *confit_v2_toml_copy_text(const char *text, size_t text_size) {
   return copy;
 }
 
-static int confit_v2_toml_utf8_continuation(unsigned char byte) {
+static int confit_toml_utf8_continuation(unsigned char byte) {
   return (byte & 0xC0U) == 0x80U;
 }
 
-static int confit_v2_toml_validate_utf8(const char *text, size_t text_size,
+static int confit_toml_validate_utf8(const char *text, size_t text_size,
                                          size_t *out_line,
                                          size_t *out_column) {
   const unsigned char *bytes;
@@ -77,9 +77,9 @@ static int confit_v2_toml_validate_utf8(const char *text, size_t text_size,
     }
 
     if (index + width > text_size ||
-        (width >= 2U && !confit_v2_toml_utf8_continuation(bytes[index + 1U])) ||
-        (width >= 3U && !confit_v2_toml_utf8_continuation(bytes[index + 2U])) ||
-        (width >= 4U && !confit_v2_toml_utf8_continuation(bytes[index + 3U])) ||
+        (width >= 2U && !confit_toml_utf8_continuation(bytes[index + 1U])) ||
+        (width >= 3U && !confit_toml_utf8_continuation(bytes[index + 2U])) ||
+        (width >= 4U && !confit_toml_utf8_continuation(bytes[index + 3U])) ||
         (width == 3U && first == 0xE0U && bytes[index + 1U] < 0xA0U) ||
         (width == 3U && first == 0xEDU && bytes[index + 1U] > 0x9FU) ||
         (width == 4U && first == 0xF0U && bytes[index + 1U] < 0x90U) ||
@@ -109,7 +109,7 @@ static int confit_v2_toml_validate_utf8(const char *text, size_t text_size,
   return 0;
 }
 
-static size_t confit_v2_toml_error_line(const char *message) {
+static size_t confit_toml_error_line(const char *message) {
   const char *cursor;
 
   if (message == 0) {
@@ -140,7 +140,7 @@ static size_t confit_v2_toml_error_line(const char *message) {
 /* tomlc17의 parse error transport는 line만 제공한다. 0-column 진단을 외부
  * schema checker로 흘리지 않도록 그 line의 첫 non-whitespace byte를 bounded하게
  * 계산한다. EOF line처럼 source에 없는 line도 1-based column 1로 봉인한다. */
-static size_t confit_v2_toml_error_column(const char *text, size_t text_size,
+static size_t confit_toml_error_column(const char *text, size_t text_size,
                                           size_t error_line) {
   size_t index = 0U;
   size_t line = 1U;
@@ -160,40 +160,40 @@ static size_t confit_v2_toml_error_column(const char *text, size_t text_size,
   }
 }
 
-static ConfitV2TomlValueType
-confit_v2_toml_map_type(toml_type_t type) {
+static ConfitTomlValueType
+confit_toml_map_type(toml_type_t type) {
   switch (type) {
   case TOML_STRING:
-    return CONFIT_V2_TOML_VALUE_STRING;
+    return CONFIT_TOML_VALUE_STRING;
   case TOML_INT64:
-    return CONFIT_V2_TOML_VALUE_INT64;
+    return CONFIT_TOML_VALUE_INT64;
   case TOML_FP64:
-    return CONFIT_V2_TOML_VALUE_FLOAT64;
+    return CONFIT_TOML_VALUE_FLOAT64;
   case TOML_BOOLEAN:
-    return CONFIT_V2_TOML_VALUE_BOOL;
+    return CONFIT_TOML_VALUE_BOOL;
   case TOML_DATE:
-    return CONFIT_V2_TOML_VALUE_DATE;
+    return CONFIT_TOML_VALUE_DATE;
   case TOML_TIME:
-    return CONFIT_V2_TOML_VALUE_TIME;
+    return CONFIT_TOML_VALUE_TIME;
   case TOML_DATETIME:
-    return CONFIT_V2_TOML_VALUE_DATETIME;
+    return CONFIT_TOML_VALUE_DATETIME;
   case TOML_DATETIMETZ:
-    return CONFIT_V2_TOML_VALUE_DATETIME_TZ;
+    return CONFIT_TOML_VALUE_DATETIME_TZ;
   case TOML_ARRAY:
-    return CONFIT_V2_TOML_VALUE_ARRAY;
+    return CONFIT_TOML_VALUE_ARRAY;
   case TOML_TABLE:
-    return CONFIT_V2_TOML_VALUE_TABLE;
+    return CONFIT_TOML_VALUE_TABLE;
   case TOML_UNKNOWN:
   default:
-    return CONFIT_V2_TOML_VALUE_UNKNOWN;
+    return CONFIT_TOML_VALUE_UNKNOWN;
   }
 }
 
-ConfitStatus confit_v2_toml_parse_text(const char *source_name,
+ConfitStatus confit_toml_parse_text(const char *source_name,
                                        const char *text, size_t text_size,
-                                       ConfitV2TomlDocument **out_document,
+                                       ConfitTomlDocument **out_document,
                                        ConfitDiagnostic *diagnostic) {
-  ConfitV2TomlDocument *document;
+  ConfitTomlDocument *document;
   char *owned_text;
   size_t column;
   size_t line;
@@ -201,48 +201,48 @@ ConfitStatus confit_v2_toml_parse_text(const char *source_name,
 
   if (out_document == 0 || text == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, source_name,
-                          0U, 0U, kConfitV2TomlInvalidArgument);
+                          0U, 0U, kConfitTomlInvalidArgument);
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   *out_document = 0;
   if (text_size > (size_t)INT_MAX) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, 0U, 0U,
-                          kConfitV2TomlTooLarge);
+                          kConfitTomlTooLarge);
     return CONFIT_ERR_PARSE;
   }
 
   line = 0U;
   column = 0U;
-  if (!confit_v2_toml_validate_utf8(text, text_size, &line, &column)) {
+  if (!confit_toml_validate_utf8(text, text_size, &line, &column)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line,
-                          column, kConfitV2TomlInvalidUtf8);
+                          column, kConfitTomlInvalidUtf8);
     return CONFIT_ERR_PARSE;
   }
 
-  owned_text = confit_v2_toml_copy_text(text, text_size);
+  owned_text = confit_toml_copy_text(text, text_size);
   if (owned_text == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source_name, 0U,
-                          0U, kConfitV2TomlOutOfMemory);
+                          0U, kConfitTomlOutOfMemory);
     return CONFIT_ERR_INTERNAL;
   }
 
   result = toml_parse_named(owned_text, (int)text_size, source_name);
   if (!result.ok) {
-    line = confit_v2_toml_error_line(result.errmsg);
-    column = confit_v2_toml_error_column(owned_text, text_size, line);
+    line = confit_toml_error_line(result.errmsg);
+    column = confit_toml_error_column(owned_text, text_size, line);
     toml_free(result);
     free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line, column,
-                          kConfitV2TomlParseFailed);
+                          kConfitTomlParseFailed);
     return CONFIT_ERR_PARSE;
   }
 
-  document = (ConfitV2TomlDocument *)calloc(1U, sizeof(*document));
+  document = (ConfitTomlDocument *)calloc(1U, sizeof(*document));
   if (document == 0) {
     toml_free(result);
     free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source_name, 0U,
-                          0U, kConfitV2TomlOutOfMemory);
+                          0U, kConfitTomlOutOfMemory);
     return CONFIT_ERR_INTERNAL;
   }
 
@@ -253,8 +253,8 @@ ConfitStatus confit_v2_toml_parse_text(const char *source_name,
   return CONFIT_OK;
 }
 
-ConfitStatus confit_v2_toml_parse_file(const char *path,
-                                       ConfitV2TomlDocument **out_document,
+ConfitStatus confit_toml_parse_file(const char *path,
+                                       ConfitTomlDocument **out_document,
                                        ConfitDiagnostic *diagnostic) {
   ConfitStatus status;
   char *text;
@@ -262,7 +262,7 @@ ConfitStatus confit_v2_toml_parse_file(const char *path,
 
   if (out_document == 0 || path == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0U,
-                          0U, kConfitV2TomlInvalidArgument);
+                          0U, kConfitTomlInvalidArgument);
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   *out_document = 0;
@@ -272,13 +272,13 @@ ConfitStatus confit_v2_toml_parse_file(const char *path,
   if (status != CONFIT_OK) {
     return status;
   }
-  status = confit_v2_toml_parse_text(path, text, text_size, out_document,
+  status = confit_toml_parse_text(path, text, text_size, out_document,
                                       diagnostic);
   confit_host_free(text);
   return status;
 }
 
-void confit_v2_toml_document_free(ConfitV2TomlDocument *document) {
+void confit_toml_document_free(ConfitTomlDocument *document) {
   if (document == 0) {
     return;
   }
@@ -288,46 +288,46 @@ void confit_v2_toml_document_free(ConfitV2TomlDocument *document) {
 }
 
 const char *
-confit_v2_toml_document_source_text(const ConfitV2TomlDocument *document) {
+confit_toml_document_source_text(const ConfitTomlDocument *document) {
   return document != 0 ? document->source_text : 0;
 }
 
-size_t confit_v2_toml_document_source_size(
-    const ConfitV2TomlDocument *document) {
+size_t confit_toml_document_source_size(
+    const ConfitTomlDocument *document) {
   return document != 0 ? document->source_size : 0U;
 }
 
-const ConfitV2TomlValue *
-confit_v2_toml_document_root(const ConfitV2TomlDocument *document) {
-  return document != 0 ? confit_v2_toml_as_value(&document->result.toptab)
+const ConfitTomlValue *
+confit_toml_document_root(const ConfitTomlDocument *document) {
+  return document != 0 ? confit_toml_as_value(&document->result.toptab)
                        : 0;
 }
 
-ConfitV2TomlValueType
-confit_v2_toml_value_type(const ConfitV2TomlValue *value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
-  return datum != 0 ? confit_v2_toml_map_type(datum->type)
-                    : CONFIT_V2_TOML_VALUE_UNKNOWN;
+ConfitTomlValueType
+confit_toml_value_type(const ConfitTomlValue *value) {
+  const toml_datum_t *datum = confit_toml_as_datum(value);
+  return datum != 0 ? confit_toml_map_type(datum->type)
+                    : CONFIT_TOML_VALUE_UNKNOWN;
 }
 
-size_t confit_v2_toml_value_line(const ConfitV2TomlValue *value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+size_t confit_toml_value_line(const ConfitTomlValue *value) {
+  const toml_datum_t *datum = confit_toml_as_datum(value);
   return datum != 0 && datum->lineno > 0 ? (size_t)datum->lineno : 0U;
 }
 
-size_t confit_v2_toml_value_column(const ConfitV2TomlValue *value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+size_t confit_toml_value_column(const ConfitTomlValue *value) {
+  const toml_datum_t *datum = confit_toml_as_datum(value);
   return datum != 0 && datum->colno > 0 ? (size_t)datum->colno : 0U;
 }
 
-const char *confit_v2_toml_value_source(const ConfitV2TomlValue *value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+const char *confit_toml_value_source(const ConfitTomlValue *value) {
+  const toml_datum_t *datum = confit_toml_as_datum(value);
   return datum != 0 ? datum->source : 0;
 }
 
-int confit_v2_toml_value_string(const ConfitV2TomlValue *value,
+int confit_toml_value_string(const ConfitTomlValue *value,
                                 const char **out_text, size_t *out_size) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+  const toml_datum_t *datum = confit_toml_as_datum(value);
 
   if (datum == 0 || datum->type != TOML_STRING || out_text == 0 ||
       out_size == 0 || datum->u.str.len < 0) {
@@ -338,9 +338,9 @@ int confit_v2_toml_value_string(const ConfitV2TomlValue *value,
   return 1;
 }
 
-int confit_v2_toml_value_int64(const ConfitV2TomlValue *value,
+int confit_toml_value_int64(const ConfitTomlValue *value,
                                 int64_t *out_value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+  const toml_datum_t *datum = confit_toml_as_datum(value);
 
   if (datum == 0 || datum->type != TOML_INT64 || out_value == 0) {
     return 0;
@@ -349,9 +349,9 @@ int confit_v2_toml_value_int64(const ConfitV2TomlValue *value,
   return 1;
 }
 
-int confit_v2_toml_value_float64(const ConfitV2TomlValue *value,
+int confit_toml_value_float64(const ConfitTomlValue *value,
                                   double *out_value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+  const toml_datum_t *datum = confit_toml_as_datum(value);
 
   if (datum == 0 || datum->type != TOML_FP64 || out_value == 0) {
     return 0;
@@ -360,9 +360,9 @@ int confit_v2_toml_value_float64(const ConfitV2TomlValue *value,
   return 1;
 }
 
-int confit_v2_toml_value_bool(const ConfitV2TomlValue *value,
+int confit_toml_value_bool(const ConfitTomlValue *value,
                                int *out_value) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(value);
+  const toml_datum_t *datum = confit_toml_as_datum(value);
 
   if (datum == 0 || datum->type != TOML_BOOLEAN || out_value == 0) {
     return 0;
@@ -371,16 +371,16 @@ int confit_v2_toml_value_bool(const ConfitV2TomlValue *value,
   return 1;
 }
 
-size_t confit_v2_toml_table_size(const ConfitV2TomlValue *table) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(table);
+size_t confit_toml_table_size(const ConfitTomlValue *table) {
+  const toml_datum_t *datum = confit_toml_as_datum(table);
   return datum != 0 && datum->type == TOML_TABLE && datum->u.tab.size > 0
              ? (size_t)datum->u.tab.size
              : 0U;
 }
 
-const char *confit_v2_toml_table_key_at(const ConfitV2TomlValue *table,
+const char *confit_toml_table_key_at(const ConfitTomlValue *table,
                                          size_t index) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(table);
+  const toml_datum_t *datum = confit_toml_as_datum(table);
 
   if (datum == 0 || datum->type != TOML_TABLE || datum->u.tab.size < 0 ||
       index >= (size_t)datum->u.tab.size) {
@@ -389,49 +389,49 @@ const char *confit_v2_toml_table_key_at(const ConfitV2TomlValue *table,
   return datum->u.tab.key[index];
 }
 
-const ConfitV2TomlValue *
-confit_v2_toml_table_value_at(const ConfitV2TomlValue *table, size_t index) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(table);
+const ConfitTomlValue *
+confit_toml_table_value_at(const ConfitTomlValue *table, size_t index) {
+  const toml_datum_t *datum = confit_toml_as_datum(table);
 
   if (datum == 0 || datum->type != TOML_TABLE || datum->u.tab.size < 0 ||
       index >= (size_t)datum->u.tab.size) {
     return 0;
   }
-  return confit_v2_toml_as_value(&datum->u.tab.value[index]);
+  return confit_toml_as_value(&datum->u.tab.value[index]);
 }
 
-const ConfitV2TomlValue *
-confit_v2_toml_table_find(const ConfitV2TomlValue *table, const char *key) {
+const ConfitTomlValue *
+confit_toml_table_find(const ConfitTomlValue *table, const char *key) {
   size_t index;
   size_t size;
 
   if (key == 0) {
     return 0;
   }
-  size = confit_v2_toml_table_size(table);
+  size = confit_toml_table_size(table);
   for (index = 0U; index < size; ++index) {
-    const char *candidate = confit_v2_toml_table_key_at(table, index);
+    const char *candidate = confit_toml_table_key_at(table, index);
     if (candidate != 0 && strcmp(candidate, key) == 0) {
-      return confit_v2_toml_table_value_at(table, index);
+      return confit_toml_table_value_at(table, index);
     }
   }
   return 0;
 }
 
-size_t confit_v2_toml_array_size(const ConfitV2TomlValue *array) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(array);
+size_t confit_toml_array_size(const ConfitTomlValue *array) {
+  const toml_datum_t *datum = confit_toml_as_datum(array);
   return datum != 0 && datum->type == TOML_ARRAY && datum->u.arr.size > 0
              ? (size_t)datum->u.arr.size
              : 0U;
 }
 
-const ConfitV2TomlValue *
-confit_v2_toml_array_at(const ConfitV2TomlValue *array, size_t index) {
-  const toml_datum_t *datum = confit_v2_toml_as_datum(array);
+const ConfitTomlValue *
+confit_toml_array_at(const ConfitTomlValue *array, size_t index) {
+  const toml_datum_t *datum = confit_toml_as_datum(array);
 
   if (datum == 0 || datum->type != TOML_ARRAY || datum->u.arr.size < 0 ||
       index >= (size_t)datum->u.arr.size) {
     return 0;
   }
-  return confit_v2_toml_as_value(&datum->u.arr.elem[index]);
+  return confit_toml_as_value(&datum->u.arr.elem[index]);
 }

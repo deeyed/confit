@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "confit/host.h"
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 
 #define CONFIT_COMPONENT_MAX_DEPTH 32U
 #define CONFIT_COMPONENT_MAX_ROOTS 32U
@@ -293,34 +293,34 @@ static int confit_component_list_contains(char *const *items, size_t count,
 }
 
 static ConfitStatus confit_component_validate_table_keys(
-    const ConfitV2TomlValue *table, const char *const *allowed,
+    const ConfitTomlValue *table, const char *const *allowed,
     size_t allowed_count, const char *fallback_path,
     ConfitDiagnostic *diagnostic) {
   size_t index;
   if (table == 0 ||
-      confit_v2_toml_value_type(table) != CONFIT_V2_TOML_VALUE_TABLE) {
+      confit_toml_value_type(table) != CONFIT_TOML_VALUE_TABLE) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        table != 0 ? confit_v2_toml_value_source(table) : fallback_path,
-        table != 0 ? confit_v2_toml_value_line(table) : 1U,
-        table != 0 ? confit_v2_toml_value_column(table) : 1U,
+        table != 0 ? confit_toml_value_source(table) : fallback_path,
+        table != 0 ? confit_toml_value_line(table) : 1U,
+        table != 0 ? confit_toml_value_column(table) : 1U,
         "component schema requires a closed TOML table");
     return CONFIT_ERR_SCHEMA;
   }
-  for (index = 0U; index < confit_v2_toml_table_size(table); ++index) {
+  for (index = 0U; index < confit_toml_table_size(table); ++index) {
     size_t allowed_index;
-    const char *key = confit_v2_toml_table_key_at(table, index);
+    const char *key = confit_toml_table_key_at(table, index);
     for (allowed_index = 0U; allowed_index < allowed_count; ++allowed_index) {
       if (strcmp(key, allowed[allowed_index]) == 0) break;
     }
     if (allowed_index == allowed_count) {
-      const ConfitV2TomlValue *value =
-          confit_v2_toml_table_value_at(table, index);
+      const ConfitTomlValue *value =
+          confit_toml_table_value_at(table, index);
       confit_component_diagnostic_set(
           diagnostic, CONFIT_ERR_SCHEMA,
-          value != 0 ? confit_v2_toml_value_source(value) : fallback_path,
-          value != 0 ? confit_v2_toml_value_line(value) : 1U,
-          value != 0 ? confit_v2_toml_value_column(value) : 1U,
+          value != 0 ? confit_toml_value_source(value) : fallback_path,
+          value != 0 ? confit_toml_value_line(value) : 1U,
+          value != 0 ? confit_toml_value_column(value) : 1U,
           "component schema contains an unknown field or table");
       return CONFIT_ERR_SCHEMA;
     }
@@ -329,20 +329,20 @@ static ConfitStatus confit_component_validate_table_keys(
 }
 
 static ConfitStatus confit_component_copy_toml_string(
-    const ConfitV2TomlValue *value, size_t maximum, char **out,
+    const ConfitTomlValue *value, size_t maximum, char **out,
     ConfitDiagnostic *diagnostic) {
   const char *text;
   size_t size;
   char *copy;
   *out = 0;
   if (value == 0) return CONFIT_ERR_SCHEMA;
-  if (!confit_v2_toml_value_string(value, &text, &size) ||
+  if (!confit_toml_value_string(value, &text, &size) ||
       size == 0U || size > maximum || memchr(text, '\0', size) != 0) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        confit_v2_toml_value_source(value),
-        confit_v2_toml_value_line(value),
-        confit_v2_toml_value_column(value),
+        confit_toml_value_source(value),
+        confit_toml_value_line(value),
+        confit_toml_value_column(value),
         "component manifest has an invalid bounded string");
     return CONFIT_ERR_SCHEMA;
   }
@@ -355,7 +355,7 @@ static ConfitStatus confit_component_copy_toml_string(
 }
 
 static ConfitStatus confit_component_parse_atom_list(
-    const ConfitV2TomlValue *value, ConfitComponentAtomKind atom_kind,
+    const ConfitTomlValue *value, ConfitComponentAtomKind atom_kind,
     char ***out_items, ConfitComponentSourceSpan **out_spans,
     size_t *out_count, size_t *total_edges, ConfitDiagnostic *diagnostic) {
   size_t count;
@@ -363,21 +363,21 @@ static ConfitStatus confit_component_parse_atom_list(
   char **items = 0;
   ConfitComponentSourceSpan *spans = 0;
   if (value == 0 ||
-      confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
-      (count = confit_v2_toml_array_size(value)) >
+      confit_toml_value_type(value) != CONFIT_TOML_VALUE_ARRAY ||
+      (count = confit_toml_array_size(value)) >
           CONFIT_COMPONENT_MAX_LIST_ITEMS) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        value != 0 ? confit_v2_toml_value_source(value) : 0,
-        value != 0 ? confit_v2_toml_value_line(value) : 0U,
-        value != 0 ? confit_v2_toml_value_column(value) : 0U,
+        value != 0 ? confit_toml_value_source(value) : 0,
+        value != 0 ? confit_toml_value_line(value) : 0U,
+        value != 0 ? confit_toml_value_column(value) : 0U,
         "component manifest has an invalid bounded list");
     return CONFIT_ERR_SCHEMA;
   }
   if (*total_edges > CONFIT_COMPONENT_MAX_TOTAL_EDGES - count) {
     confit_component_diagnostic_set(
-        diagnostic, CONFIT_ERR_SCHEMA, confit_v2_toml_value_source(value),
-        confit_v2_toml_value_line(value), confit_v2_toml_value_column(value),
+        diagnostic, CONFIT_ERR_SCHEMA, confit_toml_value_source(value),
+        confit_toml_value_line(value), confit_toml_value_column(value),
         "component manifest edge budget exceeds the supported limit");
     return CONFIT_ERR_SCHEMA;
   }
@@ -392,7 +392,7 @@ static ConfitStatus confit_component_parse_atom_list(
   }
   for (index = 0U; index < count; ++index) {
     size_t other;
-    const ConfitV2TomlValue *atom = confit_v2_toml_array_at(value, index);
+    const ConfitTomlValue *atom = confit_toml_array_at(value, index);
     ConfitStatus status = confit_component_copy_toml_string(
         atom, CONFIT_COMPONENT_MAX_ATOM_BYTES, &items[index], diagnostic);
     if (status != CONFIT_OK ||
@@ -402,23 +402,23 @@ static ConfitStatus confit_component_parse_atom_list(
            confit_component_kapi_valid(items[index])))) {
       if (status == CONFIT_OK) {
         confit_component_diagnostic_set(
-            diagnostic, CONFIT_ERR_SCHEMA, confit_v2_toml_value_source(atom),
-            confit_v2_toml_value_line(atom), confit_v2_toml_value_column(atom),
+            diagnostic, CONFIT_ERR_SCHEMA, confit_toml_value_source(atom),
+            confit_toml_value_line(atom), confit_toml_value_column(atom),
             "component manifest has an invalid feature or KAPI token");
       }
       confit_component_string_list_clear(items, count);
       free(spans);
       return status == CONFIT_OK ? CONFIT_ERR_SCHEMA : status;
     }
-    spans[index].line = confit_v2_toml_value_line(atom);
-    spans[index].column = confit_v2_toml_value_column(atom);
+    spans[index].line = confit_toml_value_line(atom);
+    spans[index].column = confit_toml_value_column(atom);
     for (other = 0U; other < index; ++other) {
       if (strcmp(items[other], items[index]) == 0) {
         confit_component_string_list_clear(items, count);
         free(spans);
         confit_component_diagnostic_set(
-            diagnostic, CONFIT_ERR_SCHEMA, confit_v2_toml_value_source(atom),
-            confit_v2_toml_value_line(atom), confit_v2_toml_value_column(atom),
+            diagnostic, CONFIT_ERR_SCHEMA, confit_toml_value_source(atom),
+            confit_toml_value_line(atom), confit_toml_value_column(atom),
             "component manifest list contains a duplicate token");
         return CONFIT_ERR_SCHEMA;
       }
@@ -773,12 +773,12 @@ static ConfitStatus confit_component_parse_manifest(
       "requires", "provides", "conflicts", "default"};
   static const char *const interface_keys[] = {
       "kapi_requires", "kapi_provides"};
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *root;
-  const ConfitV2TomlValue *component_table;
-  const ConfitV2TomlValue *selection_table;
-  const ConfitV2TomlValue *interface_table;
-  const ConfitV2TomlValue *value;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *component_table;
+  const ConfitTomlValue *selection_table;
+  const ConfitTomlValue *interface_table;
+  const ConfitTomlValue *value;
   char directory[4096];
   char makefile_physical[4096];
   char makefile_canonical[4096];
@@ -787,13 +787,13 @@ static ConfitStatus confit_component_parse_manifest(
   int default_value = 1;
   ConfitStatus status;
   memset(out, 0, sizeof(*out));
-  status = confit_v2_toml_parse_file(manifest_physical, &document, diagnostic);
+  status = confit_toml_parse_file(manifest_physical, &document, diagnostic);
   if (status != CONFIT_OK) return status;
-  root = confit_v2_toml_document_root(document);
-  component_table = confit_v2_toml_table_find(root, "component");
-  selection_table = confit_v2_toml_table_find(root, "selection");
-  interface_table = confit_v2_toml_table_find(root, "interfaces");
-  value = confit_v2_toml_table_find(root, "schema_version");
+  root = confit_toml_document_root(document);
+  component_table = confit_toml_table_find(root, "component");
+  selection_table = confit_toml_table_find(root, "selection");
+  interface_table = confit_toml_table_find(root, "interfaces");
+  value = confit_toml_table_find(root, "schema_version");
   status = confit_component_validate_table_keys(
       root, root_keys, sizeof(root_keys) / sizeof(root_keys[0]),
       manifest_physical, diagnostic);
@@ -810,25 +810,25 @@ static ConfitStatus confit_component_parse_manifest(
       sizeof(interface_keys) / sizeof(interface_keys[0]), manifest_physical,
       diagnostic);
   if (status != CONFIT_OK) goto invalid;
-  if (value == 0 || !confit_v2_toml_value_int64(value, &schema_version) ||
+  if (value == 0 || !confit_toml_value_int64(value, &schema_version) ||
       schema_version != 3) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        value != 0 ? confit_v2_toml_value_source(value) : manifest_physical,
-        value != 0 ? confit_v2_toml_value_line(value) : 1U,
-        value != 0 ? confit_v2_toml_value_column(value) : 1U,
+        value != 0 ? confit_toml_value_source(value) : manifest_physical,
+        value != 0 ? confit_toml_value_line(value) : 1U,
+        value != 0 ? confit_toml_value_column(value) : 1U,
         "component manifest schema_version must be exactly 3");
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
   status = confit_component_copy_toml_string(
-      confit_v2_toml_table_find(component_table, "id"),
+      confit_toml_table_find(component_table, "id"),
       CONFIT_COMPONENT_MAX_ATOM_BYTES, &out->id, diagnostic);
   if (status == CONFIT_OK) status = confit_component_copy_toml_string(
-      confit_v2_toml_table_find(component_table, "summary"),
+      confit_toml_table_find(component_table, "summary"),
       CONFIT_COMPONENT_MAX_SUMMARY_BYTES, &out->summary, diagnostic);
   if (status == CONFIT_OK) status = confit_component_copy_toml_string(
-      confit_v2_toml_table_find(component_table, "owner"),
+      confit_toml_table_find(component_table, "owner"),
       CONFIT_COMPONENT_MAX_ATOM_BYTES, &out->owner, diagnostic);
   if (status != CONFIT_OK || !confit_component_identifier_valid(out->id) ||
       !confit_component_identifier_valid(out->owner) ||
@@ -840,7 +840,7 @@ static ConfitStatus confit_component_parse_manifest(
   {
     char *kind_text = 0;
     status = confit_component_copy_toml_string(
-        confit_v2_toml_table_find(component_table, "kind"),
+        confit_toml_table_find(component_table, "kind"),
         CONFIT_COMPONENT_MAX_ATOM_BYTES, &kind_text, diagnostic);
     if (status == CONFIT_OK) out->kind = confit_component_kind_parse(kind_text);
     free(kind_text);
@@ -849,40 +849,40 @@ static ConfitStatus confit_component_parse_manifest(
       goto invalid;
     }
   }
-  value = confit_v2_toml_table_find(selection_table, "default");
-  if (value == 0 || !confit_v2_toml_value_bool(value, &default_value) ||
+  value = confit_toml_table_find(selection_table, "default");
+  if (value == 0 || !confit_toml_value_bool(value, &default_value) ||
       default_value != 0) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        value != 0 ? confit_v2_toml_value_source(value) : manifest_physical,
-        value != 0 ? confit_v2_toml_value_line(value) : 1U,
-        value != 0 ? confit_v2_toml_value_column(value) : 1U,
+        value != 0 ? confit_toml_value_source(value) : manifest_physical,
+        value != 0 ? confit_toml_value_line(value) : 1U,
+        value != 0 ? confit_toml_value_column(value) : 1U,
         "component selection.default must be the boolean false");
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
   status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(selection_table, "requires"),
+      confit_toml_table_find(selection_table, "requires"),
       CONFIT_COMPONENT_ATOM_FEATURE, &out->feature_requires,
       &out->feature_requirement_spans, &out->feature_requirement_count,
       total_edges, diagnostic);
   if (status == CONFIT_OK) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(selection_table, "provides"),
+      confit_toml_table_find(selection_table, "provides"),
       CONFIT_COMPONENT_ATOM_FEATURE, &out->feature_provides,
       &out->feature_provide_spans, &out->feature_provide_count, total_edges,
       diagnostic);
   if (status == CONFIT_OK) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(selection_table, "conflicts"),
+      confit_toml_table_find(selection_table, "conflicts"),
       CONFIT_COMPONENT_ATOM_FEATURE, &out->feature_conflicts,
       &out->feature_conflict_spans, &out->feature_conflict_count, total_edges,
       diagnostic);
   if (status == CONFIT_OK) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(interface_table, "kapi_requires"),
+      confit_toml_table_find(interface_table, "kapi_requires"),
       CONFIT_COMPONENT_ATOM_KAPI, &out->kapi_requires,
       &out->kapi_requirement_spans, &out->kapi_requirement_count, total_edges,
       diagnostic);
   if (status == CONFIT_OK) status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(interface_table, "kapi_provides"),
+      confit_toml_table_find(interface_table, "kapi_provides"),
       CONFIT_COMPONENT_ATOM_KAPI, &out->kapi_provides,
       &out->kapi_provide_spans, &out->kapi_provide_count, total_edges,
       diagnostic);
@@ -922,7 +922,7 @@ static ConfitStatus confit_component_parse_manifest(
     status = CONFIT_ERR_INTERNAL;
     goto invalid;
   }
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return CONFIT_OK;
 
 invalid:
@@ -931,7 +931,7 @@ invalid:
         diagnostic, CONFIT_ERR_SCHEMA, manifest_physical, 1U, 1U,
         "component.toml is not the closed selectable schema v3");
   }
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   confit_component_clear(out);
   return status == CONFIT_OK ? CONFIT_ERR_SCHEMA : status;
 }
@@ -1615,12 +1615,12 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
   static const char *const profile_keys[] = {"id", "target"};
   static const char *const feature_keys[] = {"enable"};
   char canonical[4096];
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *root;
-  const ConfitV2TomlValue *profile;
-  const ConfitV2TomlValue *features;
-  const ConfitV2TomlValue *providers;
-  const ConfitV2TomlValue *value;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *profile;
+  const ConfitTomlValue *features;
+  const ConfitTomlValue *providers;
+  const ConfitTomlValue *value;
   char *profile_id = 0;
   char *target_id = 0;
   char **required = 0;
@@ -1646,13 +1646,13 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
         "schema v3 profile is symlinked or escapes the project root");
     return CONFIT_ERR_SCHEMA;
   }
-  status = confit_v2_toml_parse_file(profile_path, &document, diagnostic);
+  status = confit_toml_parse_file(profile_path, &document, diagnostic);
   if (status != CONFIT_OK) return status;
-  root = confit_v2_toml_document_root(document);
-  profile = confit_v2_toml_table_find(root, "profile");
-  features = confit_v2_toml_table_find(root, "features");
-  providers = confit_v2_toml_table_find(root, "providers");
-  value = confit_v2_toml_table_find(root, "schema_version");
+  root = confit_toml_document_root(document);
+  profile = confit_toml_table_find(root, "profile");
+  features = confit_toml_table_find(root, "features");
+  providers = confit_toml_table_find(root, "providers");
+  value = confit_toml_table_find(root, "schema_version");
   status = confit_component_validate_table_keys(
       root, root_keys, sizeof(root_keys) / sizeof(root_keys[0]), profile_path,
       diagnostic);
@@ -1663,34 +1663,34 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
       features, feature_keys, sizeof(feature_keys) / sizeof(feature_keys[0]),
       profile_path, diagnostic);
   if (status != CONFIT_OK) goto invalid;
-  if (value == 0 || !confit_v2_toml_value_int64(value, &schema_version) ||
+  if (value == 0 || !confit_toml_value_int64(value, &schema_version) ||
       schema_version != 3) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        value != 0 ? confit_v2_toml_value_source(value) : profile_path,
-        value != 0 ? confit_v2_toml_value_line(value) : 1U,
-        value != 0 ? confit_v2_toml_value_column(value) : 1U,
+        value != 0 ? confit_toml_value_source(value) : profile_path,
+        value != 0 ? confit_toml_value_line(value) : 1U,
+        value != 0 ? confit_toml_value_column(value) : 1U,
         "component profile schema_version must be exactly 3");
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
   if (providers == 0 ||
-      confit_v2_toml_value_type(providers) != CONFIT_V2_TOML_VALUE_TABLE ||
-      confit_v2_toml_table_size(providers) > CONFIT_COMPONENT_MAX_LIST_ITEMS) {
+      confit_toml_value_type(providers) != CONFIT_TOML_VALUE_TABLE ||
+      confit_toml_table_size(providers) > CONFIT_COMPONENT_MAX_LIST_ITEMS) {
     confit_component_diagnostic_set(
         diagnostic, CONFIT_ERR_SCHEMA,
-        providers != 0 ? confit_v2_toml_value_source(providers) : profile_path,
-        providers != 0 ? confit_v2_toml_value_line(providers) : 1U,
-        providers != 0 ? confit_v2_toml_value_column(providers) : 1U,
+        providers != 0 ? confit_toml_value_source(providers) : profile_path,
+        providers != 0 ? confit_toml_value_line(providers) : 1U,
+        providers != 0 ? confit_toml_value_column(providers) : 1U,
         "component profile has an invalid bounded providers table");
     status = CONFIT_ERR_SCHEMA;
     goto invalid;
   }
   status = confit_component_copy_toml_string(
-      confit_v2_toml_table_find(profile, "id"),
+      confit_toml_table_find(profile, "id"),
       CONFIT_COMPONENT_MAX_ATOM_BYTES, &profile_id, diagnostic);
   if (status == CONFIT_OK) status = confit_component_copy_toml_string(
-      confit_v2_toml_table_find(profile, "target"),
+      confit_toml_table_find(profile, "target"),
       CONFIT_COMPONENT_MAX_ATOM_BYTES, &target_id, diagnostic);
   if (status != CONFIT_OK ||
       !confit_component_identifier_valid(profile_id) ||
@@ -1699,11 +1699,11 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
     goto invalid;
   }
   status = confit_component_parse_atom_list(
-      confit_v2_toml_table_find(features, "enable"),
+      confit_toml_table_find(features, "enable"),
       CONFIT_COMPONENT_ATOM_FEATURE, &required, &required_spans,
       &required_count, &total_edges, diagnostic);
   if (status != CONFIT_OK) goto invalid;
-  choice_count = confit_v2_toml_table_size(providers);
+  choice_count = confit_toml_table_size(providers);
   if (choice_count > 0U) {
     choices = (ConfitComponentProviderChoice *)calloc(choice_count,
                                                        sizeof(*choices));
@@ -1713,9 +1713,9 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
     }
   }
   for (index = 0U; index < choice_count; ++index) {
-    const char *feature = confit_v2_toml_table_key_at(providers, index);
-    const ConfitV2TomlValue *provider =
-        confit_v2_toml_table_value_at(providers, index);
+    const char *feature = confit_toml_table_key_at(providers, index);
+    const ConfitTomlValue *provider =
+        confit_toml_table_value_at(providers, index);
     char *component_id = 0;
     if (!confit_component_feature_valid(feature)) {
       status = CONFIT_ERR_SCHEMA;
@@ -1732,8 +1732,8 @@ ConfitStatus confit_component_catalog_resolve_profile_file(
     choices[index].feature = confit_component_strdup(feature);
     choices[index].component_id = component_id;
     choices[index].source_path = profile_path;
-    choices[index].source_line = confit_v2_toml_value_line(provider);
-    choices[index].source_column = confit_v2_toml_value_column(provider);
+    choices[index].source_line = confit_toml_value_line(provider);
+    choices[index].source_column = confit_toml_value_column(provider);
     if (choices[index].feature == 0) {
       status = CONFIT_ERR_INTERNAL;
       goto invalid;
@@ -1805,7 +1805,7 @@ done:
   confit_component_string_list_clear(required, required_count);
   free(required_spans);
   confit_component_provider_choices_clear(choices, choice_count);
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return status;
 }
 

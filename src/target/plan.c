@@ -7,7 +7,7 @@
 
 #include "confit/host.h"
 #include "confit/generator_v2.h"
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 
 enum {
   CONFIT_TARGET_PATH_LIMIT = 4096,
@@ -191,16 +191,16 @@ static int confit_target_package_digest_valid(const char *text) {
   return 0;
 }
 
-static int confit_target_table_only(const ConfitV2TomlValue *table,
+static int confit_target_table_only(const ConfitTomlValue *table,
                                     const char *const *fields,
                                     size_t field_count) {
   size_t index;
   if (table == 0 ||
-      confit_v2_toml_value_type(table) != CONFIT_V2_TOML_VALUE_TABLE) {
+      confit_toml_value_type(table) != CONFIT_TOML_VALUE_TABLE) {
     return 0;
   }
-  for (index = 0U; index < confit_v2_toml_table_size(table); ++index) {
-    const char *key = confit_v2_toml_table_key_at(table, index);
+  for (index = 0U; index < confit_toml_table_size(table); ++index) {
+    const char *key = confit_toml_table_key_at(table, index);
     size_t field_index;
     int found = 0;
     for (field_index = 0U; field_index < field_count; ++field_index) {
@@ -215,18 +215,18 @@ static int confit_target_table_only(const ConfitV2TomlValue *table,
 }
 
 static ConfitStatus confit_target_get_string(
-    const ConfitV2TomlValue *table, const char *key, int required,
+    const ConfitTomlValue *table, const char *key, int required,
     char **out, const char *path, ConfitDiagnostic *diagnostic) {
-  const ConfitV2TomlValue *value = confit_v2_toml_table_find(table, key);
+  const ConfitTomlValue *value = confit_toml_table_find(table, key);
   const char *text;
   size_t size;
   *out = 0;
   if (value == 0 && !required) return CONFIT_OK;
-  if (value == 0 || !confit_v2_toml_value_string(value, &text, &size) ||
+  if (value == 0 || !confit_toml_value_string(value, &text, &size) ||
       size == 0U || size > CONFIT_TARGET_TEXT_LIMIT) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path,
-                          confit_v2_toml_value_line(table),
-                          confit_v2_toml_value_column(table),
+                          confit_toml_value_line(table),
+                          confit_toml_value_column(table),
                           "target descriptor string field is missing or invalid");
     return CONFIT_ERR_SCHEMA;
   }
@@ -238,35 +238,35 @@ static ConfitStatus confit_target_get_string(
 }
 
 static ConfitStatus confit_target_get_string_list(
-    const ConfitV2TomlValue *table, const char *key, char ***out_items,
+    const ConfitTomlValue *table, const char *key, char ***out_items,
     size_t *out_count, const char *path, ConfitDiagnostic *diagnostic) {
-  const ConfitV2TomlValue *value = confit_v2_toml_table_find(table, key);
+  const ConfitTomlValue *value = confit_toml_table_find(table, key);
   size_t index;
   *out_items = 0;
   *out_count = 0U;
   if (value == 0 ||
-      confit_v2_toml_value_type(value) != CONFIT_V2_TOML_VALUE_ARRAY ||
-      confit_v2_toml_array_size(value) > CONFIT_TARGET_INCLUDE_LIMIT) {
+      confit_toml_value_type(value) != CONFIT_TOML_VALUE_ARRAY ||
+      confit_toml_array_size(value) > CONFIT_TARGET_INCLUDE_LIMIT) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path,
-                          confit_v2_toml_value_line(table),
-                          confit_v2_toml_value_column(table),
+                          confit_toml_value_line(table),
+                          confit_toml_value_column(table),
                           "target descriptor string list is missing or invalid");
     return CONFIT_ERR_SCHEMA;
   }
-  if (confit_v2_toml_array_size(value) != 0U) {
-    *out_items = (char **)calloc(confit_v2_toml_array_size(value),
+  if (confit_toml_array_size(value) != 0U) {
+    *out_items = (char **)calloc(confit_toml_array_size(value),
                                  sizeof(**out_items));
     if (*out_items == 0) return CONFIT_ERR_INTERNAL;
   }
-  for (index = 0U; index < confit_v2_toml_array_size(value); ++index) {
-    const ConfitV2TomlValue *item = confit_v2_toml_array_at(value, index);
+  for (index = 0U; index < confit_toml_array_size(value); ++index) {
+    const ConfitTomlValue *item = confit_toml_array_at(value, index);
     const char *text;
     size_t size;
-    if (!confit_v2_toml_value_string(item, &text, &size) || size == 0U ||
+    if (!confit_toml_value_string(item, &text, &size) || size == 0U ||
         size > CONFIT_TARGET_TEXT_LIMIT) {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path,
-                            confit_v2_toml_value_line(item),
-                            confit_v2_toml_value_column(item),
+                            confit_toml_value_line(item),
+                            confit_toml_value_column(item),
                             "target descriptor list item is invalid");
       return CONFIT_ERR_SCHEMA;
     }
@@ -279,18 +279,18 @@ static ConfitStatus confit_target_get_string_list(
   return CONFIT_OK;
 }
 
-static int confit_target_string_list_contains(const ConfitV2TomlValue *array,
+static int confit_target_string_list_contains(const ConfitTomlValue *array,
                                               const char *expected) {
   size_t index;
   if (array == 0 ||
-      confit_v2_toml_value_type(array) != CONFIT_V2_TOML_VALUE_ARRAY) {
+      confit_toml_value_type(array) != CONFIT_TOML_VALUE_ARRAY) {
     return 0;
   }
-  for (index = 0U; index < confit_v2_toml_array_size(array); ++index) {
-    const ConfitV2TomlValue *item = confit_v2_toml_array_at(array, index);
+  for (index = 0U; index < confit_toml_array_size(array); ++index) {
+    const ConfitTomlValue *item = confit_toml_array_at(array, index);
     const char *text;
     size_t size;
-    if (confit_v2_toml_value_string(item, &text, &size) &&
+    if (confit_toml_value_string(item, &text, &size) &&
         strlen(expected) == size && memcmp(text, expected, size) == 0) {
       return 1;
     }
@@ -298,13 +298,13 @@ static int confit_target_string_list_contains(const ConfitV2TomlValue *array,
   return 0;
 }
 
-static int confit_target_value_matches(const ConfitV2TomlValue *values,
+static int confit_target_value_matches(const ConfitTomlValue *values,
                                        const char *key,
                                        const char *expected) {
-  const ConfitV2TomlValue *value = confit_v2_toml_table_find(values, key);
+  const ConfitTomlValue *value = confit_toml_table_find(values, key);
   const char *text;
   size_t size;
-  return value != 0 && confit_v2_toml_value_string(value, &text, &size) &&
+  return value != 0 && confit_toml_value_string(value, &text, &size) &&
          strlen(expected) == size && memcmp(text, expected, size) == 0;
 }
 
@@ -412,20 +412,20 @@ static ConfitStatus confit_target_parse_build(
       "provider_owner", "consumer_owner", "role", "facade_include_root",
       "required_kapi"};
   char path[CONFIT_TARGET_PATH_LIMIT];
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *root;
-  const ConfitV2TomlValue *target;
-  const ConfitV2TomlValue *values;
-  const ConfitV2TomlValue *build;
-  const ConfitV2TomlValue *support;
-  const ConfitV2TomlValue *machine;
-  const ConfitV2TomlValue *name;
-  const ConfitV2TomlValue *schema;
-  const ConfitV2TomlValue *max_image;
-  const ConfitV2TomlValue *max_kernel;
-  const ConfitV2TomlValue *max_world;
-  const ConfitV2TomlValue *machine_memory;
-  const ConfitV2TomlValue *machine_evidence_max;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *target;
+  const ConfitTomlValue *values;
+  const ConfitTomlValue *build;
+  const ConfitTomlValue *support;
+  const ConfitTomlValue *machine;
+  const ConfitTomlValue *name;
+  const ConfitTomlValue *schema;
+  const ConfitTomlValue *max_image;
+  const ConfitTomlValue *max_kernel;
+  const ConfitTomlValue *max_world;
+  const ConfitTomlValue *machine_memory;
+  const ConfitTomlValue *machine_evidence_max;
   const char *name_text;
   size_t name_size;
   int64_t schema_version;
@@ -453,21 +453,21 @@ static ConfitStatus confit_target_parse_build(
 
   status = confit_target_find_descriptor(project, target_id, path,
                                          sizeof(path), diagnostic);
-  if (status == CONFIT_OK) status = confit_v2_toml_parse_file(
+  if (status == CONFIT_OK) status = confit_toml_parse_file(
       path, &document, diagnostic);
   if (status != CONFIT_OK) return status;
-  root = confit_v2_toml_document_root(document);
-  target = confit_v2_toml_table_find(root, "target");
-  values = confit_v2_toml_table_find(root, "values");
-  build = confit_v2_toml_table_find(root, "build");
-  support = confit_v2_toml_table_find(root, "support");
-  machine = confit_v2_toml_table_find(root, "machine");
+  root = confit_toml_document_root(document);
+  target = confit_toml_table_find(root, "target");
+  values = confit_toml_table_find(root, "values");
+  build = confit_toml_table_find(root, "build");
+  support = confit_toml_table_find(root, "support");
+  machine = confit_toml_table_find(root, "machine");
   if (!confit_target_table_only(root, root_fields,
                                 sizeof(root_fields) / sizeof(root_fields[0])) ||
       target == 0 || values == 0 || support == 0 ||
       !confit_target_table_only(target, target_fields,
                                 sizeof(target_fields) / sizeof(target_fields[0])) ||
-      confit_v2_toml_value_type(values) != CONFIT_V2_TOML_VALUE_TABLE ||
+      confit_toml_value_type(values) != CONFIT_TOML_VALUE_TABLE ||
       !confit_target_table_only(build, build_fields,
                                 sizeof(build_fields) / sizeof(build_fields[0])) ||
       !confit_target_table_only(support, support_fields,
@@ -480,13 +480,13 @@ static ConfitStatus confit_target_parse_build(
                           "target descriptor has unknown or missing tables");
     goto done;
   }
-  name = confit_v2_toml_table_find(target, "name");
-  schema = confit_v2_toml_table_find(target, "schema_version");
+  name = confit_toml_table_find(target, "name");
+  schema = confit_toml_table_find(target, "schema_version");
   if (name == 0 || schema == 0 ||
-      !confit_v2_toml_value_string(name, &name_text, &name_size) ||
+      !confit_toml_value_string(name, &name_text, &name_size) ||
       strlen(target_id) != name_size ||
       memcmp(name_text, target_id, name_size) != 0 ||
-      !confit_v2_toml_value_int64(schema, &schema_version) ||
+      !confit_toml_value_int64(schema, &schema_version) ||
       schema_version != 3) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
@@ -554,10 +554,10 @@ static ConfitStatus confit_target_parse_build(
     if (status == CONFIT_OK) status = confit_target_get_string(
         machine, "evidence_protocol", 1,
         &plan->machine_evidence_protocol, path, diagnostic);
-    machine_memory = confit_v2_toml_table_find(machine, "memory_mib");
+    machine_memory = confit_toml_table_find(machine, "memory_mib");
     if (status == CONFIT_OK &&
         (machine_memory == 0 ||
-         !confit_v2_toml_value_int64(machine_memory, &machine_memory_mib) ||
+         !confit_toml_value_int64(machine_memory, &machine_memory_mib) ||
          machine_memory_mib < 16 || machine_memory_mib > 65536)) {
       status = CONFIT_ERR_SCHEMA;
     }
@@ -565,10 +565,10 @@ static ConfitStatus confit_target_parse_build(
       plan->machine_memory_mib = (size_t)machine_memory_mib;
     }
     machine_evidence_max =
-        confit_v2_toml_table_find(machine, "evidence_max_bytes");
+        confit_toml_table_find(machine, "evidence_max_bytes");
     if (status == CONFIT_OK &&
         (machine_evidence_max == 0 ||
-         !confit_v2_toml_value_int64(machine_evidence_max,
+         !confit_toml_value_int64(machine_evidence_max,
                                      &machine_evidence_max_bytes) ||
          machine_evidence_max_bytes <= 0 ||
          machine_evidence_max_bytes > CONFIT_TARGET_EVIDENCE_LIMIT_MAX)) {
@@ -615,11 +615,11 @@ static ConfitStatus confit_target_parse_build(
       build, "world_artifact_roles", &artifact_roles, &artifact_role_count,
       path, diagnostic);
 #undef CONFIT_TARGET_BUILD_STRING
-  max_image = confit_v2_toml_table_find(build, "max_image_bytes");
-  max_kernel = confit_v2_toml_table_find(build, "max_kernel_bytes");
-  max_world = confit_v2_toml_table_find(build, "max_world_bytes");
+  max_image = confit_toml_table_find(build, "max_image_bytes");
+  max_kernel = confit_toml_table_find(build, "max_kernel_bytes");
+  max_world = confit_toml_table_find(build, "max_world_bytes");
   if (status == CONFIT_OK &&
-      (max_image == 0 || !confit_v2_toml_value_int64(max_image, &max_image_bytes) ||
+      (max_image == 0 || !confit_toml_value_int64(max_image, &max_image_bytes) ||
        max_image_bytes <= 0 ||
        max_image_bytes > CONFIT_TARGET_IMAGE_LIMIT_MAX)) {
     status = CONFIT_ERR_SCHEMA;
@@ -629,7 +629,7 @@ static ConfitStatus confit_target_parse_build(
   if (status == CONFIT_OK) plan->max_image_bytes = (size_t)max_image_bytes;
   if (status == CONFIT_OK &&
       (max_kernel == 0 ||
-       !confit_v2_toml_value_int64(max_kernel, &max_kernel_bytes) ||
+       !confit_toml_value_int64(max_kernel, &max_kernel_bytes) ||
        max_kernel_bytes <= 0 || max_kernel_bytes > CONFIT_TARGET_IMAGE_LIMIT_MAX)) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
@@ -638,7 +638,7 @@ static ConfitStatus confit_target_parse_build(
   if (status == CONFIT_OK) plan->max_kernel_bytes = (size_t)max_kernel_bytes;
   if (status == CONFIT_OK &&
       (max_world == 0 ||
-       !confit_v2_toml_value_int64(max_world, &max_world_bytes) ||
+       !confit_toml_value_int64(max_world, &max_world_bytes) ||
        max_world_bytes <= 0 || max_world_bytes > CONFIT_TARGET_IMAGE_LIMIT_MAX)) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
@@ -778,7 +778,7 @@ static ConfitStatus confit_target_parse_build(
       if (status == CONFIT_OK && plan->dtc_path == 0) status = CONFIT_ERR_INTERNAL;
     }
     free(dtc_name);
-  } else if (status == CONFIT_OK && confit_v2_toml_table_find(build, "dtc") != 0) {
+  } else if (status == CONFIT_OK && confit_toml_table_find(build, "dtc") != 0) {
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "dtc executable is forbidden without a dts input");
@@ -1038,7 +1038,7 @@ done:
     }
     free(package_input_digests);
   }
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return status;
 }
 
@@ -1052,12 +1052,12 @@ static ConfitStatus confit_target_parse_toolchain(
       "supported_isas", "supported_abis"};
   char relative[256];
   char path[CONFIT_TARGET_PATH_LIMIT];
-  ConfitV2TomlDocument *document = 0;
-  const ConfitV2TomlValue *root;
-  const ConfitV2TomlValue *toolchain;
-  const ConfitV2TomlValue *schema;
-  const ConfitV2TomlValue *supported_isas;
-  const ConfitV2TomlValue *supported_abis;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *toolchain;
+  const ConfitTomlValue *schema;
+  const ConfitTomlValue *supported_isas;
+  const ConfitTomlValue *supported_abis;
   int64_t version;
   char *id = 0;
   char *compiler = 0;
@@ -1081,11 +1081,11 @@ static ConfitStatus confit_target_parse_toolchain(
                           "selected toolchain descriptor is missing");
     status = CONFIT_ERR_SCHEMA;
   }
-  if (status == CONFIT_OK) status = confit_v2_toml_parse_file(
+  if (status == CONFIT_OK) status = confit_toml_parse_file(
       path, &document, diagnostic);
   if (status != CONFIT_OK) return status;
-  root = confit_v2_toml_document_root(document);
-  toolchain = confit_v2_toml_table_find(root, "toolchain");
+  root = confit_toml_document_root(document);
+  toolchain = confit_toml_table_find(root, "toolchain");
   if (!confit_target_table_only(root, root_fields,
                                 sizeof(root_fields) / sizeof(root_fields[0])) ||
       !confit_target_table_only(toolchain, fields,
@@ -1095,8 +1095,8 @@ static ConfitStatus confit_target_parse_toolchain(
                           "toolchain descriptor has an unknown field");
     goto done;
   }
-  schema = confit_v2_toml_table_find(toolchain, "schema_version");
-  if (schema == 0 || !confit_v2_toml_value_int64(schema, &version) ||
+  schema = confit_toml_table_find(toolchain, "schema_version");
+  if (schema == 0 || !confit_toml_value_int64(schema, &version) ||
       version != 1) {
     status = CONFIT_ERR_SCHEMA;
     goto done;
@@ -1116,8 +1116,8 @@ static ConfitStatus confit_target_parse_toolchain(
   CONFIT_TOOLCHAIN_STRING("sysroot", &sysroot_relative);
   CONFIT_TOOLCHAIN_STRING("link_emulation", &plan->link_emulation);
 #undef CONFIT_TOOLCHAIN_STRING
-  supported_isas = confit_v2_toml_table_find(toolchain, "supported_isas");
-  supported_abis = confit_v2_toml_table_find(toolchain, "supported_abis");
+  supported_isas = confit_toml_table_find(toolchain, "supported_isas");
+  supported_abis = confit_toml_table_find(toolchain, "supported_abis");
   if (status == CONFIT_OK &&
       (strcmp(id, plan->toolchain_id) != 0 ||
        strcmp(plan->toolchain_kind, "clang-lld-v1") != 0 ||
@@ -1191,7 +1191,7 @@ done:
   free(linker);
   free(resource_headers);
   free(sysroot_relative);
-  confit_v2_toml_document_free(document);
+  confit_toml_document_free(document);
   return status;
 }
 

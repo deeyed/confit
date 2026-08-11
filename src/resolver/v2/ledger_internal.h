@@ -1,7 +1,7 @@
 #ifndef CONFIT_RESOLVER_V2_LEDGER_INTERNAL_H
 #define CONFIT_RESOLVER_V2_LEDGER_INTERNAL_H
 
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 #include "confit/resolver_v2.h"
 
 typedef enum ConfitV2InputKind {
@@ -60,7 +60,7 @@ void confit_v2_ledger_value_clear(ConfitV2Value *value);
 ConfitStatus confit_v2_ledger_value_copy(ConfitV2Value *out,
                                           const ConfitV2Value *value);
 ConfitStatus confit_v2_ledger_parse_toml_value(
-    const ConfitV2Symbol *symbol, const ConfitV2TomlValue *source,
+    const ConfitV2Symbol *symbol, const ConfitTomlValue *source,
     ConfitV2Value *out, ConfitDiagnostic *diagnostic);
 ConfitStatus confit_v2_ledger_parse_user_value(
     const ConfitV2Symbol *symbol, const char *text, ConfitV2Value *out,

@@ -10,7 +10,7 @@
 #include "confit/constraint_v2.h"
 #include "confit/generator_v2.h"
 #include "confit/host.h"
-#include "confit/parser_v2.h"
+#include "confit/toml.h"
 #include "confit/resolver_v2.h"
 #include "confit/schema_v2.h"
 #include "confit/source_catalog.h"
