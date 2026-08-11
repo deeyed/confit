@@ -29,6 +29,8 @@ typedef struct ConfitV4ConfigureRequest {
   ConfitV4ToolIdentity resolver;
   ConfitV4ToolIdentity toolchain;
   ConfitV4ToolIdentity verifier;
+  /** Bake product receipt를 발행할 유일한 compiled producer identity다. */
+  ConfitV4ToolIdentity binding_producer;
   const ConfitV4LayeredAssignment *assignments;
   size_t assignment_count;
   const ConfitV4ProviderChoice *provider_choices;
@@ -58,11 +60,12 @@ typedef struct ConfitV4ProductBinding {
 typedef struct ConfitV4ProductBindingReceipt {
   const char *schema;
   const char *generation_sha256;
+  const char *producer_path;
+  const char *producer_version;
+  const char *producer_sha256;
   const char *receipt_sha256;
   const ConfitV4ProductBinding *bindings;
   size_t binding_count;
-  /** R03에서는 반드시 0이며 R05 producer만 1을 게시할 수 있다. */
-  int trusted_external_producer;
 } ConfitV4ProductBindingReceipt;
 
 /**
@@ -82,14 +85,14 @@ ConfitStatus confit_v4_generation_cancel(
     ConfitDiagnostic *diagnostic);
 
 /**
- * @brief product-binding을 검사한 뒤 selected alias Apply를 시도한다.
+ * @brief descriptor-rooted Bake receipt를 검사하고 selected alias를 게시한다.
  *
- * R03 candidate에는 trusted Bake producer가 없으므로 structurally valid synthetic
- * receipt도 `CONFIT_ERR_UNSUPPORTED`로 효과 없이 실패한다.
+ * Caller가 구성한 typed struct나 boolean은 Apply 권한이 아니다. Preview에서 봉인한
+ * producer가 현재 생성한 canonical receipt 파일만 성공할 수 있다.
  */
-ConfitStatus confit_v4_generation_apply(
+ConfitStatus confit_v4_generation_apply_file(
     ConfitV4GenerationTransaction *transaction,
-    const ConfitV4ProductBindingReceipt *receipt,
+    const char *receipt_path,
     ConfitDiagnostic *diagnostic);
 
 /** @brief transaction의 generation digest를 borrowed string으로 반환한다. */

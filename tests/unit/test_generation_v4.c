@@ -10,6 +10,7 @@
 
 #if !defined(_WIN32)
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -162,6 +163,7 @@ static void expect_preview_cancel_and_seal(void) {
   request.resolver = tool;
   request.toolchain = tool;
   request.verifier = tool;
+  request.binding_producer = tool;
   request.assignments = assignments;
   request.assignment_count = sizeof(assignments) / sizeof(assignments[0]);
   confit_diagnostic_init(&diagnostic);
@@ -304,6 +306,7 @@ static void expect_stale_tool_and_unrelated_override_fail(void) {
   request.resolver = tool;
   request.toolchain = tool;
   request.verifier = tool;
+  request.binding_producer = tool;
   request.assignments = assignments;
   request.assignment_count = 2U;
   confit_diagnostic_init(&diagnostic);
@@ -375,6 +378,7 @@ static void expect_product_receipt_gate(void) {
   request.resolver = tool;
   request.toolchain = tool;
   request.verifier = tool;
+  request.binding_producer = tool;
   request.assignments = assignments;
   request.assignment_count = 1U;
   confit_diagnostic_init(&diagnostic);
@@ -383,21 +387,28 @@ static void expect_product_receipt_gate(void) {
   memset(&receipt, 0, sizeof(receipt));
   receipt.schema = "bake-product-binding-v1";
   receipt.generation_sha256 = confit_v4_generation_digest(transaction);
+  receipt.producer_path = tool.path;
+  receipt.producer_version = tool.version;
+  receipt.producer_sha256 = tool.sha256;
   CONFIT_TEST_ASSERT(snprintf(canonical, sizeof(canonical),
-                             "schema=bake-product-binding-v1\ngeneration=%s\n",
-                             receipt.generation_sha256) > 0);
+                             "schema=bake-product-binding-v1\ngeneration=%s\n"
+                             "producer.path=%s\nproducer.version=%s\n"
+                             "producer.sha256=%s\nbinding.count=0\n",
+                             receipt.generation_sha256, receipt.producer_path,
+                             receipt.producer_version,
+                             receipt.producer_sha256) > 0);
   confit_v4_sha256_hex(canonical, receipt_digest);
   receipt.receipt_sha256 = receipt_digest;
   CONFIT_TEST_ASSERT(confit_v4_product_binding_receipt_verify(
                          transaction, &receipt, &diagnostic) == CONFIT_OK);
   confit_diagnostic_clear(&diagnostic);
-  CONFIT_TEST_ASSERT(confit_v4_generation_apply(
-                         transaction, &receipt, &diagnostic) ==
-                     CONFIT_ERR_UNSUPPORTED);
+  CONFIT_TEST_ASSERT(confit_v4_generation_apply_file(
+                         transaction, "/missing/bake-receipt", &diagnostic) !=
+                     CONFIT_OK);
   receipt.generation_sha256 =
       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   confit_diagnostic_clear(&diagnostic);
-  CONFIT_TEST_ASSERT(confit_v4_generation_apply(
+  CONFIT_TEST_ASSERT(confit_v4_product_binding_receipt_verify(
                          transaction, &receipt, &diagnostic) != CONFIT_OK);
 #if !defined(_WIN32)
   {
@@ -466,11 +477,123 @@ static void emit_retained_cross_repository_fixture(void) {
   /* Cross-repository consumer가 process 종료 뒤 artifact lifetime을 검증한다. */
 }
 
+#if !defined(_WIN32)
+static int run_bake_receipt(const char *buildctl, const char *root,
+                            const char *relative, const char *generation,
+                            const char *product) {
+  pid_t child = fork();
+  int status = 0;
+  if (child < 0) return 0;
+  if (child == 0) {
+    char *const arguments[] = {
+        (char *)buildctl,
+        "bake-product-receipt",
+        (char *)root,
+        (char *)relative,
+        (char *)generation,
+        "1",
+        "DRIVER_AUDIO_CMI8738",
+        "kernel",
+        "kernel",
+        (char *)product,
+        0,
+    };
+    execv(buildctl, arguments);
+    _exit(127);
+  }
+  while (waitpid(child, &status, 0) < 0) {
+  }
+  return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static void expect_external_product_apply(const char *buildctl,
+                                          const char *receipt_root,
+                                          const char *receipt_directory) {
+  char root[4096];
+  char output[4096];
+  char selected[4096];
+  char wrong_relative[4096];
+  char valid_relative[4096];
+  char wrong_receipt[4096];
+  char valid_receipt[4096];
+  char producer_digest[65];
+  ConfitV4GenerationTransaction *transaction = 0;
+  ConfitDiagnostic diagnostic;
+  ConfitV4ToolIdentity tool = tool_identity("/usr/bin/cc");
+  ConfitV4ToolIdentity producer;
+  const ConfitV4LayeredAssignment assignments[] = {
+      {{"AUDIO", "true", {"confit://cross", 1U, 1U}}, 0},
+      {{"BUS_PCI", "true", {"confit://cross", 2U, 1U}}, 0},
+      {{"DMA", "mapped", {"confit://cross", 3U, 1U}}, 0},
+      {{"DRIVER_AUDIO_CMI8738", "kernel",
+        {"confit://cross", 4U, 1U}},
+       0},
+  };
+  ConfitV4ConfigureRequest request;
+  setup_repository(root, sizeof(root), output, sizeof(output));
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_v4_sha256_file(buildctl, producer_digest,
+                                           &diagnostic) == CONFIT_OK);
+  producer.path = buildctl;
+  producer.version = "1";
+  producer.sha256 = producer_digest;
+  memset(&request, 0, sizeof(request));
+  request.repository_root = root;
+  request.output_root = output;
+  request.profile_id = "cross";
+  request.target_id = "host-fixture";
+  request.transaction_id = "bake-receipt-0001";
+  request.resolver = tool;
+  request.toolchain = tool;
+  request.verifier = tool;
+  request.binding_producer = producer;
+  request.assignments = assignments;
+  request.assignment_count = sizeof(assignments) / sizeof(assignments[0]);
+  CONFIT_TEST_ASSERT(confit_v4_generation_preview(
+                         &request, &transaction, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(snprintf(wrong_relative, sizeof(wrong_relative), "%s/%s",
+                             receipt_directory, "wrong.receipt") > 0);
+  CONFIT_TEST_ASSERT(snprintf(valid_relative, sizeof(valid_relative), "%s/%s",
+                             receipt_directory, "valid.receipt") > 0);
+  join(wrong_receipt, sizeof(wrong_receipt), receipt_root, wrong_relative);
+  join(valid_receipt, sizeof(valid_receipt), receipt_root, valid_relative);
+  join(selected, sizeof(selected), output, "selected");
+  CONFIT_TEST_ASSERT(run_bake_receipt(
+      buildctl, receipt_root, wrong_relative,
+      confit_v4_generation_digest(transaction),
+      "sys/dev/audio/cmi8738/not-kernel"));
+  CONFIT_TEST_ASSERT(confit_v4_generation_apply_file(
+                         transaction, wrong_receipt, &diagnostic) != CONFIT_OK);
+  CONFIT_TEST_ASSERT(!confit_test_fs_file_exists(selected));
+  confit_diagnostic_clear(&diagnostic);
+  CONFIT_TEST_ASSERT(run_bake_receipt(
+      buildctl, receipt_root, valid_relative,
+      confit_v4_generation_digest(transaction),
+      "sys/dev/audio/cmi8738/kernel"));
+  CONFIT_TEST_ASSERT(confit_v4_generation_apply_file(
+                         transaction, valid_receipt, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(selected));
+  CONFIT_TEST_ASSERT(confit_v4_generation_apply_file(
+                         transaction, valid_receipt, &diagnostic) != CONFIT_OK);
+  CONFIT_TEST_ASSERT(
+      confit_v4_generation_cancel(&transaction, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(transaction == 0);
+  CONFIT_TEST_ASSERT(confit_test_fs_file_exists(selected));
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+}
+#endif
+
 int main(int argc, char **argv) {
   if (argc == 2 && strcmp(argv[1], "--emit-cross-fixture") == 0) {
     emit_retained_cross_repository_fixture();
     return 0;
   }
+#if !defined(_WIN32)
+  if (argc == 5 && strcmp(argv[1], "--apply-bake-receipt") == 0) {
+    expect_external_product_apply(argv[2], argv[3], argv[4]);
+    return 0;
+  }
+#endif
   CONFIT_TEST_ASSERT(argc == 1);
   (void)argv;
   expect_preview_cancel_and_seal();

@@ -31,6 +31,7 @@
 enum {
   CONFIT_V4_GENERATION_MAX_TEXT = 16U * 1024U * 1024U,
   CONFIT_V4_GENERATION_MAX_MEMBERS = 1024U,
+  CONFIT_V4_GENERATION_MAX_BINDINGS = CONFIT_V4_MAX_OPTIONS * 2U,
 };
 
 typedef struct ConfitV4Text {
@@ -60,6 +61,10 @@ struct ConfitV4GenerationTransaction {
   char *profile_id;
   char *target_id;
   char *transaction_id;
+  char *output_root;
+  ConfitV4ToolIdentity binding_producer;
+  ConfitV4ProductBinding *expected_bindings;
+  size_t expected_binding_count;
   int active;
 };
 
@@ -227,6 +232,11 @@ static ConfitStatus validate_current_tool(const ConfitV4ToolIdentity *tool,
     return CONFIT_ERR_COMPATIBILITY;
   }
   return CONFIT_OK;
+}
+
+static int optional_tool_present(const ConfitV4ToolIdentity *tool) {
+  return tool != 0 &&
+         (tool->path != 0 || tool->version != 0 || tool->sha256 != 0);
 }
 
 static ConfitStatus make_config_header(const ConfitV4Catalog *catalog,
@@ -573,7 +583,22 @@ static ConfitStatus make_inputs(const ConfitV4Catalog *catalog,
   if (status == CONFIT_OK) status = json_string(out, request->verifier.version);
   if (status == CONFIT_OK) status = text_s(out, ",");
   if (status == CONFIT_OK) status = json_string(out, request->verifier.sha256);
-  if (status == CONFIT_OK) status = text_s(out, "],\"roots\":[");
+  if (status == CONFIT_OK) status = text_s(out, "],\"binding_producer\":");
+  if (status == CONFIT_OK && optional_tool_present(&request->binding_producer)) {
+    status = text_s(out, "[");
+    if (status == CONFIT_OK)
+      status = json_string(out, request->binding_producer.path);
+    if (status == CONFIT_OK) status = text_s(out, ",");
+    if (status == CONFIT_OK)
+      status = json_string(out, request->binding_producer.version);
+    if (status == CONFIT_OK) status = text_s(out, ",");
+    if (status == CONFIT_OK)
+      status = json_string(out, request->binding_producer.sha256);
+    if (status == CONFIT_OK) status = text_s(out, "]");
+  } else if (status == CONFIT_OK) {
+    status = text_s(out, "null");
+  }
+  if (status == CONFIT_OK) status = text_s(out, ",\"roots\":[");
   for (size_t role = 0U; status == CONFIT_OK && role < CONFIT_V4_ROLE_COUNT;
        ++role) {
     for (size_t index = 0U;
@@ -639,6 +664,101 @@ static ConfitStatus make_seal(const ConfitV4GenerationTransaction *transaction,
   return status;
 }
 
+static void binding_clear(ConfitV4ProductBinding *binding) {
+  if (binding == 0) return;
+  free((char *)binding->symbol);
+  free((char *)binding->value);
+  free((char *)binding->product_role);
+  free((char *)binding->canonical_product);
+  memset(binding, 0, sizeof(*binding));
+}
+
+static ConfitStatus binding_add(ConfitV4GenerationTransaction *transaction,
+                                const char *symbol, const char *value,
+                                const char *role, const char *base,
+                                const char *suffix) {
+  ConfitV4ProductBinding *binding;
+  char product[CONFIT_V4_MAX_PATH_BYTES + 1U];
+  if (transaction->expected_binding_count >=
+          CONFIT_V4_GENERATION_MAX_BINDINGS ||
+      snprintf(product, sizeof(product), "%s/%s", base, suffix) >=
+          (int)sizeof(product))
+    return CONFIT_ERR_GENERATION;
+  binding = &transaction->expected_bindings[transaction->expected_binding_count];
+  binding->symbol = v4_copy(symbol);
+  binding->value = v4_copy(value);
+  binding->product_role = v4_copy(role);
+  binding->canonical_product = v4_copy(product);
+  if (binding->symbol == 0 || binding->value == 0 ||
+      binding->product_role == 0 || binding->canonical_product == 0) {
+    binding_clear(binding);
+    return CONFIT_ERR_INTERNAL;
+  }
+  ++transaction->expected_binding_count;
+  return CONFIT_OK;
+}
+
+static int option_product_base(const ConfitV4Catalog *catalog,
+                               const ConfitV4Option *option, char *out,
+                               size_t out_size) {
+  const size_t repository_size = strlen(catalog->repository_root);
+  static const char suffix[] = "/Config.toml";
+  for (size_t index = 0U;
+       index < catalog->roots[CONFIT_V4_ROLE_PRODUCTS].count; ++index) {
+    char prefix[CONFIT_V4_MAX_PATH_BYTES + 1U];
+    const char *relative;
+    size_t relative_size;
+    if (snprintf(prefix, sizeof(prefix), "%s/%s/", catalog->repository_root,
+                 catalog->roots[CONFIT_V4_ROLE_PRODUCTS].items[index]) >=
+        (int)sizeof(prefix))
+      return 0;
+    if (strncmp(option->declaration.path, prefix, strlen(prefix)) != 0)
+      continue;
+    relative = option->declaration.path + repository_size + 1U;
+    relative_size = strlen(relative);
+    if (relative_size <= strlen(suffix) ||
+        strcmp(relative + relative_size - strlen(suffix), suffix) != 0 ||
+        relative_size - strlen(suffix) + 1U > out_size)
+      return 0;
+    memcpy(out, relative, relative_size - strlen(suffix));
+    out[relative_size - strlen(suffix)] = '\0';
+    return 1;
+  }
+  return 0;
+}
+
+static ConfitStatus collect_product_bindings(
+    ConfitV4GenerationTransaction *transaction, const ConfitV4Catalog *catalog,
+    const ConfitV4Evaluation *evaluation) {
+  transaction->expected_bindings = (ConfitV4ProductBinding *)calloc(
+      CONFIT_V4_GENERATION_MAX_BINDINGS, sizeof(ConfitV4ProductBinding));
+  if (transaction->expected_bindings == 0) return CONFIT_ERR_INTERNAL;
+  for (size_t index = 0U; index < catalog->option_count; ++index) {
+    const ConfitV4Option *option = &catalog->options[index];
+    const char *value;
+    char base[CONFIT_V4_MAX_PATH_BYTES + 1U];
+    ConfitStatus status;
+    if (!option_product_base(catalog, option, base, sizeof(base))) continue;
+    value = confit_v4_evaluation_value(evaluation, option->symbol);
+    if (value == 0) return CONFIT_ERR_INTERNAL;
+    if (strcmp(value, "off") == 0) continue;
+    if (strcmp(value, "kernel") == 0) {
+      status = binding_add(transaction, option->symbol, value, "kernel", base,
+                           "kernel");
+    } else if (strcmp(value, "service") == 0) {
+      status = binding_add(transaction, option->symbol, value, "service", base,
+                           "service");
+      if (status == CONFIT_OK)
+        status = binding_add(transaction, option->symbol, value, "kernel-shim",
+                             base, "service/kernel");
+    } else {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status != CONFIT_OK) return status;
+  }
+  return CONFIT_OK;
+}
+
 static void transaction_free(ConfitV4GenerationTransaction *transaction) {
   if (transaction == 0) return;
   for (size_t index = 0U; index < CONFIT_V4_GENERATION_ARTIFACT_COUNT; ++index)
@@ -648,6 +768,13 @@ static void transaction_free(ConfitV4GenerationTransaction *transaction) {
   free(transaction->profile_id);
   free(transaction->target_id);
   free(transaction->transaction_id);
+  free(transaction->output_root);
+  free((char *)transaction->binding_producer.path);
+  free((char *)transaction->binding_producer.version);
+  free((char *)transaction->binding_producer.sha256);
+  for (size_t index = 0U; index < transaction->expected_binding_count; ++index)
+    binding_clear(&transaction->expected_bindings[index]);
+  free(transaction->expected_bindings);
   free(transaction);
 }
 
@@ -853,6 +980,9 @@ ConfitStatus confit_v4_generation_preview(
     status = validate_current_tool(&request->toolchain, "toolchain", diagnostic);
   if (status == CONFIT_OK)
     status = validate_current_tool(&request->verifier, "verifier", diagnostic);
+  if (status == CONFIT_OK && optional_tool_present(&request->binding_producer))
+    status = validate_current_tool(&request->binding_producer,
+                                   "binding-producer", diagnostic);
   if (status != CONFIT_OK) return status;
   status = confit_v4_catalog_load(request->repository_root, &catalog, diagnostic);
   if (status == CONFIT_OK)
@@ -868,7 +998,9 @@ ConfitStatus confit_v4_generation_preview(
   }
   for (size_t index = 0U; index < CONFIT_V4_GENERATION_ARTIFACT_COUNT; ++index)
     transaction->artifacts[index].name = kArtifactNames[index];
-  status = make_config_header(catalog, evaluation, &texts[0]);
+  status = collect_product_bindings(transaction, catalog, evaluation);
+  if (status == CONFIT_OK)
+    status = make_config_header(catalog, evaluation, &texts[0]);
   if (status == CONFIT_OK) status = make_config_mk(evaluation, &texts[1]);
   if (status == CONFIT_OK) status = make_selection_mk(evaluation, &texts[2]);
   if (status == CONFIT_OK) status = make_target_mk(request, &texts[3]);
@@ -898,8 +1030,21 @@ ConfitStatus confit_v4_generation_preview(
     transaction->profile_id = v4_copy(request->profile_id);
     transaction->target_id = v4_copy(request->target_id);
     transaction->transaction_id = v4_copy(request->transaction_id);
+    transaction->output_root = v4_copy(request->output_root);
+    if (optional_tool_present(&request->binding_producer)) {
+      transaction->binding_producer.path =
+          v4_copy(request->binding_producer.path);
+      transaction->binding_producer.version =
+          v4_copy(request->binding_producer.version);
+      transaction->binding_producer.sha256 =
+          v4_copy(request->binding_producer.sha256);
+    }
     if (transaction->profile_id == 0 || transaction->target_id == 0 ||
-        transaction->transaction_id == 0)
+        transaction->transaction_id == 0 || transaction->output_root == 0 ||
+        (optional_tool_present(&request->binding_producer) &&
+         (transaction->binding_producer.path == 0 ||
+          transaction->binding_producer.version == 0 ||
+          transaction->binding_producer.sha256 == 0)))
       status = CONFIT_ERR_INTERNAL;
   }
 #if defined(_WIN32)
@@ -986,8 +1131,13 @@ const char *confit_v4_generation_directory(
 static ConfitStatus binding_digest(
     const ConfitV4ProductBindingReceipt *receipt, char output[65]) {
   ConfitV4Text text = {0};
-  ConfitStatus status = text_f(&text, "schema=%s\ngeneration=%s\n",
-                               receipt->schema, receipt->generation_sha256);
+  ConfitStatus status = text_f(
+      &text,
+      "schema=%s\ngeneration=%s\nproducer.path=%s\nproducer.version=%s\n"
+      "producer.sha256=%s\nbinding.count=%zu\n",
+      receipt->schema, receipt->generation_sha256, receipt->producer_path,
+      receipt->producer_version, receipt->producer_sha256,
+      receipt->binding_count);
   for (size_t index = 0U; status == CONFIT_OK && index < receipt->binding_count;
        ++index) {
     const ConfitV4ProductBinding *binding = &receipt->bindings[index];
@@ -997,9 +1147,12 @@ static ConfitStatus binding_digest(
         strstr(binding->canonical_product, "..") != 0)
       status = CONFIT_ERR_SCHEMA;
     else
-      status = text_f(&text, "%s %s %s %s\n", binding->symbol,
-                      binding->value, binding->product_role,
-                      binding->canonical_product);
+      status = text_f(
+          &text,
+          "binding.%zu.symbol=%s\nbinding.%zu.value=%s\n"
+          "binding.%zu.role=%s\nbinding.%zu.product=%s\n",
+          index, binding->symbol, index, binding->value, index,
+          binding->product_role, index, binding->canonical_product);
   }
   if (status == CONFIT_OK)
     confit_v4_sha256_bytes(text.bytes, text.size, output);
@@ -1014,10 +1167,19 @@ ConfitStatus confit_v4_product_binding_receipt_verify(
   char digest[65];
   if (transaction == 0 || receipt == 0 || receipt->schema == 0 ||
       receipt->generation_sha256 == 0 || receipt->receipt_sha256 == 0 ||
+      receipt->producer_path == 0 || receipt->producer_version == 0 ||
+      receipt->producer_sha256 == 0 ||
       (receipt->binding_count != 0U && receipt->bindings == 0))
     return CONFIT_ERR_INVALID_ARGUMENT;
   if (strcmp(receipt->schema, "bake-product-binding-v1") != 0 ||
       strcmp(receipt->generation_sha256, transaction->generation_sha256) != 0 ||
+      transaction->binding_producer.path == 0 ||
+      strcmp(receipt->producer_path, transaction->binding_producer.path) != 0 ||
+      strcmp(receipt->producer_version,
+             transaction->binding_producer.version) != 0 ||
+      strcmp(receipt->producer_sha256,
+             transaction->binding_producer.sha256) != 0 ||
+      receipt->binding_count != transaction->expected_binding_count ||
       !digest_text(receipt->receipt_sha256) ||
       binding_digest(receipt, digest) != CONFIT_OK ||
       strcmp(digest, receipt->receipt_sha256) != 0) {
@@ -1025,19 +1187,268 @@ ConfitStatus confit_v4_product_binding_receipt_verify(
              "product-binding receipt does not match the candidate generation");
     return CONFIT_ERR_COMPATIBILITY;
   }
+  for (size_t index = 0U; index < receipt->binding_count; ++index) {
+    const ConfitV4ProductBinding *actual = &receipt->bindings[index];
+    const ConfitV4ProductBinding *expected =
+        &transaction->expected_bindings[index];
+    if (strcmp(actual->symbol, expected->symbol) != 0 ||
+        strcmp(actual->value, expected->value) != 0 ||
+        strcmp(actual->product_role, expected->product_role) != 0 ||
+        strcmp(actual->canonical_product, expected->canonical_product) != 0) {
+      set_diag(diagnostic, CONFIT_ERR_COMPATIBILITY, "product-binding",
+               "Bake product roles differ from the configured option values");
+      return CONFIT_ERR_COMPATIBILITY;
+    }
+  }
   return CONFIT_OK;
 }
 
-ConfitStatus confit_v4_generation_apply(
-    ConfitV4GenerationTransaction *transaction,
-    const ConfitV4ProductBindingReceipt *receipt,
+#if !defined(_WIN32)
+typedef struct ParsedBindingReceipt {
+  char *storage;
+  ConfitV4ProductBindingReceipt view;
+  ConfitV4ProductBinding bindings[CONFIT_V4_GENERATION_MAX_BINDINGS];
+} ParsedBindingReceipt;
+
+static char *receipt_value(char **cursor, const char *prefix) {
+  char *line;
+  char *newline;
+  const size_t prefix_size = strlen(prefix);
+  if (cursor == 0 || *cursor == 0 || **cursor == '\0') return 0;
+  line = *cursor;
+  newline = strchr(line, '\n');
+  if (newline == 0 || strncmp(line, prefix, prefix_size) != 0 ||
+      line[prefix_size] == '\0')
+    return 0;
+  *newline = '\0';
+  *cursor = newline + 1U;
+  return line + prefix_size;
+}
+
+static int parse_decimal_count(const char *text, size_t *out) {
+  size_t value = 0U;
+  if (text == 0 || text[0] == '\0') return 0;
+  for (size_t index = 0U; text[index] != '\0'; ++index) {
+    if (text[index] < '0' || text[index] > '9' ||
+        value > (CONFIT_V4_GENERATION_MAX_BINDINGS -
+                 (size_t)(text[index] - '0')) /
+                    10U)
+      return 0;
+    value = value * 10U + (size_t)(text[index] - '0');
+  }
+  *out = value;
+  return 1;
+}
+
+static ConfitStatus parse_binding_receipt(const char *path,
+                                          ParsedBindingReceipt *parsed,
+                                          ConfitDiagnostic *diagnostic) {
+  char canonical[4096];
+  struct stat metadata;
+  char *cursor;
+  char prefix[64];
+  int fd = -1;
+  size_t offset = 0U;
+  size_t count = 0U;
+  memset(parsed, 0, sizeof(*parsed));
+  if (!absolute_path(path) || realpath(path, canonical) == 0 ||
+      strcmp(path, canonical) != 0 ||
+      (fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)) < 0 ||
+      fstat(fd, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+      metadata.st_size <= 0 || metadata.st_size > 65536) {
+    if (fd >= 0) close(fd);
+    set_diag(diagnostic, CONFIT_ERR_GENERATION, path,
+             "Bake receipt must be one bounded canonical regular file");
+    return CONFIT_ERR_GENERATION;
+  }
+  parsed->storage = (char *)malloc((size_t)metadata.st_size + 1U);
+  if (parsed->storage == 0) {
+    close(fd);
+    return CONFIT_ERR_INTERNAL;
+  }
+  while (offset < (size_t)metadata.st_size) {
+    const ssize_t got = read(fd, parsed->storage + offset,
+                             (size_t)metadata.st_size - offset);
+    if (got <= 0) break;
+    offset += (size_t)got;
+  }
+  close(fd);
+  if (offset != (size_t)metadata.st_size ||
+      memchr(parsed->storage, '\0', offset) != 0 ||
+      parsed->storage[offset - 1U] != '\n')
+    goto malformed;
+  parsed->storage[offset] = '\0';
+  cursor = parsed->storage;
+  parsed->view.schema = receipt_value(&cursor, "schema=");
+  parsed->view.generation_sha256 = receipt_value(&cursor, "generation=");
+  parsed->view.producer_path = receipt_value(&cursor, "producer.path=");
+  parsed->view.producer_version = receipt_value(&cursor, "producer.version=");
+  parsed->view.producer_sha256 = receipt_value(&cursor, "producer.sha256=");
+  if (!parse_decimal_count(receipt_value(&cursor, "binding.count="), &count) ||
+      count > CONFIT_V4_GENERATION_MAX_BINDINGS)
+    goto malformed;
+  parsed->view.bindings = parsed->bindings;
+  parsed->view.binding_count = count;
+  for (size_t index = 0U; index < count; ++index) {
+    (void)snprintf(prefix, sizeof(prefix), "binding.%zu.symbol=", index);
+    parsed->bindings[index].symbol = receipt_value(&cursor, prefix);
+    (void)snprintf(prefix, sizeof(prefix), "binding.%zu.value=", index);
+    parsed->bindings[index].value = receipt_value(&cursor, prefix);
+    (void)snprintf(prefix, sizeof(prefix), "binding.%zu.role=", index);
+    parsed->bindings[index].product_role = receipt_value(&cursor, prefix);
+    (void)snprintf(prefix, sizeof(prefix), "binding.%zu.product=", index);
+    parsed->bindings[index].canonical_product = receipt_value(&cursor, prefix);
+    if (parsed->bindings[index].symbol == 0 ||
+        parsed->bindings[index].value == 0 ||
+        parsed->bindings[index].product_role == 0 ||
+        parsed->bindings[index].canonical_product == 0)
+      goto malformed;
+  }
+  parsed->view.receipt_sha256 = receipt_value(&cursor, "receipt.sha256=");
+  if (parsed->view.schema == 0 || parsed->view.generation_sha256 == 0 ||
+      parsed->view.producer_path == 0 || parsed->view.producer_version == 0 ||
+      parsed->view.producer_sha256 == 0 ||
+      parsed->view.receipt_sha256 == 0 || *cursor != '\0')
+    goto malformed;
+  return CONFIT_OK;
+malformed:
+  free(parsed->storage);
+  memset(parsed, 0, sizeof(*parsed));
+  set_diag(diagnostic, CONFIT_ERR_SCHEMA, path,
+           "Bake receipt is malformed, reordered, duplicated, or extended");
+  return CONFIT_ERR_SCHEMA;
+}
+
+static ConfitStatus verify_candidate_artifacts(
+    const ConfitV4GenerationTransaction *transaction,
     ConfitDiagnostic *diagnostic) {
-  ConfitStatus status = confit_v4_product_binding_receipt_verify(
-      transaction, receipt, diagnostic);
-  if (status != CONFIT_OK) return status;
-  set_diag(diagnostic, CONFIT_ERR_UNSUPPORTED, "selected",
-           "BPAH-R03 has no trusted Bake product-binding producer; Apply has no effect");
+  DIR *stream;
+  struct dirent *entry;
+  size_t found = 0U;
+  stream = opendir(transaction->generation_directory);
+  if (stream == 0) return CONFIT_ERR_GENERATION;
+  while ((entry = readdir(stream)) != 0) {
+    char path[4096];
+    struct stat metadata;
+    char digest[65];
+    size_t match = CONFIT_V4_GENERATION_ARTIFACT_COUNT;
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+      continue;
+    for (size_t index = 0U; index < CONFIT_V4_GENERATION_ARTIFACT_COUNT;
+         ++index)
+      if (strcmp(entry->d_name, transaction->artifacts[index].name) == 0) {
+        match = index;
+        break;
+      }
+    if (match == CONFIT_V4_GENERATION_ARTIFACT_COUNT ||
+        snprintf(path, sizeof(path), "%s/%s", transaction->generation_directory,
+                 entry->d_name) >= (int)sizeof(path) ||
+        lstat(path, &metadata) != 0 || !S_ISREG(metadata.st_mode) ||
+        S_ISLNK(metadata.st_mode) ||
+        (size_t)metadata.st_size != transaction->artifacts[match].size ||
+        confit_v4_sha256_file(path, digest, diagnostic) != CONFIT_OK ||
+        strcmp(digest, transaction->artifacts[match].sha256) != 0) {
+      closedir(stream);
+      return CONFIT_ERR_COMPATIBILITY;
+    }
+    ++found;
+  }
+  closedir(stream);
+  return found == CONFIT_V4_GENERATION_ARTIFACT_COUNT ? CONFIT_OK
+                                                      : CONFIT_ERR_COMPATIBILITY;
+}
+
+static ConfitStatus publish_selected_alias(
+    ConfitV4GenerationTransaction *transaction, const char *receipt_path,
+    const char *receipt_sha256, ConfitDiagnostic *diagnostic) {
+  char temporary[128];
+  char bytes[12288];
+  int root_fd = -1;
+  int lock_fd = -1;
+  int file_fd = -1;
+  int written;
+  ConfitStatus status = CONFIT_OK;
+  written = snprintf(bytes, sizeof(bytes),
+                     "schema=confit-selected-v4\ngeneration=%s\n"
+                     "transaction=%s\nreceipt.path=%s\nreceipt.sha256=%s\n"
+                     "candidate.path=%s\n",
+                     transaction->generation_sha256,
+                     transaction->transaction_id, receipt_path,
+                     receipt_sha256, transaction->generation_directory);
+  if (written <= 0 || written >= (int)sizeof(bytes) ||
+      snprintf(temporary, sizeof(temporary), ".selected-%s-%ld",
+               transaction->transaction_id, (long)getpid()) >=
+          (int)sizeof(temporary))
+    return CONFIT_ERR_GENERATION;
+  root_fd = open(transaction->output_root,
+                 O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (root_fd < 0) return CONFIT_ERR_GENERATION;
+  lock_fd = openat(root_fd, ".confit-apply-v4.lock",
+                   O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+  if (lock_fd < 0 || flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
+    status = CONFIT_ERR_CONFLICT;
+    goto done;
+  }
+  file_fd = openat(root_fd, temporary,
+                   O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+                   0400);
+  if (file_fd < 0 || write(file_fd, bytes, (size_t)written) != written ||
+      fsync(file_fd) != 0 || close(file_fd) != 0) {
+    file_fd = -1;
+    status = CONFIT_ERR_GENERATION;
+    goto done;
+  }
+  file_fd = -1;
+  if (renameat(root_fd, temporary, root_fd, "selected") != 0 ||
+      fsync(root_fd) != 0)
+    status = CONFIT_ERR_GENERATION;
+done:
+  if (file_fd >= 0) close(file_fd);
+  if (status != CONFIT_OK && root_fd >= 0) (void)unlinkat(root_fd, temporary, 0);
+  if (lock_fd >= 0) close(lock_fd);
+  if (root_fd >= 0) close(root_fd);
+  if (status != CONFIT_OK)
+    set_diag(diagnostic, status, transaction->output_root,
+             "selected alias atomic publication failed");
+  return status;
+}
+#endif
+
+ConfitStatus confit_v4_generation_apply_file(
+    ConfitV4GenerationTransaction *transaction, const char *receipt_path,
+    ConfitDiagnostic *diagnostic) {
+#if defined(_WIN32)
+  (void)transaction;
+  (void)receipt_path;
+  (void)diagnostic;
   return CONFIT_ERR_UNSUPPORTED;
+#else
+  ParsedBindingReceipt parsed;
+  ConfitStatus status;
+  memset(&parsed, 0, sizeof(parsed));
+  if (transaction == 0 || !transaction->active || receipt_path == 0)
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  if (transaction->binding_producer.path == 0) {
+    set_diag(diagnostic, CONFIT_ERR_UNSUPPORTED, "selected",
+             "candidate generation has no sealed Bake receipt producer");
+    return CONFIT_ERR_UNSUPPORTED;
+  }
+  status = validate_current_tool(&transaction->binding_producer,
+                                 "binding-producer", diagnostic);
+  if (status == CONFIT_OK)
+    status = parse_binding_receipt(receipt_path, &parsed, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_v4_product_binding_receipt_verify(
+        transaction, &parsed.view, diagnostic);
+  if (status == CONFIT_OK)
+    status = verify_candidate_artifacts(transaction, diagnostic);
+  if (status == CONFIT_OK)
+    status = publish_selected_alias(transaction, receipt_path,
+                                    parsed.view.receipt_sha256, diagnostic);
+  if (status == CONFIT_OK) transaction->active = 0;
+  if (parsed.storage != 0) free(parsed.storage);
+  return status;
+#endif
 }
 
 typedef struct JsonCursor {
@@ -1071,6 +1482,9 @@ typedef struct VerifyInputs {
   char verifier_path[4096];
   char verifier_version[256];
   char verifier_sha256[65];
+  char binding_producer_path[4096];
+  char binding_producer_version[256];
+  char binding_producer_sha256[65];
   VerifyRoot roots[64];
   size_t root_count;
   VerifyMember members[CONFIT_V4_GENERATION_MAX_MEMBERS];
@@ -1193,8 +1607,22 @@ static int parse_inputs_json(const char *text, size_t size,
                         sizeof(inputs->verifier_path), inputs->verifier_version,
                         sizeof(inputs->verifier_version),
                         inputs->verifier_sha256) ||
-      !json_literal(&cursor, ",\"roots\":["))
+      !json_literal(&cursor, ",\"binding_producer\":"))
     return 0;
+  if (!json_literal(&cursor, "null") &&
+      (!json_literal(&cursor, "[") ||
+       !json_string_value(&cursor, inputs->binding_producer_path,
+                          sizeof(inputs->binding_producer_path)) ||
+       !json_literal(&cursor, ",") ||
+       !json_string_value(&cursor, inputs->binding_producer_version,
+                          sizeof(inputs->binding_producer_version)) ||
+       !json_literal(&cursor, ",") ||
+       !json_string_value(&cursor, inputs->binding_producer_sha256,
+                          sizeof(inputs->binding_producer_sha256)) ||
+       !digest_text(inputs->binding_producer_sha256) ||
+       !json_literal(&cursor, "]")))
+    return 0;
+  if (!json_literal(&cursor, ",\"roots\":[")) return 0;
   if (!json_literal(&cursor, "]")) {
     for (;;) {
       VerifyRoot *root;
