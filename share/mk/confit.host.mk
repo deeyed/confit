@@ -1,6 +1,27 @@
 .if !defined(_CONFIT_HOST_MK_)
 _CONFIT_HOST_MK_=1
 
+.if defined(CONFIT_ADMISSION_TOOL) || defined(CONFIT_ADMISSION_ROOT) || \
+    defined(CONFIT_ADMISSION_FD)
+.if !defined(CONFIT_ADMISSION_TOOL) || ${CONFIT_ADMISSION_TOOL:M/*} == "" || \
+    !defined(CONFIT_ADMISSION_ROOT) || ${CONFIT_ADMISSION_ROOT:M/*} == "" || \
+    !defined(CONFIT_ADMISSION_FD) || empty(CONFIT_ADMISSION_FD:M[0-9]*) || \
+    ${CONFIT_OBJROOT:M${CONFIT_ADMISSION_ROOT}/*} == ""
+.error Confit admission variables must describe one inherited output root
+.endif
+_CONFIT_PREPARE_DIRECTORY= ${CONFIT_ADMISSION_TOOL} mkdir \
+    ${CONFIT_ADMISSION_ROOT} ${CONFIT_ADMISSION_FD} \
+    ${.TARGET:H:S,${CONFIT_ADMISSION_ROOT}/,,}
+.else
+# Confit를 독립 저장소로 빌드할 때의 explicit stage-0 TCB다. Parus production은
+# 위 descriptor-rooted admission branch만 사용하며 PATH fallback은 없다.
+CONFIT_STAGE0_MKDIR?=/bin/mkdir
+.if ${CONFIT_STAGE0_MKDIR:M/*} == "" || !exists(${CONFIT_STAGE0_MKDIR})
+.error standalone Confit requires one existing absolute directory creator
+.endif
+_CONFIT_PREPARE_DIRECTORY= ${CONFIT_STAGE0_MKDIR} -p -- ${.TARGET:H}
+.endif
+
 CONFIT_BIN_ROOT=${CONFIT_OBJROOT}/bin
 CONFIT_OBJ_ROOT=${CONFIT_OBJROOT}/obj
 CONFIT_TEST_BIN_ROOT=${CONFIT_OBJROOT}/tests/bin
@@ -54,7 +75,7 @@ _obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_PRODUCT_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
 ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 .if ${_src} == "vendor/tomlc17/tomlc17.c"
 	${CONFIT_HOST_CC} -std=c17 -w ${CONFIT_INCLUDE_FLAGS} -MMD -MP \
 	    -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
@@ -69,7 +90,7 @@ _obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_CLI_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
 ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
 	    ${CONFIT_BUILD_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
 	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
@@ -80,7 +101,7 @@ _obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_TEST_SUPPORT_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
 ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
 	    -MMD -MP -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 .endfor
@@ -92,17 +113,17 @@ CONFIT_TEST_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
 CONFIT_TEST_BINARIES+=${CONFIT_TEST_BIN_ROOT}/confit_${_src:T:R}
 CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
 ${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
 	    ${CONFIT_TEST_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
 	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
 ${_bin}: ${_obj} ${CONFIT_PRODUCT_OBJECTS} ${CONFIT_TEST_SUPPORT_OBJECTS}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 	${CONFIT_HOST_CC} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
 .endfor
 
 ${CONFIT_BINARY}: ${CONFIT_PRODUCT_OBJECTS} ${CONFIT_CLI_OBJECTS}
-	@mkdir -p -- ${.TARGET:H}
+	@${_CONFIT_PREPARE_DIRECTORY}
 	${CONFIT_HOST_CC} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
 
 CONFIT_GENERATED_FILES= \
@@ -117,7 +138,11 @@ CONFIT_DIRECT_TEST_TARGETS=
 CONFIT_DIRECT_TEST_TARGETS+=run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
+.if ${_test_binary:T} == "confit_test_host_boundary"
+	@${_test_binary} ${CONFIT_BINARY} ${.MAKE:tA} ${CONFIT_HOST_CC:tA}
+.else
 	@${_test_binary}
+.endif
 .endfor
 
 .for _dep in ${CONFIT_DEPFILES}

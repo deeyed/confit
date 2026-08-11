@@ -19,21 +19,17 @@ check: check-host
 # 이 gate는 bmake가 열거한 C test binary를 각각 직접 실행한다. Shell runner,
 # 동적 argv registry와 과거 result file은 이 target의 성공 권위가 아니다.
 check-host: check-cli ${CONFIT_DIRECT_TEST_TARGETS}
-	@printf '%s\n' 'confit direct C host tests: pass'
 
 check-cli: confit
 	@${CONFIT_BINARY} --version
 	@${CONFIT_BINARY} doctor
 
 clean:
-	@rm -f -- ${CONFIT_GENERATED_FILES}
+	@/bin/rm -f -- ${CONFIT_GENERATED_FILES}
 
+.if ${.TARGETS:Mhelp} != ""
+.info Confit host build (direct bmake)
+.info bmake CONFIT_OBJROOT=/absolute/output all | check-host
+.info CONFIT_HOST_CC is the absolute host compiler.
+.endif
 help:
-	@printf '%s\n' \
-	    'Confit host build (direct bmake)' \
-	    '' \
-	    '  bmake CONFIT_OBJROOT=/absolute/output all' \
-	    '  bmake CONFIT_OBJROOT=/absolute/output check-host' \
-	    '      run every registered C host test directly from bmake' \
-	    '' \
-	    'CONFIT_HOST_CC is the host compiler; target compiler variables are ignored.'

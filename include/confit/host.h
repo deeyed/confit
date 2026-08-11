@@ -61,6 +61,21 @@ ConfitStatus confit_host_resolve_executable(char *out, size_t out_size,
                                             ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief 현재 실행 중인 Confit image의 canonical absolute path를 구한다.
+ *
+ * `argv[0]`이나 PATH를 신뢰하지 않고 host kernel이 게시하는 executable identity를
+ * 사용한다. 지원 host가 이 identity를 제공하지 않거나 canonical path로 봉인할 수
+ * 없으면 fail-closed한다.
+ *
+ * @param out canonical absolute executable path를 받을 buffer.
+ * @param out_size `out`의 byte 크기.
+ * @param diagnostic 실패 시 오류 위치와 메시지를 받을 optional diagnostic.
+ * @return 성공하면 CONFIT_OK, 실패하면 오류 status.
+ */
+ConfitStatus confit_host_self_executable(char *out, size_t out_size,
+                                         ConfitDiagnostic *diagnostic);
+
+/**
  * @brief absolute executable을 argv 두 원소로 실행해 bounded stdout 한 줄을 읽는다.
  *
  * Shell, command string, stderr merge와 arbitrary argv는 제공하지 않는다. 출력이
@@ -157,6 +172,24 @@ ConfitStatus confit_host_write_text_file_if_changed_atomic(
  */
 ConfitStatus confit_host_make_directories(const char *path,
                                           ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief 비어 있는 Parus object root와 invocation별 admission leaf를 준비한다.
+ *
+ * 이 API는 Parus의 stage-0 bootstrap 전용이다. `root`의 parent는 이미 존재하는
+ * canonical absolute directory여야 하며, `invocation`은 decimal PID token이다.
+ * 구현은 symlink를 따르지 않는 descriptor walk로 root와 invocation leaf를 만들고,
+ * root lock을 유지한 채 fixed compiler argv와 bounded file limit로 repository의 exact
+ * `tools/host/admit/main.c`를 `parus-admit`으로 컴파일한다. Source path나 임의 compiler
+ * argv를 받는 범용 실행 API가 아니다. `stage0_confit`은 CLI가 host kernel에서 구한
+ * 현재 executable의 canonical absolute path이며 public `build-enter` 문법으로 별도
+ * 주입할 수 없다. 이 parameter는 direct host-boundary test가 동일 receipt 경계를
+ * 검증할 때만 명시적으로 전달한다.
+ */
+ConfitStatus confit_host_prepare_parus_build_root(
+    const char *root, const char *repository, const char *invocation,
+    const char *stage0_confit, const char *bmake, const char *host_compiler,
+    ConfitDiagnostic *diagnostic);
 
 /**
  * @brief directory 바로 아래의 `.toml` file path 목록을 deterministic order로 읽는다.

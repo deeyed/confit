@@ -6,6 +6,8 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,7 +19,16 @@
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#elif defined(__FreeBSD__)
+#include <sys/sysctl.h>
+#endif
 extern char **environ;
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
 #endif
 
 static int confit_host_executable_name_valid(const char *name) {
@@ -110,6 +121,65 @@ ConfitStatus confit_host_resolve_executable(char *out, size_t out_size,
                         "required executable was not found");
   return CONFIT_ERR_UNSUPPORTED;
 #endif
+}
+
+ConfitStatus confit_host_self_executable(char *out, size_t out_size,
+                                         ConfitDiagnostic *diagnostic) {
+  char observed[PATH_MAX];
+  if (out == 0 || out_size == 0U) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
+                          "invalid self executable output buffer");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+#if defined(_WIN32)
+  {
+    const DWORD length =
+        GetModuleFileNameA(0, observed, (DWORD)sizeof(observed));
+    if (length == 0U || length >= sizeof(observed)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0U, 0U,
+                            "host did not publish a bounded executable path");
+      return CONFIT_ERR_UNSUPPORTED;
+    }
+    observed[length] = '\0';
+  }
+#elif defined(__APPLE__)
+  {
+    uint32_t capacity = (uint32_t)sizeof(observed);
+    if (_NSGetExecutablePath(observed, &capacity) != 0 ||
+        capacity > sizeof(observed)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0U, 0U,
+                            "host executable path exceeds the bounded buffer");
+      return CONFIT_ERR_UNSUPPORTED;
+    }
+  }
+#elif defined(__linux__)
+  {
+    const ssize_t length =
+        readlink("/proc/self/exe", observed, sizeof(observed) - 1U);
+    if (length <= 0 || (size_t)length >= sizeof(observed) - 1U) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0U, 0U,
+                            "host did not publish a bounded executable path");
+      return CONFIT_ERR_UNSUPPORTED;
+    }
+    observed[length] = '\0';
+  }
+#elif defined(__FreeBSD__)
+  {
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+    size_t length = sizeof(observed);
+    if (sysctl(mib, 4U, observed, &length, 0, 0U) != 0 || length == 0U ||
+        length > sizeof(observed) || observed[length - 1U] != '\0') {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0U, 0U,
+                            "host did not publish a bounded executable path");
+      return CONFIT_ERR_UNSUPPORTED;
+    }
+  }
+#else
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, 0, 0U, 0U,
+                        "host executable identity is unsupported");
+  return CONFIT_ERR_UNSUPPORTED;
+#endif
+  return confit_host_path_canonicalize(out, out_size, observed, diagnostic);
 }
 
 static ConfitStatus confit_host_capture_argument(

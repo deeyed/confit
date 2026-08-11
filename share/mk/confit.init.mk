@@ -37,12 +37,10 @@ CONFIT_OBJROOT_CANONICAL:=${CONFIT_OBJROOT:tA}
 .error CONFIT_OBJROOT must not be inside the Confit source tree
 .endif
 
-CONFIT_HOST_CC?=cc
-.if ${CONFIT_HOST_CC:[#]} != 1 || ${CONFIT_HOST_CC:C,[A-Za-z0-9_./-],,g} != ""
-.error CONFIT_HOST_CC must be one bounded compiler executable token without flags
-.endif
-.if !empty(CONFIT_HOST_CC:M/*) && !exists(${CONFIT_HOST_CC})
-.error absolute CONFIT_HOST_CC does not exist
+CONFIT_HOST_CC?=/usr/bin/cc
+.if ${CONFIT_HOST_CC:[#]} != 1 || ${CONFIT_HOST_CC:M/*} == "" || \
+    ${CONFIT_HOST_CC:C,[A-Za-z0-9_./-],,g} != "" || !exists(${CONFIT_HOST_CC})
+.error CONFIT_HOST_CC must be one existing absolute compiler executable
 .endif
 
 # Confit은 build 전에만 동작하는 구성 resolver다. TUI와 과거 build backend는

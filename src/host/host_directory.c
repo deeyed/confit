@@ -1,7 +1,17 @@
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
+
 #include "confit/host.h"
+#include "confit/generator_v2.h"
+#include "confit/version.h"
 
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,9 +20,689 @@
 #include <windows.h>
 #else
 #include <dirent.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/file.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
+
+#if !defined(_WIN32)
+static int confit_host_decimal_invocation(const char *text) {
+  size_t index;
+  if (text == 0 || text[0] == '\0') return 0;
+  for (index = 0U; text[index] != '\0'; ++index) {
+    if (text[index] < '0' || text[index] > '9' || index >= 31U) return 0;
+  }
+  return 1;
+}
+
+static int confit_host_safe_build_root(const char *root, char parent[PATH_MAX],
+                                       const char **leaf) {
+  const char *separator;
+  size_t parent_size;
+  size_t index;
+  if (root == 0 || root[0] != '/' || strlen(root) >= PATH_MAX ||
+      strstr(root, "//") != 0 || strstr(root, "/../") != 0 ||
+      strstr(root, "/./") != 0 || root[strlen(root) - 1U] == '/') return 0;
+  separator = strrchr(root, '/');
+  if (separator == 0 || separator == root || separator[1] == '\0') return 0;
+  if (strcmp(separator + 1, ".") == 0 || strcmp(separator + 1, "..") == 0)
+    return 0;
+  for (index = 1U; separator[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)separator[index];
+    if (!((value >= 'A' && value <= 'Z') ||
+          (value >= 'a' && value <= 'z') ||
+          (value >= '0' && value <= '9') || value == '.' || value == '_' ||
+          value == '-')) return 0;
+  }
+  parent_size = (size_t)(separator - root);
+  if (parent_size >= PATH_MAX) return 0;
+  memcpy(parent, root, parent_size);
+  parent[parent_size] = '\0';
+  *leaf = separator + 1;
+  return 1;
+}
+
+static int confit_host_open_directory_at(int parent, const char *name,
+                                         int create, int *out_created) {
+  int created = 0;
+  int descriptor = openat(parent, name,
+                          O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (descriptor < 0 && create && errno == ENOENT) {
+    if (mkdirat(parent, name, 0700) == 0) {
+      created = 1;
+    } else if (errno != EEXIST) {
+      return -1;
+    }
+    descriptor = openat(parent, name,
+                        O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  }
+  if (descriptor >= 0 && out_created != 0) *out_created = created;
+  return descriptor;
+}
+
+static int confit_host_create_directory_at(int parent, const char *name) {
+  if (mkdirat(parent, name, 0700) != 0) return -1;
+  return openat(parent, name,
+                O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+}
+
+static int confit_host_write_all(int descriptor, const char *bytes,
+                                 size_t size) {
+  size_t offset = 0U;
+  while (offset < size) {
+    const ssize_t written = write(descriptor, bytes + offset, size - offset);
+    if (written <= 0) return 0;
+    offset += (size_t)written;
+  }
+  return 1;
+}
+
+static int confit_host_root_marker_text(
+    char bytes[4096], const char *root, const char *repository, int root_fd,
+    int repository_fd, int marker_fd) {
+  struct stat root_metadata;
+  struct stat repository_metadata;
+  struct stat marker_metadata;
+  if (fstat(root_fd, &root_metadata) != 0 ||
+      fstat(repository_fd, &repository_metadata) != 0 ||
+      fstat(marker_fd, &marker_metadata) != 0 ||
+      !S_ISDIR(root_metadata.st_mode) ||
+      !S_ISDIR(repository_metadata.st_mode) ||
+      !S_ISREG(marker_metadata.st_mode) || marker_metadata.st_nlink != 1U) {
+    return 0;
+  }
+  return snprintf(bytes, 4096U,
+                  "PARUS-CONFIT-ROOT-V1\n"
+                  "root=%s\nrepository=%s\n"
+                  "root.device=%llu\nroot.inode=%llu\n"
+                  "repository.device=%llu\nrepository.inode=%llu\n"
+                  "marker.device=%llu\nmarker.inode=%llu\n",
+                  root, repository,
+                  (unsigned long long)root_metadata.st_dev,
+                  (unsigned long long)root_metadata.st_ino,
+                  (unsigned long long)repository_metadata.st_dev,
+                  (unsigned long long)repository_metadata.st_ino,
+                  (unsigned long long)marker_metadata.st_dev,
+                  (unsigned long long)marker_metadata.st_ino);
+}
+
+static int confit_host_root_marker(int root_fd, int repository_fd,
+                                   const char *root, const char *repository,
+                                   int create) {
+  static const char name[] = ".parus-root-v1";
+  char actual[4096];
+  char expected[4096];
+  struct stat metadata;
+  ssize_t got;
+  int marker_fd;
+  int length;
+  if (create) {
+    marker_fd = openat(root_fd, name,
+                       O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+                       0600);
+    if (marker_fd < 0) return 0;
+    length = confit_host_root_marker_text(expected, root, repository, root_fd,
+                                          repository_fd, marker_fd);
+    if (length <= 0 || (size_t)length >= sizeof(expected) ||
+        !confit_host_write_all(marker_fd, expected, (size_t)length) ||
+        fsync(marker_fd) != 0 || close(marker_fd) != 0 ||
+        fsync(root_fd) != 0) {
+      (void)unlinkat(root_fd, name, 0);
+      return 0;
+    }
+    return 1;
+  }
+  marker_fd = openat(root_fd, name, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  if (marker_fd < 0 || fstat(marker_fd, &metadata) != 0 ||
+      !S_ISREG(metadata.st_mode) || metadata.st_nlink != 1U ||
+      metadata.st_size <= 0 || metadata.st_size >= (off_t)sizeof(actual)) {
+    if (marker_fd >= 0) (void)close(marker_fd);
+    return 0;
+  }
+  got = read(marker_fd, actual, sizeof(actual));
+  length = confit_host_root_marker_text(expected, root, repository, root_fd,
+                                        repository_fd, marker_fd);
+  (void)close(marker_fd);
+  return length > 0 && (size_t)length < sizeof(expected) &&
+         got == (ssize_t)length && memcmp(actual, expected, (size_t)length) == 0;
+}
+
+typedef struct ConfitHostStage0Tool {
+  char path[PATH_MAX];
+  char sha256[65];
+  char version[64];
+  unsigned long long device;
+  unsigned long long inode;
+  unsigned long long size;
+} ConfitHostStage0Tool;
+
+#define CONFIT_STAGE0_ADMISSION_MAX_BYTES \
+  (UINT64_C(8) * UINT64_C(1024) * UINT64_C(1024))
+#define CONFIT_STAGE0_ADMISSION_OPERATION "parus-admit-c17-v1"
+#define CONFIT_STAGE0_ADMISSION_VERSION "1.0.0"
+
+static int confit_host_stage0_path(const char *path) {
+  size_t index;
+  if (path == 0 || path[0] != '/' || strlen(path) >= PATH_MAX ||
+      strstr(path, "//") != 0 || strstr(path, "/../") != 0 ||
+      strstr(path, "/./") != 0 || path[strlen(path) - 1U] == '/') return 0;
+  for (index = 0U; path[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)path[index];
+    if (!((value >= 'A' && value <= 'Z') ||
+          (value >= 'a' && value <= 'z') ||
+          (value >= '0' && value <= '9') || value == '.' || value == '_' ||
+          value == '+' || value == '-' || value == '/')) return 0;
+  }
+  return 1;
+}
+
+/*
+ * Darwin에는 fd-bound executable launch가 없으므로 stage-0 compiler pathname은
+ * unprivileged writer가 교체할 수 없는 system hierarchy로 제한한다. 이후 build
+ * toolchain은 ToolGEN seal이 별도로 소유한다.
+ */
+static int confit_host_immutable_system_executable(const char *path) {
+  char copy[PATH_MAX];
+  char *cursor;
+  char *separator;
+  int current = -1;
+  if (!confit_host_stage0_path(path) || strlen(path) >= sizeof(copy)) return 0;
+  memcpy(copy, path, strlen(path) + 1U);
+  current = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (current < 0) return 0;
+  cursor = copy + 1U;
+  for (;;) {
+    struct stat metadata;
+    int next;
+    separator = strchr(cursor, '/');
+    if (separator != 0) *separator = '\0';
+    next = openat(current, cursor,
+                  (separator == 0 ? O_RDONLY : O_RDONLY | O_DIRECTORY) |
+                      O_CLOEXEC | O_NOFOLLOW);
+    (void)close(current);
+    if (next < 0 || fstat(next, &metadata) != 0 || metadata.st_uid != 0U ||
+        (metadata.st_mode & (S_IWGRP | S_IWOTH)) != 0 ||
+        (separator == 0 &&
+         (!S_ISREG(metadata.st_mode) || access(path, X_OK) != 0)) ||
+        (separator != 0 && !S_ISDIR(metadata.st_mode))) {
+      if (next >= 0) (void)close(next);
+      return 0;
+    }
+    current = next;
+    if (separator == 0) break;
+    cursor = separator + 1U;
+  }
+  (void)close(current);
+  return 1;
+}
+
+static int confit_host_numeric_version(const char *banner, char output[64]) {
+  size_t start = 0U;
+  size_t length = 0U;
+  while (banner[start] != '\0' &&
+         (banner[start] < '0' || banner[start] > '9')) ++start;
+  while (banner[start + length] != '\0' &&
+         ((banner[start + length] >= '0' &&
+           banner[start + length] <= '9') ||
+          banner[start + length] == '.')) {
+    if (length + 1U >= 64U) return 0;
+    ++length;
+  }
+  if (length == 0U || banner[start + length - 1U] == '.') return 0;
+  memcpy(output, banner + start, length);
+  output[length] = '\0';
+  return 1;
+}
+
+static int confit_host_capture_bmake_version(const char *path,
+                                             char output[64]) {
+  int descriptors[2];
+  pid_t child;
+  char bytes[128];
+  size_t used = 0U;
+  int overflow = 0;
+  int status;
+  if (pipe(descriptors) != 0) return 0;
+  child = fork();
+  if (child == 0) {
+    char *const arguments[] = {(char *)path, (char *)"-f",
+                               (char *)"/dev/null", (char *)"-V",
+                               (char *)"MAKE_VERSION", 0};
+    char *const environment[] = {(char *)"PATH=/usr/bin:/bin",
+                                 (char *)"LC_ALL=C", 0};
+    (void)close(descriptors[0]);
+    if (dup2(descriptors[1], STDOUT_FILENO) < 0) _exit(126);
+    (void)close(descriptors[1]);
+    execve(path, arguments, environment);
+    _exit(127);
+  }
+  (void)close(descriptors[1]);
+  if (child < 0) {
+    (void)close(descriptors[0]);
+    return 0;
+  }
+  for (;;) {
+    char chunk[64];
+    const ssize_t got = read(descriptors[0], chunk, sizeof(chunk));
+    if (got == 0) break;
+    if (got < 0) {
+      if (errno == EINTR) continue;
+      overflow = 1;
+      break;
+    }
+    if ((size_t)got > sizeof(bytes) - 1U - used) {
+      overflow = 1;
+    } else if (!overflow) {
+      memcpy(bytes + used, chunk, (size_t)got);
+      used += (size_t)got;
+    }
+  }
+  (void)close(descriptors[0]);
+  while (waitpid(child, &status, 0) < 0) {
+    if (errno != EINTR) return 0;
+  }
+  while (used > 0U && (bytes[used - 1U] == '\n' ||
+                       bytes[used - 1U] == '\r')) --used;
+  bytes[used] = '\0';
+  if (overflow || used == 0U || !WIFEXITED(status) ||
+      WEXITSTATUS(status) != 0) return 0;
+  for (size_t index = 0U; index < used; ++index) {
+    if (bytes[index] < '0' || bytes[index] > '9') return 0;
+  }
+  if (used + 1U > 64U) return 0;
+  memcpy(output, bytes, used + 1U);
+  return 1;
+}
+
+static int confit_host_measure_stage0_tool(
+    const char *path, int kind, ConfitHostStage0Tool *out,
+    ConfitDiagnostic *diagnostic) {
+  char canonical[PATH_MAX];
+  char banner[512];
+  struct stat before;
+  struct stat opened;
+  struct stat after;
+  int descriptor = -1;
+  ConfitStatus status;
+  if (out == 0 || !confit_host_stage0_path(path) ||
+      realpath(path, canonical) == 0 || !confit_host_stage0_path(canonical) ||
+      lstat(canonical, &before) != 0 || !S_ISREG(before.st_mode) ||
+      before.st_nlink == 0U || before.st_size <= 0 ||
+      access(canonical, X_OK) != 0) return 0;
+  descriptor = open(canonical, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  if (descriptor < 0 || fstat(descriptor, &opened) != 0 ||
+      opened.st_dev != before.st_dev || opened.st_ino != before.st_ino ||
+      opened.st_size != before.st_size) {
+    if (descriptor >= 0) (void)close(descriptor);
+    return 0;
+  }
+  status = confit_v4_sha256_file(canonical, out->sha256, diagnostic);
+  if (status != CONFIT_OK || lstat(canonical, &after) != 0 ||
+      after.st_dev != opened.st_dev || after.st_ino != opened.st_ino ||
+      after.st_size != opened.st_size) {
+    (void)close(descriptor);
+    return 0;
+  }
+  (void)close(descriptor);
+  if (kind == 0) {
+    char expected[96];
+    status = confit_host_capture_first_line_argument(
+        banner, sizeof(banner), canonical, "--version", diagnostic);
+    if (status != CONFIT_OK ||
+        snprintf(expected, sizeof(expected), "confit %s",
+                 CONFIT_VERSION_RELEASE) <= 0 ||
+        strcmp(banner, expected) != 0 ||
+        strlen(CONFIT_VERSION_RELEASE) >= sizeof(out->version)) return 0;
+    memcpy(out->version, CONFIT_VERSION_RELEASE,
+           strlen(CONFIT_VERSION_RELEASE) + 1U);
+  } else if (kind == 1) {
+    if (!confit_host_capture_bmake_version(canonical, out->version)) return 0;
+  } else if (kind == 2) {
+    status = confit_host_capture_first_line_argument(
+        banner, sizeof(banner), canonical, "--version", diagnostic);
+    if (status != CONFIT_OK ||
+        !confit_host_numeric_version(banner, out->version)) return 0;
+  } else {
+    static const char admission_banner[] =
+        "parus-admit " CONFIT_STAGE0_ADMISSION_VERSION;
+    status = confit_host_capture_first_line_argument(
+        banner, sizeof(banner), canonical, "--version", diagnostic);
+    if (status != CONFIT_OK || strcmp(banner, admission_banner) != 0) return 0;
+    memcpy(out->version, CONFIT_STAGE0_ADMISSION_VERSION,
+           sizeof(CONFIT_STAGE0_ADMISSION_VERSION));
+  }
+  memcpy(out->path, canonical, strlen(canonical) + 1U);
+  out->device = (unsigned long long)opened.st_dev;
+  out->inode = (unsigned long long)opened.st_ino;
+  out->size = (unsigned long long)opened.st_size;
+  return 1;
+}
+
+static int confit_host_stage0_receipt(
+    int invocation_fd, const char *root, const char *repository,
+    const char *invocation, const char *stage0_path, const char *bmake_path,
+    const char *compiler_path, const char *source_path,
+    const char *source_sha256, const char *admission_path,
+    ConfitDiagnostic *diagnostic) {
+  static const char receipt_name[] = ".parus-stage0-v1";
+  ConfitHostStage0Tool stage0;
+  ConfitHostStage0Tool bmake;
+  ConfitHostStage0Tool compiler;
+  ConfitHostStage0Tool admission;
+  char bytes[8192];
+  int descriptor = -1;
+  int length;
+  if (!confit_host_measure_stage0_tool(stage0_path, 0, &stage0, diagnostic) ||
+      !confit_host_measure_stage0_tool(bmake_path, 1, &bmake, diagnostic) ||
+      !confit_host_measure_stage0_tool(compiler_path, 2, &compiler,
+                                      diagnostic) ||
+      !confit_host_measure_stage0_tool(admission_path, 3, &admission,
+                                      diagnostic)) return 0;
+  descriptor = openat(invocation_fd, receipt_name,
+                      O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+                      0600);
+  if (descriptor < 0) return 0;
+  length = snprintf(
+      bytes, sizeof(bytes),
+      "PARUS-STAGE0-RECEIPT-V1\n"
+      "root=%s\nrepository=%s\ninvocation=%s\n"
+      "stage0.path=%s\nstage0.sha256=%s\nstage0.version=%s\n"
+      "stage0.device=%llu\nstage0.inode=%llu\nstage0.size=%llu\n"
+      "bmake.path=%s\nbmake.sha256=%s\nbmake.version=%s\n"
+      "bmake.device=%llu\nbmake.inode=%llu\nbmake.size=%llu\n"
+      "compiler.path=%s\ncompiler.sha256=%s\ncompiler.version=%s\n"
+      "compiler.device=%llu\ncompiler.inode=%llu\ncompiler.size=%llu\n"
+      "source.path=%s\nsource.sha256=%s\n"
+      "compile.operation=" CONFIT_STAGE0_ADMISSION_OPERATION "\n"
+      "admission.path=%s\nadmission.sha256=%s\nadmission.version=%s\n"
+      "admission.device=%llu\nadmission.inode=%llu\nadmission.size=%llu\n",
+      root, repository, invocation,
+      stage0.path, stage0.sha256, stage0.version,
+      stage0.device, stage0.inode, stage0.size,
+      bmake.path, bmake.sha256, bmake.version,
+      bmake.device, bmake.inode, bmake.size,
+      compiler.path, compiler.sha256, compiler.version,
+      compiler.device, compiler.inode, compiler.size,
+      source_path, source_sha256,
+      admission.path, admission.sha256, admission.version,
+      admission.device, admission.inode, admission.size);
+  if (length <= 0 || (size_t)length >= sizeof(bytes) ||
+      !confit_host_write_all(descriptor, bytes, (size_t)length) ||
+      fchmod(descriptor, 0400) != 0 || fsync(descriptor) != 0 ||
+      close(descriptor) != 0 ||
+      fsync(invocation_fd) != 0) {
+    if (descriptor >= 0) (void)close(descriptor);
+    (void)unlinkat(invocation_fd, receipt_name, 0);
+    return 0;
+  }
+  return 1;
+}
+
+static int confit_host_compile_admission(
+    int parent_fd, const char *root_leaf, int root_fd, int bootstrap_fd,
+    const char *invocation, int invocation_fd, const char *repository,
+    const char *source, const char *compiler_path,
+    char out_source_sha256[65], ConfitDiagnostic *diagnostic) {
+  static const char stage_name[] = ".parus-admit-stage";
+  static const char temporary_name[] = "parus-admit.bin";
+  static const char output_name[] = "parus-admit";
+  char canonical_source[PATH_MAX];
+  char canonical_compiler[PATH_MAX];
+  char source_sha256[65];
+  char source_after_sha256[65];
+  char source_define[128];
+  char operation_define[128];
+  struct stat source_before;
+  struct stat source_after;
+  struct stat root_metadata;
+  struct stat current_root;
+  struct stat invocation_metadata;
+  struct stat current_invocation;
+  struct stat output_metadata;
+  struct stat created_output;
+  pid_t child;
+  int status;
+  int stage_fd = -1;
+  int output = -1;
+  int output_linked = 0;
+  const size_t repository_size = strlen(repository);
+  if (source == 0 || compiler_path == 0 ||
+      realpath(source, canonical_source) == 0 ||
+      strcmp(source, canonical_source) != 0 ||
+      strncmp(source, repository, repository_size) != 0 ||
+      source[repository_size] != '/' ||
+      lstat(source, &source_before) != 0 ||
+      !S_ISREG(source_before.st_mode) || source_before.st_nlink != 1U ||
+      source_before.st_size <= 0 ||
+      confit_v4_sha256_file(canonical_source, source_sha256, diagnostic) !=
+          CONFIT_OK ||
+      snprintf(source_define, sizeof(source_define),
+               "-DPARUS_ADMIT_SOURCE_SHA256=\"%s\"", source_sha256) <= 0 ||
+      snprintf(operation_define, sizeof(operation_define),
+               "-DPARUS_ADMIT_COMPILE_OPERATION=\"%s\"",
+               CONFIT_STAGE0_ADMISSION_OPERATION) <= 0 ||
+      realpath(compiler_path, canonical_compiler) == 0 ||
+      !confit_host_stage0_path(canonical_compiler) ||
+      !confit_host_immutable_system_executable(canonical_compiler) ||
+      fstat(root_fd, &root_metadata) != 0 ||
+      fstat(invocation_fd, &invocation_metadata) != 0 ||
+      fstatat(invocation_fd, output_name, &output_metadata,
+              AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT) return 0;
+  stage_fd = confit_host_create_directory_at(invocation_fd, stage_name);
+  if (stage_fd < 0) return 0;
+  output = openat(stage_fd, temporary_name,
+                  O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
+  if (output < 0 || fstat(output, &created_output) != 0 ||
+      !S_ISREG(created_output.st_mode) || created_output.st_nlink != 1U ||
+      fchmod(stage_fd, 0500) != 0 || close(output) != 0) goto cleanup;
+  output = -1;
+  child = fork();
+  if (child == 0) {
+    struct rlimit file_limit;
+    char *const arguments[] = {
+        canonical_compiler, (char *)"-std=c17", (char *)"-O2",
+        (char *)"-Wall", (char *)"-Wextra", (char *)"-Werror",
+        (char *)"-pedantic", (char *)"-D_POSIX_C_SOURCE=200809L",
+        (char *)"-D_DARWIN_C_SOURCE", source_define, operation_define,
+        (char *)"-o",
+        (char *)temporary_name, canonical_source, 0};
+    char *const environment[] = {(char *)"PATH=/usr/bin:/bin",
+                                 (char *)"LC_ALL=C",
+                                 (char *)"LANG=C", 0};
+    file_limit.rlim_cur = (rlim_t)CONFIT_STAGE0_ADMISSION_MAX_BYTES;
+    file_limit.rlim_max = (rlim_t)CONFIT_STAGE0_ADMISSION_MAX_BYTES;
+    if (fchdir(stage_fd) != 0 ||
+        setrlimit(RLIMIT_FSIZE, &file_limit) != 0) _exit(126);
+    (void)umask(077);
+    execve(canonical_compiler, arguments, environment);
+    _exit(127);
+  }
+  if (child < 0) goto cleanup;
+  while (waitpid(child, &status, 0) < 0) {
+    if (errno != EINTR) goto cleanup;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 ||
+      lstat(source, &source_after) != 0 ||
+      source_after.st_dev != source_before.st_dev ||
+      source_after.st_ino != source_before.st_ino ||
+      source_after.st_size != source_before.st_size ||
+      confit_v4_sha256_file(canonical_source, source_after_sha256,
+                            diagnostic) != CONFIT_OK ||
+      strcmp(source_after_sha256, source_sha256) != 0 ||
+      fstatat(parent_fd, root_leaf, &current_root, AT_SYMLINK_NOFOLLOW) != 0 ||
+      !S_ISDIR(current_root.st_mode) ||
+      current_root.st_dev != root_metadata.st_dev ||
+      current_root.st_ino != root_metadata.st_ino ||
+      fstatat(bootstrap_fd, invocation, &current_invocation,
+              AT_SYMLINK_NOFOLLOW) != 0 ||
+      !S_ISDIR(current_invocation.st_mode) ||
+      current_invocation.st_dev != invocation_metadata.st_dev ||
+      current_invocation.st_ino != invocation_metadata.st_ino) goto cleanup;
+  output = openat(stage_fd, temporary_name,
+                  O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  if (output < 0 || fstat(output, &output_metadata) != 0 ||
+      !S_ISREG(output_metadata.st_mode) || output_metadata.st_nlink != 1U ||
+      output_metadata.st_dev != created_output.st_dev ||
+      output_metadata.st_ino != created_output.st_ino ||
+      output_metadata.st_size <= 0 ||
+      (uint64_t)output_metadata.st_size > CONFIT_STAGE0_ADMISSION_MAX_BYTES ||
+      fchmod(output, 0500) != 0 || fsync(output) != 0 || close(output) != 0 ||
+      fchmod(stage_fd, 0700) != 0) {
+    if (output >= 0) (void)close(output);
+    output = -1;
+    goto cleanup;
+  }
+  output = -1;
+  if (linkat(stage_fd, temporary_name, invocation_fd, output_name, 0) != 0) {
+    goto cleanup;
+  }
+  output_linked = 1;
+  if (fstatat(invocation_fd, output_name, &output_metadata,
+              AT_SYMLINK_NOFOLLOW) != 0 ||
+      output_metadata.st_dev != created_output.st_dev ||
+      output_metadata.st_ino != created_output.st_ino ||
+      unlinkat(stage_fd, temporary_name, 0) != 0 || fsync(stage_fd) != 0 ||
+      close(stage_fd) != 0 ||
+      unlinkat(invocation_fd, stage_name, AT_REMOVEDIR) != 0 ||
+      fsync(invocation_fd) != 0) goto cleanup;
+  stage_fd = -1;
+  memcpy(out_source_sha256, source_sha256, sizeof(source_sha256));
+  return 1;
+cleanup:
+  if (output >= 0) (void)close(output);
+  if (stage_fd >= 0) {
+    (void)fchmod(stage_fd, 0700);
+    (void)unlinkat(stage_fd, temporary_name, 0);
+    (void)close(stage_fd);
+    (void)unlinkat(invocation_fd, stage_name, AT_REMOVEDIR);
+  }
+  if (output_linked) (void)unlinkat(invocation_fd, output_name, 0);
+  return 0;
+}
+#endif
+
+ConfitStatus confit_host_prepare_parus_build_root(
+    const char *root, const char *repository, const char *invocation,
+    const char *stage0_confit, const char *bmake, const char *host_compiler,
+    ConfitDiagnostic *diagnostic) {
+#if defined(_WIN32)
+  (void)repository;
+  (void)invocation;
+  (void)stage0_confit;
+  (void)bmake;
+  (void)host_compiler;
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, root, 0U, 0U,
+                        "Parus stage-0 root admission is unavailable on this host");
+  return CONFIT_ERR_UNSUPPORTED;
+#else
+  char parent[PATH_MAX];
+  char canonical[PATH_MAX];
+  char admission_source[PATH_MAX];
+  char admission_path[PATH_MAX];
+  char source_sha256[65];
+  const char *leaf = 0;
+  struct stat before;
+  struct stat after;
+  int parent_fd = -1;
+  int root_fd = -1;
+  int repository_fd = -1;
+  int bootstrap_fd = -1;
+  int invocation_fd = -1;
+  int invocation_created = 0;
+  int source_length;
+  int admission_length;
+  int root_created = 0;
+  ConfitStatus status = CONFIT_ERR_GENERATION;
+  if (!confit_host_decimal_invocation(invocation) ||
+      !confit_host_safe_build_root(root, parent, &leaf) ||
+      lstat(parent, &before) != 0 || !S_ISDIR(before.st_mode) ||
+      realpath(parent, canonical) == 0 || strcmp(parent, canonical) != 0 ||
+      repository == 0 || repository[0] != '/' ||
+      realpath(repository, canonical) == 0 || strcmp(repository, canonical) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, root, 0U, 0U,
+                          "build root parent or invocation is not canonical");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  source_length = snprintf(admission_source, sizeof(admission_source),
+                           "%s/tools/host/admit/main.c", repository);
+  if (source_length <= 0 || (size_t)source_length >= sizeof(admission_source)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, repository,
+                          0U, 0U,
+                          "Parus admission source path exceeds host limit");
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  }
+  parent_fd = open(parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  repository_fd = open(repository,
+                       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  if (parent_fd < 0 || fstat(parent_fd, &after) != 0 ||
+      before.st_dev != after.st_dev || before.st_ino != after.st_ino ||
+      repository_fd < 0 ||
+      (root_fd = confit_host_open_directory_at(parent_fd, leaf, 1,
+                                                &root_created)) < 0 ||
+      flock(root_fd, LOCK_EX | LOCK_NB) != 0 ||
+      !confit_host_root_marker(root_fd, repository_fd, root, repository,
+                               root_created) ||
+      (bootstrap_fd = confit_host_open_directory_at(
+           root_fd, ".parus-admission-bootstrap", 1, 0)) < 0 ||
+      fchmod(bootstrap_fd, 0700) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                          "descriptor-rooted build admission directory failed");
+    goto cleanup;
+  }
+  invocation_fd = confit_host_create_directory_at(bootstrap_fd, invocation);
+  if (invocation_fd < 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                          "build invocation identity already exists");
+    goto cleanup;
+  }
+  invocation_created = 1;
+  admission_length = snprintf(
+      admission_path, sizeof(admission_path),
+      "%s/.parus-admission-bootstrap/%s/parus-admit", root, invocation);
+  if (admission_length <= 0 ||
+      (size_t)admission_length >= sizeof(admission_path) ||
+      !confit_host_compile_admission(
+          parent_fd, leaf, root_fd, bootstrap_fd, invocation, invocation_fd,
+          repository, admission_source, host_compiler, source_sha256,
+          diagnostic) ||
+      !confit_host_stage0_receipt(
+          invocation_fd, root, repository, invocation, stage0_confit, bmake,
+          host_compiler, admission_source, source_sha256, admission_path,
+          diagnostic) ||
+      fchmod(invocation_fd, 0500) != 0 ||
+      fchmod(bootstrap_fd, 0500) != 0 ||
+      fsync(invocation_fd) != 0 || fsync(bootstrap_fd) != 0 ||
+      fsync(root_fd) != 0 || fsync(parent_fd) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                          "stage-0 tool receipt publication failed");
+    goto cleanup;
+  }
+  status = CONFIT_OK;
+cleanup:
+  if (status != CONFIT_OK && invocation_fd >= 0) {
+    (void)fchmod(invocation_fd, 0700);
+    (void)unlinkat(invocation_fd, ".parus-stage0-v1", 0);
+    (void)unlinkat(invocation_fd, "parus-admit.tmp", 0);
+    (void)unlinkat(invocation_fd, "parus-admit", 0);
+  }
+  if (invocation_fd >= 0) (void)close(invocation_fd);
+  if (status != CONFIT_OK && invocation_created && bootstrap_fd >= 0) {
+    (void)fchmod(bootstrap_fd, 0700);
+    (void)unlinkat(bootstrap_fd, invocation, AT_REMOVEDIR);
+  }
+  if (bootstrap_fd >= 0) (void)fchmod(bootstrap_fd, 0500);
+  if (bootstrap_fd >= 0) (void)close(bootstrap_fd);
+  if (root_fd >= 0) (void)close(root_fd);
+  if (repository_fd >= 0) (void)close(repository_fd);
+  if (parent_fd >= 0) (void)close(parent_fd);
+  return status;
+#endif
+}
 
 static int confit_host_is_path_separator_local(char value) {
   return value == '/' || value == '\\';
