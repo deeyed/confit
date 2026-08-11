@@ -989,7 +989,8 @@ static ConfitStatus confit_v2_input_parse_document(
               0 &&
           strcmp(key, "values") != 0 && strcmp(key, "unset") != 0 &&
           !(kind == CONFIT_V2_INPUT_KIND_TARGET &&
-            (strcmp(key, "build") == 0 || strcmp(key, "machine") == 0))) {
+            (strcmp(key, "build") == 0 || strcmp(key, "support") == 0 ||
+             strcmp(key, "machine") == 0))) {
         status = CONFIT_ERR_SCHEMA;
         confit_v2_ledger_diagnostic(
             path, confit_v2_toml_value_line(root),
@@ -1008,6 +1009,15 @@ fail:
                                       ? kAllocationFailed
                                       : kInvalidInputDocument,
                                   diagnostic);
+    }
+    /*
+     * out_document->path는 아래 clear에서 해제된다. Diagnostic은 borrowed
+     * pointer이므로 실패 위치가 document-owned copy를 가리키면 CLI가 반환 뒤
+     * use-after-free 문자열을 출력한다. 호출자가 보유한 canonical path로 다시
+     * 결속한 다음 document storage를 해제한다.
+     */
+    if (diagnostic != 0 && diagnostic->path == out_document->path) {
+      diagnostic->path = path;
     }
     confit_v2_input_document_clear(out_document);
   }
