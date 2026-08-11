@@ -139,7 +139,7 @@ CONFIT_DIRECT_TEST_TARGETS+=run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
 .if ${_test_binary:T} == "confit_test_host_boundary"
-	@${_test_binary} ${CONFIT_BINARY} ${.MAKE:tA} ${CONFIT_HOST_CC:tA}
+	@${_test_binary} ${CONFIT_BINARY} ${CONFIT_BMAKE_TOOL:tA} ${CONFIT_HOST_CC:tA}
 .else
 	@${_test_binary}
 .endif

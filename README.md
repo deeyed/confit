@@ -34,7 +34,8 @@ Parus checkout에서는 repository root의 direct bmake entry를 사용한다.
 
 ```sh
 bmake -r -C tools/confit -f Makefile \
-  CONFIT_OBJROOT=/private/tmp/confit-build check-host
+  CONFIT_OBJROOT=/private/tmp/confit-build \
+  CONFIT_BMAKE_TOOL=/absolute/path/to/bmake check-host
 
 /private/tmp/confit-build/bin/confit check \
   --project tests/fixtures/schema-v2/valid
@@ -45,8 +46,10 @@ bmake -r -C tools/confit -f Makefile \
 ```
 
 Standalone clone은 `20240909`에서 검토한 feature baseline 이상인 bmake와 C17 host
-compiler를 제공해야 한다. Exact package-manager path나 한 release만 source에 고정하지
-않으며 실제 engine version은 current invocation에서 확인한다.
+compiler와 current invocation의 absolute `CONFIT_BMAKE_TOOL`을 제공해야 한다.
+Exact package-manager path나 한 release만 source에 고정하지 않으며 실제 engine
+version은 current invocation에서 확인한다. Basename/PATH를 test 또는 receipt
+권위로 다시 해석하지 않는다.
 
 ## sealed bundle
 
@@ -62,8 +65,12 @@ compiler를 제공해야 한다. Exact package-manager path나 한 release만 so
     config.mk
     config.values.mk
     components.mk
+    generators.mk
     nucleus.mk
     tests.mk
+    target.mk
+    build.policy
+    build.policy.mk
     component.catalog.json
     config.bundle.json
   selected -> generations/<bundle-digest>
@@ -78,6 +85,8 @@ required field, extra unlisted artifact 또는 digest mismatch는 fallback 없�
 
 - [bmake-artifact-v4.md](docs/bmake-artifact-v4.md): bmake adapter와 sealed bundle
   계약.
+- [build-policy-v1.md](docs/build-policy-v1.md): Five-GEN typed action policy candidate와
+  Parus activation/non-claim 경계.
 - [schema-v2.md](docs/schema-v2.md): generic project v2와 selectable/source-owner v3 규칙.
 - [resolution-v2.md](docs/resolution-v2.md): immutable resolution pipeline.
 - [architecture-v2.md](docs/architecture-v2.md): host/process/module authority.

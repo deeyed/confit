@@ -101,8 +101,12 @@ int main(void) {
                             "/tests.mk\"") != 0);
   CONFIT_TEST_ASSERT(strstr(artifacts.config_mk,
                             "/generators.mk\"") != 0);
+  CONFIT_TEST_ASSERT(strstr(artifacts.config_mk,
+                            "/build.policy.mk\"") != 0);
   CONFIT_TEST_ASSERT(strstr(artifacts.target_mk,
                             "PARUS_TARGET_PLAN_ABI:= 0") != 0);
+  CONFIT_TEST_ASSERT(strstr(artifacts.build_policy,
+                            "policy_abi=0") != 0);
   CONFIT_TEST_ASSERT(artifacts.reason_json != 0 && artifacts.tests_mk != 0 &&
                      artifacts.generators_mk != 0);
 
@@ -236,6 +240,11 @@ int main(void) {
   target_plan.machine_executable_sha256 =
       "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   target_plan.machine_executable_version = "11.0.2";
+  target_plan.machine_trust_profile = "qemu-executable-v1";
+  target_plan.machine_resource_identity = "synthetic-novel64-machine-v1";
+  target_plan.machine_evidence_transport = "qemu-fwcfg-challenge-v1";
+  target_plan.machine_evidence_protocol = "parus-qemu-terminal-v1";
+  target_plan.machine_evidence_max_bytes = 65536U;
   target_plan.machine_name = "virt";
   target_plan.machine_cpu = "novel64-generic";
   target_plan.machine_serial = "stdio-v1";
@@ -272,11 +281,22 @@ int main(void) {
         sizeof(world_roles) / sizeof(world_roles[0]);
   }
   target_plan.max_world_bytes = 20971520U;
+  target_plan.support_provider_owner = "sys.arch.novel64.support";
+  target_plan.support_consumer_owner = "sys.board.novel64.synthetic";
+  target_plan.support_role = "architecture.facade.v1";
+  target_plan.support_facade_include_root = "sys/include/parus/arch/novel64";
+  target_plan.support_required_kapi = "parus.arch.novel64.support.v1";
   target_plan.max_image_bytes = 67108864U;
   targeted_options.target_plan = &target_plan;
-  CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
-                         snapshot, &targeted_options, &targeted,
-                         &diagnostic) == CONFIT_OK);
+  {
+    const ConfitStatus targeted_status = confit_v4_generate_artifacts(
+        snapshot, &targeted_options, &targeted, &diagnostic);
+    if (targeted_status != CONFIT_OK) {
+      fprintf(stderr, "target policy diagnostic: %s\n",
+              diagnostic.message != 0 ? diagnostic.message : "none");
+    }
+    CONFIT_TEST_ASSERT(targeted_status == CONFIT_OK);
+  }
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_PLAN_ABI:= 3") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
@@ -299,6 +319,13 @@ int main(void) {
                             "PARUS_TARGET_IMAGE_ARTIFACT_PROFILE:= imagegen-v1") != 0);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_IMAGE_ARTIFACT_ROLE_package:= artifacts/image.pkg") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
+                            "PARUS_TARGET_SUPPORT_REQUIRED_KAPI:= parus.arch.novel64.support.v1") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.build_policy,
+                            "edge_table_id=parus-five-gen-edge-v1") != 0);
+  CONFIT_TEST_ASSERT(strstr(targeted.build_policy,
+                            "tool.target_cc.sha256=1123456789abcdef") != 0);
+  CONFIT_TEST_ASSERT(strlen(targeted.build_policy_digest) == 64U);
   CONFIT_TEST_ASSERT(strstr(targeted.target_mk,
                             "PARUS_TARGET_PACKAGE_INPUT_DIGEST_ROLES:=\n") != 0);
   confit_v4_artifact_set_clear(&targeted);
@@ -430,7 +457,7 @@ int main(void) {
         "config.selection.json", "config.inputs.json", "config.reason.json",
         "config.report.json", "config.bundle.json", "components.mk",
         "component.catalog.json", "generators.mk", "nucleus.mk", "tests.mk",
-        "target.mk"};
+        "target.mk", "build.policy", "build.policy.mk"};
     static const char stale_digest[] =
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     size_t artifact_index;

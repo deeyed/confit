@@ -2,7 +2,7 @@
 doc_type: artifact-contract
 status: accepted
 authority: normative
-last_verified: 2026-08-09
+last_verified: 2026-08-11
 ---
 
 # bmake adapter와 artifact ABI v4
@@ -29,7 +29,10 @@ generations/<digest>/
   config.values.mk          # safe scalar/list values
   components.mk             # ordered component IDs, sealed source와 public Build API mapping
   nucleus.mk                # mandatory KERN_UNIT source-owner graph
+  generators.mk             # reviewed typed generator catalog
   target.mk                 # 검증된 target/toolchain/image/package tuple
+  build.policy              # Five-GEN/action/role/edge와 exact target tool identity
+  build.policy.mk           # policy/configuration/target digest만 노출하는 adapter
   tests.mk                  # bounded roots에서 발견한 complete owner-local test catalog
   component.catalog.json    # typed catalog/selected closure
   config.bundle.json        # ABI/version and all published artifact digests
@@ -52,7 +55,16 @@ table과 일치해야 한다. Test는 selectable component kind가 아니다.
 mandatory unit/source/KERN_USES/KAPI publication을 기록한다. Nucleus에는
 `component.toml`이 없으며 profile selection으로 제거할 수 없다.
 
-`config.mk`, `config.values.mk`, `components.mk`, `target.mk`, `tests.mk`에는 assignment, include와 encoded data만
+`build.policy`는 selected configuration, target tuple, board→architecture facade,
+Five-GEN/test domain, closed action/role edge, compiler·archiver·linker·DTC·QEMU exact
+identity와 QEMU evidence transport를 결속한다. `build.policy.mk`는 digest와 ABI만
+노출하며 action 권한을 Make variable로 재해석하지 않는다. Pointer-free
+little-endian action wire의 자세한 candidate 계약은
+[build-policy-v1.md](build-policy-v1.md)에 있다. Parus parent가 exact Confit gitlink와
+consumer를 동시에 교체하기 전까지 이 policy는 bundle에 존재하지만
+production action executor에 활성화되지 않는다.
+
+`config.mk`, `config.values.mk`, `components.mk`, `target.mk`, `build.policy.mk`, `tests.mk`에는 assignment, include와 encoded data만
 있을 수 있다. rule, recipe, conditional, shell expansion 또는 compiler flag는 허용하지
 않는다. Confit은 restricted Makefile을 API 3 data grammar로 검증하되 실행하지 않고,
 configured bmake child는 원본 leaf Makefile을 다시 include하지 않는다.

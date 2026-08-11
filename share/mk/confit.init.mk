@@ -43,6 +43,15 @@ CONFIT_HOST_CC?=/usr/bin/cc
 .error CONFIT_HOST_CC must be one existing absolute compiler executable
 .endif
 
+# Host-boundary corpus와 stage-zero receipt가 같은 bmake executable을 봉인하도록
+# invocation basename/PATH를 다시 해석하지 않는다.
+.if !defined(CONFIT_BMAKE_TOOL) || ${CONFIT_BMAKE_TOOL:[#]} != 1 || \
+    ${CONFIT_BMAKE_TOOL:M/*} == "" || \
+    ${CONFIT_BMAKE_TOOL:C,[A-Za-z0-9_./-],,g} != "" || \
+    !exists(${CONFIT_BMAKE_TOOL})
+.error CONFIT_BMAKE_TOOL must be one existing absolute bmake executable
+.endif
+
 # Confit은 build 전에만 동작하는 구성 resolver다. TUI와 과거 build backend는
 # canonical host tool의 일부가 아니므로 build option으로 되살리지 않는다.
 

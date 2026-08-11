@@ -14,6 +14,7 @@ enum {
   CONFIT_TARGET_TEXT_LIMIT = 1024,
   CONFIT_TARGET_INCLUDE_LIMIT = 32,
   CONFIT_TARGET_IMAGE_LIMIT_MAX = 1024 * 1024 * 1024,
+  CONFIT_TARGET_EVIDENCE_LIMIT_MAX = 1024 * 1024,
 };
 
 static char *confit_target_strdup(const char *text) {
@@ -96,6 +97,25 @@ static int confit_target_relative_path_valid(const char *text) {
     cursor += 1;
   }
   return 1;
+}
+
+static int confit_target_support_facade_valid(const char *text) {
+  static const char prefix[] = "sys/include/parus/";
+  return confit_target_relative_path_valid(text) &&
+         strncmp(text, prefix, sizeof(prefix) - 1U) == 0 &&
+         text[sizeof(prefix) - 1U] != '\0';
+}
+
+static int confit_target_kapi_valid(const char *text) {
+  const char *version;
+  size_t index;
+  if (!confit_target_atom_valid(text)) return 0;
+  version = strstr(text, ".v");
+  if (version == 0 || version == text || version[2] == '\0') return 0;
+  for (index = 2U; version[index] != '\0'; ++index) {
+    if (version[index] < '0' || version[index] > '9') return 0;
+  }
+  return version[2] != '0';
 }
 
 static int confit_target_world_role_valid(const char *text) {
@@ -369,14 +389,15 @@ static ConfitStatus confit_target_find_descriptor(
 static ConfitStatus confit_target_parse_build(
     const ConfitV2Project *project, const char *target_id,
     ConfitTargetPlan *plan, ConfitDiagnostic *diagnostic) {
-  static const char *const root_fields[] = {"target", "values", "build", "machine"};
+  static const char *const root_fields[] = {
+      "target", "values", "build", "support", "machine"};
   static const char *const target_fields[] = {"name", "schema_version"};
   static const char *const build_fields[] = {
       "isa", "abi", "cpu_profile", "entry_profile", "toolchain",
       "linker_script", "image_artifact_profile", "image_artifact_roles",
       "package_profile", "machine_profile",
       "expected_component", "expected_capability", "output_stem",
-      "required_profile", "private_includes", "max_image_bytes", "dts",
+      "required_profile", "max_image_bytes", "dts",
       "dtc", "package_source", "package_input_digests", "kernel_artifact_profile",
       "kernel_artifact_roles", "max_kernel_bytes", "world_artifact_profile",
       "compile_tuple", "world_boot_component", "world_artifact_entry",
@@ -384,13 +405,19 @@ static ConfitStatus confit_target_parse_build(
       "max_world_bytes"};
   static const char *const machine_fields[] = {
       "runner", "architecture", "executable", "machine", "cpu",
-      "memory_mib", "serial", "artifact"};
+      "memory_mib", "serial", "artifact", "trust_profile",
+      "resource_identity", "evidence_transport", "evidence_protocol",
+      "evidence_max_bytes"};
+  static const char *const support_fields[] = {
+      "provider_owner", "consumer_owner", "role", "facade_include_root",
+      "required_kapi"};
   char path[CONFIT_TARGET_PATH_LIMIT];
   ConfitV2TomlDocument *document = 0;
   const ConfitV2TomlValue *root;
   const ConfitV2TomlValue *target;
   const ConfitV2TomlValue *values;
   const ConfitV2TomlValue *build;
+  const ConfitV2TomlValue *support;
   const ConfitV2TomlValue *machine;
   const ConfitV2TomlValue *name;
   const ConfitV2TomlValue *schema;
@@ -398,6 +425,7 @@ static ConfitStatus confit_target_parse_build(
   const ConfitV2TomlValue *max_kernel;
   const ConfitV2TomlValue *max_world;
   const ConfitV2TomlValue *machine_memory;
+  const ConfitV2TomlValue *machine_evidence_max;
   const char *name_text;
   size_t name_size;
   int64_t schema_version;
@@ -405,12 +433,11 @@ static ConfitStatus confit_target_parse_build(
   int64_t max_kernel_bytes;
   int64_t max_world_bytes;
   int64_t machine_memory_mib = 0;
+  int64_t machine_evidence_max_bytes = 0;
   char *linker_relative = 0;
   char *dts_relative = 0;
   char *package_relative = 0;
   char *world_artifact_linker_relative = 0;
-  char **private_relatives = 0;
-  size_t private_count = 0U;
   char **compile_tuple = 0;
   size_t compile_tuple_count = 0U;
   char **artifact_roles = 0;
@@ -433,15 +460,18 @@ static ConfitStatus confit_target_parse_build(
   target = confit_v2_toml_table_find(root, "target");
   values = confit_v2_toml_table_find(root, "values");
   build = confit_v2_toml_table_find(root, "build");
+  support = confit_v2_toml_table_find(root, "support");
   machine = confit_v2_toml_table_find(root, "machine");
   if (!confit_target_table_only(root, root_fields,
                                 sizeof(root_fields) / sizeof(root_fields[0])) ||
-      target == 0 || values == 0 ||
+      target == 0 || values == 0 || support == 0 ||
       !confit_target_table_only(target, target_fields,
                                 sizeof(target_fields) / sizeof(target_fields[0])) ||
       confit_v2_toml_value_type(values) != CONFIT_V2_TOML_VALUE_TABLE ||
       !confit_target_table_only(build, build_fields,
                                 sizeof(build_fields) / sizeof(build_fields[0])) ||
+      !confit_target_table_only(support, support_fields,
+                                sizeof(support_fields) / sizeof(support_fields[0])) ||
       (machine != 0 &&
        !confit_target_table_only(machine, machine_fields,
                                  sizeof(machine_fields) / sizeof(machine_fields[0])))) {
@@ -512,6 +542,18 @@ static ConfitStatus confit_target_parse_build(
         machine, "serial", 1, &plan->machine_serial, path, diagnostic);
     if (status == CONFIT_OK) status = confit_target_get_string(
         machine, "artifact", 1, &plan->machine_artifact, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "trust_profile", 1, &plan->machine_trust_profile, path,
+        diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "resource_identity", 1, &plan->machine_resource_identity,
+        path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "evidence_transport", 1,
+        &plan->machine_evidence_transport, path, diagnostic);
+    if (status == CONFIT_OK) status = confit_target_get_string(
+        machine, "evidence_protocol", 1,
+        &plan->machine_evidence_protocol, path, diagnostic);
     machine_memory = confit_v2_toml_table_find(machine, "memory_mib");
     if (status == CONFIT_OK &&
         (machine_memory == 0 ||
@@ -522,16 +564,41 @@ static ConfitStatus confit_target_parse_build(
     if (status == CONFIT_OK) {
       plan->machine_memory_mib = (size_t)machine_memory_mib;
     }
+    machine_evidence_max =
+        confit_v2_toml_table_find(machine, "evidence_max_bytes");
+    if (status == CONFIT_OK &&
+        (machine_evidence_max == 0 ||
+         !confit_v2_toml_value_int64(machine_evidence_max,
+                                     &machine_evidence_max_bytes) ||
+         machine_evidence_max_bytes <= 0 ||
+         machine_evidence_max_bytes > CONFIT_TARGET_EVIDENCE_LIMIT_MAX)) {
+      status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) {
+      plan->machine_evidence_max_bytes =
+          (size_t)machine_evidence_max_bytes;
+    }
   }
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      support, "provider_owner", 1, &plan->support_provider_owner, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      support, "consumer_owner", 1, &plan->support_consumer_owner, path,
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      support, "role", 1, &plan->support_role, path, diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      support, "facade_include_root", 1,
+      &plan->support_facade_include_root, path, diagnostic);
+  if (status == CONFIT_OK) status = confit_target_get_string(
+      support, "required_kapi", 1, &plan->support_required_kapi, path,
+      diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "linker_script", 1, &linker_relative, path, diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "dts", 0, &dts_relative, path, diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string(
       build, "package_source", 0, &package_relative, path, diagnostic);
-  if (status == CONFIT_OK) status = confit_target_get_string_list(
-      build, "private_includes", &private_relatives, &private_count, path,
-      diagnostic);
   if (status == CONFIT_OK) status = confit_target_get_string_list(
       build, "compile_tuple", &compile_tuple, &compile_tuple_count, path,
       diagnostic);
@@ -593,10 +660,20 @@ static ConfitStatus confit_target_parse_build(
        !confit_target_atom_valid(plan->required_profile) ||
        !confit_target_atom_valid(plan->kernel_artifact_profile) ||
        !confit_target_atom_valid(plan->world_artifact_profile) ||
+       !confit_target_atom_valid(plan->support_provider_owner) ||
+       !confit_target_atom_valid(plan->support_consumer_owner) ||
+       !confit_target_atom_valid(plan->support_role) ||
+       !confit_target_kapi_valid(plan->support_required_kapi) ||
+       !confit_target_support_facade_valid(
+           plan->support_facade_include_root) ||
        (machine != 0 &&
         (!confit_target_atom_valid(plan->machine_runner) ||
          !confit_target_atom_valid(plan->machine_architecture) ||
          !confit_target_atom_valid(plan->machine_executable) ||
+         !confit_target_atom_valid(plan->machine_trust_profile) ||
+         !confit_target_atom_valid(plan->machine_resource_identity) ||
+         !confit_target_atom_valid(plan->machine_evidence_transport) ||
+         !confit_target_atom_valid(plan->machine_evidence_protocol) ||
          !confit_target_atom_valid(plan->machine_name) ||
          !confit_target_atom_valid(plan->machine_cpu) ||
          !confit_target_atom_valid(plan->machine_serial) ||
@@ -607,6 +684,11 @@ static ConfitStatus confit_target_parse_build(
   }
   if (status == CONFIT_OK && machine != 0 &&
       (strcmp(plan->machine_runner, "qemu-v1") != 0 ||
+       strcmp(plan->machine_trust_profile, "qemu-executable-v1") != 0 ||
+       strcmp(plan->machine_evidence_transport,
+              "qemu-fwcfg-challenge-v1") != 0 ||
+       strcmp(plan->machine_evidence_protocol,
+              "parus-qemu-terminal-v1") != 0 ||
        strcmp(plan->machine_architecture, plan->isa) != 0 ||
        strcmp(plan->machine_serial, "stdio-v1") != 0 ||
        strcmp(plan->machine_artifact, "flat-image-v1") != 0 ||
@@ -619,6 +701,14 @@ static ConfitStatus confit_target_parse_build(
     status = CONFIT_ERR_UNSUPPORTED;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "target machine tuple uses an unknown QEMU profile");
+  }
+  if (status == CONFIT_OK &&
+      (strcmp(plan->support_consumer_owner, plan->expected_component) != 0 ||
+       strcmp(plan->support_role, "architecture.facade.v1") != 0)) {
+    status = CONFIT_ERR_CONFLICT;
+    confit_diagnostic_set(
+        diagnostic, status, path, 0U, 0U,
+        "target support edge is not the exact board-to-architecture facade");
   }
   if (status == CONFIT_OK &&
       (!confit_target_value_matches(values, "parus.target.isa", plan->isa) ||
@@ -692,17 +782,6 @@ static ConfitStatus confit_target_parse_build(
     status = CONFIT_ERR_SCHEMA;
     confit_diagnostic_set(diagnostic, status, path, 0U, 0U,
                           "dtc executable is forbidden without a dts input");
-  }
-  if (status == CONFIT_OK && private_count != 0U) {
-    plan->private_include_paths =
-        (char **)calloc(private_count, sizeof(*plan->private_include_paths));
-    if (plan->private_include_paths == 0) status = CONFIT_ERR_INTERNAL;
-  }
-  for (index = 0U; status == CONFIT_OK && index < private_count; ++index) {
-    status = confit_target_repo_path(project, private_relatives[index], 1,
-                                     &plan->private_include_paths[index],
-                                     diagnostic);
-    if (status == CONFIT_OK) plan->private_include_count += 1U;
   }
   if (status == CONFIT_OK && compile_tuple_count == 0U) {
     status = CONFIT_ERR_SCHEMA;
@@ -937,10 +1016,6 @@ done:
   free(dts_relative);
   free(package_relative);
   free(world_artifact_linker_relative);
-  if (private_relatives != 0) {
-    for (index = 0U; index < private_count; ++index) free(private_relatives[index]);
-    free(private_relatives);
-  }
   if (compile_tuple != 0) {
     for (index = 0U; index < compile_tuple_count; ++index) free(compile_tuple[index]);
     free(compile_tuple);
@@ -1290,6 +1365,10 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(machine_executable_path);
   CONFIT_TARGET_FREE(machine_executable_sha256);
   CONFIT_TARGET_FREE(machine_executable_version);
+  CONFIT_TARGET_FREE(machine_trust_profile);
+  CONFIT_TARGET_FREE(machine_resource_identity);
+  CONFIT_TARGET_FREE(machine_evidence_transport);
+  CONFIT_TARGET_FREE(machine_evidence_protocol);
   CONFIT_TARGET_FREE(machine_name);
   CONFIT_TARGET_FREE(machine_cpu);
   CONFIT_TARGET_FREE(machine_serial);
@@ -1308,13 +1387,14 @@ void confit_target_plan_clear(ConfitTargetPlan *plan) {
   CONFIT_TARGET_FREE(world_boot_component);
   CONFIT_TARGET_FREE(world_artifact_entry);
   CONFIT_TARGET_FREE(world_artifact_linker_script);
+  CONFIT_TARGET_FREE(support_provider_owner);
+  CONFIT_TARGET_FREE(support_consumer_owner);
+  CONFIT_TARGET_FREE(support_role);
+  CONFIT_TARGET_FREE(support_facade_include_root);
+  CONFIT_TARGET_FREE(support_required_kapi);
   CONFIT_TARGET_FREE(target_descriptor_path);
   CONFIT_TARGET_FREE(toolchain_descriptor_path);
 #undef CONFIT_TARGET_FREE
-  for (index = 0U; index < plan->private_include_count; ++index) {
-    free(plan->private_include_paths[index]);
-  }
-  free(plan->private_include_paths);
   for (index = 0U; index < plan->compile_tuple_count; ++index) {
     free(plan->compile_tuple[index]);
   }
@@ -1343,9 +1423,13 @@ ConfitStatus confit_target_plan_validate_selection(
     const ConfitComponentClosure *closure, ConfitDiagnostic *diagnostic) {
   const ConfitComponent *component;
   const ConfitComponent *provider = 0;
+  const ConfitComponent *support_provider = 0;
+  const ConfitComponent *kapi_provider;
   size_t provider_count;
   size_t index;
   int selected = 0;
+  int support_selected = 0;
+  int support_required = 0;
   if (plan == 0 || catalog == 0 || closure == 0) {
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
@@ -1363,6 +1447,42 @@ ConfitStatus confit_target_plan_validate_selection(
     confit_diagnostic_set(
         diagnostic, CONFIT_ERR_CONFLICT, "target-plan.selection", 0U, 0U,
         "target expected component/capability is not the selected provider");
+    return CONFIT_ERR_CONFLICT;
+  }
+  for (index = 0U; index < closure->component_count; ++index) {
+    const ConfitComponent *candidate = closure->ordered[index];
+    size_t requirement;
+    if (strcmp(candidate->owner, plan->support_provider_owner) == 0) {
+      if (support_provider != 0) {
+        confit_diagnostic_set(
+            diagnostic, CONFIT_ERR_CONFLICT, "target-plan.support", 0U, 0U,
+            "target support owner identifies multiple selected components");
+        return CONFIT_ERR_CONFLICT;
+      }
+      support_provider = candidate;
+      support_selected = 1;
+    }
+    if (candidate == component) {
+      for (requirement = 0U;
+           requirement < candidate->kapi_requirement_count; ++requirement) {
+        if (strcmp(candidate->kapi_requires[requirement],
+                   plan->support_required_kapi) == 0) {
+          support_required = 1;
+          break;
+        }
+      }
+    }
+  }
+  kapi_provider = confit_component_closure_find_kapi_provider(
+      closure, plan->support_required_kapi);
+  if (!support_selected || support_provider == 0 ||
+      support_provider == component || kapi_provider != support_provider ||
+      strcmp(component->owner, plan->support_consumer_owner) != 0 ||
+      strcmp(plan->support_consumer_owner, plan->expected_component) != 0 ||
+      !support_required) {
+    confit_diagnostic_set(
+        diagnostic, CONFIT_ERR_CONFLICT, "target-plan.support", 0U, 0U,
+        "target support facade is not the selected consumer-to-KAPI-provider edge");
     return CONFIT_ERR_CONFLICT;
   }
   if (strcmp(plan->world_artifact_profile, "world-v1") == 0) {

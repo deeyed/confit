@@ -12,7 +12,8 @@ Confit의 canonical host build는 reviewed `20240909` feature baseline 이상인
 
 ```sh
 bmake -r -C tools/confit -f Makefile \
-  CONFIT_OBJROOT=/private/tmp/confit-check check-host
+  CONFIT_OBJROOT=/private/tmp/confit-check \
+  CONFIT_BMAKE_TOOL=/absolute/path/to/bmake check-host
 ```
 
 `check-host`는 host binary와 bmake가 직접 열거한 v2 unit/fuzz/publication C test,

@@ -20,7 +20,10 @@
 #endif
 
 #include "confit/host.h"
+#include "confit/build_policy.h"
 #include "confit/version.h"
+
+enum { CONFIT_V4_PUBLISHED_TEXT_COUNT = 16 };
 
 typedef struct ConfitV2ArtifactBuilder {
   char *text;
@@ -547,13 +550,24 @@ static void confit_v4_sha256_final(ConfitV4Sha256 *hash,
 }
 
 static void confit_v4_sha256_text(const char *text, char output[65]) {
+  confit_v4_sha256_bytes(text, strlen(text), output);
+}
+
+void confit_v4_sha256_bytes(const void *data, size_t size, char output[65]) {
   static const char digits[] = "0123456789abcdef";
   unsigned char bytes[32];
   ConfitV4Sha256 hash;
   size_t index;
 
+  if (output == 0) return;
+  if (data == 0 && size != 0U) {
+    output[0] = '\0';
+    return;
+  }
   confit_v4_sha256_init(&hash);
-  confit_v4_sha256_update(&hash, (const unsigned char *)text, strlen(text));
+  if (size != 0U) {
+    confit_v4_sha256_update(&hash, (const unsigned char *)data, size);
+  }
   confit_v4_sha256_final(&hash, bytes);
   for (index = 0U; index < sizeof(bytes); ++index) {
     output[index * 2U] = digits[bytes[index] >> 4U];
@@ -1541,6 +1555,10 @@ static ConfitStatus confit_v4_generate_target_mk(
   CONFIT_TARGET_ATOM("PARUS_TARGET_MACHINE_PROFILE", machine_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_EXPECTED_COMPONENT", expected_component);
   CONFIT_TARGET_ATOM("PARUS_TARGET_EXPECTED_CAPABILITY", expected_capability);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_SUPPORT_PROVIDER_OWNER", support_provider_owner);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_SUPPORT_CONSUMER_OWNER", support_consumer_owner);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_SUPPORT_ROLE", support_role);
+  CONFIT_TARGET_ATOM("PARUS_TARGET_SUPPORT_REQUIRED_KAPI", support_required_kapi);
   CONFIT_TARGET_ATOM("PARUS_TARGET_OUTPUT_STEM", output_stem);
   CONFIT_TARGET_ATOM("PARUS_TARGET_REQUIRED_PROFILE", required_profile);
   CONFIT_TARGET_ATOM("PARUS_TARGET_KERNEL_ARTIFACT_PROFILE", kernel_artifact_profile);
@@ -1763,6 +1781,31 @@ static ConfitStatus confit_v4_generate_target_mk(
           : "none",
       diagnostic);
   if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_TRUST_PROFILE",
+      plan->machine_trust_profile != 0 ? plan->machine_trust_profile : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_RESOURCE_IDENTITY",
+      plan->machine_resource_identity != 0
+          ? plan->machine_resource_identity
+          : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_EVIDENCE_TRANSPORT",
+      plan->machine_evidence_transport != 0
+          ? plan->machine_evidence_transport
+          : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
+      &builder, "PARUS_TARGET_MACHINE_EVIDENCE_PROTOCOL",
+      plan->machine_evidence_protocol != 0
+          ? plan->machine_evidence_protocol
+          : "none",
+      diagnostic);
+  if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+      &builder, "PARUS_TARGET_MACHINE_EVIDENCE_MAX_BYTES:= %zu\n",
+      plan->machine_evidence_max_bytes);
+  if (status == CONFIT_OK) status = confit_v4_append_target_atom(
       &builder, "PARUS_TARGET_MACHINE_NAME",
       plan->machine_name != 0 ? plan->machine_name : "none", diagnostic);
   if (status == CONFIT_OK) status = confit_v4_append_target_atom(
@@ -1818,25 +1861,14 @@ static ConfitStatus confit_v4_generate_target_mk(
   if (status == CONFIT_OK) status = confit_v4_append_target_path(
       &builder, "PARUS_TARGET_PACKAGE_SOURCE", plan->package_source, 0,
       diagnostic);
+  if (status == CONFIT_OK) status = confit_v4_append_target_path(
+      &builder, "PARUS_TARGET_SUPPORT_FACADE_INCLUDE_ROOT",
+      plan->support_facade_include_root, 0, diagnostic);
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
       &builder, "PARUS_TARGET_MAX_IMAGE_BYTES:= %llu\n"
-                "PARUS_TARGET_MAX_KERNEL_BYTES:= %llu\n"
-                "PARUS_TARGET_PRIVATE_INCLUDES:=",
+                "PARUS_TARGET_MAX_KERNEL_BYTES:= %llu\n",
       (unsigned long long)plan->max_image_bytes,
       (unsigned long long)plan->max_kernel_bytes);
-  for (index = 0U; status == CONFIT_OK && index < plan->private_include_count;
-       ++index) {
-    if (!confit_v4_is_safe_make_path(plan->private_include_paths[index], 0)) {
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA,
-                            "PARUS_TARGET_PRIVATE_INCLUDES", 0U, 0U,
-                            "unsafe private include cannot enter target.mk");
-      status = CONFIT_ERR_SCHEMA;
-    } else {
-      status = confit_v2_builder_appendf(
-          &builder, " %s", plan->private_include_paths[index]);
-    }
-  }
-  if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
     if (*out == 0) status = CONFIT_ERR_INTERNAL;
@@ -2115,7 +2147,7 @@ static ConfitStatus confit_v4_generate_config_mk(
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\nCONFIT_TARGET:= ");
   if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, target != 0 ? target : "none");
   if (status == CONFIT_OK) status = confit_v2_builder_appendf(
-      &builder, "\nCONFIT_BUNDLE_SHA256:= %s\n.include \"${.PARSEDIR}/config.values.mk\"\n.include \"${.PARSEDIR}/nucleus.mk\"\n.include \"${.PARSEDIR}/components.mk\"\n.include \"${.PARSEDIR}/target.mk\"\n.include \"${.PARSEDIR}/tests.mk\"\n.include \"${.PARSEDIR}/generators.mk\"\n",
+      &builder, "\nCONFIT_BUNDLE_SHA256:= %s\n.include \"${.PARSEDIR}/config.values.mk\"\n.include \"${.PARSEDIR}/nucleus.mk\"\n.include \"${.PARSEDIR}/components.mk\"\n.include \"${.PARSEDIR}/target.mk\"\n.include \"${.PARSEDIR}/build.policy.mk\"\n.include \"${.PARSEDIR}/tests.mk\"\n.include \"${.PARSEDIR}/generators.mk\"\n",
       bundle_digest);
   if (status == CONFIT_OK) {
     *out = confit_v2_builder_take(&builder);
@@ -2161,8 +2193,10 @@ ConfitStatus confit_v4_generate_artifacts(
     const ConfitV2Snapshot *snapshot, const ConfitV4ArtifactOptions *options,
     ConfitV4ArtifactSet *out_artifacts, ConfitDiagnostic *diagnostic) {
   ConfitV4ArtifactOptions defaults;
-  ConfitV4NamedText identity_texts[12];
+  ConfitV4NamedText identity_texts[14];
   char component_catalog_digest[65] = {0};
+  char configuration_digest[65] = {0};
+  char target_digest[65] = {0};
   const char *tool_identity;
   ConfitStatus status = CONFIT_OK;
 
@@ -2232,6 +2266,32 @@ ConfitStatus confit_v4_generate_artifacts(
         &out_artifacts->nucleus_mk, diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_target_mk(
         options->target_plan, &out_artifacts->target_mk, diagnostic);
+    if (status == CONFIT_OK) {
+      confit_v4_sha256_text(out_artifacts->selection_json,
+                            configuration_digest);
+      confit_v4_sha256_text(out_artifacts->target_mk, target_digest);
+      if (options->target_plan != 0) {
+        const char *profile_name = confit_v2_snapshot_profile_name(snapshot);
+        status = confit_build_policy_generate(
+            profile_name != 0 ? profile_name : "none", configuration_digest,
+            options->target_plan, target_digest,
+            &out_artifacts->build_policy,
+            out_artifacts->build_policy_digest, diagnostic);
+      } else {
+        out_artifacts->build_policy = confit_v4_strdup(
+            "schema=parus-build-policy-v1\npolicy_abi=0\nstate=unavailable\n");
+        if (out_artifacts->build_policy == 0) status = CONFIT_ERR_INTERNAL;
+        if (status == CONFIT_OK) {
+          confit_v4_sha256_text(out_artifacts->build_policy,
+                                out_artifacts->build_policy_digest);
+        }
+      }
+    }
+    if (status == CONFIT_OK) {
+      status = confit_build_policy_generate_make_adapter(
+          out_artifacts->build_policy_digest, configuration_digest,
+          target_digest, &out_artifacts->build_policy_mk, diagnostic);
+    }
     if (status == CONFIT_OK) status = confit_v4_generate_tests_mk(
         options->test_catalog, &out_artifacts->tests_mk, diagnostic);
     if (status == CONFIT_OK) status = confit_v4_generate_generators_mk(
@@ -2247,18 +2307,20 @@ ConfitStatus confit_v4_generate_artifacts(
     identity_texts[6] = (ConfitV4NamedText){"nucleus.mk", out_artifacts->nucleus_mk, {0}};
     identity_texts[7] = (ConfitV4NamedText){"components.mk", out_artifacts->components_mk, {0}};
     identity_texts[8] = (ConfitV4NamedText){"target.mk", out_artifacts->target_mk, {0}};
-    identity_texts[9] = (ConfitV4NamedText){"tests.mk", out_artifacts->tests_mk, {0}};
-    identity_texts[10] = (ConfitV4NamedText){"generators.mk", out_artifacts->generators_mk, {0}};
-    identity_texts[11] = (ConfitV4NamedText){"component.catalog.json", out_artifacts->component_catalog_json, {0}};
+    identity_texts[9] = (ConfitV4NamedText){"build.policy", out_artifacts->build_policy, {0}};
+    identity_texts[10] = (ConfitV4NamedText){"build.policy.mk", out_artifacts->build_policy_mk, {0}};
+    identity_texts[11] = (ConfitV4NamedText){"tests.mk", out_artifacts->tests_mk, {0}};
+    identity_texts[12] = (ConfitV4NamedText){"generators.mk", out_artifacts->generators_mk, {0}};
+    identity_texts[13] = (ConfitV4NamedText){"component.catalog.json", out_artifacts->component_catalog_json, {0}};
     confit_v4_digest_named_texts(identity_texts,
                                  sizeof(identity_texts) / sizeof(identity_texts[0]),
                                  out_artifacts->bundle_digest);
     status = confit_v4_generate_config_mk(snapshot, out_artifacts->bundle_digest,
                                           &out_artifacts->config_mk, diagnostic);
     if (status == CONFIT_OK) {
-      ConfitV4NamedText manifest_texts[13];
+      ConfitV4NamedText manifest_texts[15];
       memcpy(manifest_texts, identity_texts, sizeof(identity_texts));
-      manifest_texts[12] = (ConfitV4NamedText){"config.mk", out_artifacts->config_mk, {0}};
+      manifest_texts[14] = (ConfitV4NamedText){"config.mk", out_artifacts->config_mk, {0}};
       for (size_t index = 0U; index < sizeof(manifest_texts) / sizeof(manifest_texts[0]); ++index) {
         confit_v4_sha256_text(manifest_texts[index].text, manifest_texts[index].sha256);
       }
@@ -2290,6 +2352,8 @@ void confit_v4_artifact_set_clear(ConfitV4ArtifactSet *artifacts) {
   free(artifacts->components_mk);
   free(artifacts->nucleus_mk);
   free(artifacts->target_mk);
+  free(artifacts->build_policy);
+  free(artifacts->build_policy_mk);
   free(artifacts->tests_mk);
   free(artifacts->generators_mk);
   free(artifacts->component_catalog_json);
@@ -2348,7 +2412,8 @@ static ConfitStatus confit_v4_verify_text(const char *path, const char *text,
 }
 
 static ConfitStatus confit_v4_complete_texts(
-    const ConfitV4ArtifactSet *artifacts, ConfitV4NamedText texts[14],
+    const ConfitV4ArtifactSet *artifacts,
+    ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT],
     ConfitDiagnostic *diagnostic) {
   if (artifacts == 0 || artifacts->bundle_digest[0] == '\0' ||
       strlen(artifacts->bundle_digest) != 64U || artifacts->config_header == 0 ||
@@ -2357,7 +2422,8 @@ static ConfitStatus confit_v4_complete_texts(
       artifacts->inputs_json == 0 || artifacts->config_mk == 0 ||
       artifacts->config_values_mk == 0 || artifacts->nucleus_mk == 0 ||
       artifacts->components_mk == 0 ||
-      artifacts->target_mk == 0 || artifacts->tests_mk == 0 ||
+      artifacts->target_mk == 0 || artifacts->build_policy == 0 ||
+      artifacts->build_policy_mk == 0 || artifacts->tests_mk == 0 ||
       artifacts->generators_mk == 0 ||
       artifacts->component_catalog_json == 0 || artifacts->bundle_json == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
@@ -2374,21 +2440,25 @@ static ConfitStatus confit_v4_complete_texts(
   texts[7] = (ConfitV4NamedText){"nucleus.mk", artifacts->nucleus_mk, {0}};
   texts[8] = (ConfitV4NamedText){"components.mk", artifacts->components_mk, {0}};
   texts[9] = (ConfitV4NamedText){"target.mk", artifacts->target_mk, {0}};
-  texts[10] = (ConfitV4NamedText){"tests.mk", artifacts->tests_mk, {0}};
-  texts[11] = (ConfitV4NamedText){"generators.mk", artifacts->generators_mk, {0}};
-  texts[12] = (ConfitV4NamedText){"component.catalog.json", artifacts->component_catalog_json, {0}};
-  texts[13] = (ConfitV4NamedText){"config.bundle.json", artifacts->bundle_json, {0}};
+  texts[10] = (ConfitV4NamedText){"build.policy", artifacts->build_policy, {0}};
+  texts[11] = (ConfitV4NamedText){"build.policy.mk", artifacts->build_policy_mk, {0}};
+  texts[12] = (ConfitV4NamedText){"tests.mk", artifacts->tests_mk, {0}};
+  texts[13] = (ConfitV4NamedText){"generators.mk", artifacts->generators_mk, {0}};
+  texts[14] = (ConfitV4NamedText){"component.catalog.json", artifacts->component_catalog_json, {0}};
+  texts[15] = (ConfitV4NamedText){"config.bundle.json", artifacts->bundle_json, {0}};
   return CONFIT_OK;
 }
 
 static ConfitStatus confit_v4_verify_generation(
-    const char *generation, const ConfitV4NamedText texts[14],
+    const char *generation,
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT],
     ConfitDiagnostic *diagnostic) {
   size_t index;
   ConfitStatus status = CONFIT_OK;
   char path[4096];
 
-  for (index = 0U; status == CONFIT_OK && index < 14U; ++index) {
+  for (index = 0U; status == CONFIT_OK &&
+                  index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     status = confit_v4_join_path(path, sizeof(path), generation, texts[index].path,
                                  diagnostic);
     if (status == CONFIT_OK) status = confit_v4_verify_text(path, texts[index].text,
@@ -2398,13 +2468,15 @@ static ConfitStatus confit_v4_verify_generation(
 }
 
 static ConfitStatus confit_v4_write_staging(
-    const char *staging, const ConfitV4NamedText texts[14],
+    const char *staging,
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT],
     size_t fault_after_artifact, ConfitDiagnostic *diagnostic) {
   size_t index;
   ConfitStatus status = CONFIT_OK;
   char path[4096];
 
-  for (index = 0U; status == CONFIT_OK && index < 14U; ++index) {
+  for (index = 0U; status == CONFIT_OK &&
+                  index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     status = confit_v4_join_path(path, sizeof(path), staging, texts[index].path,
                                  diagnostic);
     if (status == CONFIT_OK) status = confit_host_write_text_file(path, texts[index].text,
@@ -2421,11 +2493,11 @@ static ConfitStatus confit_v4_write_staging(
 }
 
 static void confit_v4_mark_read_only(const char *generation,
-                                     const ConfitV4NamedText texts[14]) {
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
 #if !defined(_WIN32)
   char path[4096];
   size_t index;
-  for (index = 0U; index < 14U; ++index) {
+  for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     if (snprintf(path, sizeof(path), "%s/%s", generation, texts[index].path) > 0) {
       (void)chmod(path, 0444);
     }
@@ -2438,11 +2510,11 @@ static void confit_v4_mark_read_only(const char *generation,
 }
 
 static int confit_v4_remove_staging(const char *staging,
-                                    const ConfitV4NamedText texts[14]) {
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
   char path[4096];
   size_t index;
 
-  for (index = 0U; index < 14U; ++index) {
+  for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     if (snprintf(path, sizeof(path), "%s/%s", staging, texts[index].path) <= 0 ||
         remove(path) != 0) {
       if (errno != ENOENT) return 0;
@@ -2623,14 +2695,14 @@ static int confit_v4_posix_verify_text(int directory, const char *name,
 
 static int confit_v4_posix_remove_generation(int generations,
                                              const char *name,
-                                             const ConfitV4NamedText texts[14]) {
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
   size_t index;
   int generation = confit_v4_posix_open_dir(generations, name, 0);
   if (generation < 0 || fchmod(generation, 0700) != 0) {
     if (generation >= 0) (void)close(generation);
     return 0;
   }
-  for (index = 0U; index < 14U; ++index) {
+  for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     if (unlinkat(generation, texts[index].path, 0) != 0) {
       (void)close(generation);
       return 0;
@@ -2653,7 +2725,7 @@ static int confit_v4_posix_remove_generation(int generations,
 
 static int confit_v4_posix_gc_generations(int generations,
                                           const char *selected_digest,
-                                          const ConfitV4NamedText texts[14]) {
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
   DIR *stream = fdopendir(dup(generations));
   struct dirent *entry;
   size_t count = 0U;
@@ -2675,7 +2747,8 @@ static int confit_v4_posix_gc_generations(int generations,
 
 static ConfitStatus confit_v4_publish_artifacts_posix(
     const ConfitV4PublishOptions *options, const ConfitV4ArtifactSet *artifacts,
-    const ConfitV4NamedText texts[14], size_t *out_changed_file_count,
+    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT],
+    size_t *out_changed_file_count,
     ConfitDiagnostic *diagnostic) {
   static unsigned long serial;
   char staging_name[128];
@@ -2694,7 +2767,7 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
   ConfitStatus status = CONFIT_OK;
   const char *phase = "output-root";
   uint64_t generation_bytes = 0U;
-  for (index = 0U; index < 14U; ++index) {
+  for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
     const size_t size = strlen(texts[index].text);
     if ((uint64_t)size > UINT64_MAX - generation_bytes) {
       return CONFIT_ERR_GENERATION;
@@ -2741,7 +2814,8 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
   if (status == CONFIT_OK) {
     generation = confit_v4_posix_open_dir(generations, artifacts->bundle_digest, 0);
     if (generation >= 0) {
-      for (index = 0U; status == CONFIT_OK && index < 14U; ++index) {
+      for (index = 0U; status == CONFIT_OK &&
+                      index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
         if (!confit_v4_posix_verify_text(generation, texts[index].path,
                                          texts[index].text)) status = CONFIT_ERR_GENERATION;
       }
@@ -2760,7 +2834,8 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
         if (staging < 0) status = CONFIT_ERR_GENERATION;
       }
       phase = "generation-write";
-      for (index = 0U; status == CONFIT_OK && index < 14U; ++index) {
+      for (index = 0U; status == CONFIT_OK &&
+                      index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
         if (!confit_v4_posix_write_text(staging, texts[index].path,
                                         texts[index].text)) {
           status = CONFIT_ERR_GENERATION;
@@ -2795,7 +2870,7 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
       }
       if (status != CONFIT_OK && staging >= 0) {
         (void)fchmod(staging, 0700);
-        for (index = 0U; index < 14U; ++index) {
+        for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
           (void)unlinkat(staging, texts[index].path, 0);
         }
         (void)close(staging); staging = -1;
@@ -2870,7 +2945,7 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
 ConfitStatus confit_v4_publish_artifacts(
     const ConfitV4PublishOptions *options, const ConfitV4ArtifactSet *artifacts,
     size_t *out_changed_file_count, ConfitDiagnostic *diagnostic) {
-  ConfitV4NamedText texts[14];
+  ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT];
   ConfitStatus status;
   char generations[4096];
   char staging_parent[4096];

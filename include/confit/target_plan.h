@@ -52,6 +52,11 @@ typedef struct ConfitTargetPlan {
   char *machine_executable_path;
   char *machine_executable_sha256;
   char *machine_executable_version;
+  char *machine_trust_profile;
+  char *machine_resource_identity;
+  char *machine_evidence_transport;
+  char *machine_evidence_protocol;
+  size_t machine_evidence_max_bytes;
   char *machine_name;
   char *machine_cpu;
   char *machine_serial;
@@ -81,8 +86,11 @@ typedef struct ConfitTargetPlan {
   size_t max_world_bytes;
   char **compile_tuple;
   size_t compile_tuple_count;
-  char **private_include_paths;
-  size_t private_include_count;
+  char *support_provider_owner;
+  char *support_consumer_owner;
+  char *support_role;
+  char *support_facade_include_root;
+  char *support_required_kapi;
   size_t max_image_bytes;
   char *target_descriptor_path;
   char *toolchain_descriptor_path;

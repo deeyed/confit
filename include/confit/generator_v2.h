@@ -58,6 +58,9 @@ typedef struct ConfitV4ArtifactSet {
   char *components_mk;
   char *nucleus_mk;
   char *target_mk;
+  char *build_policy;
+  char *build_policy_mk;
+  char build_policy_digest[65];
   char *tests_mk;
   char *generators_mk;
   char *component_catalog_json;
@@ -76,6 +79,9 @@ typedef struct ConfitV4PublishOptions {
 
 /** @brief NUL-terminated text의 strong SHA-256을 lower-case hex로 쓴다. */
 void confit_v4_sha256_hex(const char *text, char output[65]);
+
+/** @brief arbitrary bounded bytes의 strong SHA-256을 lower-case hex로 쓴다. */
+void confit_v4_sha256_bytes(const void *bytes, size_t size, char output[65]);
 
 /** @brief 최대 256 MiB regular file을 읽어 lower-case SHA-256 identity를 만든다. */
 ConfitStatus confit_v4_sha256_file(const char *path, char output[65],

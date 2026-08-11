@@ -2,7 +2,7 @@
 doc_type: language-spec
 status: accepted
 authority: normative
-last_verified: 2026-08-09
+last_verified: 2026-08-11
 ---
 
 # generic project schema v2와 selectable schema v3 source
@@ -16,6 +16,41 @@ Target은 typed `values`, machine/toolchain/image tuple과 required high-level f
 표현한다. Selectable profile은 `config/selections/<target>/<profile>.toml`에서 root feature와
 ambiguous provider만 소유한다. Source list, compiler flag, generated artifact path 또는
 physical device attach rule은 selection schema가 아니다.
+
+Target schema v3의 `[build]`에는 ISA/ABI/CPU/entry, toolchain ID, closed compile
+tuple, linker/package와 Kernel·World·Image artifact role만 있다. Target-wide
+`private_includes`는 제거되었고 unknown field로 거부된다. Board와 mandatory
+architecture implementation의 경계는 다음 exact facade edge로 대체한다.
+
+```toml
+[support]
+provider_owner = "sys.arch.arm64.support"
+consumer_owner = "sys.board.arm64.qemu_virt"
+role = "architecture.facade.v1"
+facade_include_root = "sys/include/parus/arch/arm64"
+required_kapi = "parus.arch.arm64.support.v1"
+```
+
+`facade_include_root`는 `sys/include/parus/`의 relative descendant여야 하며
+consumer는 target의 `expected_component`와 exact-match한다. 이 edge는 선택된 public
+facade이지 아키텍처/board/provider private header의 전역 노출이 아니다. Selection
+closure 안에서 `provider_owner`가 유일한 selected component를 가리키고 그 component가
+`required_kapi`를 게시하며, consumer가 같은 KAPI를 요구할 때만 target plan이 성립한다.
+
+QEMU machine을 게시하는 target은 `[machine]`에 다음 required closed
+evidence tuple을 함께 둔다.
+
+```toml
+trust_profile = "qemu-executable-v1"
+resource_identity = "arm64-qemu-virt-machine-v1"
+evidence_transport = "qemu-fwcfg-challenge-v1"
+evidence_protocol = "parus-qemu-terminal-v1"
+evidence_max_bytes = 65536
+```
+
+Unknown evidence/trust vocabulary, zero/unbounded evidence size, executable digest/version
+누락은 fail-closed다. 이 tuple은 trusted configured QEMU 전제의 QEMU 증거이며
+malicious hypervisor attestation이나 physical-hardware 증거가 아니다.
 
 ## selectable component manifest v3
 
