@@ -1,7 +1,15 @@
+#if !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#define _DARWIN_C_SOURCE
+#endif
+
 #include "confit/digest.h"
 
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -173,7 +181,10 @@ ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
   size_t total = 0U;
   size_t index;
   int descriptor;
-  if (path == 0 || path[0] != '/' || output == 0 || lstat(path, &before) != 0 ||
+  char canonical[4096];
+  if (path == 0 || path[0] != '/' || output == 0 ||
+      realpath(path, canonical) == 0 || strcmp(path, canonical) != 0 ||
+      lstat(path, &before) != 0 ||
       !S_ISREG(before.st_mode)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0U,
                           0U, "digest input must be an absolute regular file");

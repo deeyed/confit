@@ -653,8 +653,11 @@ static void transaction_free(ConfitV4GenerationTransaction *transaction) {
 
 #if !defined(_WIN32)
 static int directory_real(const char *path) {
+  char canonical[4096];
   struct stat metadata;
-  return lstat(path, &metadata) == 0 && !S_ISLNK(metadata.st_mode) &&
+  return path != 0 && realpath(path, canonical) != 0 &&
+         strcmp(path, canonical) == 0 && lstat(path, &metadata) == 0 &&
+         !S_ISLNK(metadata.st_mode) &&
          S_ISDIR(metadata.st_mode);
 }
 
@@ -676,6 +679,7 @@ static ConfitStatus publish_candidate(
   int lock_fd = -1;
   int tx_fd = -1;
   int generation_fd = -1;
+  int renamed = 0;
   ConfitStatus status = CONFIT_OK;
   if (snprintf(transactions, sizeof(transactions), "%s/transactions",
                request->output_root) >= (int)sizeof(transactions) ||
@@ -769,6 +773,7 @@ static ConfitStatus publish_candidate(
     set_diag(diagnostic, status, transaction_path,
              "candidate transaction atomic publication failed");
   }
+  if (status == CONFIT_OK) renamed = 1;
   if (status == CONFIT_OK && fsync(root_fd) != 0)
     status = CONFIT_ERR_GENERATION;
   if (status == CONFIT_OK) {
@@ -782,7 +787,8 @@ done:
   if (generation_fd >= 0) close(generation_fd);
   if (tx_fd >= 0) close(tx_fd);
   if (status != CONFIT_OK && root_fd >= 0)
-    (void)remove_tree_fd(root_fd, temporary_name);
+    (void)remove_tree_fd(root_fd,
+                         renamed ? request->transaction_id : temporary_name);
   if (lock_fd >= 0) close(lock_fd);
   if (root_fd >= 0) close(root_fd);
   return status;
@@ -1296,6 +1302,7 @@ static int collect_current_members(const char *repository_root,
       snprintf(absolute, sizeof(absolute), "%s/%s", repository_root,
                relative_root) >= (int)sizeof(absolute))
     return 0;
+  if (!directory_real(absolute)) return 0;
   stream = opendir(absolute);
   if (stream == 0) return 0;
   while ((entry = readdir(stream)) != 0) {
@@ -1487,6 +1494,10 @@ ConfitStatus confit_v4_configseal_verify(
   (void)repository_root;
   if (!absolute_path(generation_directory) || !absolute_path(repository_root))
     return CONFIT_ERR_INVALID_ARGUMENT;
+#if !defined(_WIN32)
+  if (!directory_real(generation_directory) || !directory_real(repository_root))
+    return CONFIT_ERR_COMPATIBILITY;
+#endif
   status = validate_tool(toolchain, "toolchain", diagnostic);
   if (status == CONFIT_OK) status = validate_tool(verifier, "verifier", diagnostic);
   if (status != CONFIT_OK) return status;

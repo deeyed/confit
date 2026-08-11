@@ -262,6 +262,16 @@ static void expect_preview_cancel_and_seal(void) {
                            &tool, &tool, &diagnostic) != CONFIT_OK);
     CONFIT_TEST_ASSERT(rmdir(original) == 0);
     CONFIT_TEST_ASSERT(rename(moved, original) == 0);
+    join(original, sizeof(original), root, "config/options");
+    join(moved, sizeof(moved), root, "config/options-real");
+    CONFIT_TEST_ASSERT(rename(original, moved) == 0);
+    CONFIT_TEST_ASSERT(symlink(moved, original) == 0);
+    confit_diagnostic_clear(&diagnostic);
+    CONFIT_TEST_ASSERT(confit_v4_configseal_verify(
+                           confit_v4_generation_directory(transaction), root,
+                           &tool, &tool, &diagnostic) != CONFIT_OK);
+    CONFIT_TEST_ASSERT(unlink(original) == 0);
+    CONFIT_TEST_ASSERT(rename(moved, original) == 0);
   }
 #endif
   join(source, sizeof(source), root, "Makefile");
