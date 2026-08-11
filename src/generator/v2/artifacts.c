@@ -2694,26 +2694,25 @@ static int confit_v4_posix_verify_text(int directory, const char *name,
 }
 
 static int confit_v4_posix_remove_generation(int generations,
-                                             const char *name,
-    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
-  size_t index;
+                                             const char *name) {
+  size_t count = 0U;
   int generation = confit_v4_posix_open_dir(generations, name, 0);
   if (generation < 0 || fchmod(generation, 0700) != 0) {
     if (generation >= 0) (void)close(generation);
     return 0;
-  }
-  for (index = 0U; index < CONFIT_V4_PUBLISHED_TEXT_COUNT; ++index) {
-    if (unlinkat(generation, texts[index].path, 0) != 0) {
-      (void)close(generation);
-      return 0;
-    }
   }
   {
     DIR *stream = fdopendir(dup(generation));
     struct dirent *entry;
     if (stream == 0) { (void)close(generation); return 0; }
     while ((entry = readdir(stream)) != 0) {
-      if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+      struct stat metadata;
+      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+      if (++count > 64U ||
+          fstatat(generation, entry->d_name, &metadata,
+                  AT_SYMLINK_NOFOLLOW) != 0 ||
+          !S_ISREG(metadata.st_mode) || metadata.st_nlink != 1U ||
+          unlinkat(generation, entry->d_name, 0) != 0) {
         (void)closedir(stream); (void)close(generation); return 0;
       }
     }
@@ -2724,8 +2723,7 @@ static int confit_v4_posix_remove_generation(int generations,
 }
 
 static int confit_v4_posix_gc_generations(int generations,
-                                          const char *selected_digest,
-    const ConfitV4NamedText texts[CONFIT_V4_PUBLISHED_TEXT_COUNT]) {
+                                          const char *selected_digest) {
   DIR *stream = fdopendir(dup(generations));
   struct dirent *entry;
   size_t count = 0U;
@@ -2737,7 +2735,7 @@ static int confit_v4_posix_gc_generations(int generations,
       return 0;
     }
     if (strcmp(entry->d_name, selected_digest) != 0 &&
-        !confit_v4_posix_remove_generation(generations, entry->d_name, texts)) {
+        !confit_v4_posix_remove_generation(generations, entry->d_name)) {
       (void)closedir(stream);
       return 0;
     }
@@ -2922,8 +2920,9 @@ static ConfitStatus confit_v4_publish_artifacts_posix(
   }
   if (status == CONFIT_OK) {
     phase = "obsolete-generation-gc";
-    if (!confit_v4_posix_gc_generations(generations, artifacts->bundle_digest,
-                                        texts)) status = CONFIT_ERR_GENERATION;
+    if (!confit_v4_posix_gc_generations(generations, artifacts->bundle_digest)) {
+      status = CONFIT_ERR_GENERATION;
+    }
   }
   if (status != CONFIT_OK && diagnostic != 0 && diagnostic->message == 0) {
     confit_diagnostic_set(diagnostic, status, options->output_root, 0U, 0U,

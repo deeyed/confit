@@ -412,6 +412,33 @@ int main(void) {
                          &policy_ref, wire_b, wire_size_b,
                          &diagnostic) == CONFIT_OK);
 
+  /* Host/package/docs test도 arbitrary runner가 아니라 selected builtin
+   * supervisor가 test.receipt만 게시하는 같은 closed action이다. */
+  trusted_tools[1].role = CONFIT_BUILD_TOOL_BUILTIN;
+  trusted_tools[1].path = "/usr/bin/parus-test";
+  trusted_tools[1].sha256 = kDigestD;
+  trusted_tools[1].version = "1";
+  action.tool = trusted_tools[1];
+  action.source_owner = "test.host.unit";
+  action.input_count = 1U;
+  inputs[0].role = CONFIT_BUILD_ROLE_TEST_DESCRIPTOR;
+  inputs[0].path = "test/catalog/unit.plan";
+  inputs[0].owner = "test.host.unit";
+  outputs[0].role = CONFIT_BUILD_ROLE_TEST_RECEIPT;
+  outputs[0].path = "test/current/unit/host.receipt";
+  outputs[0].maximum_bytes = 4096U;
+  action.output_count = 1U;
+  CONFIT_TEST_ASSERT(confit_build_action_wire_encode(
+                         &policy_ref, &action, wire_b, sizeof(wire_b),
+                         &wire_size_b, action_id_b, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_build_action_wire_validate(
+                         &policy_ref, wire_b, wire_size_b,
+                         &diagnostic) == CONFIT_OK);
+  trusted_tools[1].role = CONFIT_BUILD_TOOL_QEMU;
+  trusted_tools[1].path = "/usr/bin/qemu-system-aarch64";
+  trusted_tools[1].sha256 = kDigestD;
+  trusted_tools[1].version = "11.0.2";
+
   action.domain = CONFIT_BUILD_DOMAIN_KERNGEN;
   action.kind = CONFIT_BUILD_ACTION_KIND_COMPILE;
   action.source_owner = "kern.nucleus.core";
@@ -504,6 +531,91 @@ int main(void) {
                          &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
   outputs[0].role = CONFIT_BUILD_ROLE_KERNEL_OBJECT;
   confit_diagnostic_clear(&diagnostic);
+
+  /* Cross-domain hostile corpus는 action 이름이나 output pathname 추론에 기대지
+   * 않고 closed domain/kind/role edge 자체가 effect 전에 거부함을 고정한다. */
+  trusted_tools[1].role = CONFIT_BUILD_TOOL_BUILTIN;
+  trusted_tools[1].path = "/usr/bin/parus-buildctl";
+  trusted_tools[1].sha256 = kDigestD;
+  trusted_tools[1].version = "1";
+  action.tool = trusted_tools[1];
+  action.source_owner = "world.fixture";
+  action.domain = CONFIT_BUILD_DOMAIN_WORLDGEN;
+  action.kind = CONFIT_BUILD_ACTION_KIND_CLEAN;
+  inputs[0].role = CONFIT_BUILD_ROLE_KERNEL_ROOT;
+  inputs[0].path = "kerngen/release/arm64-qemu-virt";
+  inputs[0].owner = "kern.fixture";
+  action.input_count = 1U;
+  action.output_count = 0U;
+  CONFIT_TEST_ASSERT(confit_build_action_validate(
+                         &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+
+  action.source_owner = "image.fixture";
+  action.domain = CONFIT_BUILD_DOMAIN_IMAGEGEN;
+  action.kind = CONFIT_BUILD_ACTION_KIND_COMPILE;
+  inputs[0].role = CONFIT_BUILD_ROLE_IMAGE_POLICY;
+  inputs[0].path = "imagegen/policy.v1";
+  inputs[0].owner = "image.fixture";
+  outputs[0].role = CONFIT_BUILD_ROLE_IMAGE_ARTIFACT;
+  outputs[0].path = "imagegen/release/arm64-qemu-virt/image.bin";
+  action.output_count = 1U;
+  CONFIT_TEST_ASSERT(confit_build_action_validate(
+                         &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+
+  action.source_owner = "env.fixture";
+  action.domain = CONFIT_BUILD_DOMAIN_ENVGEN;
+  action.kind = CONFIT_BUILD_ACTION_KIND_LINK;
+  inputs[0].role = CONFIT_BUILD_ROLE_ENV_SOURCE;
+  inputs[0].path = "env/service.c";
+  inputs[0].owner = "env.fixture";
+  outputs[0].role = CONFIT_BUILD_ROLE_ENV_LIBRARY;
+  outputs[0].path = "envgen/release/arm64-qemu-virt/service.elf";
+  CONFIT_TEST_ASSERT(confit_build_action_validate(
+                         &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+
+  action.source_owner = "tool.fixture";
+  action.domain = CONFIT_BUILD_DOMAIN_TOOLGEN;
+  action.kind = CONFIT_BUILD_ACTION_KIND_GENERATE;
+  inputs[0].role = CONFIT_BUILD_ROLE_HOST_SOURCE;
+  inputs[0].path = "tools/host/tool.c";
+  inputs[0].owner = "tool.fixture";
+  outputs[0].role = CONFIT_BUILD_ROLE_KERNEL_OBJECT;
+  outputs[0].path = "toolgen/release/arm64-qemu-virt/target.o";
+  CONFIT_TEST_ASSERT(confit_build_action_validate(
+                         &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+
+  action.source_owner = "test.fixture";
+  action.domain = CONFIT_BUILD_DOMAIN_TEST;
+  action.kind = CONFIT_BUILD_ACTION_KIND_EXECUTE_TEST;
+  inputs[0].role = CONFIT_BUILD_ROLE_TEST_DESCRIPTOR;
+  inputs[0].path = "test/catalog/tests.mk";
+  inputs[0].owner = "test.fixture";
+  outputs[0].role = CONFIT_BUILD_ROLE_KERNEL_SEAL;
+  outputs[0].path = "kerngen/release/arm64-qemu-virt/seal/forged.v1";
+  CONFIT_TEST_ASSERT(confit_build_action_validate(
+                         &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+
+  trusted_tools[1].role = CONFIT_BUILD_TOOL_QEMU;
+  trusted_tools[1].path = "/usr/bin/qemu-system-aarch64";
+  trusted_tools[1].sha256 = kDigestD;
+  trusted_tools[1].version = "11.0.2";
+  action.domain = CONFIT_BUILD_DOMAIN_KERNGEN;
+  action.kind = CONFIT_BUILD_ACTION_KIND_COMPILE;
+  action.source_owner = "kern.nucleus.core";
+  action.tool = trusted_tools[0];
+  inputs[0].role = CONFIT_BUILD_ROLE_KERNEL_SOURCE;
+  inputs[0].path = "sys/kern/main.c";
+  inputs[0].owner = "kern.nucleus.core";
+  outputs[0].role = CONFIT_BUILD_ROLE_KERNEL_OBJECT;
+  outputs[0].path = "kerngen/release/arm64-qemu-virt/obj/main.o";
+  action.input_count = 1U;
+  action.output_count = 1U;
+
   inputs[0].path = "sys/kern/../private.c";
   CONFIT_TEST_ASSERT(confit_build_action_validate(
                          &policy_ref, &action, &diagnostic) == CONFIT_ERR_SCHEMA);

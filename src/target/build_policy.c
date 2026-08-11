@@ -520,14 +520,18 @@ static int confit_build_kind_allowed(ConfitBuildDomain domain,
              kind == CONFIT_BUILD_ACTION_KIND_COMPILE ||
              kind == CONFIT_BUILD_ACTION_KIND_LINK;
     case CONFIT_BUILD_DOMAIN_WORLDGEN:
-      return kind == CONFIT_BUILD_ACTION_KIND_COMPILE ||
+      return kind == CONFIT_BUILD_ACTION_KIND_COPY ||
+             kind == CONFIT_BUILD_ACTION_KIND_COMPILE ||
+             kind == CONFIT_BUILD_ACTION_KIND_ARCHIVE ||
              kind == CONFIT_BUILD_ACTION_KIND_LINK;
     case CONFIT_BUILD_DOMAIN_IMAGEGEN:
       return kind == CONFIT_BUILD_ACTION_KIND_COPY ||
              kind == CONFIT_BUILD_ACTION_KIND_GENERATE ||
              kind == CONFIT_BUILD_ACTION_KIND_PACKAGE;
     case CONFIT_BUILD_DOMAIN_TEST:
-      return kind == CONFIT_BUILD_ACTION_KIND_EXECUTE_TEST;
+      return kind == CONFIT_BUILD_ACTION_KIND_COMPILE ||
+             kind == CONFIT_BUILD_ACTION_KIND_LINK ||
+             kind == CONFIT_BUILD_ACTION_KIND_EXECUTE_TEST;
     default:
       return 0;
   }
@@ -560,7 +564,9 @@ static int confit_build_input_role_allowed(ConfitBuildDomain domain,
              role == CONFIT_BUILD_ROLE_ENV_SYSROOT_SEAL ||
              role == CONFIT_BUILD_ROLE_KERNEL_SOURCE ||
              role == CONFIT_BUILD_ROLE_KERNEL_OBJECT ||
+             role == CONFIT_BUILD_ROLE_KERNEL_ELF ||
              role == CONFIT_BUILD_ROLE_KERNEL_METADATA ||
+             role == CONFIT_BUILD_ROLE_KERNEL_SEAL ||
              role == CONFIT_BUILD_ROLE_KERNEL_ROOT;
     case CONFIT_BUILD_DOMAIN_WORLDGEN:
       return role == CONFIT_BUILD_ROLE_TOOL_EXECUTABLE ||
@@ -571,6 +577,9 @@ static int confit_build_input_role_allowed(ConfitBuildDomain domain,
              role == CONFIT_BUILD_ROLE_ENV_SYSROOT_SEAL ||
              role == CONFIT_BUILD_ROLE_WORLD_SOURCE ||
              role == CONFIT_BUILD_ROLE_WORLD_OBJECT ||
+             role == CONFIT_BUILD_ROLE_WORLD_ARTIFACT ||
+             role == CONFIT_BUILD_ROLE_WORLD_INSTALL_PLAN ||
+             role == CONFIT_BUILD_ROLE_WORLD_SEAL ||
              role == CONFIT_BUILD_ROLE_WORLD_ROOT;
     case CONFIT_BUILD_DOMAIN_IMAGEGEN:
       return role == CONFIT_BUILD_ROLE_TOOL_EXECUTABLE ||
@@ -584,15 +593,20 @@ static int confit_build_input_role_allowed(ConfitBuildDomain domain,
              role == CONFIT_BUILD_ROLE_IMAGE_ARTIFACT ||
              role == CONFIT_BUILD_ROLE_IMAGE_ROOT;
     case CONFIT_BUILD_DOMAIN_TEST:
-      return role == CONFIT_BUILD_ROLE_TOOL_EXECUTABLE ||
+      return role == CONFIT_BUILD_ROLE_HOST_SOURCE ||
+             role == CONFIT_BUILD_ROLE_TOOL_EXECUTABLE ||
              role == CONFIT_BUILD_ROLE_TOOL_SEAL ||
              role == CONFIT_BUILD_ROLE_TEST_DESCRIPTOR ||
              role == CONFIT_BUILD_ROLE_TEST_IMAGE ||
              role == CONFIT_BUILD_ROLE_KERNEL_ELF ||
+             role == CONFIT_BUILD_ROLE_KERNEL_METADATA ||
              role == CONFIT_BUILD_ROLE_KERNEL_SEAL ||
              role == CONFIT_BUILD_ROLE_WORLD_ARTIFACT ||
+             role == CONFIT_BUILD_ROLE_WORLD_INSTALL_PLAN ||
+             role == CONFIT_BUILD_ROLE_WORLD_SEAL ||
              role == CONFIT_BUILD_ROLE_IMAGE_ARTIFACT ||
              role == CONFIT_BUILD_ROLE_IMAGE_PACKAGE ||
+             role == CONFIT_BUILD_ROLE_IMAGE_SEAL ||
              role == CONFIT_BUILD_ROLE_TEST_ROOT;
     default:
       return 0;
@@ -630,7 +644,8 @@ static int confit_build_output_role_allowed(ConfitBuildDomain domain,
              role == CONFIT_BUILD_ROLE_IMAGE_SEAL ||
              role == CONFIT_BUILD_ROLE_IMAGE_ROOT;
     case CONFIT_BUILD_DOMAIN_TEST:
-      return role == CONFIT_BUILD_ROLE_TEST_LOG ||
+      return role == CONFIT_BUILD_ROLE_TEST_IMAGE ||
+             role == CONFIT_BUILD_ROLE_TEST_LOG ||
              role == CONFIT_BUILD_ROLE_TEST_RECEIPT ||
              role == CONFIT_BUILD_ROLE_TEST_ROOT;
     default:
@@ -675,6 +690,8 @@ static int confit_build_tool_allowed(ConfitBuildDomain domain,
   if (domain == CONFIT_BUILD_DOMAIN_WORLDGEN) {
     if (kind == CONFIT_BUILD_ACTION_KIND_COMPILE)
       return tool == CONFIT_BUILD_TOOL_TARGET_CC;
+    if (kind == CONFIT_BUILD_ACTION_KIND_ARCHIVE)
+      return tool == CONFIT_BUILD_TOOL_TARGET_AR;
     if (kind == CONFIT_BUILD_ACTION_KIND_LINK)
       return tool == CONFIT_BUILD_TOOL_TARGET_LD;
     return tool == CONFIT_BUILD_TOOL_BUILTIN;
@@ -682,8 +699,19 @@ static int confit_build_tool_allowed(ConfitBuildDomain domain,
   if (domain == CONFIT_BUILD_DOMAIN_IMAGEGEN) {
     return tool == CONFIT_BUILD_TOOL_BUILTIN;
   }
-  return domain == CONFIT_BUILD_DOMAIN_TEST &&
-         tool == CONFIT_BUILD_TOOL_QEMU;
+  /* Host unit, security, package와 docs lane도 current receipt를 쓰는 typed
+   * test action이다. QEMU만 허용하면 이들 lane이 production action graph를
+   * 우회해야 하므로 reviewed builtin test supervisor도 같은 closed kind에서
+   * 허용한다. */
+  if (domain == CONFIT_BUILD_DOMAIN_TEST) {
+    if (kind == CONFIT_BUILD_ACTION_KIND_COMPILE ||
+        kind == CONFIT_BUILD_ACTION_KIND_LINK) {
+      return tool == CONFIT_BUILD_TOOL_HOST_CC;
+    }
+    return tool == CONFIT_BUILD_TOOL_BUILTIN ||
+           tool == CONFIT_BUILD_TOOL_QEMU;
+  }
+  return 0;
 }
 
 static int confit_build_endpoint_counts_allowed(
