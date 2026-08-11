@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "confit/host.h"
-#include "confit/generator_v2.h"
+#include "confit/digest.h"
 #include "confit/toml.h"
 
 enum {

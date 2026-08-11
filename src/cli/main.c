@@ -13,11 +13,11 @@ static void confit_cli_print_help(void) {
       "Confit bmake configuration resolver\n\n"
       "Usage: confit <command> [options]\n\n"
       "Commands:\n"
-      "  check, resolve, gen, explain, list, graph, diff, component\n"
+      "  check, resolve, explain, list, graph, diff, component\n"
       "  build-enter --root ABSOLUTE --repository ABSOLUTE "
       "--invocation DECIMAL --bmake ABSOLUTE --compiler ABSOLUTE\n\n"
-      "`gen` accepts only --artifact bundle and publishes the sealed ABI v4 "
-      "bundle.\n"
+      "Configuration publication is provided only by the schema-v4 "
+      "Preview/Cancel/Apply transaction API.\n"
       "Only schema_version = 2 project input is accepted.\n",
       stdout);
 }

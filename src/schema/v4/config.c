@@ -2296,6 +2296,17 @@ int confit_v4_catalog_option(const ConfitV4Catalog *catalog,
   out_option->since = option->since;
   out_option->stability = option->stability;
   out_option->default_value = option->default_value;
+  out_option->minimum = option->minimum;
+  out_option->maximum = option->maximum;
+  out_option->domain_count = option->type == CONFIT_V4_OPTION_PLACEMENT
+                                 ? option->allowed.count
+                                 : option->values.count;
+  out_option->domain_values = (const char *const *)(
+      option->type == CONFIT_V4_OPTION_PLACEMENT ? option->allowed.items
+                                                 : option->values.items);
+  out_option->enabled_value_count = option->enabled_values.count;
+  out_option->enabled_values =
+      (const char *const *)option->enabled_values.items;
   out_option->tag_count = option->tags.count;
   out_option->tags = (const char *const *)option->tags.items;
   out_option->prerequisite_count = option->prerequisites.count;

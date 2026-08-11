@@ -79,6 +79,12 @@ typedef struct ConfitV4OptionView {
   const char *since;
   const char *stability;
   const char *default_value;
+  int64_t minimum;
+  int64_t maximum;
+  size_t domain_count;
+  const char *const *domain_values;
+  size_t enabled_value_count;
+  const char *const *enabled_values;
   size_t tag_count;
   const char *const *tags;
   size_t prerequisite_count;
@@ -101,6 +107,13 @@ typedef struct ConfitV4Assignment {
   const char *value;
   ConfitV4SourceSpan source;
 } ConfitV4Assignment;
+
+/** @brief explicit base-to-leaf edge를 가진 configuration assignment다. */
+typedef struct ConfitV4LayeredAssignment {
+  ConfitV4Assignment assignment;
+  /** 바로 이전 effective assignment의 exact source path다. */
+  const char *overrides_source_path;
+} ConfitV4LayeredAssignment;
 
 /**
  * @brief `single` KPF provider의 explicit selection owner다.
@@ -181,12 +194,38 @@ ConfitStatus confit_v4_evaluate(
     size_t provider_choice_count, ConfitV4Evaluation **out_evaluation,
     ConfitDiagnostic *diagnostic);
 
+/**
+ * @brief explicit override chain을 포함한 assignment를 평가한다.
+ *
+ * 같은 symbol이 다시 등장하면 현재 effective source path와 정확히 일치하는
+ * `overrides_source_path`가 필요하다. Discovery order나 unrelated overwrite는 없다.
+ */
+ConfitStatus confit_v4_evaluate_layered(
+    const ConfitV4Catalog *catalog,
+    const ConfitV4LayeredAssignment *assignments, size_t assignment_count,
+    const ConfitV4ProviderChoice *provider_choices,
+    size_t provider_choice_count, ConfitV4Evaluation **out_evaluation,
+    ConfitDiagnostic *diagnostic);
+
 /** @brief evaluation과 reason storage를 해제한다. */
 void confit_v4_evaluation_free(ConfitV4Evaluation *evaluation);
 
 /** @brief option의 effective canonical value를 조회한다. */
 const char *confit_v4_evaluation_value(const ConfitV4Evaluation *evaluation,
                                        const char *symbol);
+
+/** @brief evaluation이 가진 effective option 수를 반환한다. */
+size_t confit_v4_evaluation_value_count(
+    const ConfitV4Evaluation *evaluation);
+
+/**
+ * @brief index의 effective symbol/value/source를 borrowed view로 반환한다.
+ *
+ * Generator는 이 ordered view만 소비하며 source/object/link graph를 조회하지 않는다.
+ */
+int confit_v4_evaluation_value_at(
+    const ConfitV4Evaluation *evaluation, size_t index, const char **out_symbol,
+    const char **out_value, int *out_enabled, ConfitV4SourceSpan *out_source);
 
 /** @brief evaluation reason 수를 반환한다. */
 size_t confit_v4_evaluation_reason_count(

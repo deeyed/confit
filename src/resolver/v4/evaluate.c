@@ -138,7 +138,8 @@ static ConfitStatus confit_v4_initialize_values(
 
 static ConfitStatus confit_v4_apply_assignments(
     const ConfitV4Catalog *catalog, const ConfitV4Assignment *assignments,
-    size_t assignment_count, ConfitV4Evaluation *evaluation,
+    const char *const *override_paths, size_t assignment_count,
+    ConfitV4Evaluation *evaluation,
     ConfitDiagnostic *diagnostic) {
   if (assignment_count > CONFIT_V4_MAX_OPTIONS ||
       (assignment_count != 0U && assignments == 0))
@@ -165,16 +166,25 @@ static ConfitStatus confit_v4_apply_assignments(
                       : "assignment value is outside the option domain");
       return CONFIT_ERR_SCHEMA;
     }
-    for (size_t other = 0U; other < index; ++other) {
-      if (strcmp(assignments[other].symbol, assignment->symbol) == 0) {
-        confit_v4_set_diagnostic(
-            diagnostic, CONFIT_ERR_CONFLICT, &source,
-            "unrelated duplicate assignment has no override authority");
-        return CONFIT_ERR_CONFLICT;
-      }
-    }
     value = confit_v4_find_effective_mutable(evaluation, assignment->symbol);
     if (value == 0) return CONFIT_ERR_INTERNAL;
+    for (size_t other = 0U; other < index; ++other) {
+      if (strcmp(assignments[other].symbol, assignment->symbol) == 0) {
+        if (override_paths == 0 || override_paths[index] == 0 ||
+            value->source.path == 0 ||
+            strcmp(override_paths[index], value->source.path) != 0) {
+          confit_v4_set_diagnostic(
+              diagnostic, CONFIT_ERR_CONFLICT, &source,
+              "duplicate assignment needs an exact base-to-leaf override edge");
+          return CONFIT_ERR_CONFLICT;
+        }
+        if (confit_v4_evaluation_add_reason(
+                evaluation, CONFIT_V4_REASON_REQUEST, 1, option->symbol,
+                override_paths[index], &source) != CONFIT_OK)
+          return CONFIT_ERR_INTERNAL;
+        break;
+      }
+    }
     free(value->value);
     value->value = confit_v4_copy(assignment->value);
     value->enabled = enabled;
@@ -516,9 +526,10 @@ static ConfitStatus confit_v4_evaluate_providers(
   return CONFIT_OK;
 }
 
-ConfitStatus confit_v4_evaluate(
+static ConfitStatus confit_v4_evaluate_internal(
     const ConfitV4Catalog *catalog, const ConfitV4Assignment *assignments,
-    size_t assignment_count, const ConfitV4ProviderChoice *provider_choices,
+    const char *const *override_paths, size_t assignment_count,
+    const ConfitV4ProviderChoice *provider_choices,
     size_t provider_choice_count, ConfitV4Evaluation **out_evaluation,
     ConfitDiagnostic *diagnostic) {
   ConfitV4Evaluation *evaluation;
@@ -529,7 +540,7 @@ ConfitStatus confit_v4_evaluate(
   if (evaluation == 0) return CONFIT_ERR_INTERNAL;
   status = confit_v4_initialize_values(catalog, evaluation);
   if (status == CONFIT_OK)
-    status = confit_v4_apply_assignments(catalog, assignments,
+    status = confit_v4_apply_assignments(catalog, assignments, override_paths,
                                          assignment_count, evaluation,
                                          diagnostic);
   if (status == CONFIT_OK)
@@ -543,6 +554,48 @@ ConfitStatus confit_v4_evaluate(
         catalog, provider_choices, provider_choice_count, evaluation,
         diagnostic);
   *out_evaluation = evaluation;
+  return status;
+}
+
+ConfitStatus confit_v4_evaluate(
+    const ConfitV4Catalog *catalog, const ConfitV4Assignment *assignments,
+    size_t assignment_count, const ConfitV4ProviderChoice *provider_choices,
+    size_t provider_choice_count, ConfitV4Evaluation **out_evaluation,
+    ConfitDiagnostic *diagnostic) {
+  return confit_v4_evaluate_internal(
+      catalog, assignments, 0, assignment_count, provider_choices,
+      provider_choice_count, out_evaluation, diagnostic);
+}
+
+ConfitStatus confit_v4_evaluate_layered(
+    const ConfitV4Catalog *catalog,
+    const ConfitV4LayeredAssignment *assignments, size_t assignment_count,
+    const ConfitV4ProviderChoice *provider_choices,
+    size_t provider_choice_count, ConfitV4Evaluation **out_evaluation,
+    ConfitDiagnostic *diagnostic) {
+  ConfitV4Assignment *plain = 0;
+  const char **overrides = 0;
+  ConfitStatus status;
+  if (assignment_count != 0U && assignments == 0)
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  if (assignment_count != 0U) {
+    plain = (ConfitV4Assignment *)calloc(assignment_count, sizeof(plain[0]));
+    overrides = (const char **)calloc(assignment_count, sizeof(overrides[0]));
+    if (plain == 0 || overrides == 0) {
+      free(plain);
+      free(overrides);
+      return CONFIT_ERR_INTERNAL;
+    }
+    for (size_t index = 0U; index < assignment_count; ++index) {
+      plain[index] = assignments[index].assignment;
+      overrides[index] = assignments[index].overrides_source_path;
+    }
+  }
+  status = confit_v4_evaluate_internal(
+      catalog, plain, overrides, assignment_count, provider_choices,
+      provider_choice_count, out_evaluation, diagnostic);
+  free(plain);
+  free(overrides);
   return status;
 }
 
@@ -573,6 +626,28 @@ const char *confit_v4_evaluation_value(const ConfitV4Evaluation *evaluation,
   const ConfitV4EffectiveValue *value =
       confit_v4_find_effective(evaluation, symbol);
   return value != 0 ? value->value : 0;
+}
+
+size_t confit_v4_evaluation_value_count(
+    const ConfitV4Evaluation *evaluation) {
+  return evaluation != 0 ? evaluation->value_count : 0U;
+}
+
+int confit_v4_evaluation_value_at(
+    const ConfitV4Evaluation *evaluation, size_t index, const char **out_symbol,
+    const char **out_value, int *out_enabled, ConfitV4SourceSpan *out_source) {
+  const ConfitV4EffectiveValue *value;
+  if (evaluation == 0 || index >= evaluation->value_count || out_symbol == 0 ||
+      out_value == 0 || out_enabled == 0 || out_source == 0)
+    return 0;
+  value = &evaluation->values[index];
+  *out_symbol = value->symbol;
+  *out_value = value->value;
+  *out_enabled = value->enabled;
+  out_source->path = value->source.path;
+  out_source->line = value->source.line;
+  out_source->column = value->source.column;
+  return 1;
 }
 
 size_t confit_v4_evaluation_reason_count(

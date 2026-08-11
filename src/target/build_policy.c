@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "confit/generator_v2.h"
+#include "confit/digest.h"
 
 enum {
   CONFIT_BUILD_POLICY_TEXT_LIMIT = 32768,

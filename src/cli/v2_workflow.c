@@ -8,7 +8,6 @@
 
 #include "confit/component_catalog.h"
 #include "confit/constraint_v2.h"
-#include "confit/generator_v2.h"
 #include "confit/host.h"
 #include "confit/toml.h"
 #include "confit/resolver_v2.h"
@@ -27,9 +26,7 @@ typedef struct ConfitCliV2Args {
   const char *project;
   const char *profile;
   const char *target;
-  const char *out;
   const char *format;
-  const char *artifact;
   const char *option_id;
   const char *base;
   const char *kind;
@@ -41,8 +38,6 @@ typedef struct ConfitCliV2Args {
   const char **sets;
   size_t set_count;
   int strict;
-  int force;
-  int dry_run;
   int diagnostic_json;
 } ConfitCliV2Args;
 
@@ -55,14 +50,6 @@ typedef struct ConfitCliV2Context {
   char **override_ids;
   size_t override_count;
 } ConfitCliV2Context;
-
-typedef struct ConfitCliV4InputSet {
-  ConfitV2ArtifactInput *records;
-  char **paths;
-  char **hashes;
-  char **roles;
-  size_t count;
-} ConfitCliV4InputSet;
 
 static void confit_cli_v2_context_clear(ConfitCliV2Context *context);
 static ConfitStatus confit_cli_v2_context_load(const ConfitCliV2Args *args,
@@ -283,7 +270,6 @@ static ConfitStatus confit_cli_v2_append_value(ConfitCliV2Builder *builder,
 static void confit_cli_v2_args_init(ConfitCliV2Args *args) {
   memset(args, 0, sizeof(*args));
   args->format = "text";
-  args->artifact = "bundle";
   args->kind = "options";
 }
 
@@ -303,311 +289,6 @@ static ConfitStatus confit_cli_v2_add_set(ConfitCliV2Args *args,
   args->sets[args->set_count] = assignment;
   args->set_count += 1U;
   return CONFIT_OK;
-}
-
-static char *confit_cli_v2_strdup(const char *text) {
-  const size_t size = strlen(text) + 1U;
-  char *copy = (char *)malloc(size);
-  if (copy != 0) memcpy(copy, text, size);
-  return copy;
-}
-
-static void confit_cli_v4_input_set_clear(ConfitCliV4InputSet *inputs) {
-  size_t index;
-  if (inputs == 0) return;
-  for (index = 0U; index < inputs->count; ++index) {
-    free(inputs->paths[index]);
-    free(inputs->hashes[index]);
-    free(inputs->roles[index]);
-  }
-  free(inputs->records);
-  free(inputs->paths);
-  free(inputs->hashes);
-  free(inputs->roles);
-  memset(inputs, 0, sizeof(*inputs));
-}
-
-static ConfitStatus confit_cli_v4_input_set_add_text(
-    ConfitCliV4InputSet *inputs, const char *path, const char *role,
-    const char *text, ConfitDiagnostic *diagnostic) {
-  ConfitV2ArtifactInput *records;
-  char **paths;
-  char **hashes;
-  char **roles;
-  char *path_copy;
-  char *hash_copy;
-  char *role_copy;
-  char digest[65];
-  char prefixed[72];
-  size_t index;
-
-  for (index = 0U; index < inputs->count; ++index) {
-    if (strcmp(inputs->paths[index], path) == 0) {
-      if (strcmp(inputs->roles[index], role) == 0) return CONFIT_OK;
-      confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path, 0U, 0U,
-                            "one sealed provenance path has conflicting roles");
-      return CONFIT_ERR_SCHEMA;
-    }
-  }
-  if (inputs->count == SIZE_MAX / sizeof(*inputs->records)) return CONFIT_ERR_INTERNAL;
-  path_copy = confit_cli_v2_strdup(path);
-  role_copy = confit_cli_v2_strdup(role);
-  confit_v4_sha256_hex(text, digest);
-  if (snprintf(prefixed, sizeof(prefixed), "sha256:%s", digest) < 0) {
-    free(path_copy); free(role_copy);
-    return CONFIT_ERR_INTERNAL;
-  }
-  hash_copy = confit_cli_v2_strdup(prefixed);
-  if (path_copy == 0 || role_copy == 0 || hash_copy == 0) {
-    free(path_copy); free(role_copy); free(hash_copy);
-    return CONFIT_ERR_INTERNAL;
-  }
-  records = calloc(inputs->count + 1U, sizeof(*records));
-  paths = calloc(inputs->count + 1U, sizeof(*paths));
-  hashes = calloc(inputs->count + 1U, sizeof(*hashes));
-  roles = calloc(inputs->count + 1U, sizeof(*roles));
-  if (records == 0 || paths == 0 || hashes == 0 || roles == 0) {
-    free(path_copy); free(role_copy); free(hash_copy);
-    free(records); free(paths); free(hashes); free(roles);
-    return CONFIT_ERR_INTERNAL;
-  }
-  if (inputs->count > 0U) {
-    memcpy(records, inputs->records, inputs->count * sizeof(*records));
-    memcpy(paths, inputs->paths, inputs->count * sizeof(*paths));
-    memcpy(hashes, inputs->hashes, inputs->count * sizeof(*hashes));
-    memcpy(roles, inputs->roles, inputs->count * sizeof(*roles));
-  }
-  free(inputs->records);
-  free(inputs->paths);
-  free(inputs->hashes);
-  free(inputs->roles);
-  inputs->records = records;
-  inputs->paths = paths;
-  inputs->hashes = hashes;
-  inputs->roles = roles;
-  inputs->paths[inputs->count] = path_copy;
-  inputs->hashes[inputs->count] = hash_copy;
-  inputs->roles[inputs->count] = role_copy;
-  inputs->records[inputs->count].path = path_copy;
-  inputs->records[inputs->count].content_hash = hash_copy;
-  inputs->records[inputs->count].role = role_copy;
-  inputs->count += 1U;
-  return CONFIT_OK;
-}
-
-static ConfitStatus confit_cli_v4_input_set_add_file(
-    ConfitCliV4InputSet *inputs, const char *logical_path, const char *physical_path,
-    const char *role, ConfitDiagnostic *diagnostic) {
-  char *text = 0;
-  ConfitStatus status = confit_host_read_text_file(physical_path, &text, 0U,
-                                                    diagnostic);
-  if (status == CONFIT_OK) {
-    status = confit_cli_v4_input_set_add_text(inputs, logical_path, role, text,
-                                               diagnostic);
-  }
-  confit_host_free(text);
-  return status;
-}
-
-static ConfitStatus confit_cli_v4_logical_path(const ConfitV2Project *project,
-                                                const char *physical_path,
-                                                char *out, size_t out_size,
-                                                ConfitDiagnostic *diagnostic) {
-  const char *root = project->config_root;
-  const size_t root_size = strlen(root);
-  const char *relative;
-  if (strncmp(root, physical_path, root_size) != 0 ||
-      (physical_path[root_size] != '/' && physical_path[root_size] != '\\')) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, physical_path, 0U, 0U,
-                          "semantic input escapes the configuration root");
-    return CONFIT_ERR_SCHEMA;
-  }
-  relative = physical_path + root_size + 1U;
-  if (strlen(relative) + 1U > out_size) return CONFIT_ERR_INTERNAL;
-  memcpy(out, relative, strlen(relative) + 1U);
-  return CONFIT_OK;
-}
-
-static ConfitStatus confit_cli_v4_input_set_add_project_file(
-    ConfitCliV4InputSet *inputs, const ConfitV2Project *project,
-    const char *physical_path, const char *role, ConfitDiagnostic *diagnostic) {
-  char logical_path[4096];
-  ConfitStatus status;
-
-  if (physical_path == 0 || physical_path[0] == '\0') return CONFIT_OK;
-  status = confit_cli_v4_logical_path(project, physical_path, logical_path,
-                                      sizeof(logical_path), diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
-      inputs, logical_path, physical_path, role, diagnostic);
-  return status;
-}
-
-static ConfitStatus confit_cli_v4_input_set_add_directory(
-    ConfitCliV4InputSet *inputs, const ConfitV2Project *project,
-    const ConfitV2StringList *directories, const char *role,
-    ConfitDiagnostic *diagnostic) {
-  size_t directory_index;
-  ConfitStatus status = CONFIT_OK;
-
-  for (directory_index = 0U; status == CONFIT_OK &&
-                            directory_index < directories->count;
-       ++directory_index) {
-    char directory[4096];
-    char **paths = 0;
-    size_t path_count = 0U;
-    size_t path_index;
-    status = confit_host_path_join(directory, sizeof(directory),
-                                   project->config_root,
-                                   directories->items[directory_index], diagnostic);
-    if (status == CONFIT_OK) status = confit_host_list_toml_files(
-        directory, &paths, &path_count, diagnostic);
-    for (path_index = 0U; status == CONFIT_OK && path_index < path_count;
-         ++path_index) {
-      status = confit_cli_v4_input_set_add_project_file(inputs, project,
-                                                         paths[path_index], role,
-                                                         diagnostic);
-    }
-    confit_host_string_list_free(paths, path_count);
-  }
-  return status;
-}
-
-static ConfitStatus confit_cli_v4_collect_inputs(
-    const ConfitCliV2Args *args, const ConfitCliV2Context *context,
-    const ConfitComponentCatalog *catalog,
-    const ConfitNucleusCatalog *nucleus,
-    const ConfitTestCatalog *tests,
-    const ConfitGeneratorCatalog *generators,
-    ConfitCliV4InputSet *out_inputs, ConfitDiagnostic *diagnostic) {
-  const ConfitV2Project *project = context->project;
-  ConfitStatus status;
-  size_t index;
-
-  memset(out_inputs, 0, sizeof(*out_inputs));
-  status = confit_cli_v4_input_set_add_project_file(out_inputs, project,
-                                                     project->span.path,
-                                                     "project", diagnostic);
-  for (index = 0U; status == CONFIT_OK && index < project->import_count; ++index) {
-    status = confit_cli_v4_input_set_add_project_file(
-        out_inputs, project, project->imports[index].canonical_path, "schema",
-        diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && index < project->symbol_count; ++index) {
-    status = confit_cli_v4_input_set_add_project_file(
-        out_inputs, project, project->symbols[index].span.path, "schema", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && index < project->menu_count; ++index) {
-    status = confit_cli_v4_input_set_add_project_file(
-        out_inputs, project, project->menus[index].span.path, "schema", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && index < project->choice_count; ++index) {
-    status = confit_cli_v4_input_set_add_project_file(
-        out_inputs, project, project->choices[index].span.path, "schema", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && index < project->constraint_count; ++index) {
-    status = confit_cli_v4_input_set_add_project_file(
-        out_inputs, project, project->constraints[index].span.path, "schema", diagnostic);
-  }
-  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
-      out_inputs, project, &project->profile_dirs, "profile", diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
-      out_inputs, project, &project->target_dirs, "target", diagnostic);
-  if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_directory(
-      out_inputs, project, &project->selection_dirs, "selection", diagnostic);
-  for (index = 0U; status == CONFIT_OK && catalog != 0 &&
-                         index < catalog->component_count; ++index) {
-    char physical_path[4096];
-    status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                   catalog->project_root,
-                                   catalog->components[index].manifest_path,
-                                   diagnostic);
-    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
-        out_inputs, catalog->components[index].manifest_path, physical_path,
-        "component-manifest", diagnostic);
-    if (status == CONFIT_OK) {
-      status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                     catalog->project_root,
-                                     catalog->components[index].makefile_path,
-                                     diagnostic);
-    }
-    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
-        out_inputs, catalog->components[index].makefile_path, physical_path,
-        "component-make", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && nucleus != 0 &&
-                         index < nucleus->unit_count; ++index) {
-    char physical_path[4096];
-    status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                   nucleus->project_root,
-                                   nucleus->units[index].makefile_path,
-                                   diagnostic);
-    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
-        out_inputs, nucleus->units[index].makefile_path, physical_path,
-        "nucleus-make", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && tests != 0 &&
-                         index < tests->test_count; ++index) {
-    char physical_path[4096];
-    status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                   tests->project_root,
-                                   tests->tests[index].makefile_path,
-                                   diagnostic);
-    if (status == CONFIT_OK) status = confit_cli_v4_input_set_add_file(
-        out_inputs, tests->tests[index].makefile_path, physical_path,
-        "test-make", diagnostic);
-  }
-  for (index = 0U; status == CONFIT_OK && generators != 0 &&
-                         index < generators->generator_count; ++index) {
-    const ConfitGeneratorUnit *generator = &generators->generators[index];
-    char physical_path[4096];
-    size_t input_index;
-    status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                   generators->project_root,
-                                   generator->makefile_path, diagnostic);
-    if (status == CONFIT_OK)
-      status = confit_cli_v4_input_set_add_file(
-          out_inputs, generator->makefile_path, physical_path,
-          "generator-make", diagnostic);
-    for (input_index = 0U; status == CONFIT_OK &&
-                           input_index < generator->input_count;
-         ++input_index) {
-      char directory[4096];
-      char logical_path[2048];
-      const int written = snprintf(logical_path, sizeof(logical_path), "%s/%s",
-                                   generator->directory,
-                                   generator->inputs[input_index]);
-      if (written <= 0 || (size_t)written >= sizeof(logical_path)) {
-        status = CONFIT_ERR_INTERNAL;
-        break;
-      }
-      status = confit_host_path_join(directory, sizeof(directory),
-                                     generators->project_root,
-                                     generator->directory, diagnostic);
-      if (status == CONFIT_OK)
-        status = confit_host_path_join(physical_path, sizeof(physical_path),
-                                       directory,
-                                       generator->inputs[input_index],
-                                       diagnostic);
-      if (status == CONFIT_OK)
-        status = confit_cli_v4_input_set_add_file(
-            out_inputs, logical_path, physical_path, "generator-input",
-            diagnostic);
-    }
-  }
-  for (index = 0U; status == CONFIT_OK && index < args->set_count; ++index) {
-    char logical_path[64];
-    const int written = snprintf(logical_path, sizeof(logical_path),
-                                 "cli/override/%04llu", (unsigned long long)index);
-    if (written < 0 || (size_t)written >= sizeof(logical_path)) {
-      status = CONFIT_ERR_INTERNAL;
-    } else {
-      status = confit_cli_v4_input_set_add_text(out_inputs, logical_path,
-                                                 "override", args->sets[index],
-                                                 diagnostic);
-    }
-  }
-  if (status != CONFIT_OK) confit_cli_v4_input_set_clear(out_inputs);
-  return status;
 }
 
 static ConfitStatus confit_cli_v2_parse(const char *command, int argc,
@@ -640,21 +321,12 @@ static ConfitStatus confit_cli_v2_parse(const char *command, int argc,
       args->strict = 1;
       continue;
     }
-    if (strcmp(arg, "--force") == 0) {
-      args->force = 1;
-      continue;
-    }
-    if (strcmp(arg, "--dry-run") == 0) {
-      args->dry_run = 1;
-      continue;
-    }
     if (strcmp(arg, "--show-hidden") == 0) {
       continue;
     }
     if (index + 1 < argc &&
         (strcmp(arg, "--project") == 0 || strcmp(arg, "--profile") == 0 ||
-         strcmp(arg, "--target") == 0 || strcmp(arg, "--out") == 0 ||
-         strcmp(arg, "--format") == 0 || strcmp(arg, "--artifact") == 0 ||
+         strcmp(arg, "--target") == 0 || strcmp(arg, "--format") == 0 ||
          strcmp(arg, "--set") == 0 || strcmp(arg, "--base") == 0 ||
          strcmp(arg, "--kind") == 0 || strcmp(arg, "--category") == 0 ||
          strcmp(arg, "--tag") == 0 || strcmp(arg, "--query") == 0 ||
@@ -663,9 +335,7 @@ static ConfitStatus confit_cli_v2_parse(const char *command, int argc,
       if (strcmp(arg, "--project") == 0) args->project = value;
       else if (strcmp(arg, "--profile") == 0) args->profile = value;
       else if (strcmp(arg, "--target") == 0) args->target = value;
-      else if (strcmp(arg, "--out") == 0) args->out = value;
       else if (strcmp(arg, "--format") == 0) args->format = value;
-      else if (strcmp(arg, "--artifact") == 0) args->artifact = value;
       else if (strcmp(arg, "--base") == 0) args->base = value;
       else if (strcmp(arg, "--kind") == 0) args->kind = value;
       else if (strcmp(arg, "--category") == 0) args->category = value;
@@ -1310,122 +980,6 @@ static ConfitStatus confit_cli_v2_run_resolve(const ConfitCliV2Args *args,
   return status;
 }
 
-static ConfitStatus confit_cli_v2_run_gen(const ConfitCliV2Args *args,
-                                           ConfitDiagnostic *diagnostic) {
-  ConfitCliV2Context context;
-  ConfitCliV4InputSet inputs;
-  ConfitV4ArtifactOptions artifact_options;
-  ConfitV4ArtifactSet artifacts;
-  ConfitV4PublishOptions publish_options;
-  ConfitTargetPlan target_plan;
-  ConfitComponentCatalog catalog;
-  ConfitComponentClosure closure;
-  ConfitNucleusCatalog nucleus;
-  ConfitTestCatalog tests;
-  ConfitGeneratorCatalog generators;
-  size_t changed = 0U;
-  ConfitStatus status;
-
-  if (args->out == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, 0, 0U, 0U,
-                          "schema v2 gen requires --out");
-    return CONFIT_ERR_INVALID_ARGUMENT;
-  }
-  if (strcmp(args->artifact, "bundle") != 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, args->artifact,
-                          0U, 0U,
-                          "schema v2 gen accepts only `bundle`; partial and legacy artifact selectors are unsupported");
-    return CONFIT_ERR_UNSUPPORTED;
-  }
-  status = confit_cli_v2_context_load(args, &context, diagnostic);
-  memset(&artifacts, 0, sizeof(artifacts));
-  memset(&inputs, 0, sizeof(inputs));
-  memset(&artifact_options, 0, sizeof(artifact_options));
-  memset(&publish_options, 0, sizeof(publish_options));
-  memset(&target_plan, 0, sizeof(target_plan));
-  memset(&catalog, 0, sizeof(catalog));
-  memset(&closure, 0, sizeof(closure));
-  memset(&nucleus, 0, sizeof(nucleus));
-  memset(&tests, 0, sizeof(tests));
-  memset(&generators, 0, sizeof(generators));
-  if (status == CONFIT_OK) {
-    status = confit_component_catalog_load(context.project, &catalog, diagnostic);
-  }
-  if (status == CONFIT_OK) status = confit_cli_v2_resolve_component_closure(
-      args, &context, &catalog, &closure, diagnostic);
-  if (status == CONFIT_OK)
-    status = confit_nucleus_catalog_load(context.project, &nucleus, diagnostic);
-  if (status == CONFIT_OK)
-    status = confit_static_kapi_validate(&closure, &nucleus, diagnostic);
-  if (status == CONFIT_OK)
-    status = confit_test_catalog_load(context.project, &tests, diagnostic);
-  if (status == CONFIT_OK)
-    status = confit_test_catalog_validate_owners(&tests, &nucleus, &catalog,
-                                                 diagnostic);
-  if (status == CONFIT_OK)
-    status = confit_generator_catalog_load(context.project, &generators,
-                                           diagnostic);
-  if (status == CONFIT_OK &&
-      confit_v2_snapshot_target_name(context.snapshot) != 0) {
-    status = confit_target_plan_load(
-        context.project, confit_v2_snapshot_target_name(context.snapshot),
-        &target_plan, diagnostic);
-  }
-  if (status == CONFIT_OK) {
-    status = confit_cli_v4_collect_inputs(args, &context, &catalog, &nucleus,
-                                          &tests, &generators, &inputs,
-                                          diagnostic);
-  }
-  if (status == CONFIT_OK && target_plan.toolchain_descriptor_path != 0) {
-    status = confit_cli_v4_input_set_add_project_file(
-        &inputs, context.project, target_plan.toolchain_descriptor_path,
-        "toolchain", diagnostic);
-    if (status != CONFIT_OK) {
-      const char *message = diagnostic != 0 && diagnostic->message != 0
-                                ? diagnostic->message
-                                : "failed to record the target toolchain input";
-      confit_diagnostic_set(diagnostic, status, "target-plan.toolchain-input",
-                            0U, 0U, message);
-    }
-  }
-  if (status == CONFIT_OK) {
-    artifact_options.inputs = inputs.records;
-    artifact_options.input_count = inputs.count;
-    artifact_options.tool_identity = "confit-" CONFIT_VERSION_RELEASE;
-    artifact_options.component_catalog = &catalog;
-    artifact_options.component_closure = &closure;
-    artifact_options.nucleus_catalog = &nucleus;
-    artifact_options.test_catalog = &tests;
-    artifact_options.generator_catalog = &generators;
-    artifact_options.target_plan = target_plan.target_id != 0 ? &target_plan : 0;
-    status = confit_v4_generate_artifacts(context.snapshot, &artifact_options,
-                                           &artifacts, diagnostic);
-  }
-  if (status == CONFIT_OK && args->dry_run) {
-    status = confit_host_stdout_write_line("gen dry-run ok");
-  } else if (status == CONFIT_OK) {
-    publish_options.output_root = args->out;
-    status = confit_v4_publish_artifacts(&publish_options, &artifacts, &changed,
-                                          diagnostic);
-  }
-  if (status == CONFIT_OK && !args->dry_run) {
-    char line[192];
-    (void)snprintf(line, sizeof(line), "gen ok: bundle=%s changed=%llu",
-                   artifacts.bundle_digest, (unsigned long long)changed);
-    status = confit_host_stdout_write_line(line);
-  }
-  confit_v4_artifact_set_clear(&artifacts);
-  confit_target_plan_clear(&target_plan);
-  confit_cli_v4_input_set_clear(&inputs);
-  confit_component_closure_clear(&closure);
-  confit_component_catalog_clear(&catalog);
-  confit_nucleus_catalog_clear(&nucleus);
-  confit_test_catalog_clear(&tests);
-  confit_generator_catalog_clear(&generators);
-  confit_cli_v2_context_clear(&context);
-  return status;
-}
-
 static ConfitStatus confit_cli_v2_run_explain(const ConfitCliV2Args *args,
                                                ConfitDiagnostic *diagnostic) {
   ConfitCliV2Context context;
@@ -1711,7 +1265,7 @@ int confit_cli_v2_try_run(const char *command, int argc, char **argv,
 
   if (out_handled != 0) *out_handled = 0;
   if (strcmp(command, "check") != 0 && strcmp(command, "resolve") != 0 &&
-      strcmp(command, "gen") != 0 && strcmp(command, "explain") != 0 &&
+      strcmp(command, "explain") != 0 &&
       strcmp(command, "list") != 0 && strcmp(command, "graph") != 0 &&
       strcmp(command, "diff") != 0 && strcmp(command, "component") != 0) {
     return 0;
@@ -1725,7 +1279,6 @@ int confit_cli_v2_try_run(const char *command, int argc, char **argv,
   }
   if (strcmp(command, "check") == 0) status = confit_cli_v2_run_check(&args, &diagnostic);
   else if (strcmp(command, "resolve") == 0) status = confit_cli_v2_run_resolve(&args, &diagnostic);
-  else if (strcmp(command, "gen") == 0) status = confit_cli_v2_run_gen(&args, &diagnostic);
   else if (strcmp(command, "explain") == 0) status = confit_cli_v2_run_explain(&args, &diagnostic);
   else if (strcmp(command, "list") == 0) status = confit_cli_v2_run_list(&args, &diagnostic);
   else if (strcmp(command, "graph") == 0) status = confit_cli_v2_run_graph(&args, &diagnostic);

@@ -6,7 +6,7 @@
 #endif
 
 #include "confit/host.h"
-#include "confit/generator_v2.h"
+#include "confit/digest.h"
 #include "confit/version.h"
 
 #include <errno.h>

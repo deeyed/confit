@@ -4,6 +4,7 @@ _CONFIT_SOURCES_MK_=1
 # This file is the explicit bootstrap graph. Semantic grouping is review
 # authority; no filesystem discovery participates in source selection.
 CONFIT_CORE_SOURCES= \
+	src/core/digest.c \
 	src/core/diagnostic.c \
 	src/core/status.c \
 	src/core/version.c
@@ -50,7 +51,7 @@ CONFIT_RESOLVER_SOURCES= \
 	src/resolver/v2/incremental.c
 
 CONFIT_GENERATOR_SOURCES= \
-	src/generator/v2/artifacts.c
+	src/generator/v4/generation.c
 
 CONFIT_CLI_SOURCES= \
 	src/cli/main.c \
@@ -63,6 +64,7 @@ CONFIT_TEST_SUPPORT_SOURCES= \
 
 CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_config_v4.c \
+	tests/unit/test_generation_v4.c \
 	tests/unit/test_status_diagnostic.c \
 	tests/unit/test_host_boundary.c \
 	tests/unit/test_toml_adapter.c \
@@ -73,7 +75,6 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver_v2_ledger.c \
 	tests/unit/test_resolver_v2_evaluate.c \
 	tests/unit/test_resolver_v2_snapshot.c \
-	tests/unit/test_generator_v4_publication.c \
 	tests/unit/test_component_catalog.c \
 	tests/unit/test_source_catalog.c \
 	tests/unit/test_build_policy.c \
