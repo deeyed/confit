@@ -1053,6 +1053,48 @@ static int confit_v4_list_has(char *const *items, size_t count,
   return 0;
 }
 
+static ConfitStatus confit_v4_resolve_link_owner(
+    const ConfitComponentClosure *closure,
+    const ConfitNucleusCatalog *nucleus, const char *consumer,
+    const char *link, const char **out, ConfitDiagnostic *diagnostic) {
+  size_t index;
+  size_t matches = 0U;
+  const char *resolved = NULL;
+  if (closure == NULL || nucleus == NULL || consumer == NULL || link == NULL ||
+      out == NULL) return CONFIT_ERR_INVALID_ARGUMENT;
+  if (strchr(link, '@') != NULL) {
+    for (index = 0U; index < closure->component_count; ++index) {
+      const ConfitComponent *candidate = closure->ordered[index];
+      if (confit_v4_list_has(candidate->feature_provides,
+                             candidate->feature_provide_count, link)) {
+        resolved = candidate->id;
+        ++matches;
+      }
+    }
+  } else {
+    for (index = 0U; index < closure->component_count; ++index) {
+      if (strcmp(closure->ordered[index]->id, link) == 0) {
+        resolved = link;
+        ++matches;
+      }
+    }
+    for (index = 0U; index < nucleus->unit_count; ++index) {
+      if (strcmp(nucleus->units[index].id, link) == 0) {
+        resolved = link;
+        ++matches;
+      }
+    }
+  }
+  if (matches != 1U || resolved == NULL || strcmp(consumer, resolved) == 0) {
+    confit_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, link, 0U, 0U,
+        "LINK_USES must resolve to one different selected source owner");
+    return CONFIT_ERR_SCHEMA;
+  }
+  *out = resolved;
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_v4_kapi_facade_directory(
     const ConfitComponentClosure *closure,
     const ConfitNucleusCatalog *nucleus, const char *kapi,
@@ -1243,6 +1285,21 @@ static ConfitStatus confit_v4_generate_components_mk(
       } else {
         status = confit_v2_builder_appendf(
             &builder, " %s", component->kapi_provides[source_index]);
+      }
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_COMPONENT_%s_LINK_USES:=", identifier);
+    for (source_index = 0U; status == CONFIT_OK &&
+         source_index < component->link_use_count; ++source_index) {
+      const char *resolved = NULL;
+      status = confit_v4_resolve_link_owner(
+          closure, nucleus, component->id, component->link_uses[source_index],
+          &resolved, diagnostic);
+      if (status == CONFIT_OK && confit_v4_is_safe_atom(resolved, 0)) {
+        status = confit_v2_builder_appendf(
+            &builder, " %s", resolved);
+      } else if (status == CONFIT_OK) {
+        status = CONFIT_ERR_SCHEMA;
       }
     }
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
@@ -1915,6 +1972,18 @@ static ConfitStatus confit_v4_generate_nucleus_mk(
     for (item = 0U; status == CONFIT_OK && item < unit->use_count; ++item)
       status = confit_v2_builder_appendf(&builder, " %s", unit->uses[item]);
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
+        &builder, "\nPARUS_NUCLEUS_%s_LINK_USES:=", identifier);
+    for (item = 0U; status == CONFIT_OK && item < unit->link_use_count; ++item) {
+      const char *resolved = NULL;
+      status = confit_v4_resolve_link_owner(
+          components, catalog, unit->id, unit->link_uses[item], &resolved,
+          diagnostic);
+      if (status == CONFIT_OK && confit_v4_is_safe_atom(resolved, 0))
+        status = confit_v2_builder_appendf(&builder, " %s", resolved);
+      else if (status == CONFIT_OK)
+        status = CONFIT_ERR_SCHEMA;
+    }
+    if (status == CONFIT_OK) status = confit_v2_builder_appendf(
         &builder, "\nPARUS_NUCLEUS_%s_KAPI_IMPORTS:=", identifier);
     for (item = 0U; status == CONFIT_OK &&
                     item < unit->kapi_import_count; ++item)
@@ -1970,6 +2039,7 @@ static ConfitStatus confit_v4_generate_tests_mk(
     const ConfitTestUnit *test = &catalog->tests[index];
     char identifier[160];
     size_t source;
+    size_t private_use;
     status = confit_v4_component_make_identifier(test->id, identifier,
                                                   sizeof(identifier));
     if (status == CONFIT_OK) status = confit_v2_builder_appendf(
@@ -1992,6 +2062,15 @@ static ConfitStatus confit_v4_generate_tests_mk(
         identifier, test->receipt_profile, identifier);
     for (source = 0U; status == CONFIT_OK && source < test->source_count; ++source)
       status = confit_v2_builder_appendf(&builder, " %s", test->sources[source]);
+    if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
+    if (status == CONFIT_OK)
+      status = confit_v2_builder_appendf(
+          &builder, "PARUS_TEST_%s_PRIVATE_USES:=", identifier);
+    for (private_use = 0U;
+         status == CONFIT_OK && private_use < test->private_use_count;
+         ++private_use)
+      status = confit_v2_builder_appendf(
+          &builder, " %s", test->private_uses[private_use]);
     if (status == CONFIT_OK) status = confit_v2_builder_append(&builder, "\n");
   }
   if (status == CONFIT_OK) {

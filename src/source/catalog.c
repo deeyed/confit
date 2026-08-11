@@ -29,6 +29,8 @@ typedef struct ConfitRestrictedMake {
   size_t source_count;
   char **uses;
   size_t use_count;
+  char **link_uses;
+  size_t link_use_count;
   char **kapi_imports;
   size_t kapi_import_count;
   char **kapi_exports;
@@ -42,6 +44,8 @@ typedef struct ConfitRestrictedMake {
   char *test_target;
   char *test_machine;
   char *test_receipt;
+  char **test_private_uses;
+  size_t test_private_use_count;
   uint32_t test_timeout_ms;
   int has_timeout;
   char *generator_id;
@@ -172,6 +176,7 @@ static void restricted_make_clear(ConfitRestrictedMake *make) {
   source_list_clear(make->subdirs, make->subdir_count);
   source_list_clear(make->sources, make->source_count);
   source_list_clear(make->uses, make->use_count);
+  source_list_clear(make->link_uses, make->link_use_count);
   source_list_clear(make->kapi_imports, make->kapi_import_count);
   source_list_clear(make->kapi_exports, make->kapi_export_count);
   source_list_clear(make->public_headers, make->public_header_count);
@@ -182,6 +187,7 @@ static void restricted_make_clear(ConfitRestrictedMake *make) {
   free(make->test_target);
   free(make->test_machine);
   free(make->test_receipt);
+  source_list_clear(make->test_private_uses, make->test_private_use_count);
   free(make->generator_id);
   free(make->generator_tool);
   source_list_clear(make->generator_inputs, make->generator_input_count);
@@ -316,6 +322,7 @@ static ConfitStatus source_parse_statement(
   static const char kern_subdirs[] = "KERN_SUBDIRS += ";
   static const char sources[] = "SRCS += ";
   static const char kern_uses[] = "KERN_USES += ";
+  static const char link_uses[] = "LINK_USES += ";
   static const char kapi_imports[] = "KAPI_IMPORTS += ";
   static const char kapi_exports[] = "KAPI_EXPORTS += ";
   static const char public_headers[] = "PUBLIC_HEADERS += ";
@@ -328,6 +335,7 @@ static ConfitStatus source_parse_statement(
   static const char test_machine[] = "TEST_MACHINE_PROFILE = ";
   static const char test_receipt[] = "TEST_RECEIPT_PROFILE = ";
   static const char test_sources[] = "TEST_SRCS += ";
+  static const char test_private_uses[] = "TEST_PRIVATE_USES += ";
   static const char generator_id[] = "GENERATOR = ";
   static const char generator_tool[] = "GENERATOR_TOOL = ";
   static const char generator_inputs[] = "GENERATOR_INPUTS = ";
@@ -365,6 +373,10 @@ static ConfitStatus source_parse_statement(
   if (strncmp(statement, kern_uses, sizeof(kern_uses) - 1U) == 0)
     return source_parse_list(statement + sizeof(kern_uses) - 1U, &make->uses,
                              &make->use_count, 1, 0, path, line, diagnostic);
+  if (strncmp(statement, link_uses, sizeof(link_uses) - 1U) == 0)
+    return source_parse_list(statement + sizeof(link_uses) - 1U,
+                             &make->link_uses, &make->link_use_count, 1, 0,
+                             path, line, diagnostic);
   if (strncmp(statement, kapi_imports, sizeof(kapi_imports) - 1U) == 0)
     return source_parse_list(statement + sizeof(kapi_imports) - 1U,
                              &make->kapi_imports, &make->kapi_import_count, 1,
@@ -410,6 +422,12 @@ static ConfitStatus source_parse_statement(
     return source_parse_list(statement + sizeof(test_sources) - 1U,
                              &make->sources, &make->source_count, 0, 0, path,
                              line, diagnostic);
+  if (strncmp(statement, test_private_uses,
+              sizeof(test_private_uses) - 1U) == 0)
+    return source_parse_list(statement + sizeof(test_private_uses) - 1U,
+                             &make->test_private_uses,
+                             &make->test_private_use_count, 1, 0, path, line,
+                             diagnostic);
   if (strncmp(statement, test_timeout, sizeof(test_timeout) - 1U) == 0) {
     char *end = NULL;
     unsigned long parsed;
@@ -593,6 +611,7 @@ static void nucleus_unit_clear(ConfitNucleusUnit *unit) {
   free(unit->makefile_path);
   source_list_clear(unit->sources, unit->source_count);
   source_list_clear(unit->uses, unit->use_count);
+  source_list_clear(unit->link_uses, unit->link_use_count);
   source_list_clear(unit->kapi_imports, unit->kapi_import_count);
   source_list_clear(unit->kapi_exports, unit->kapi_export_count);
   source_list_clear(unit->public_headers, unit->public_header_count);
@@ -644,6 +663,10 @@ static ConfitStatus nucleus_append(ConfitNucleusCatalog *catalog,
   unit->use_count = parsed->use_count;
   parsed->uses = NULL;
   parsed->use_count = 0U;
+  unit->link_uses = parsed->link_uses;
+  unit->link_use_count = parsed->link_use_count;
+  parsed->link_uses = NULL;
+  parsed->link_use_count = 0U;
   unit->kapi_imports = parsed->kapi_imports;
   unit->kapi_import_count = parsed->kapi_import_count;
   parsed->kapi_imports = NULL;
@@ -718,7 +741,8 @@ static ConfitStatus nucleus_walk(ConfitNucleusCatalog *catalog,
                               diagnostic);
   } else if (strcmp(parsed.include_name, "parus.kernsubdir.mk") == 0) {
     if (parsed.unit != NULL || parsed.source_count != 0U ||
-        parsed.subdir_count == 0U || parsed.test_id != NULL) {
+        parsed.subdir_count == 0U || parsed.test_id != NULL ||
+        parsed.link_use_count != 0U) {
       status = source_error(diagnostic, makefile, 0U,
                             "nucleus parent has leaf or test authority");
     }
@@ -971,6 +995,7 @@ static void test_unit_clear(ConfitTestUnit *test) {
   free(test->directory);
   free(test->makefile_path);
   source_list_clear(test->sources, test->source_count);
+  source_list_clear(test->private_uses, test->private_use_count);
   memset(test, 0, sizeof(*test));
 }
 
@@ -1031,6 +1056,7 @@ static ConfitStatus generator_append(ConfitGeneratorCatalog *catalog,
       !parsed->has_generator_max_bytes || parsed->unit != NULL ||
       parsed->subdir_count != 0U || parsed->source_count != 0U ||
       parsed->test_id != NULL || parsed->use_count != 0U ||
+      parsed->link_use_count != 0U ||
       parsed->kapi_import_count != 0U || parsed->kapi_export_count != 0U ||
       parsed->public_header_count != 0U)
     return source_error(diagnostic, makefile, 0U,
@@ -1119,6 +1145,7 @@ static ConfitStatus test_append(ConfitTestCatalog *catalog,
       parsed->test_lane == NULL || parsed->test_evidence == NULL ||
       !parsed->has_timeout || parsed->unit != NULL ||
       parsed->subdir_count != 0U || parsed->use_count != 0U ||
+      parsed->link_use_count != 0U ||
       parsed->kapi_export_count != 0U || parsed->public_header_count != 0U ||
       !test_lane_valid(parsed->test_lane, parsed->test_evidence))
     return source_error(diagnostic, makefile, 0U,
@@ -1157,6 +1184,10 @@ static ConfitStatus test_append(ConfitTestCatalog *catalog,
   test->source_count = parsed->source_count;
   parsed->sources = NULL;
   parsed->source_count = 0U;
+  test->private_uses = parsed->test_private_uses;
+  test->private_use_count = parsed->test_private_use_count;
+  parsed->test_private_uses = NULL;
+  parsed->test_private_use_count = 0U;
   if (test->target == NULL) test->target = source_strdup("none");
   if (test->machine_profile == NULL)
     test->machine_profile = source_strdup("none");
@@ -1390,6 +1421,27 @@ ConfitStatus confit_test_catalog_validate_owners(
           written > 0 && (size_t)written < sizeof(message)
               ? message
               : "test owner is not an exact declared identity");
+    }
+    for (owner_index = 0U; owner_index < test->private_use_count;
+         ++owner_index) {
+      size_t nucleus_index;
+      int private_found = 0;
+      for (nucleus_index = 0U; nucleus_index < nucleus->unit_count;
+           ++nucleus_index) {
+        if (strcmp(test->private_uses[owner_index],
+                   nucleus->units[nucleus_index].id) == 0) {
+          private_found = 1;
+          break;
+        }
+      }
+      if (!private_found &&
+          confit_component_catalog_find(components,
+                                       test->private_uses[owner_index]) != NULL)
+        private_found = 1;
+      if (!private_found)
+        return source_error(
+            diagnostic, test->makefile_path, 0U,
+            "test private implementation owner is not in the sealed catalog");
     }
   }
   return CONFIT_OK;

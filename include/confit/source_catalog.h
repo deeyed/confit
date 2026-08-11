@@ -22,6 +22,8 @@ typedef struct ConfitNucleusUnit {
   size_t source_count;
   char **uses;
   size_t use_count;
+  char **link_uses;
+  size_t link_use_count;
   char **kapi_imports;
   size_t kapi_import_count;
   char **kapi_exports;
@@ -51,6 +53,8 @@ typedef struct ConfitTestUnit {
   char *makefile_path;
   char **sources;
   size_t source_count;
+  char **private_uses;
+  size_t private_use_count;
 } ConfitTestUnit;
 
 /** @brief central ID registry 없이 local Makefile에서 얻은 complete test catalog다. */

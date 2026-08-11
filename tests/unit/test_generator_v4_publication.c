@@ -115,17 +115,22 @@ int main(void) {
   {
     char *features[] = {"world.synthetic@1"};
     char *roots[] = {"world.synthetic@1"};
+    char *link_uses[] = {"kern.synthetic"};
     const ConfitComponent *ordered[1];
     ConfitComponent component;
     ConfitComponentCatalog catalog;
     ConfitComponentClosure closure;
     ConfitComponentReason reason;
+    ConfitNucleusUnit nucleus_unit;
+    ConfitNucleusCatalog nucleus;
     ConfitV2ArtifactInput profile_input;
     ConfitV4ArtifactOptions component_options;
     memset(&component, 0, sizeof(component));
     memset(&catalog, 0, sizeof(catalog));
     memset(&closure, 0, sizeof(closure));
     memset(&reason, 0, sizeof(reason));
+    memset(&nucleus_unit, 0, sizeof(nucleus_unit));
+    memset(&nucleus, 0, sizeof(nucleus));
     memset(&profile_input, 0, sizeof(profile_input));
     memset(&component_options, 0, sizeof(component_options));
     component.id = "world.synthetic";
@@ -137,6 +142,8 @@ int main(void) {
     component.build_include = "parus.world.mk";
     component.feature_provides = features;
     component.feature_provide_count = 1U;
+    component.link_uses = link_uses;
+    component.link_use_count = 1U;
     catalog.project_root = "/tmp";
     catalog.components = &component;
     catalog.component_count = 1U;
@@ -154,6 +161,9 @@ int main(void) {
     reason.source_column = 11U;
     closure.reasons = &reason;
     closure.reason_count = 1U;
+    nucleus_unit.id = "kern.synthetic";
+    nucleus.units = &nucleus_unit;
+    nucleus.unit_count = 1U;
     profile_input.path = "config/profiles/profile.toml";
     profile_input.content_hash =
         "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -162,6 +172,7 @@ int main(void) {
     component_options.input_count = 1U;
     component_options.component_catalog = &catalog;
     component_options.component_closure = &closure;
+    component_options.nucleus_catalog = &nucleus;
     {
       const ConfitStatus component_status = confit_v4_generate_artifacts(
           snapshot, &component_options, &component_first, &diagnostic);
@@ -190,6 +201,14 @@ int main(void) {
                               "PARUS_TEST_IDS:=") != 0);
     CONFIT_TEST_ASSERT(strstr(component_first.nucleus_mk,
                               "PARUS_NUCLEUS_UNIT_IDS:=") != 0);
+    CONFIT_TEST_ASSERT(strstr(component_first.components_mk,
+                              "PARUS_COMPONENT_world_synthetic_LINK_USES:= kern.synthetic") != 0);
+    link_uses[0] = "kern.missing";
+    confit_v4_artifact_set_clear(&component_second);
+    CONFIT_TEST_ASSERT(confit_v4_generate_artifacts(
+                           snapshot, &component_options, &component_second,
+                           &diagnostic) == CONFIT_ERR_SCHEMA);
+    link_uses[0] = "kern.synthetic";
     confit_v4_artifact_set_clear(&component_first);
     confit_v4_artifact_set_clear(&component_second);
   }

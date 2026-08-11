@@ -39,6 +39,8 @@ typedef struct ConfitComponent {
   size_t source_count;
   char **public_headers;
   size_t public_header_count;
+  char **link_uses;
+  size_t link_use_count;
   char **feature_requires;
   ConfitComponentSourceSpan *feature_requirement_spans;
   size_t feature_requirement_count;

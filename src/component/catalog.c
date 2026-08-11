@@ -85,6 +85,8 @@ static void confit_component_clear(ConfitComponent *component) {
                                      component->source_count);
   confit_component_string_list_clear(component->public_headers,
                                      component->public_header_count);
+  confit_component_string_list_clear(component->link_uses,
+                                     component->link_use_count);
   confit_component_string_list_clear(component->feature_requires,
                                      component->feature_requirement_count);
   free(component->feature_requirement_spans);
@@ -262,6 +264,11 @@ static int confit_component_kapi_valid(const char *text) {
   memcpy(name, text, name_size);
   name[name_size] = '\0';
   return confit_component_identifier_valid(name);
+}
+
+static int confit_component_link_valid(const char *text) {
+  return confit_component_identifier_valid(text) ||
+         confit_component_feature_valid(text);
 }
 
 static int confit_component_text_safe(const char *text, size_t maximum) {
@@ -545,6 +552,52 @@ static ConfitStatus confit_component_parse_make_tokens(
   return status;
 }
 
+static ConfitStatus confit_component_parse_link_tokens(
+    char *tokens, const char *makefile, size_t line,
+    ConfitComponent *component, ConfitDiagnostic *diagnostic) {
+  char *cursor = tokens;
+  if (cursor[0] == '\0' || cursor[0] == ' ' ||
+      cursor[strlen(cursor) - 1U] == ' ') return CONFIT_ERR_SCHEMA;
+  while (*cursor != '\0') {
+    char *separator = strchr(cursor, ' ');
+    char **grown;
+    size_t index;
+    if (separator != 0) *separator = '\0';
+    if (!confit_component_link_valid(cursor) ||
+        component->link_use_count >= CONFIT_COMPONENT_MAX_LIST_ITEMS) {
+      if (separator != 0) *separator = ' ';
+      confit_component_diagnostic_set(
+          diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+          "LINK_USES contains an unsafe or excessive owner identity");
+      return CONFIT_ERR_SCHEMA;
+    }
+    for (index = 0U; index < component->link_use_count; ++index) {
+      if (strcmp(component->link_uses[index], cursor) == 0) {
+        if (separator != 0) *separator = ' ';
+        confit_component_diagnostic_set(
+            diagnostic, CONFIT_ERR_SCHEMA, makefile, line, 1U,
+            "LINK_USES contains a duplicate owner identity");
+        return CONFIT_ERR_SCHEMA;
+      }
+    }
+    grown = (char **)realloc(
+        component->link_uses,
+        (component->link_use_count + 1U) * sizeof(*grown));
+    if (grown == 0) return CONFIT_ERR_INTERNAL;
+    component->link_uses = grown;
+    component->link_uses[component->link_use_count] =
+        confit_component_strdup(cursor);
+    if (component->link_uses[component->link_use_count] == 0)
+      return CONFIT_ERR_INTERNAL;
+    ++component->link_use_count;
+    if (separator == 0) break;
+    *separator = ' ';
+    cursor = separator + 1U;
+    if (*cursor == ' ') return CONFIT_ERR_SCHEMA;
+  }
+  return CONFIT_OK;
+}
+
 static ConfitStatus confit_component_parse_make_statement(
     char *statement, const char *project_root, const char *directory,
     const char *makefile, size_t line, ConfitComponent *component,
@@ -552,6 +605,7 @@ static ConfitStatus confit_component_parse_make_statement(
   static const char kApi[] = "PARUS_MK_API = ";
   static const char kSources[] = "SRCS += ";
   static const char kHeaders[] = "PUBLIC_HEADERS += ";
+  static const char kLinkUses[] = "LINK_USES += ";
   static const char kIncludePrefix[] = ".include <";
   size_t size = strlen(statement);
   ConfitStatus status = CONFIT_OK;
@@ -576,6 +630,10 @@ static ConfitStatus confit_component_parse_make_statement(
     status = confit_component_parse_make_tokens(
         statement + sizeof(kHeaders) - 1U, 1, project_root, directory,
         makefile, line, component, diagnostic);
+  } else if (strncmp(statement, kLinkUses, sizeof(kLinkUses) - 1U) == 0) {
+    status = confit_component_parse_link_tokens(
+        statement + sizeof(kLinkUses) - 1U, makefile, line, component,
+        diagnostic);
   } else if (size > sizeof(kIncludePrefix) &&
              strncmp(statement, kIncludePrefix,
                      sizeof(kIncludePrefix) - 1U) == 0 &&

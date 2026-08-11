@@ -89,11 +89,18 @@ self-edge, cycle, symlink/path escape와 limit 초과는 partial catalog 없이 
 Selection은 root/feature/KAPI/provider reason과 manifest source 위치를 immutable
 artifact에 보존한다.
 
-Sibling selectable Makefile은 exact `PARUS_MK_API = 3`, bounded `SRCS +=`와 kind별 public
+Sibling selectable Makefile은 exact `PARUS_MK_API = 3`, bounded `SRCS +=`, optional
+`LINK_USES +=`와 kind별 public
 include 하나만 가진다. Mandatory nucleus는 `component.toml` 없이 parent
 `KERN_SUBDIRS +=`/`parus.kernsubdir.mk` 또는 leaf `KERN_UNIT`, `SRCS`, `KERN_USES`,
-`KAPI_EXPORTS`/`parus.kernunit.mk` grammar를 사용한다. Test는 owner-local `TEST_ID`,
+`LINK_USES`, `KAPI_EXPORTS`/`parus.kernunit.mk` grammar를 사용한다. `LINK_USES`는
+selected closure의 exact owner 또는 unique feature로 낮아지는 same-image raw symbol
+감사 edge이며 selection, KAPI나 runtime capability가 아니다. Test는 owner-local `TEST_ID`,
 `TEST_OWNER`, lane/evidence/timeout, optional target/machine/receipt와 `TEST_SRCS`를
-`parus.test.mk`로 닫는다. Condition, modifier, recipe, glob, raw flag, extra include와 source
-escape는 catalog 단계에서 거부한다. Source는 owner directory 아래 existing regular
+`parus.test.mk`로 닫는다. White-box test는 exact owner implementation root를 자동으로 받고,
+여러 owner의 내부 상태를 함께 검증해야 할 때만
+`TEST_PRIVATE_USES += <exact-nucleus-or-component-id>`를 반복할 수 있다. 이 목록은 같은 sealed
+catalog의 구현 owner만 가리키며 test compile header-closure 이외의 selection/KAPI/runtime
+권위를 만들지 않는다. Condition, modifier, recipe, glob, raw flag, author-supplied include와
+source escape는 catalog 단계에서 거부한다. Source는 owner directory 아래 existing regular
 file이어야 하고 한 graph에서 owner가 중복될 수 없다.

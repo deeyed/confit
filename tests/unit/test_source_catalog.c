@@ -72,6 +72,7 @@ static void expect_valid_catalogs(void) {
              "PARUS_MK_API = 3\n"
              "KERN_UNIT = kern.fixture.core\n"
              "SRCS += core.c\n"
+             "LINK_USES += arch.kernel@1\n"
              "PUBLIC_HEADERS += core.h\n"
              ".include <parus.kernunit.mk>\n");
   write_file(root, "nucleus/core/core.c", "int source_core(void) { return 3; }\n");
@@ -84,6 +85,7 @@ static void expect_valid_catalogs(void) {
              "TEST_LANE = unit\n"
              "TEST_EVIDENCE_CLASS = host-unit\n"
              "TEST_TIMEOUT_MS = 1000\n"
+             "TEST_PRIVATE_USES += kern.fixture.core\n"
              "TEST_SRCS += suite.c\n"
              ".include <parus.test.mk>\n");
   write_file(root, "tests/core/suite.c", "int main(void) { return 0; }\n");
@@ -96,12 +98,27 @@ static void expect_valid_catalogs(void) {
   CONFIT_TEST_ASSERT(nucleus.unit_count == 1U);
   CONFIT_TEST_ASSERT(strcmp(nucleus.units[0].id, "kern.fixture.core") == 0);
   CONFIT_TEST_ASSERT(nucleus.units[0].source_count == 1U);
+  CONFIT_TEST_ASSERT(nucleus.units[0].link_use_count == 1U);
+  CONFIT_TEST_ASSERT(strcmp(nucleus.units[0].link_uses[0],
+                            "arch.kernel@1") == 0);
   confit_diagnostic_clear(&diagnostic);
   CONFIT_TEST_ASSERT(
       confit_test_catalog_load(&project, &tests, &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(tests.test_count == 1U);
   CONFIT_TEST_ASSERT(strcmp(tests.tests[0].owner, "kern.fixture.core") == 0);
   CONFIT_TEST_ASSERT(tests.tests[0].timeout_ms == 1000U);
+  CONFIT_TEST_ASSERT(tests.tests[0].private_use_count == 1U);
+  CONFIT_TEST_ASSERT(strcmp(tests.tests[0].private_uses[0],
+                            "kern.fixture.core") == 0);
+  CONFIT_TEST_ASSERT(confit_test_catalog_validate_owners(
+                         &tests, &nucleus, &components, &diagnostic) ==
+                     CONFIT_OK);
+  tests.tests[0].private_uses[0][0] = 'x';
+  CONFIT_TEST_ASSERT(confit_test_catalog_validate_owners(
+                         &tests, &nucleus, &components, &diagnostic) ==
+                     CONFIT_ERR_SCHEMA);
+  confit_diagnostic_clear(&diagnostic);
+  tests.tests[0].private_uses[0][0] = 'k';
   CONFIT_TEST_ASSERT(confit_test_catalog_validate_owners(
                          &tests, &nucleus, &components, &diagnostic) ==
                      CONFIT_OK);
