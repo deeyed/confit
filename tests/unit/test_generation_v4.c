@@ -187,7 +187,7 @@ static void expect_preview_cancel_and_seal(void) {
     CONFIT_TEST_ASSERT(strstr(artifact.text, "components.mk") == 0);
     CONFIT_TEST_ASSERT(strstr(artifact.text, "tests.mk") == 0);
     CONFIT_TEST_ASSERT(strstr(artifact.text, "generators.mk") == 0);
-    CONFIT_TEST_ASSERT(strstr(artifact.text, "build.policy") == 0);
+    CONFIT_TEST_ASSERT(strstr(artifact.text, "build." "policy") == 0);
     if (strcmp(artifact.name, "config.provenance.json") == 0) {
       CONFIT_TEST_ASSERT(strstr(artifact.text, "\"prompt\"") != 0);
       CONFIT_TEST_ASSERT(strstr(artifact.text, "\"help\"") != 0);

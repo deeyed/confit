@@ -1386,7 +1386,7 @@ static ConfitStatus publish_selected_alias(
   written = snprintf(bytes, sizeof(bytes),
                      "schema=confit-selected-v4\ngeneration=%s\n"
                      "transaction=%s\nreceipt.path=%s\nreceipt.sha256=%s\n"
-                     "candidate.path=%s\n",
+                     "generation.path=%s\n",
                      transaction->generation_sha256,
                      transaction->transaction_id, receipt_path,
                      receipt_sha256, transaction->generation_directory);

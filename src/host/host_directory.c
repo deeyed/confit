@@ -397,12 +397,30 @@ static int confit_host_stage0_receipt(
   char bytes[8192];
   int descriptor = -1;
   int length;
-  if (!confit_host_measure_stage0_tool(stage0_path, 0, &stage0, diagnostic) ||
-      !confit_host_measure_stage0_tool(bmake_path, 1, &bmake, diagnostic) ||
-      !confit_host_measure_stage0_tool(compiler_path, 2, &compiler,
-                                      diagnostic) ||
-      !confit_host_measure_stage0_tool(admission_path, 3, &admission,
-                                      diagnostic)) return 0;
+  if (!confit_host_measure_stage0_tool(stage0_path, 0, &stage0, diagnostic)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, stage0_path, 0U,
+                          0U, "stage-0 Confit identity measurement failed");
+    return 0;
+  }
+  if (!confit_host_measure_stage0_tool(bmake_path, 1, &bmake, diagnostic)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, bmake_path, 0U,
+                          0U, "stage-0 bmake identity measurement failed");
+    return 0;
+  }
+  if (!confit_host_measure_stage0_tool(compiler_path, 2, &compiler,
+                                      diagnostic)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, compiler_path,
+                          0U, 0U,
+                          "stage-0 C compiler identity measurement failed");
+    return 0;
+  }
+  if (!confit_host_measure_stage0_tool(admission_path, 3, &admission,
+                                      diagnostic)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, admission_path,
+                          0U, 0U,
+                          "generated admission identity measurement failed");
+    return 0;
+  }
   descriptor = openat(invocation_fd, receipt_name,
                       O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
                       0600);
@@ -464,7 +482,7 @@ static int confit_host_compile_admission(
   struct stat invocation_metadata;
   struct stat current_invocation;
   struct stat output_metadata;
-  struct stat created_output;
+  struct stat sealed_output;
   pid_t child;
   int status;
   int stage_fd = -1;
@@ -473,34 +491,59 @@ static int confit_host_compile_admission(
   const size_t repository_size = strlen(repository);
   if (source == 0 || compiler_path == 0 ||
       realpath(source, canonical_source) == 0 ||
-      strcmp(source, canonical_source) != 0 ||
-      strncmp(source, repository, repository_size) != 0 ||
-      source[repository_size] != '/' ||
-      lstat(source, &source_before) != 0 ||
+      strcmp(source, canonical_source) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission source is not one canonical path");
+    return 0;
+  }
+  if (strncmp(source, repository, repository_size) != 0 ||
+      source[repository_size] != '/') {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission source is outside the repository");
+    return 0;
+  }
+  if (lstat(source, &source_before) != 0 ||
       !S_ISREG(source_before.st_mode) || source_before.st_nlink != 1U ||
-      source_before.st_size <= 0 ||
-      confit_v4_sha256_file(canonical_source, source_sha256, diagnostic) !=
-          CONFIT_OK ||
-      snprintf(source_define, sizeof(source_define),
+      source_before.st_size <= 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission source is not one nonempty regular file");
+    return 0;
+  }
+  if (confit_v4_sha256_file(canonical_source, source_sha256, diagnostic) !=
+      CONFIT_OK) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission source digest measurement failed");
+    return 0;
+  }
+  if (snprintf(source_define, sizeof(source_define),
                "-DPARUS_ADMIT_SOURCE_SHA256=\"%s\"", source_sha256) <= 0 ||
       snprintf(operation_define, sizeof(operation_define),
                "-DPARUS_ADMIT_COMPILE_OPERATION=\"%s\"",
-               CONFIT_STAGE0_ADMISSION_OPERATION) <= 0 ||
-      realpath(compiler_path, canonical_compiler) == 0 ||
+               CONFIT_STAGE0_ADMISSION_OPERATION) <= 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission compile identity encoding failed");
+    return 0;
+  }
+  if (realpath(compiler_path, canonical_compiler) == 0 ||
       !confit_host_stage0_path(canonical_compiler) ||
-      !confit_host_immutable_system_executable(canonical_compiler) ||
-      fstat(root_fd, &root_metadata) != 0 ||
+      !confit_host_immutable_system_executable(canonical_compiler)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, compiler_path,
+                          0U, 0U,
+                          "stage-0 compiler is outside the immutable system boundary");
+    return 0;
+  }
+  if (fstat(root_fd, &root_metadata) != 0 ||
       fstat(invocation_fd, &invocation_metadata) != 0 ||
       fstatat(invocation_fd, output_name, &output_metadata,
-              AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT) return 0;
+              AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission output leaf boundary validation failed");
+    return 0;
+  }
   stage_fd = confit_host_create_directory_at(invocation_fd, stage_name);
   if (stage_fd < 0) return 0;
-  output = openat(stage_fd, temporary_name,
-                  O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
-  if (output < 0 || fstat(output, &created_output) != 0 ||
-      !S_ISREG(created_output.st_mode) || created_output.st_nlink != 1U ||
-      fchmod(stage_fd, 0500) != 0 || close(output) != 0) goto cleanup;
-  output = -1;
+  if (fstatat(stage_fd, temporary_name, &output_metadata,
+              AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT) goto cleanup;
   child = fork();
   if (child == 0) {
     struct rlimit file_limit;
@@ -526,15 +569,23 @@ static int confit_host_compile_admission(
   while (waitpid(child, &status, 0) < 0) {
     if (errno != EINTR) goto cleanup;
   }
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 ||
-      lstat(source, &source_after) != 0 ||
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "stage-0 C compiler rejected the admission source");
+    goto cleanup;
+  }
+  if (lstat(source, &source_after) != 0 ||
       source_after.st_dev != source_before.st_dev ||
       source_after.st_ino != source_before.st_ino ||
       source_after.st_size != source_before.st_size ||
       confit_v4_sha256_file(canonical_source, source_after_sha256,
                             diagnostic) != CONFIT_OK ||
-      strcmp(source_after_sha256, source_sha256) != 0 ||
-      fstatat(parent_fd, root_leaf, &current_root, AT_SYMLINK_NOFOLLOW) != 0 ||
+      strcmp(source_after_sha256, source_sha256) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission source identity changed during compilation");
+    goto cleanup;
+  }
+  if (fstatat(parent_fd, root_leaf, &current_root, AT_SYMLINK_NOFOLLOW) != 0 ||
       !S_ISDIR(current_root.st_mode) ||
       current_root.st_dev != root_metadata.st_dev ||
       current_root.st_ino != root_metadata.st_ino ||
@@ -542,34 +593,47 @@ static int confit_host_compile_admission(
               AT_SYMLINK_NOFOLLOW) != 0 ||
       !S_ISDIR(current_invocation.st_mode) ||
       current_invocation.st_dev != invocation_metadata.st_dev ||
-      current_invocation.st_ino != invocation_metadata.st_ino) goto cleanup;
+      current_invocation.st_ino != invocation_metadata.st_ino) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission output root identity changed during compilation");
+    goto cleanup;
+  }
   output = openat(stage_fd, temporary_name,
                   O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
   if (output < 0 || fstat(output, &output_metadata) != 0 ||
       !S_ISREG(output_metadata.st_mode) || output_metadata.st_nlink != 1U ||
-      output_metadata.st_dev != created_output.st_dev ||
-      output_metadata.st_ino != created_output.st_ino ||
       output_metadata.st_size <= 0 ||
       (uint64_t)output_metadata.st_size > CONFIT_STAGE0_ADMISSION_MAX_BYTES ||
       fchmod(output, 0500) != 0 || fsync(output) != 0 || close(output) != 0 ||
-      fchmod(stage_fd, 0700) != 0) {
+      fchmod(stage_fd, 0500) != 0) {
     if (output >= 0) (void)close(output);
     output = -1;
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission compiler output validation failed");
     goto cleanup;
   }
   output = -1;
+  sealed_output = output_metadata;
   if (linkat(stage_fd, temporary_name, invocation_fd, output_name, 0) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission output create-only publication failed");
     goto cleanup;
   }
   output_linked = 1;
   if (fstatat(invocation_fd, output_name, &output_metadata,
               AT_SYMLINK_NOFOLLOW) != 0 ||
-      output_metadata.st_dev != created_output.st_dev ||
-      output_metadata.st_ino != created_output.st_ino ||
+      !S_ISREG(output_metadata.st_mode) || output_metadata.st_nlink != 2U ||
+      output_metadata.st_dev != sealed_output.st_dev ||
+      output_metadata.st_ino != sealed_output.st_ino ||
+      fchmod(stage_fd, 0700) != 0 ||
       unlinkat(stage_fd, temporary_name, 0) != 0 || fsync(stage_fd) != 0 ||
       close(stage_fd) != 0 ||
       unlinkat(invocation_fd, stage_name, AT_REMOVEDIR) != 0 ||
-      fsync(invocation_fd) != 0) goto cleanup;
+      fsync(invocation_fd) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
+                          "admission output publication identity check failed");
+    goto cleanup;
+  }
   stage_fd = -1;
   memcpy(out_source_sha256, source_sha256, sizeof(source_sha256));
   return 1;
@@ -665,21 +729,42 @@ ConfitStatus confit_host_prepare_parus_build_root(
       admission_path, sizeof(admission_path),
       "%s/.parus-admission-bootstrap/%s/parus-admit", root, invocation);
   if (admission_length <= 0 ||
-      (size_t)admission_length >= sizeof(admission_path) ||
-      !confit_host_compile_admission(
+      (size_t)admission_length >= sizeof(admission_path)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                          "generated admission path exceeds the host limit");
+    goto cleanup;
+  }
+  if (!confit_host_compile_admission(
           parent_fd, leaf, root_fd, bootstrap_fd, invocation, invocation_fd,
           repository, admission_source, host_compiler, source_sha256,
-          diagnostic) ||
-      !confit_host_stage0_receipt(
+          diagnostic)) {
+    if (diagnostic->message == 0 || diagnostic->message[0] == '\0') {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION,
+                            admission_source, 0U, 0U,
+                            "descriptor-rooted admission compilation failed");
+    }
+    goto cleanup;
+  }
+  if (!confit_host_stage0_receipt(
           invocation_fd, root, repository, invocation, stage0_confit, bmake,
           host_compiler, admission_source, source_sha256, admission_path,
-          diagnostic) ||
-      fchmod(invocation_fd, 0500) != 0 ||
-      fchmod(bootstrap_fd, 0500) != 0 ||
-      fsync(invocation_fd) != 0 || fsync(bootstrap_fd) != 0 ||
+          diagnostic)) {
+    if (diagnostic->message == 0 || diagnostic->message[0] == '\0') {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                            "stage-0 tool receipt publication failed");
+    }
+    goto cleanup;
+  }
+  if (fchmod(invocation_fd, 0500) != 0 ||
+      fchmod(bootstrap_fd, 0500) != 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
+                          "stage-0 admission permissions could not be sealed");
+    goto cleanup;
+  }
+  if (fsync(invocation_fd) != 0 || fsync(bootstrap_fd) != 0 ||
       fsync(root_fd) != 0 || fsync(parent_fd) != 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
-                          "stage-0 tool receipt publication failed");
+                          "stage-0 admission directory sync failed");
     goto cleanup;
   }
   status = CONFIT_OK;
@@ -1036,7 +1121,7 @@ static ConfitStatus confit_host_append_named_path(char ***items,
 
   if (*item_count >= max_count) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, path, 0U, 0U,
-                          "component manifest count exceeds the supported limit");
+                          "configuration member count exceeds the supported limit");
     return CONFIT_ERR_SCHEMA;
   }
   copy = (char *)malloc(size + 1U);
@@ -1065,23 +1150,23 @@ static ConfitStatus confit_host_list_named_files_recursive_impl(
   if (lstat(directory, &info) != 0) {
     if (errno == ENOENT) return CONFIT_OK;
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
-                          "failed to inspect component root");
+                          "failed to inspect configuration discovery root");
     return CONFIT_ERR_PARSE;
   }
   if (S_ISLNK(info.st_mode)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
-                          "component discovery rejects symlink roots");
+                          "configuration discovery rejects symlink roots");
     return CONFIT_ERR_SCHEMA;
   }
   if (!S_ISDIR(info.st_mode)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
-                          "component root is not a directory");
+                          "configuration discovery root is not a directory");
     return CONFIT_ERR_SCHEMA;
   }
   dir = opendir(directory);
   if (dir == 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
-                          "failed to open component root");
+                          "failed to open configuration discovery root");
     return CONFIT_ERR_PARSE;
   }
   while ((entry = readdir(dir)) != 0) {
@@ -1098,14 +1183,14 @@ static ConfitStatus confit_host_list_named_files_recursive_impl(
       free(child);
       (void)closedir(dir);
       confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
-                            "failed to inspect component entry");
+                            "failed to inspect configuration entry");
       return CONFIT_ERR_PARSE;
     }
     if (S_ISLNK(info.st_mode)) {
       free(child);
       (void)closedir(dir);
       confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
-                            "component discovery rejects symlink entries");
+                            "configuration discovery rejects symlink entries");
       return CONFIT_ERR_SCHEMA;
     }
     if (S_ISDIR(info.st_mode)) {
@@ -1113,7 +1198,7 @@ static ConfitStatus confit_host_list_named_files_recursive_impl(
         free(child);
         (void)closedir(dir);
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
-                              "component discovery depth exceeds the supported limit");
+                              "configuration discovery depth exceeds the supported limit");
         return CONFIT_ERR_SCHEMA;
       }
       status = confit_host_list_named_files_recursive_impl(
@@ -1131,7 +1216,7 @@ static ConfitStatus confit_host_list_named_files_recursive_impl(
         free(child);
         (void)closedir(dir);
         confit_diagnostic_set(diagnostic, CONFIT_ERR_SCHEMA, directory, 0U, 0U,
-                              "component manifest exceeds the supported size");
+                              "configuration member exceeds the supported size");
         return CONFIT_ERR_SCHEMA;
       }
       status = confit_host_append_named_path(items, item_count, max_count, child,
@@ -1147,7 +1232,7 @@ static ConfitStatus confit_host_list_named_files_recursive_impl(
   }
   if (closedir(dir) != 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, directory, 0U, 0U,
-                          "failed to close component root");
+                          "failed to close configuration discovery root");
     return CONFIT_ERR_PARSE;
   }
   return CONFIT_OK;

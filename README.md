@@ -6,8 +6,8 @@ profile, target, selection과 product binding을 bounded하게 해석하고 immu
 graph는 해석하거나 소유하지 않는다.
 
 Production 흐름은 `confit configure` 한 번과 이후의 `bmake` 소비 단계로 분리된다.
-설정 입력이 바뀌지 않은 ordinary build에서는 resolver를 다시 실행하지 않는다. Config v2,
-selectable component schema v3, build policy 생성기와 호환 reader는 제공하지 않는다.
+설정 입력이 바뀌지 않은 ordinary build에서는 resolver를 다시 실행하지 않는다. 이전
+manifest와 generated graph 형식의 생성기·호환 reader는 제공하지 않는다.
 
 독립 검증:
 

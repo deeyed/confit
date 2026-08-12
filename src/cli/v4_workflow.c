@@ -37,6 +37,30 @@ typedef struct ConfigureArguments {
   const char *receipt_relative;
 } ConfigureArguments;
 
+/*
+ * Make context와 config seal에는 shell 문장이 아니라 compiler-neutral한 bounded
+ * version atom만 게시한다. Human banner 전체는 실행 경계에서만 관찰하며 첫 numeric
+ * version을 추출한다. 따옴표나 공백을 Make 변수로 전달하는 escape hatch는 없다.
+ */
+static int normalize_version_atom(char version[256]) {
+  char normalized[256];
+  size_t start = 0U;
+  size_t length = 0U;
+  while (version[start] != '\0' &&
+         (version[start] < '0' || version[start] > '9')) ++start;
+  while (version[start + length] != '\0' &&
+         ((version[start + length] >= '0' && version[start + length] <= '9') ||
+          version[start + length] == '.')) {
+    if (length + 1U >= sizeof(normalized)) return 0;
+    ++length;
+  }
+  if (length == 0U || version[start + length - 1U] == '.') return 0;
+  (void)memcpy(normalized, version + start, length);
+  normalized[length] = '\0';
+  (void)memcpy(version, normalized, length + 1U);
+  return 1;
+}
+
 static int option_value(int argc, char **argv, const char *name,
                         const char **out) {
   int found = 0;
@@ -76,6 +100,8 @@ static ConfitStatus tool_identity(const char *path, const char *version_argument
     status = confit_host_capture_first_line_argument(
         version, CONFIT_CLI_VERSION_BYTES, canonical, version_argument,
         diagnostic);
+  if (status == CONFIT_OK && !normalize_version_atom(version))
+    status = CONFIT_ERR_COMPATIBILITY;
   if (status == CONFIT_OK)
     status = confit_v4_sha256_file(canonical, digest, diagnostic);
   if (status != CONFIT_OK) return status;

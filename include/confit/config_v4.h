@@ -148,7 +148,7 @@ typedef struct ConfitV4Evaluation ConfitV4Evaluation;
  *
  * Loader는 project가 등록한 role root만 lexical traversal하며 symlink, path
  * escape, case-fold collision, duplicate symbol, wrong-role table와 budget
- * 초과를 partial catalog 없이 거부한다. Schema v3 fallback이나 converter는
+ * 초과를 partial catalog 없이 거부한다. Retired manifest fallback이나 converter는
  * 호출하지 않는다.
  */
 ConfitStatus confit_v4_catalog_load(const char *repository_root,

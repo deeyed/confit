@@ -1674,7 +1674,7 @@ static ConfitStatus confit_v4_parse_document(
   case CONFIT_V4_ROLE_SELECTIONS:
     confit_v4_set_value_diagnostic(
         context->diagnostic, CONFIT_ERR_UNSUPPORTED, 0, path,
-        "BPAH-R02 candidate does not yet publish profile/target/selection state");
+        "this configure-only resolver does not accept standalone profile, target, or selection documents");
     return CONFIT_ERR_UNSUPPORTED;
   default:
     return CONFIT_ERR_INTERNAL;
