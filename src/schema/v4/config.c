@@ -1568,6 +1568,265 @@ static void confit_v4_rule_clear(ConfitV4Rule *rule) {
   memset(rule, 0, sizeof(*rule));
 }
 
+static int confit_v4_layer_id_valid(const char *text) {
+  size_t index;
+  if (text == 0 || text[0] == '\0' || strlen(text) > 127U ||
+      !isalnum((unsigned char)text[0])) return 0;
+  for (index = 1U; text[index] != '\0'; ++index) {
+    const unsigned char value = (unsigned char)text[index];
+    if (!(isalnum(value) || value == '.' || value == '-' || value == '_'))
+      return 0;
+  }
+  return 1;
+}
+
+static void confit_v4_layer_clear(ConfitV4Layer *layer) {
+  if (layer == 0) return;
+  free(layer->id);
+  free(layer->profile_id);
+  free(layer->target_id);
+  for (size_t index = 0U; index < layer->assignment_count; ++index) {
+    free(layer->assignments[index].symbol);
+    free(layer->assignments[index].value);
+    free(layer->assignments[index].overrides_source_path);
+    confit_v4_owned_span_clear(&layer->assignments[index].source);
+  }
+  free(layer->assignments);
+  for (size_t index = 0U; index < layer->provider_count; ++index) {
+    free((char *)layer->providers[index].namespace_name);
+    free((char *)layer->providers[index].option_symbol);
+    free((char *)layer->providers[index].source.path);
+  }
+  free(layer->providers);
+  confit_v4_owned_span_clear(&layer->source);
+  memset(layer, 0, sizeof(*layer));
+}
+
+static ConfitStatus confit_v4_parse_layer_assignments(
+    const ConfitTomlValue *values, const char *path,
+    const char *repository_root, ConfitV4Layer *layer,
+    ConfitDiagnostic *diagnostic) {
+  static const char *const allowed[] = {"symbol", "value", "overrides"};
+  size_t count = values == 0 ? 0U : confit_toml_array_size(values);
+  if (values != 0 && confit_toml_value_type(values) != CONFIT_TOML_VALUE_ARRAY)
+    return CONFIT_ERR_SCHEMA;
+  if (count > CONFIT_V4_MAX_LAYER_ASSIGNMENTS) return CONFIT_ERR_SCHEMA;
+  if (count == 0U) return CONFIT_OK;
+  layer->assignments = (ConfitV4LayerAssignment *)calloc(
+      count, sizeof(layer->assignments[0]));
+  if (layer->assignments == 0) return CONFIT_ERR_INTERNAL;
+  layer->assignment_count = count;
+  for (size_t index = 0U; index < count; ++index) {
+    const ConfitTomlValue *table = confit_toml_array_at(values, index);
+    const ConfitTomlValue *override_value;
+    ConfitV4LayerAssignment *assignment = &layer->assignments[index];
+    ConfitStatus status = confit_v4_validate_keys(
+        table, allowed, sizeof(allowed) / sizeof(allowed[0]), path,
+        diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_v4_copy_string(
+          confit_toml_table_find(table, "symbol"),
+          CONFIT_V4_MAX_SYMBOL_BYTES, &assignment->symbol, diagnostic);
+    if (status == CONFIT_OK && !confit_v4_symbol_valid(assignment->symbol))
+      status = CONFIT_ERR_SCHEMA;
+    if (status == CONFIT_OK)
+      status = confit_v4_copy_string(
+          confit_toml_table_find(table, "value"),
+          CONFIT_V4_MAX_TEXT_BYTES, &assignment->value, diagnostic);
+    override_value = confit_toml_table_find(table, "overrides");
+    if (status == CONFIT_OK && override_value != 0) {
+      char *relative = 0;
+      char absolute[CONFIT_V4_MAX_PATH_BYTES + 1U];
+      status = confit_v4_copy_string(override_value,
+                                     CONFIT_V4_MAX_PATH_BYTES,
+                                     &relative, diagnostic);
+      if (status == CONFIT_OK &&
+          (!confit_v4_relative_path_valid(relative) ||
+           !confit_v4_join(absolute, sizeof(absolute), repository_root,
+                           relative))) {
+        status = CONFIT_ERR_SCHEMA;
+      }
+      if (status == CONFIT_OK)
+        assignment->overrides_source_path = confit_v4_copy(absolute);
+      free(relative);
+      if (status == CONFIT_OK && assignment->overrides_source_path == 0)
+        status = CONFIT_ERR_INTERNAL;
+    }
+    if (status == CONFIT_OK)
+      status = confit_v4_span_from_value(&assignment->source, table, path);
+    if (status != CONFIT_OK) return status;
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v4_parse_layer_providers(
+    const ConfitTomlValue *values, const char *path, ConfitV4Layer *layer,
+    ConfitDiagnostic *diagnostic) {
+  static const char *const allowed[] = {"namespace", "major", "option"};
+  size_t count = values == 0 ? 0U : confit_toml_array_size(values);
+  if (values != 0 && confit_toml_value_type(values) != CONFIT_TOML_VALUE_ARRAY)
+    return CONFIT_ERR_SCHEMA;
+  if (count > CONFIT_V4_MAX_OPTION_EDGES) return CONFIT_ERR_SCHEMA;
+  if (count == 0U) return CONFIT_OK;
+  layer->providers = (ConfitV4ProviderChoice *)calloc(
+      count, sizeof(layer->providers[0]));
+  if (layer->providers == 0) return CONFIT_ERR_INTERNAL;
+  layer->provider_count = count;
+  for (size_t index = 0U; index < count; ++index) {
+    const ConfitTomlValue *table = confit_toml_array_at(values, index);
+    ConfitV4ProviderChoice *provider = &layer->providers[index];
+    char *namespace_name = 0;
+    char *option_symbol = 0;
+    int64_t major = 0;
+    ConfitStatus status = confit_v4_validate_keys(
+        table, allowed, sizeof(allowed) / sizeof(allowed[0]), path,
+        diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_v4_copy_string(
+          confit_toml_table_find(table, "namespace"),
+          CONFIT_V4_MAX_SYMBOL_BYTES, &namespace_name, diagnostic);
+    if (status == CONFIT_OK && !confit_v4_namespace_valid(namespace_name))
+      status = CONFIT_ERR_SCHEMA;
+    if (status == CONFIT_OK &&
+        (!confit_toml_value_int64(confit_toml_table_find(table, "major"),
+                                  &major) ||
+         major <= 0 || (uint64_t)major > UINT32_MAX))
+      status = CONFIT_ERR_SCHEMA;
+    if (status == CONFIT_OK)
+      status = confit_v4_copy_string(
+          confit_toml_table_find(table, "option"),
+          CONFIT_V4_MAX_SYMBOL_BYTES, &option_symbol, diagnostic);
+    if (status == CONFIT_OK && !confit_v4_symbol_valid(option_symbol))
+      status = CONFIT_ERR_SCHEMA;
+    if (status == CONFIT_OK) {
+      provider->namespace_name = namespace_name;
+      provider->major = (uint32_t)major;
+      provider->option_symbol = option_symbol;
+      provider->source.path = confit_v4_copy(path);
+      provider->source.line = confit_toml_value_line(table);
+      provider->source.column = confit_toml_value_column(table);
+      if (provider->source.path == 0) status = CONFIT_ERR_INTERNAL;
+    }
+    if (status != CONFIT_OK) {
+      free(namespace_name);
+      free(option_symbol);
+      return status;
+    }
+  }
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_v4_parse_layer_document(
+    ConfitV4Catalog *catalog, ConfitV4Role role, const char *path,
+    ConfitDiagnostic *diagnostic) {
+  static const char *const root_allowed[] = {
+      "schema_version", "profile", "target", "selection", "assignments",
+      "providers"};
+  static const char *const identity_allowed[] = {"id"};
+  static const char *const selection_allowed[] = {"id", "profile", "target"};
+  const char *name = role == CONFIT_V4_ROLE_PROFILES
+                         ? "profile"
+                         : role == CONFIT_V4_ROLE_TARGETS ? "target"
+                                                         : "selection";
+  ConfitV4Layer **array = role == CONFIT_V4_ROLE_PROFILES
+                              ? &catalog->profiles
+                              : role == CONFIT_V4_ROLE_TARGETS
+                                    ? &catalog->targets
+                                    : &catalog->selections;
+  size_t *count = role == CONFIT_V4_ROLE_PROFILES
+                      ? &catalog->profile_count
+                      : role == CONFIT_V4_ROLE_TARGETS
+                            ? &catalog->target_count
+                            : &catalog->selection_count;
+  ConfitTomlDocument *document = 0;
+  const ConfitTomlValue *root;
+  const ConfitTomlValue *table;
+  ConfitV4Layer layer;
+  ConfitStatus status;
+  memset(&layer, 0, sizeof(layer));
+  if (*count >= CONFIT_V4_MAX_LAYERS) return CONFIT_ERR_SCHEMA;
+  status = confit_toml_parse_file(path, &document, diagnostic);
+  if (status != CONFIT_OK) return status;
+  root = confit_toml_document_root(document);
+  status = confit_v4_validate_keys(
+      root, root_allowed, sizeof(root_allowed) / sizeof(root_allowed[0]), path,
+      diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_v4_require_schema(root, path, diagnostic);
+  if (status == CONFIT_OK) {
+    const int has_profile = confit_toml_table_find(root, "profile") != 0;
+    const int has_target = confit_toml_table_find(root, "target") != 0;
+    const int has_selection = confit_toml_table_find(root, "selection") != 0;
+    const int expected_profile = role == CONFIT_V4_ROLE_PROFILES;
+    const int expected_target = role == CONFIT_V4_ROLE_TARGETS;
+    const int expected_selection = role == CONFIT_V4_ROLE_SELECTIONS;
+    if (has_profile != expected_profile || has_target != expected_target ||
+        has_selection != expected_selection)
+      status = CONFIT_ERR_SCHEMA;
+  }
+  table = confit_toml_table_find(root, name);
+  if (status == CONFIT_OK)
+    status = confit_v4_validate_keys(
+        table,
+        role == CONFIT_V4_ROLE_SELECTIONS ? selection_allowed
+                                          : identity_allowed,
+        role == CONFIT_V4_ROLE_SELECTIONS
+            ? sizeof(selection_allowed) / sizeof(selection_allowed[0])
+            : sizeof(identity_allowed) / sizeof(identity_allowed[0]),
+        path, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_v4_copy_string(confit_toml_table_find(table, "id"),
+                                   127U, &layer.id, diagnostic);
+  if (status == CONFIT_OK && !confit_v4_layer_id_valid(layer.id))
+    status = CONFIT_ERR_SCHEMA;
+  if (status == CONFIT_OK && role == CONFIT_V4_ROLE_SELECTIONS)
+    status = confit_v4_copy_string(
+        confit_toml_table_find(table, "profile"), 127U, &layer.profile_id,
+        diagnostic);
+  if (status == CONFIT_OK && role == CONFIT_V4_ROLE_SELECTIONS)
+    status = confit_v4_copy_string(
+        confit_toml_table_find(table, "target"), 127U, &layer.target_id,
+        diagnostic);
+  if (status == CONFIT_OK && role == CONFIT_V4_ROLE_SELECTIONS &&
+      (!confit_v4_layer_id_valid(layer.profile_id) ||
+       !confit_v4_layer_id_valid(layer.target_id)))
+    status = CONFIT_ERR_SCHEMA;
+  if (status == CONFIT_OK)
+    status = confit_v4_parse_layer_assignments(
+        confit_toml_table_find(root, "assignments"), path,
+        catalog->repository_root, &layer, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_v4_parse_layer_providers(
+        confit_toml_table_find(root, "providers"), path, &layer, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_v4_span_from_value(&layer.source, table, path);
+  for (size_t index = 0U; status == CONFIT_OK && index < *count; ++index) {
+    if (strcmp((*array)[index].id, layer.id) == 0 ||
+        (role == CONFIT_V4_ROLE_SELECTIONS &&
+         strcmp((*array)[index].profile_id, layer.profile_id) == 0 &&
+         strcmp((*array)[index].target_id, layer.target_id) == 0))
+      status = CONFIT_ERR_CONFLICT;
+  }
+  if (status == CONFIT_OK) {
+    ConfitV4Layer *grown = (ConfitV4Layer *)realloc(
+        *array, (*count + 1U) * sizeof((*array)[0]));
+    if (grown == 0) status = CONFIT_ERR_INTERNAL;
+    else {
+      *array = grown;
+      (*array)[(*count)++] = layer;
+      memset(&layer, 0, sizeof(layer));
+    }
+  }
+  if (status != CONFIT_OK &&
+      (diagnostic == 0 || !confit_diagnostic_has_error(diagnostic)))
+    confit_v4_set_value_diagnostic(
+        diagnostic, status, table, path,
+        "profile, target, or selection layer is malformed or duplicated");
+  confit_v4_layer_clear(&layer);
+  confit_toml_document_free(document);
+  return status;
+}
+
 static ConfitStatus confit_v4_parse_rule_document(
     ConfitV4Catalog *catalog, const char *path,
     ConfitDiagnostic *diagnostic) {
@@ -1670,12 +1929,14 @@ static ConfitStatus confit_v4_parse_document(
     return confit_v4_parse_rule_document(context->catalog, path,
                                          context->diagnostic);
   case CONFIT_V4_ROLE_PROFILES:
+    return confit_v4_parse_layer_document(
+        context->catalog, context->role, path, context->diagnostic);
   case CONFIT_V4_ROLE_TARGETS:
+    return confit_v4_parse_layer_document(
+        context->catalog, context->role, path, context->diagnostic);
   case CONFIT_V4_ROLE_SELECTIONS:
-    confit_v4_set_value_diagnostic(
-        context->diagnostic, CONFIT_ERR_UNSUPPORTED, 0, path,
-        "this configure-only resolver does not accept standalone profile, target, or selection documents");
-    return CONFIT_ERR_UNSUPPORTED;
+    return confit_v4_parse_layer_document(
+        context->catalog, context->role, path, context->diagnostic);
   default:
     return CONFIT_ERR_INTERNAL;
   }
@@ -2147,6 +2408,15 @@ static void confit_v4_catalog_clear(ConfitV4Catalog *catalog) {
   for (size_t index = 0U; index < catalog->rule_count; ++index)
     confit_v4_rule_clear(&catalog->rules[index]);
   free(catalog->rules);
+  for (size_t index = 0U; index < catalog->profile_count; ++index)
+    confit_v4_layer_clear(&catalog->profiles[index]);
+  free(catalog->profiles);
+  for (size_t index = 0U; index < catalog->target_count; ++index)
+    confit_v4_layer_clear(&catalog->targets[index]);
+  free(catalog->targets);
+  for (size_t index = 0U; index < catalog->selection_count; ++index)
+    confit_v4_layer_clear(&catalog->selections[index]);
+  free(catalog->selections);
   for (size_t index = 0U; index < catalog->document_count; ++index)
     free(catalog->documents[index]);
   free(catalog->documents);
@@ -2268,6 +2538,110 @@ size_t confit_v4_catalog_choice_count(const ConfitV4Catalog *catalog) {
 
 size_t confit_v4_catalog_rule_count(const ConfitV4Catalog *catalog) {
   return catalog != 0 ? catalog->rule_count : 0U;
+}
+
+static const ConfitV4Layer *confit_v4_find_layer(
+    const ConfitV4Layer *layers, size_t count, const char *id) {
+  for (size_t index = 0U; index < count; ++index)
+    if (strcmp(layers[index].id, id) == 0) return &layers[index];
+  return 0;
+}
+
+void confit_v4_resolved_request_clear(ConfitV4ResolvedRequest *request) {
+  if (request == 0) return;
+  free(request->assignments);
+  free(request->providers);
+  memset(request, 0, sizeof(*request));
+}
+
+static ConfitStatus confit_v4_append_layer_request(
+    const ConfitV4Layer *layer, ConfitV4ResolvedRequest *out) {
+  if (out->assignment_count > CONFIT_V4_MAX_LAYER_ASSIGNMENTS -
+                                  layer->assignment_count ||
+      out->provider_count > CONFIT_V4_MAX_OPTION_EDGES -
+                                layer->provider_count)
+    return CONFIT_ERR_SCHEMA;
+  for (size_t index = 0U; index < layer->assignment_count; ++index) {
+    const ConfitV4LayerAssignment *source = &layer->assignments[index];
+    ConfitV4LayeredAssignment *target =
+        &out->assignments[out->assignment_count++];
+    target->assignment.symbol = source->symbol;
+    target->assignment.value = source->value;
+    target->assignment.source.path = source->source.path;
+    target->assignment.source.line = source->source.line;
+    target->assignment.source.column = source->source.column;
+    target->overrides_source_path = source->overrides_source_path;
+  }
+  for (size_t index = 0U; index < layer->provider_count; ++index)
+    out->providers[out->provider_count++] = layer->providers[index];
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_v4_resolve_request_layers(
+    const ConfitV4Catalog *catalog, const char *profile_id,
+    const char *target_id, const ConfitV4LayeredAssignment *extra_assignments,
+    size_t extra_assignment_count,
+    const ConfitV4ProviderChoice *extra_providers,
+    size_t extra_provider_count, ConfitV4ResolvedRequest *out,
+    ConfitDiagnostic *diagnostic) {
+  const ConfitV4Layer *profile;
+  const ConfitV4Layer *target;
+  const ConfitV4Layer *selection = 0;
+  size_t selection_matches = 0U;
+  ConfitStatus status = CONFIT_OK;
+  if (catalog == 0 || out == 0 || !confit_v4_layer_id_valid(profile_id) ||
+      !confit_v4_layer_id_valid(target_id) ||
+      extra_assignment_count > CONFIT_V4_MAX_LAYER_ASSIGNMENTS ||
+      extra_provider_count > CONFIT_V4_MAX_OPTION_EDGES ||
+      (extra_assignment_count != 0U && extra_assignments == 0) ||
+      (extra_provider_count != 0U && extra_providers == 0))
+    return CONFIT_ERR_INVALID_ARGUMENT;
+  memset(out, 0, sizeof(*out));
+  profile = confit_v4_find_layer(catalog->profiles, catalog->profile_count,
+                                 profile_id);
+  target = confit_v4_find_layer(catalog->targets, catalog->target_count,
+                                target_id);
+  for (size_t index = 0U; index < catalog->selection_count; ++index) {
+    if (strcmp(catalog->selections[index].profile_id, profile_id) == 0 &&
+        strcmp(catalog->selections[index].target_id, target_id) == 0) {
+      selection = &catalog->selections[index];
+      ++selection_matches;
+    }
+  }
+  if (profile == 0 || target == 0 || selection_matches != 1U) {
+    confit_diagnostic_set(
+        diagnostic, CONFIT_ERR_SCHEMA, catalog->project_path, 1U, 1U,
+        "profile/target must resolve to one declared selection layer");
+    return CONFIT_ERR_SCHEMA;
+  }
+  out->assignments = (ConfitV4LayeredAssignment *)calloc(
+      CONFIT_V4_MAX_LAYER_ASSIGNMENTS, sizeof(out->assignments[0]));
+  out->providers = (ConfitV4ProviderChoice *)calloc(
+      CONFIT_V4_MAX_OPTION_EDGES, sizeof(out->providers[0]));
+  if (out->assignments == 0 || out->providers == 0) {
+    confit_v4_resolved_request_clear(out);
+    return CONFIT_ERR_INTERNAL;
+  }
+  status = confit_v4_append_layer_request(profile, out);
+  if (status == CONFIT_OK) status = confit_v4_append_layer_request(target, out);
+  if (status == CONFIT_OK)
+    status = confit_v4_append_layer_request(selection, out);
+  for (size_t index = 0U; status == CONFIT_OK &&
+                          index < extra_assignment_count; ++index) {
+    if (out->assignment_count >= CONFIT_V4_MAX_LAYER_ASSIGNMENTS)
+      status = CONFIT_ERR_SCHEMA;
+    else
+      out->assignments[out->assignment_count++] = extra_assignments[index];
+  }
+  for (size_t index = 0U; status == CONFIT_OK &&
+                          index < extra_provider_count; ++index) {
+    if (out->provider_count >= CONFIT_V4_MAX_OPTION_EDGES)
+      status = CONFIT_ERR_SCHEMA;
+    else
+      out->providers[out->provider_count++] = extra_providers[index];
+  }
+  if (status != CONFIT_OK) confit_v4_resolved_request_clear(out);
+  return status;
 }
 
 static ConfitV4SourceSpan confit_v4_source_view(

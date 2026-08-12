@@ -114,6 +114,46 @@ static void setup_repository(char *root, size_t root_size, char *output,
              "tags = [\"audio\", \"pci\"]\n"
              "allowed = [\"off\", \"kernel\", \"service\"]\n"
              "[constraints]\nall = [\"AUDIO\", \"BUS_PCI\", \"DMA\"]\n");
+  write_file(root, "config/profiles/dev/Config.toml",
+             "schema_version = 4\n[profile]\nid = \"dev\"\n"
+             "[[assignments]]\nsymbol = \"BUS_PCI\"\nvalue = \"true\"\n");
+  write_file(root, "config/targets/arm64-qemu-virt/Config.toml",
+             "schema_version = 4\n[target]\nid = \"arm64-qemu-virt\"\n"
+             "[[assignments]]\nsymbol = \"DMA\"\nvalue = \"mapped\"\n");
+  write_file(root,
+             "config/selections/dev-arm64-qemu-virt/Config.toml",
+             "schema_version = 4\n[selection]\n"
+             "id = \"dev-arm64-qemu-virt\"\n"
+             "profile = \"dev\"\n"
+             "target = \"arm64-qemu-virt\"\n"
+             "[[assignments]]\nsymbol = \"DRIVER_AUDIO_CMI8738\"\n"
+             "value = \"kernel\"\n");
+  write_file(root, "config/targets/host-fixture/Config.toml",
+             "schema_version = 4\n[target]\nid = \"host-fixture\"\n");
+  write_file(root, "config/profiles/repro/Config.toml",
+             "schema_version = 4\n[profile]\nid = \"repro\"\n");
+  write_file(root, "config/profiles/bad/Config.toml",
+             "schema_version = 4\n[profile]\nid = \"bad\"\n");
+  write_file(root, "config/profiles/minimal/Config.toml",
+             "schema_version = 4\n[profile]\nid = \"minimal\"\n");
+  write_file(root, "config/profiles/cross/Config.toml",
+             "schema_version = 4\n[profile]\nid = \"cross\"\n");
+  write_file(root, "config/selections/repro-host/Config.toml",
+             "schema_version = 4\n[selection]\n"
+             "id = \"repro-host\"\nprofile = \"repro\"\n"
+             "target = \"host-fixture\"\n");
+  write_file(root, "config/selections/bad-host/Config.toml",
+             "schema_version = 4\n[selection]\n"
+             "id = \"bad-host\"\nprofile = \"bad\"\n"
+             "target = \"host-fixture\"\n");
+  write_file(root, "config/selections/minimal-host/Config.toml",
+             "schema_version = 4\n[selection]\n"
+             "id = \"minimal-host\"\nprofile = \"minimal\"\n"
+             "target = \"host-fixture\"\n");
+  write_file(root, "config/selections/cross-host/Config.toml",
+             "schema_version = 4\n[selection]\n"
+             "id = \"cross-host\"\nprofile = \"cross\"\n"
+             "target = \"host-fixture\"\n");
   write_file(root, "Makefile",
              "this text is intentionally not valid bmake or TOML\n");
   join(output, output_size, root, "output");
@@ -146,11 +186,6 @@ static void expect_preview_cancel_and_seal(void) {
       {{"AUDIO", "true", {"config/profiles/base/Config.toml", 4U, 1U}}, 0},
       {{"AUDIO", "true", {"config/profiles/dev/Config.toml", 5U, 1U}},
        "config/profiles/base/Config.toml"},
-      {{"BUS_PCI", "true", {"config/profiles/dev/Config.toml", 6U, 1U}}, 0},
-      {{"DMA", "mapped", {"config/targets/qemu/Config.toml", 7U, 1U}}, 0},
-      {{"DRIVER_AUDIO_CMI8738", "kernel",
-        {"config/selections/dev/Config.toml", 8U, 1U}},
-       0},
   };
   ConfitV4ConfigureRequest request;
   setup_repository(root, sizeof(root), output, sizeof(output));
@@ -188,6 +223,17 @@ static void expect_preview_cancel_and_seal(void) {
     CONFIT_TEST_ASSERT(strstr(artifact.text, "tests.mk") == 0);
     CONFIT_TEST_ASSERT(strstr(artifact.text, "generators.mk") == 0);
     CONFIT_TEST_ASSERT(strstr(artifact.text, "build." "policy") == 0);
+    if (strcmp(artifact.name, "config.mk") == 0) {
+      CONFIT_TEST_ASSERT(strstr(artifact.text, "CONFIG_BUS_PCI=true") != 0);
+      CONFIT_TEST_ASSERT(strstr(artifact.text, "CONFIG_DMA=mapped") != 0);
+      CONFIT_TEST_ASSERT(
+          strstr(artifact.text, "CONFIG_DRIVER_AUDIO_CMI8738=kernel") != 0);
+    }
+    if (strcmp(artifact.name, "selection.mk") == 0) {
+      CONFIT_TEST_ASSERT(
+          strstr(artifact.text,
+                 "BAKE_PRODUCT_VALUE.sys_dev_audio_cmi8738=kernel") != 0);
+    }
     if (strcmp(artifact.name, "config.provenance.json") == 0) {
       CONFIT_TEST_ASSERT(strstr(artifact.text, "\"prompt\"") != 0);
       CONFIT_TEST_ASSERT(strstr(artifact.text, "\"help\"") != 0);

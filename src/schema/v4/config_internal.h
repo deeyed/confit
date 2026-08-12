@@ -20,6 +20,8 @@
 #define CONFIT_V4_MAX_VALUES 128U
 #define CONFIT_V4_MAX_TOTAL_EDGES 4096U
 #define CONFIT_V4_MAX_GRAPH_DEPTH 32U
+#define CONFIT_V4_MAX_LAYERS 128U
+#define CONFIT_V4_MAX_LAYER_ASSIGNMENTS 256U
 
 typedef struct ConfitV4OwnedSpan {
   char *path;
@@ -97,6 +99,34 @@ typedef struct ConfitV4Rule {
   ConfitV4OwnedSpan source;
 } ConfitV4Rule;
 
+/** @brief profile/target/selection 문서가 소유하는 explicit assignment다. */
+typedef struct ConfitV4LayerAssignment {
+  char *symbol;
+  char *value;
+  char *overrides_source_path;
+  ConfitV4OwnedSpan source;
+} ConfitV4LayerAssignment;
+
+/** @brief configure CLI가 ID로 선택하는 one immutable source layer다. */
+typedef struct ConfitV4Layer {
+  char *id;
+  char *profile_id;
+  char *target_id;
+  ConfitV4LayerAssignment *assignments;
+  size_t assignment_count;
+  ConfitV4ProviderChoice *providers;
+  size_t provider_count;
+  ConfitV4OwnedSpan source;
+} ConfitV4Layer;
+
+/** @brief profile -> target -> selection을 합친 temporary evaluation input다. */
+typedef struct ConfitV4ResolvedRequest {
+  ConfitV4LayeredAssignment *assignments;
+  size_t assignment_count;
+  ConfitV4ProviderChoice *providers;
+  size_t provider_count;
+} ConfitV4ResolvedRequest;
+
 typedef struct ConfitV4Defaults {
   char *owner;
   char *since;
@@ -143,6 +173,12 @@ struct ConfitV4Catalog {
   size_t choice_count;
   ConfitV4Rule *rules;
   size_t rule_count;
+  ConfitV4Layer *profiles;
+  size_t profile_count;
+  ConfitV4Layer *targets;
+  size_t target_count;
+  ConfitV4Layer *selections;
+  size_t selection_count;
   char **documents;
   size_t document_count;
   size_t discovery_entry_count;
@@ -198,5 +234,13 @@ void confit_v4_set_diagnostic(ConfitDiagnostic *diagnostic,
                               ConfitStatus status,
                               const ConfitV4OwnedSpan *source,
                               const char *message);
+ConfitStatus confit_v4_resolve_request_layers(
+    const ConfitV4Catalog *catalog, const char *profile_id,
+    const char *target_id, const ConfitV4LayeredAssignment *extra_assignments,
+    size_t extra_assignment_count,
+    const ConfitV4ProviderChoice *extra_providers,
+    size_t extra_provider_count, ConfitV4ResolvedRequest *out,
+    ConfitDiagnostic *diagnostic);
+void confit_v4_resolved_request_clear(ConfitV4ResolvedRequest *request);
 
 #endif /* CONFIT_SCHEMA_V4_CONFIG_INTERNAL_H */

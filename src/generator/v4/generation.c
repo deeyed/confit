@@ -314,8 +314,14 @@ static ConfitStatus make_config_mk(const ConfitV4Evaluation *evaluation,
   return status;
 }
 
-static ConfitStatus make_selection_mk(const ConfitV4Evaluation *evaluation,
+static int option_product_base(const ConfitV4Catalog *catalog,
+                               const ConfitV4Option *option, char *out,
+                               size_t out_size);
+
+static ConfitStatus make_selection_mk(const ConfitV4Catalog *catalog,
+                                      const ConfitV4Evaluation *evaluation,
                                       ConfitV4Text *out) {
+  size_t provider_group_count = 0U;
   ConfitStatus status = text_s(
       out, "# Bake product-binding 입력인 option/value만 게시한다.\n"
            "# Source path, object, link order와 action은 의도적으로 금지된다.\n"
@@ -331,6 +337,113 @@ static ConfitStatus make_selection_mk(const ConfitV4Evaluation *evaluation,
                                        &enabled, &source))
       return CONFIT_ERR_INTERNAL;
     status = text_f(out, "CONFIT_SELECTION.%s=%s\n", symbol, value);
+  }
+  for (size_t index = 0U;
+       status == CONFIT_OK && index < catalog->option_count; ++index) {
+    const ConfitV4Option *option = &catalog->options[index];
+    const char *value = confit_v4_evaluation_value(evaluation, option->symbol);
+    char base[CONFIT_V4_MAX_PATH_BYTES + 1U];
+    char key[CONFIT_V4_MAX_PATH_BYTES + 1U];
+    size_t byte;
+    if (!option_product_base(catalog, option, base, sizeof(base))) continue;
+    if (value == 0 || strlen(base) + 1U > sizeof(key))
+      return CONFIT_ERR_INTERNAL;
+    memcpy(key, base, strlen(base) + 1U);
+    for (byte = 0U; key[byte] != '\0'; ++byte)
+      if (key[byte] == '/' || key[byte] == '-' || key[byte] == '.')
+        key[byte] = '_';
+    status = text_f(out, "BAKE_PRODUCT_VALUE.%s=%s\n", key, value);
+  }
+  for (size_t option_index = 0U; option_index < catalog->option_count;
+       ++option_index) {
+    const ConfitV4Option *option = &catalog->options[option_index];
+    for (size_t provider_index = 0U; provider_index < option->provider_count;
+         ++provider_index) {
+      const ConfitV4Provider *provider = &option->providers[provider_index];
+      int seen = 0;
+      for (size_t earlier_option = 0U; earlier_option <= option_index;
+           ++earlier_option) {
+        const ConfitV4Option *earlier = &catalog->options[earlier_option];
+        const size_t limit = earlier_option == option_index
+                                 ? provider_index
+                                 : earlier->provider_count;
+        for (size_t earlier_provider = 0U; earlier_provider < limit;
+             ++earlier_provider) {
+          if (earlier->providers[earlier_provider].major == provider->major &&
+              strcmp(earlier->providers[earlier_provider].namespace_name,
+                     provider->namespace_name) == 0) {
+            seen = 1;
+            break;
+          }
+        }
+        if (seen) break;
+      }
+      if (!seen) ++provider_group_count;
+    }
+  }
+  if (status == CONFIT_OK)
+    status = text_f(out, "CONFIT_KPF_SELECTION_COUNT=%zu\n",
+                    provider_group_count);
+  provider_group_count = 0U;
+  for (size_t option_index = 0U;
+       status == CONFIT_OK && option_index < catalog->option_count;
+       ++option_index) {
+    const ConfitV4Option *option = &catalog->options[option_index];
+    for (size_t provider_index = 0U;
+         status == CONFIT_OK && provider_index < option->provider_count;
+         ++provider_index) {
+      const ConfitV4Provider *provider = &option->providers[provider_index];
+      const char *selected_symbol;
+      const char *selected_owner = "-";
+      char owner[CONFIT_V4_MAX_PATH_BYTES + 1U];
+      int seen = 0;
+      for (size_t earlier_option = 0U; earlier_option <= option_index;
+           ++earlier_option) {
+        const ConfitV4Option *earlier = &catalog->options[earlier_option];
+        const size_t limit = earlier_option == option_index
+                                 ? provider_index
+                                 : earlier->provider_count;
+        for (size_t earlier_provider = 0U; earlier_provider < limit;
+             ++earlier_provider) {
+          if (earlier->providers[earlier_provider].major == provider->major &&
+              strcmp(earlier->providers[earlier_provider].namespace_name,
+                     provider->namespace_name) == 0) {
+            seen = 1;
+            break;
+          }
+        }
+        if (seen) break;
+      }
+      if (seen) continue;
+      selected_symbol = confit_v4_evaluation_single_provider(
+          evaluation, provider->namespace_name, provider->major);
+      if (selected_symbol != 0) {
+        const ConfitV4Option *selected =
+            confit_v4_find_option(catalog, selected_symbol);
+        if (selected == 0 ||
+            !option_product_base(catalog, selected, owner, sizeof(owner)))
+          return CONFIT_ERR_INTERNAL;
+        selected_owner = owner;
+      }
+      status = text_f(
+          out,
+          "CONFIT_KPF_SELECTION.%zu.NAMESPACE=%s\n"
+          "CONFIT_KPF_SELECTION.%zu.MAJOR=%u\n"
+          "CONFIT_KPF_SELECTION.%zu.CARDINALITY=%s\n"
+          "CONFIT_KPF_SELECTION.%zu.ABSENCE=%s\n"
+          "CONFIT_KPF_SELECTION.%zu.PROVIDER_OWNER=%s\n",
+          provider_group_count, provider->namespace_name,
+          provider_group_count, provider->major, provider_group_count,
+          provider->cardinality == CONFIT_V4_PROVIDER_CARDINALITY_SINGLE
+              ? "single"
+              : "multiple",
+          provider_group_count,
+          provider->absence == CONFIT_V4_PROVIDER_ABSENCE_ALLOWED
+              ? "allowed"
+              : "forbidden",
+          provider_group_count, selected_owner);
+      ++provider_group_count;
+    }
   }
   return status;
 }
@@ -691,7 +804,8 @@ static ConfitStatus binding_add(ConfitV4GenerationTransaction *transaction,
   char product[CONFIT_V4_MAX_PATH_BYTES + 1U];
   if (transaction->expected_binding_count >=
           CONFIT_V4_GENERATION_MAX_BINDINGS ||
-      snprintf(product, sizeof(product), "%s/%s", base, suffix) >=
+      snprintf(product, sizeof(product), strcmp(suffix, ".") == 0 ? "%s" : "%s/%s",
+               base, suffix) >=
           (int)sizeof(product))
     return CONFIT_ERR_GENERATION;
   binding = &transaction->expected_bindings[transaction->expected_binding_count];
@@ -754,7 +868,7 @@ static ConfitStatus collect_product_bindings(
     if (strcmp(value, "off") == 0) continue;
     if (strcmp(value, "kernel") == 0) {
       status = binding_add(transaction, option->symbol, value, "kernel", base,
-                           "kernel");
+                           ".");
     } else if (strcmp(value, "service") == 0) {
       status = binding_add(transaction, option->symbol, value, "service", base,
                            "service");
@@ -976,6 +1090,8 @@ ConfitStatus confit_v4_generation_preview(
     ConfitDiagnostic *diagnostic) {
   ConfitV4Catalog *catalog = 0;
   ConfitV4Evaluation *evaluation = 0;
+  ConfitV4ResolvedRequest resolved = {0};
+  ConfitV4ConfigureRequest effective_request;
   ConfitV4GenerationTransaction *transaction = 0;
   ConfitV4Text texts[CONFIT_V4_GENERATION_ARTIFACT_COUNT] = {{0}};
   ConfitStatus status;
@@ -996,9 +1112,22 @@ ConfitStatus confit_v4_generation_preview(
   if (status != CONFIT_OK) return status;
   status = confit_v4_catalog_load(request->repository_root, &catalog, diagnostic);
   if (status == CONFIT_OK)
+    status = confit_v4_resolve_request_layers(
+        catalog, request->profile_id, request->target_id,
+        request->assignments, request->assignment_count,
+        request->provider_choices, request->provider_choice_count,
+        &resolved, diagnostic);
+  effective_request = *request;
+  effective_request.assignments = resolved.assignments;
+  effective_request.assignment_count = resolved.assignment_count;
+  effective_request.provider_choices = resolved.providers;
+  effective_request.provider_choice_count = resolved.provider_count;
+  if (status == CONFIT_OK)
     status = confit_v4_evaluate_layered(
-        catalog, request->assignments, request->assignment_count,
-        request->provider_choices, request->provider_choice_count, &evaluation,
+        catalog, effective_request.assignments,
+        effective_request.assignment_count,
+        effective_request.provider_choices,
+        effective_request.provider_choice_count, &evaluation,
         diagnostic);
   if (status != CONFIT_OK) goto done;
   transaction = (ConfitV4GenerationTransaction *)calloc(1U, sizeof(*transaction));
@@ -1012,11 +1141,13 @@ ConfitStatus confit_v4_generation_preview(
   if (status == CONFIT_OK)
     status = make_config_header(catalog, evaluation, &texts[0]);
   if (status == CONFIT_OK) status = make_config_mk(evaluation, &texts[1]);
-  if (status == CONFIT_OK) status = make_selection_mk(evaluation, &texts[2]);
+  if (status == CONFIT_OK)
+    status = make_selection_mk(catalog, evaluation, &texts[2]);
   if (status == CONFIT_OK) status = make_target_mk(request, &texts[3]);
   if (status == CONFIT_OK) status = make_state(request, evaluation, &texts[4]);
   if (status == CONFIT_OK)
-    status = make_provenance(catalog, request, evaluation, &texts[5]);
+    status = make_provenance(catalog, &effective_request, evaluation,
+                             &texts[5]);
   if (status == CONFIT_OK)
     status = make_inputs(catalog, request, &texts[6], diagnostic);
   for (size_t index = 0U; status == CONFIT_OK && index < 7U; ++index) {
@@ -1073,6 +1204,7 @@ done:
     free(texts[index].bytes);
   transaction_free(transaction);
   confit_v4_evaluation_free(evaluation);
+  confit_v4_resolved_request_clear(&resolved);
   confit_v4_catalog_free(catalog);
   return status;
 }
