@@ -77,6 +77,17 @@ static const char *const kGenerationRoleNames[CONFIT_V4_ROLE_COUNT] = {
     "options", "menus", "choices", "constraints", "profiles",
     "targets", "selections", "products"};
 
+/*
+ * OBJROOT 안에서 재생성되는 도구의 절대 경로는 실행 시점 provenance이지
+ * configuration의 의미 identity가 아니다.  Generation에는 고정 role locator와
+ * version/digest만 넣고, configure/verify 시점에는 caller가 넘긴 실제 path를 다시
+ * 측정한다.  외부 target toolchain path는 target ABI 선택의 일부이므로 그대로
+ * 봉인한다.
+ */
+static const char kResolverLocator[] = "@resolver";
+static const char kVerifierLocator[] = "@verifier";
+static const char kBindingProducerLocator[] = "@binding-producer";
+
 static char *v4_copy(const char *text) {
   size_t size;
   char *copy;
@@ -368,8 +379,8 @@ static ConfitStatus make_state(const ConfitV4ConfigureRequest *request,
   ConfitStatus status = text_f(
       out,
       "schema = \"confit-config-state-v4\"\nprofile = \"%s\"\n"
-      "target = \"%s\"\ntransaction = \"%s\"\n\n[values]\n",
-      request->profile_id, request->target_id, request->transaction_id);
+      "target = \"%s\"\n\n[values]\n",
+      request->profile_id, request->target_id);
   for (size_t index = 0U;
        status == CONFIT_OK && index < confit_v4_evaluation_value_count(evaluation);
        ++index) {
@@ -563,10 +574,8 @@ static ConfitStatus make_inputs(const ConfitV4Catalog *catalog,
   if (status == CONFIT_OK) status = json_string(out, request->profile_id);
   if (status == CONFIT_OK) status = text_s(out, ",\"target\":");
   if (status == CONFIT_OK) status = json_string(out, request->target_id);
-  if (status == CONFIT_OK) status = text_s(out, ",\"transaction\":");
-  if (status == CONFIT_OK) status = json_string(out, request->transaction_id);
   if (status == CONFIT_OK) status = text_s(out, ",\"resolver\":[");
-  if (status == CONFIT_OK) status = json_string(out, request->resolver.path);
+  if (status == CONFIT_OK) status = json_string(out, kResolverLocator);
   if (status == CONFIT_OK) status = text_s(out, ",");
   if (status == CONFIT_OK) status = json_string(out, request->resolver.version);
   if (status == CONFIT_OK) status = text_s(out, ",");
@@ -578,7 +587,7 @@ static ConfitStatus make_inputs(const ConfitV4Catalog *catalog,
   if (status == CONFIT_OK) status = text_s(out, ",");
   if (status == CONFIT_OK) status = json_string(out, request->toolchain.sha256);
   if (status == CONFIT_OK) status = text_s(out, "],\"verifier\":[");
-  if (status == CONFIT_OK) status = json_string(out, request->verifier.path);
+  if (status == CONFIT_OK) status = json_string(out, kVerifierLocator);
   if (status == CONFIT_OK) status = text_s(out, ",");
   if (status == CONFIT_OK) status = json_string(out, request->verifier.version);
   if (status == CONFIT_OK) status = text_s(out, ",");
@@ -587,7 +596,7 @@ static ConfitStatus make_inputs(const ConfitV4Catalog *catalog,
   if (status == CONFIT_OK && optional_tool_present(&request->binding_producer)) {
     status = text_s(out, "[");
     if (status == CONFIT_OK)
-      status = json_string(out, request->binding_producer.path);
+      status = json_string(out, kBindingProducerLocator);
     if (status == CONFIT_OK) status = text_s(out, ",");
     if (status == CONFIT_OK)
       status = json_string(out, request->binding_producer.version);
@@ -632,9 +641,10 @@ static ConfitStatus compute_generation_digest(
     ConfitV4GenerationTransaction *transaction,
     const ConfitV4ConfigureRequest *request) {
   ConfitV4Text manifest = {0};
-  ConfitStatus status = text_f(&manifest, "schema=confit-generation-v4\nprofile=%s\ntarget=%s\ntransaction=%s\n",
-                               request->profile_id, request->target_id,
-                               request->transaction_id);
+  ConfitStatus status = text_f(&manifest,
+                               "schema=confit-generation-v4\nprofile=%s\n"
+                               "target=%s\n",
+                               request->profile_id, request->target_id);
   for (size_t index = 0U; status == CONFIT_OK && index < 7U; ++index)
     status = text_f(&manifest, "%s %zu %s\n", transaction->artifacts[index].name,
                     transaction->artifacts[index].size,
@@ -1487,7 +1497,6 @@ typedef struct VerifyInputs {
   char project[4096];
   char profile[128];
   char target[128];
-  char transaction[128];
   char resolver_path[4096];
   char resolver_version[256];
   char resolver_sha256[65];
@@ -1604,9 +1613,6 @@ static int parse_inputs_json(const char *text, size_t size,
       !json_named_string(&cursor, "target", inputs->target,
                          sizeof(inputs->target)) ||
       !json_literal(&cursor, ",") ||
-      !json_named_string(&cursor, "transaction", inputs->transaction,
-                         sizeof(inputs->transaction)) ||
-      !json_literal(&cursor, ",") ||
       !parse_tool_array(&cursor, "resolver", inputs->resolver_path,
                         sizeof(inputs->resolver_path), inputs->resolver_version,
                         sizeof(inputs->resolver_version),
@@ -1712,12 +1718,11 @@ static int compute_verified_generation(const VerifyInputs *inputs,
   ConfitV4Text manifest = {0};
   ConfitStatus status;
   if (inputs == 0 || !safe_atom(inputs->profile) ||
-      !safe_atom(inputs->target) || !safe_atom(inputs->transaction))
+      !safe_atom(inputs->target))
     return 0;
   status = text_f(&manifest,
-                  "schema=confit-generation-v4\nprofile=%s\ntarget=%s\n"
-                  "transaction=%s\n",
-                  inputs->profile, inputs->target, inputs->transaction);
+                  "schema=confit-generation-v4\nprofile=%s\ntarget=%s\n",
+                  inputs->profile, inputs->target);
   for (size_t index = 0U; status == CONFIT_OK && index < 7U; ++index)
     status = text_f(&manifest, "%s %zu %s\n", kArtifactNames[index],
                     sizes[index], digests[index]);
@@ -1845,10 +1850,13 @@ static ConfitStatus verify_inputs(const char *generation_directory,
     free(current);
     return CONFIT_ERR_SCHEMA;
   }
-  if (strcmp(inputs->toolchain_path, toolchain->path) != 0 ||
+  if (strcmp(inputs->resolver_path, kResolverLocator) != 0 ||
+      strcmp(inputs->verifier_path, kVerifierLocator) != 0 ||
+      (inputs->binding_producer_path[0] != '\0' &&
+       strcmp(inputs->binding_producer_path, kBindingProducerLocator) != 0) ||
+      strcmp(inputs->toolchain_path, toolchain->path) != 0 ||
       strcmp(inputs->toolchain_version, toolchain->version) != 0 ||
       strcmp(inputs->toolchain_sha256, toolchain->sha256) != 0 ||
-      strcmp(inputs->verifier_path, verifier->path) != 0 ||
       strcmp(inputs->verifier_version, verifier->version) != 0 ||
       strcmp(inputs->verifier_sha256, verifier->sha256) != 0 ||
       confit_v4_sha256_file(toolchain->path, measured, diagnostic) != CONFIT_OK ||

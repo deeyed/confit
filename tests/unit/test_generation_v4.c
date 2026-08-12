@@ -285,6 +285,79 @@ static void expect_preview_cancel_and_seal(void) {
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
 }
 
+static void expect_generation_identity_ignores_transaction_and_output_root(void) {
+  char root[4096];
+  char output_a[4096];
+  char output_b[4096];
+  ConfitV4GenerationTransaction *transaction_a = 0;
+  ConfitV4GenerationTransaction *transaction_b = 0;
+  ConfitDiagnostic diagnostic;
+  ConfitV4ToolIdentity tool = tool_identity("/usr/bin/cc");
+  const ConfitV4LayeredAssignment assignments[] = {
+      {{"AUDIO", "true", {"confit://repro", 1U, 1U}}, 0},
+      {{"BUS_PCI", "true", {"confit://repro", 2U, 1U}}, 0},
+      {{"DMA", "mapped", {"confit://repro", 3U, 1U}}, 0},
+      {{"DRIVER_AUDIO_CMI8738", "kernel",
+        {"confit://repro", 4U, 1U}},
+       0},
+  };
+  ConfitV4ConfigureRequest request;
+
+  setup_repository(root, sizeof(root), output_a, sizeof(output_a));
+  join(output_b, sizeof(output_b), root, "independent-output");
+  CONFIT_TEST_ASSERT(confit_test_fs_make_dirs(output_b));
+  memset(&request, 0, sizeof(request));
+  request.repository_root = root;
+  request.output_root = output_a;
+  request.profile_id = "repro";
+  request.target_id = "host-fixture";
+  request.transaction_id = "transaction-a";
+  request.resolver = tool;
+  request.toolchain = tool;
+  request.verifier = tool;
+  request.binding_producer = tool;
+  request.assignments = assignments;
+  request.assignment_count = sizeof(assignments) / sizeof(assignments[0]);
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_v4_generation_preview(
+                         &request, &transaction_a, &diagnostic) == CONFIT_OK);
+
+  request.output_root = output_b;
+  request.transaction_id = "transaction-b";
+  confit_diagnostic_clear(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_v4_generation_preview(
+                         &request, &transaction_b, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(strcmp(confit_v4_generation_digest(transaction_a),
+                            confit_v4_generation_digest(transaction_b)) == 0);
+  for (size_t index = 0U; index < CONFIT_V4_GENERATION_ARTIFACT_COUNT;
+       ++index) {
+    ConfitV4GeneratedArtifactView artifact_a;
+    ConfitV4GeneratedArtifactView artifact_b;
+    CONFIT_TEST_ASSERT(
+        confit_v4_generation_artifact(transaction_a, index, &artifact_a));
+    CONFIT_TEST_ASSERT(
+        confit_v4_generation_artifact(transaction_b, index, &artifact_b));
+    CONFIT_TEST_ASSERT(strcmp(artifact_a.name, artifact_b.name) == 0);
+    CONFIT_TEST_ASSERT(artifact_a.size == artifact_b.size);
+    CONFIT_TEST_ASSERT(memcmp(artifact_a.text, artifact_b.text,
+                             artifact_a.size) == 0);
+    CONFIT_TEST_ASSERT(strcmp(artifact_a.sha256, artifact_b.sha256) == 0);
+    if (strcmp(artifact_a.name, "config.inputs.json") == 0) {
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, "@resolver") != 0);
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, "@verifier") != 0);
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, "@binding-producer") != 0);
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, "transaction-a") == 0);
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, output_a) == 0);
+      CONFIT_TEST_ASSERT(strstr(artifact_a.text, output_b) == 0);
+    }
+  }
+  CONFIT_TEST_ASSERT(
+      confit_v4_generation_cancel(&transaction_a, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(
+      confit_v4_generation_cancel(&transaction_b, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
+}
+
 static void expect_stale_tool_and_unrelated_override_fail(void) {
   char root[4096];
   char output[4096];
@@ -597,6 +670,7 @@ int main(int argc, char **argv) {
   CONFIT_TEST_ASSERT(argc == 1);
   (void)argv;
   expect_preview_cancel_and_seal();
+  expect_generation_identity_ignores_transaction_and_output_root();
   expect_product_receipt_gate();
   expect_stale_tool_and_unrelated_override_fail();
 #if !defined(_WIN32)
