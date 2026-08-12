@@ -13,7 +13,7 @@ extern "C" {
 /**
  * @brief Confit minor version이다.
  */
-#define CONFIT_VERSION_MINOR 4
+#define CONFIT_VERSION_MINOR 5
 
 /**
  * @brief Confit patch version이다.
@@ -21,30 +21,27 @@ extern "C" {
 #define CONFIT_VERSION_PATCH 0
 
 /**
- * @brief selectable component schema v3 candidate 라벨이다.
+ * @brief configure-once Config v4 제품 라벨이다.
  */
-#define CONFIT_VERSION_LABEL "schema-v3.1"
+#define CONFIT_VERSION_LABEL "config-v4"
 
 /**
  * @brief semver prerelease까지 포함한 release 문자열이다.
  */
-#define CONFIT_VERSION_RELEASE "0.4.0-schema-v3.1"
+#define CONFIT_VERSION_RELEASE "0.5.0-config-v4"
 
 /**
  * @brief CLI와 generated artifact에 기록할 display 문자열이다.
  */
 #define CONFIT_VERSION_DISPLAY "confit " CONFIT_VERSION_RELEASE
 
-/** @brief this binary can dispatch these independent schema semantics. */
-#define CONFIT_SUPPORTED_SCHEMA_VERSIONS "config-v2,component-v3"
-
-/** @brief immutable v2 resolver identity written to generated artifacts. */
-#define CONFIT_RESOLVER_ABI_V2 "confit-resolver-v2"
+/** @brief 이 binary가 유일하게 받아들이는 source schema다. */
+#define CONFIT_SUPPORTED_SCHEMA_VERSIONS "config-v4"
 
 /** @brief sealed tool-neutral generated-artifact identity. */
 #define CONFIT_ARTIFACT_ABI_V4 "confit-artifact-v4"
 
-/** @brief vendored TOML revision used by the v2 parser adapter. */
+/** @brief vendored TOML parser revision이다. */
 #define CONFIT_TOMLC17_REVISION "R260618 (7813bdd)"
 
 /**

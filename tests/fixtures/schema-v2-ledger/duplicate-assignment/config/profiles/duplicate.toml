@@ -1,9 +1,0 @@
-[profile]
-name = "duplicate"
-schema_version = 2
-
-[values]
-"ledger.profile.value" = 2
-
-[unset]
-options = ["ledger.profile.value"]

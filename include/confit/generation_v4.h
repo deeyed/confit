@@ -108,6 +108,15 @@ int confit_v4_generation_artifact(
 const char *confit_v4_generation_directory(
     const ConfitV4GenerationTransaction *transaction);
 
+/** @brief Preview가 요구하는 canonical product binding 수를 반환한다. */
+size_t confit_v4_generation_binding_count(
+    const ConfitV4GenerationTransaction *transaction);
+
+/** @brief index의 expected product binding을 borrowed view로 반환한다. */
+int confit_v4_generation_binding(
+    const ConfitV4GenerationTransaction *transaction, size_t index,
+    ConfitV4ProductBinding *out_binding);
+
 /** @brief typed product-binding receipt의 structure와 digest를 검증한다. */
 ConfitStatus confit_v4_product_binding_receipt_verify(
     const ConfitV4GenerationTransaction *transaction,

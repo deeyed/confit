@@ -1,5 +1,0 @@
-[project]
-name = "import-duplicate"
-namespace = "confit"
-schema_version = 2
-imports = ["options/base.toml", "options/base.toml"]

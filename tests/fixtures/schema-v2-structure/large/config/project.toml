@@ -1,5 +1,0 @@
-[project]
-name = "large-structure"
-namespace = "confit"
-schema_version = 2
-imports = ["structure.toml"]

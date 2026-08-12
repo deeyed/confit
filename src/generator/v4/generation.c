@@ -1128,6 +1128,21 @@ const char *confit_v4_generation_directory(
   return transaction != 0 ? transaction->generation_directory : 0;
 }
 
+size_t confit_v4_generation_binding_count(
+    const ConfitV4GenerationTransaction *transaction) {
+  return transaction != 0 ? transaction->expected_binding_count : 0U;
+}
+
+int confit_v4_generation_binding(
+    const ConfitV4GenerationTransaction *transaction, size_t index,
+    ConfitV4ProductBinding *out_binding) {
+  if (transaction == 0 || out_binding == 0 ||
+      index >= transaction->expected_binding_count)
+    return 0;
+  *out_binding = transaction->expected_bindings[index];
+  return 1;
+}
+
 static ConfitStatus binding_digest(
     const ConfitV4ProductBindingReceipt *receipt, char output[65]) {
   ConfitV4Text text = {0};

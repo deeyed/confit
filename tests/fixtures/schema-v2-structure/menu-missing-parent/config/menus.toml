@@ -1,6 +1,0 @@
-schema_version = 2
-
-[menu."confit.root"]
-prompt = "Root"
-parent = "confit.absent"
-order = 1

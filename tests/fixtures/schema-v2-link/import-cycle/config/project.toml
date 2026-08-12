@@ -1,5 +1,0 @@
-[project]
-name = "import-cycle"
-namespace = "confit"
-schema_version = 2
-imports = ["options/a.toml"]

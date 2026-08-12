@@ -32,9 +32,7 @@ CONFIT_STRICT_CFLAGS= \
 CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/include \
 	-I${CONFIT_SOURCE_ROOT}/src/parser \
-	-I${CONFIT_SOURCE_ROOT}/src/model/v2 \
 	-I${CONFIT_SOURCE_ROOT}/src/schema \
-	-I${CONFIT_SOURCE_ROOT}/src/expression/v2 \
 	-I${CONFIT_SOURCE_ROOT}/vendor/tomlc17 \
 	-I${CONFIT_SOURCE_ROOT}/tests/support
 

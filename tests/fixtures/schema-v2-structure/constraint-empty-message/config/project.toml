@@ -1,5 +1,0 @@
-[project]
-name = "constraint-empty-message"
-namespace = "confit"
-schema_version = 2
-imports = ["source.toml"]

@@ -1,5 +1,0 @@
-[project]
-name = "import-nested"
-namespace = "confit"
-schema_version = 2
-imports = ["fragments/root.toml"]

@@ -1,9 +1,0 @@
-schema_version = 2
-
-[option."other.bad"]
-type = "bool"
-default = true
-write_domain = "profile"
-owner = "confit"
-since = "0.2.0"
-stability = "stable"

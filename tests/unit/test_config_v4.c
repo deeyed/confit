@@ -381,8 +381,8 @@ static void expect_v3_and_retired_fields_rejected(void) {
       "menu = \"drivers.audio\"\n"
       "allowed = [\"off\", \"kernel\"]\n"
       "[interfaces]\n"
-      "kapi_requires = [\"parus.dma.mapping.v2\"]\n"
-      "kapi_provides = []\n");
+      "legacy_requires = [\"dma.mapping\"]\n"
+      "legacy_provides = []\n");
   expect_replacement_failure(
       "sys/dev/audio/cmi8738/Config.toml",
       "schema_version = 4\n"

@@ -1,5 +1,0 @@
-[project]
-name = "choice-default-member"
-namespace = "confit"
-schema_version = 2
-imports = ["source.toml"]

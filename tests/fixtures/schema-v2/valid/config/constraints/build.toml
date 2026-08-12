@@ -1,7 +1,0 @@
-schema_version = 2
-
-[[constraint]]
-id = "confit.build.host"
-when = "enum_name(confit.enum.arch) == \"host\""
-require = "enabled(confit.console.host)"
-message = "host requires host console"

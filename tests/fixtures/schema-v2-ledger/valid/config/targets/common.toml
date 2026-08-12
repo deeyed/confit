@@ -1,6 +1,0 @@
-[target]
-name = "common"
-schema_version = 2
-
-[values]
-"ledger.target.board" = "host"
