@@ -27,7 +27,8 @@ CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES=
 
 CONFIT_RESOLVER_SOURCES= \
-	src/resolver/v5/evaluate.c
+	src/resolver/v5/evaluate.c \
+	src/workflow/v5/workflow.c
 
 CONFIT_GENERATOR_SOURCES= \
 	src/generator/v5/generation.c
@@ -43,6 +44,7 @@ CONFIT_TEST_SUPPORT_SOURCES= \
 
 CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_config_v5.c \
+	tests/unit/test_workflow_v5.c \
 	tests/unit/test_generation_v5.c \
 	tests/unit/test_status_diagnostic.c \
 	tests/unit/test_host_boundary.c \

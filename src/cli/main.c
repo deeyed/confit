@@ -16,6 +16,14 @@ static void confit_cli_print_help(void) {
       "  configure --repository ABS --out ABS --arch ATOM "
       "--kernconf ATOM --transaction ATOM\n"
       "  verify --repository ABS --generation ABS\n"
+      "  search|explain|why-unavailable --repository ABS --arch ATOM "
+      "--kernconf ATOM --query-or-symbol VALUE\n"
+      "  list-new|oldconfig --repository ABS --arch ATOM --kernconf ATOM\n"
+      "  save-minimal --repository ABS --arch ATOM --kernconf ATOM "
+      "--output ABS\n"
+      "  diff --repository ABS --arch ATOM --kernconf ATOM --other ATOM\n"
+      "  tui --repository ABS --out ABS --arch ATOM --kernconf ATOM "
+      "--transaction ATOM\n"
       "  build-enter --root ABSOLUTE --repository ABSOLUTE "
       "--invocation DECIMAL --bmake ABSOLUTE --compiler ABSOLUTE\n\n"
       "Only schema_version = 5 is accepted. Ordinary builds consume the "
@@ -79,6 +87,13 @@ int main(int argc, char **argv) {
     return confit_cli_v5_configure(argc, argv);
   if (strcmp(argv[1], "verify") == 0)
     return confit_cli_v5_verify(argc, argv);
+  if (strcmp(argv[1], "search") == 0 || strcmp(argv[1], "explain") == 0 ||
+      strcmp(argv[1], "why-unavailable") == 0 ||
+      strcmp(argv[1], "list-new") == 0 ||
+      strcmp(argv[1], "oldconfig") == 0 ||
+      strcmp(argv[1], "save-minimal") == 0 ||
+      strcmp(argv[1], "diff") == 0 || strcmp(argv[1], "tui") == 0)
+    return confit_cli_v5_ux(argc, argv);
 
   (void)fprintf(stderr,
                 "confit: unsupported: command or source schema is outside "

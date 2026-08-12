@@ -84,6 +84,16 @@ typedef struct ConfitV5OptionView {
   ConfitV5SourceSpan default_source;
 } ConfitV5OptionView;
 
+/** @brief catalog가 소유하는 shallow menu의 borrowed view다. */
+typedef struct ConfitV5MenuView {
+  const char *id;
+  const char *prompt;
+  const char *help;
+  const char *parent;
+  int64_t order;
+  ConfitV5SourceSpan declaration;
+} ConfitV5MenuView;
+
 /** @brief KERNCONF 또는 preview 요청이 제공하는 단일 symbol writer다. */
 typedef struct ConfitV5Assignment {
   const char *symbol;
@@ -145,6 +155,12 @@ int confit_v5_catalog_assignment(const ConfitV5Catalog *catalog, size_t index,
 int confit_v5_catalog_option(const ConfitV5Catalog *catalog,
                              const char *symbol,
                              ConfitV5OptionView *out_option);
+/** @brief lexical symbol order의 option을 borrowed view로 반환한다. */
+int confit_v5_catalog_option_at(const ConfitV5Catalog *catalog, size_t index,
+                                ConfitV5OptionView *out_option);
+/** @brief stable menu order의 menu를 borrowed view로 반환한다. */
+int confit_v5_catalog_menu_at(const ConfitV5Catalog *catalog, size_t index,
+                              ConfitV5MenuView *out_menu);
 
 /** @brief caller assignment를 default 위에 한 번 적용해 immutable 평가를 만든다. */
 ConfitStatus confit_v5_evaluate(const ConfitV5Catalog *catalog,

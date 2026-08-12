@@ -2380,3 +2380,24 @@ int confit_v5_catalog_option(const ConfitV5Catalog *catalog,
   out_option->default_source = confit_v5_source_view(&option->default_source);
   return 1;
 }
+
+int confit_v5_catalog_option_at(const ConfitV5Catalog *catalog, size_t index,
+                                ConfitV5OptionView *out_option) {
+  if (catalog == 0 || index >= catalog->option_count) return 0;
+  return confit_v5_catalog_option(catalog, catalog->options[index].symbol,
+                                  out_option);
+}
+
+int confit_v5_catalog_menu_at(const ConfitV5Catalog *catalog, size_t index,
+                              ConfitV5MenuView *out_menu) {
+  const ConfitV5Menu *menu;
+  if (catalog == 0 || out_menu == 0 || index >= catalog->menu_count) return 0;
+  menu = &catalog->menus[index];
+  out_menu->id = menu->id;
+  out_menu->prompt = menu->prompt;
+  out_menu->help = menu->help;
+  out_menu->parent = menu->parent;
+  out_menu->order = menu->order;
+  out_menu->declaration = confit_v5_source_view(&menu->source);
+  return 1;
+}
