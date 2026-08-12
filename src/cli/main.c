@@ -6,17 +6,19 @@
 #include "confit/diagnostic.h"
 #include "confit/host.h"
 
-#include "v4_workflow.h"
+#include "v5_workflow.h"
 
 static void confit_cli_print_help(void) {
   (void)fputs(
       "Confit bmake configuration resolver\n\n"
       "Usage: confit <command> [options]\n\n"
       "Commands:\n"
-      "  configure --repository ABS --out ABS --profile ID --target ID ...\n"
+      "  configure --repository ABS --out ABS --arch ATOM "
+      "--kernconf ATOM --transaction ATOM\n"
+      "  verify --repository ABS --generation ABS\n"
       "  build-enter --root ABSOLUTE --repository ABSOLUTE "
       "--invocation DECIMAL --bmake ABSOLUTE --compiler ABSOLUTE\n\n"
-      "Only schema_version = 4 is accepted. Ordinary builds consume the "
+      "Only schema_version = 5 is accepted. Ordinary builds consume the "
       "immutable config seal without rerunning Confit.\n",
       stdout);
 }
@@ -33,12 +35,12 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "version") == 0) {
     (void)printf("%s\nartifact_abi=%s\n", confit_version_string(),
-                 CONFIT_ARTIFACT_ABI_V4);
+                 CONFIT_ARTIFACT_ABI_V5);
     return 0;
   }
   if (strcmp(argv[1], "doctor") == 0) {
-    (void)printf("doctor ok\nengine=bmake\nschema_version=4\nartifact_abi=%s\n",
-                 CONFIT_ARTIFACT_ABI_V4);
+    (void)printf("doctor ok\nengine=bmake\nschema_version=5\nartifact_abi=%s\n",
+                 CONFIT_ARTIFACT_ABI_V5);
     return 0;
   }
   if (strcmp(argv[1], "build-enter") == 0) {
@@ -73,10 +75,13 @@ int main(int argc, char **argv) {
     return confit_status_exit_code(status);
   }
 
-  if (strcmp(argv[1], "configure") == 0) return confit_cli_v4_configure(argc, argv);
+  if (strcmp(argv[1], "configure") == 0)
+    return confit_cli_v5_configure(argc, argv);
+  if (strcmp(argv[1], "verify") == 0)
+    return confit_cli_v5_verify(argc, argv);
 
   (void)fprintf(stderr,
                 "confit: unsupported: command or source schema is outside "
-                "the Config v4 configure-once contract\n");
+                "the Config v5 KERNCONF-only contract\n");
   return confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
 }

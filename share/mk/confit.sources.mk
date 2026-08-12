@@ -22,19 +22,19 @@ CONFIT_PARSER_SOURCES= \
 	src/parser/tomlc17_adapter.c
 
 CONFIT_MODEL_AND_SCHEMA_SOURCES= \
-	src/schema/v4/config.c
+	src/schema/v5/config.c
 
 CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES=
 
 CONFIT_RESOLVER_SOURCES= \
-	src/resolver/v4/evaluate.c
+	src/resolver/v5/evaluate.c
 
 CONFIT_GENERATOR_SOURCES= \
-	src/generator/v4/generation.c
+	src/generator/v5/generation.c
 
 CONFIT_CLI_SOURCES= \
 	src/cli/main.c \
-	src/cli/v4_workflow.c
+	src/cli/v5_workflow.c
 
 CONFIT_TEST_SUPPORT_SOURCES= \
 	tests/support/test_assert.c \
@@ -42,8 +42,8 @@ CONFIT_TEST_SUPPORT_SOURCES= \
 	tests/support/test_process.c
 
 CONFIT_UNIT_TEST_SOURCES= \
-	tests/unit/test_config_v4.c \
-	tests/unit/test_generation_v4.c \
+	tests/unit/test_config_v5.c \
+	tests/unit/test_generation_v5.c \
 	tests/unit/test_status_diagnostic.c \
 	tests/unit/test_host_boundary.c \
 	tests/unit/test_toml_adapter.c

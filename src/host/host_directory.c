@@ -341,7 +341,7 @@ static int confit_host_measure_stage0_tool(
     if (descriptor >= 0) (void)close(descriptor);
     return 0;
   }
-  status = confit_v4_sha256_file(canonical, out->sha256, diagnostic);
+  status = confit_v5_sha256_file(canonical, out->sha256, diagnostic);
   if (status != CONFIT_OK || lstat(canonical, &after) != 0 ||
       after.st_dev != opened.st_dev || after.st_ino != opened.st_ino ||
       after.st_size != opened.st_size) {
@@ -509,7 +509,7 @@ static int confit_host_compile_admission(
                           "admission source is not one nonempty regular file");
     return 0;
   }
-  if (confit_v4_sha256_file(canonical_source, source_sha256, diagnostic) !=
+  if (confit_v5_sha256_file(canonical_source, source_sha256, diagnostic) !=
       CONFIT_OK) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
                           "admission source digest measurement failed");
@@ -578,7 +578,7 @@ static int confit_host_compile_admission(
       source_after.st_dev != source_before.st_dev ||
       source_after.st_ino != source_before.st_ino ||
       source_after.st_size != source_before.st_size ||
-      confit_v4_sha256_file(canonical_source, source_after_sha256,
+      confit_v5_sha256_file(canonical_source, source_after_sha256,
                             diagnostic) != CONFIT_OK ||
       strcmp(source_after_sha256, source_sha256) != 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,

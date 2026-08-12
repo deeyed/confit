@@ -14,18 +14,18 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-typedef struct ConfitV4Sha256 {
+typedef struct ConfitV5Sha256 {
   uint32_t state[8];
   uint64_t bit_count;
   unsigned char block[64];
   size_t block_size;
-} ConfitV4Sha256;
+} ConfitV5Sha256;
 
-static uint32_t confit_v4_rotr(uint32_t value, unsigned int shift) {
+static uint32_t confit_v5_rotr(uint32_t value, unsigned int shift) {
   return (value >> shift) | (value << (32U - shift));
 }
 
-static void confit_v4_sha256_init(ConfitV4Sha256 *hash) {
+static void confit_v5_sha256_init(ConfitV5Sha256 *hash) {
   static const uint32_t initial[] = {
       UINT32_C(0x6A09E667), UINT32_C(0xBB67AE85), UINT32_C(0x3C6EF372),
       UINT32_C(0xA54FF53A), UINT32_C(0x510E527F), UINT32_C(0x9B05688C),
@@ -35,7 +35,7 @@ static void confit_v4_sha256_init(ConfitV4Sha256 *hash) {
   hash->block_size = 0U;
 }
 
-static void confit_v4_sha256_compress(ConfitV4Sha256 *hash,
+static void confit_v5_sha256_compress(ConfitV5Sha256 *hash,
                                       const unsigned char block[64]) {
   static const uint32_t constants[] = {
       UINT32_C(0x428A2F98), UINT32_C(0x71374491), UINT32_C(0xB5C0FBCF),
@@ -71,11 +71,11 @@ static void confit_v4_sha256_compress(ConfitV4Sha256 *hash,
                       (uint32_t)block[offset + 3U];
   }
   for (index = 16U; index < 64U; ++index) {
-    const uint32_t small0 = confit_v4_rotr(schedule[index - 15U], 7U) ^
-                            confit_v4_rotr(schedule[index - 15U], 18U) ^
+    const uint32_t small0 = confit_v5_rotr(schedule[index - 15U], 7U) ^
+                            confit_v5_rotr(schedule[index - 15U], 18U) ^
                             (schedule[index - 15U] >> 3U);
-    const uint32_t small1 = confit_v4_rotr(schedule[index - 2U], 17U) ^
-                            confit_v4_rotr(schedule[index - 2U], 19U) ^
+    const uint32_t small1 = confit_v5_rotr(schedule[index - 2U], 17U) ^
+                            confit_v5_rotr(schedule[index - 2U], 19U) ^
                             (schedule[index - 2U] >> 10U);
     schedule[index] = schedule[index - 16U] + small0 +
                       schedule[index - 7U] + small1;
@@ -83,13 +83,13 @@ static void confit_v4_sha256_compress(ConfitV4Sha256 *hash,
   a = hash->state[0]; b = hash->state[1]; c = hash->state[2]; d = hash->state[3];
   e = hash->state[4]; f = hash->state[5]; g = hash->state[6]; h = hash->state[7];
   for (index = 0U; index < 64U; ++index) {
-    const uint32_t big1 = confit_v4_rotr(e, 6U) ^ confit_v4_rotr(e, 11U) ^
-                          confit_v4_rotr(e, 25U);
+    const uint32_t big1 = confit_v5_rotr(e, 6U) ^ confit_v5_rotr(e, 11U) ^
+                          confit_v5_rotr(e, 25U);
     const uint32_t choose = (e & f) ^ ((~e) & g);
     const uint32_t temporary1 =
         h + big1 + choose + constants[index] + schedule[index];
-    const uint32_t big0 = confit_v4_rotr(a, 2U) ^ confit_v4_rotr(a, 13U) ^
-                          confit_v4_rotr(a, 22U);
+    const uint32_t big0 = confit_v5_rotr(a, 2U) ^ confit_v5_rotr(a, 13U) ^
+                          confit_v5_rotr(a, 22U);
     const uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
     const uint32_t temporary2 = big0 + majority;
     h = g; g = f; f = e; e = d + temporary1;
@@ -100,7 +100,7 @@ static void confit_v4_sha256_compress(ConfitV4Sha256 *hash,
   hash->state[6] += g; hash->state[7] += h;
 }
 
-static void confit_v4_sha256_update(ConfitV4Sha256 *hash,
+static void confit_v5_sha256_update(ConfitV5Sha256 *hash,
                                     const unsigned char *text, size_t size) {
   size_t index = 0U;
   hash->bit_count += (uint64_t)size * UINT64_C(8);
@@ -112,27 +112,27 @@ static void confit_v4_sha256_update(ConfitV4Sha256 *hash,
     hash->block_size += copy_size;
     index += copy_size;
     if (hash->block_size == sizeof(hash->block)) {
-      confit_v4_sha256_compress(hash, hash->block);
+      confit_v5_sha256_compress(hash, hash->block);
       hash->block_size = 0U;
     }
   }
 }
 
-static void confit_v4_sha256_final(ConfitV4Sha256 *hash,
+static void confit_v5_sha256_final(ConfitV5Sha256 *hash,
                                    unsigned char output[32]) {
   size_t index;
   const uint64_t bit_count = hash->bit_count;
   hash->block[hash->block_size++] = 0x80U;
   if (hash->block_size > 56U) {
     while (hash->block_size < 64U) hash->block[hash->block_size++] = 0U;
-    confit_v4_sha256_compress(hash, hash->block);
+    confit_v5_sha256_compress(hash, hash->block);
     hash->block_size = 0U;
   }
   while (hash->block_size < 56U) hash->block[hash->block_size++] = 0U;
   for (index = 0U; index < 8U; ++index) {
     hash->block[63U - index] = (unsigned char)(bit_count >> (index * 8U));
   }
-  confit_v4_sha256_compress(hash, hash->block);
+  confit_v5_sha256_compress(hash, hash->block);
   for (index = 0U; index < 8U; ++index) {
     output[index * 4U] = (unsigned char)(hash->state[index] >> 24U);
     output[index * 4U + 1U] = (unsigned char)(hash->state[index] >> 16U);
@@ -141,19 +141,19 @@ static void confit_v4_sha256_final(ConfitV4Sha256 *hash,
   }
 }
 
-void confit_v4_sha256_bytes(const void *data, size_t size, char output[65]) {
+void confit_v5_sha256_bytes(const void *data, size_t size, char output[65]) {
   static const char digits[] = "0123456789abcdef";
   unsigned char bytes[32];
-  ConfitV4Sha256 hash;
+  ConfitV5Sha256 hash;
   size_t index;
   if (output == 0) return;
   if (data == 0 && size != 0U) {
     output[0] = '\0';
     return;
   }
-  confit_v4_sha256_init(&hash);
-  if (size != 0U) confit_v4_sha256_update(&hash, data, size);
-  confit_v4_sha256_final(&hash, bytes);
+  confit_v5_sha256_init(&hash);
+  if (size != 0U) confit_v5_sha256_update(&hash, data, size);
+  confit_v5_sha256_final(&hash, bytes);
   for (index = 0U; index < sizeof(bytes); ++index) {
     output[index * 2U] = digits[bytes[index] >> 4U];
     output[index * 2U + 1U] = digits[bytes[index] & 0x0FU];
@@ -161,21 +161,21 @@ void confit_v4_sha256_bytes(const void *data, size_t size, char output[65]) {
   output[64] = '\0';
 }
 
-void confit_v4_sha256_hex(const char *text, char output[65]) {
+void confit_v5_sha256_hex(const char *text, char output[65]) {
   if (output == 0) return;
   if (text == 0) {
     output[0] = '\0';
     return;
   }
-  confit_v4_sha256_bytes(text, strlen(text), output);
+  confit_v5_sha256_bytes(text, strlen(text), output);
 }
 
-ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
+ConfitStatus confit_v5_sha256_file(const char *path, char output[65],
                                    ConfitDiagnostic *diagnostic) {
   static const char digits[] = "0123456789abcdef";
   unsigned char buffer[16384];
   unsigned char bytes[32];
-  ConfitV4Sha256 hash;
+  ConfitV5Sha256 hash;
   struct stat before;
   struct stat opened;
   size_t total = 0U;
@@ -199,7 +199,7 @@ ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
                           "digest input identity changed before open");
     return CONFIT_ERR_UNSUPPORTED;
   }
-  confit_v4_sha256_init(&hash);
+  confit_v5_sha256_init(&hash);
   for (;;) {
     const ssize_t count = read(descriptor, buffer, sizeof(buffer));
     if (count < 0) {
@@ -218,7 +218,7 @@ ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
       return CONFIT_ERR_GENERATION;
     }
     total += (size_t)count;
-    confit_v4_sha256_update(&hash, buffer, (size_t)count);
+    confit_v5_sha256_update(&hash, buffer, (size_t)count);
   }
   if (fstat(descriptor, &opened) != 0 || opened.st_dev != before.st_dev ||
       opened.st_ino != before.st_ino || opened.st_size != before.st_size ||
@@ -228,7 +228,7 @@ ConfitStatus confit_v4_sha256_file(const char *path, char output[65],
                           "digest input is empty or changed during read");
     return CONFIT_ERR_UNSUPPORTED;
   }
-  confit_v4_sha256_final(&hash, bytes);
+  confit_v5_sha256_final(&hash, bytes);
   for (index = 0U; index < sizeof(bytes); ++index) {
     output[index * 2U] = digits[bytes[index] >> 4U];
     output[index * 2U + 1U] = digits[bytes[index] & 0x0FU];
