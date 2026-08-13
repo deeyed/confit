@@ -8,7 +8,7 @@
 
 int main(int argc, char **argv) {
   if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-    (void)puts("parus-admit 1.0.0");
+    (void)puts("luca-admit 1.0.0");
     return 0;
   }
   return 2;

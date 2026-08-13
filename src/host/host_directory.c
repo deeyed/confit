@@ -134,7 +134,7 @@ static int confit_host_root_marker_text(
 static int confit_host_root_marker(int root_fd, int repository_fd,
                                    const char *root, const char *repository,
                                    int create) {
-  static const char name[] = ".parus-root-v1";
+  static const char name[] = ".luca-root-v1";
   char actual[4096];
   char expected[4096];
   struct stat metadata;
@@ -183,7 +183,7 @@ typedef struct ConfitHostStage0Tool {
 
 #define CONFIT_STAGE0_ADMISSION_MAX_BYTES \
   (UINT64_C(8) * UINT64_C(1024) * UINT64_C(1024))
-#define CONFIT_STAGE0_ADMISSION_OPERATION "parus-admit-c17-v1"
+#define CONFIT_STAGE0_ADMISSION_OPERATION "luca-admit-c17-v1"
 #define CONFIT_STAGE0_ADMISSION_VERSION "1.0.0"
 
 static int confit_host_stage0_path(const char *path) {
@@ -369,7 +369,7 @@ static int confit_host_measure_stage0_tool(
         !confit_host_numeric_version(banner, out->version)) return 0;
   } else {
     static const char admission_banner[] =
-        "parus-admit " CONFIT_STAGE0_ADMISSION_VERSION;
+        "luca-admit " CONFIT_STAGE0_ADMISSION_VERSION;
     status = confit_host_capture_first_line_argument(
         banner, sizeof(banner), canonical, "--version", diagnostic);
     if (status != CONFIT_OK || strcmp(banner, admission_banner) != 0) return 0;
@@ -389,7 +389,7 @@ static int confit_host_stage0_receipt(
     const char *compiler_path, const char *source_path,
     const char *source_sha256, const char *admission_path,
     ConfitDiagnostic *diagnostic) {
-  static const char receipt_name[] = ".parus-stage0-v1";
+  static const char receipt_name[] = ".luca-stage0-v1";
   ConfitHostStage0Tool stage0;
   ConfitHostStage0Tool bmake;
   ConfitHostStage0Tool compiler;
@@ -466,9 +466,9 @@ static int confit_host_compile_admission(
     const char *invocation, int invocation_fd, const char *repository,
     const char *source, const char *compiler_path,
     char out_source_sha256[65], ConfitDiagnostic *diagnostic) {
-  static const char stage_name[] = ".parus-admit-stage";
-  static const char temporary_name[] = "parus-admit.bin";
-  static const char output_name[] = "parus-admit";
+  static const char stage_name[] = ".luca-admit-stage";
+  static const char temporary_name[] = "luca-admit.bin";
+  static const char output_name[] = "luca-admit";
   char canonical_source[PATH_MAX];
   char canonical_compiler[PATH_MAX];
   char source_sha256[65];
@@ -712,7 +712,7 @@ ConfitStatus confit_host_prepare_luca_build_root(
       !confit_host_root_marker(root_fd, repository_fd, root, repository,
                                root_created) ||
       (bootstrap_fd = confit_host_open_directory_at(
-           root_fd, ".parus-admission-bootstrap", 1, 0)) < 0 ||
+           root_fd, ".luca-admission-bootstrap", 1, 0)) < 0 ||
       fchmod(bootstrap_fd, 0700) != 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
                           "descriptor-rooted build admission directory failed");
@@ -727,7 +727,7 @@ ConfitStatus confit_host_prepare_luca_build_root(
   invocation_created = 1;
   admission_length = snprintf(
       admission_path, sizeof(admission_path),
-      "%s/.parus-admission-bootstrap/%s/parus-admit", root, invocation);
+      "%s/.luca-admission-bootstrap/%s/luca-admit", root, invocation);
   if (admission_length <= 0 ||
       (size_t)admission_length >= sizeof(admission_path)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
@@ -771,9 +771,9 @@ ConfitStatus confit_host_prepare_luca_build_root(
 cleanup:
   if (status != CONFIT_OK && invocation_fd >= 0) {
     (void)fchmod(invocation_fd, 0700);
-    (void)unlinkat(invocation_fd, ".parus-stage0-v1", 0);
-    (void)unlinkat(invocation_fd, "parus-admit.tmp", 0);
-    (void)unlinkat(invocation_fd, "parus-admit", 0);
+    (void)unlinkat(invocation_fd, ".luca-stage0-v1", 0);
+    (void)unlinkat(invocation_fd, "luca-admit.tmp", 0);
+    (void)unlinkat(invocation_fd, "luca-admit", 0);
   }
   if (invocation_fd >= 0) (void)close(invocation_fd);
   if (status != CONFIT_OK && invocation_created && bootstrap_fd >= 0) {

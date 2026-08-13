@@ -180,7 +180,7 @@ ConfitStatus confit_host_make_directories(const char *path,
  * canonical absolute directory여야 하며, `invocation`은 decimal PID token이다.
  * 구현은 symlink를 따르지 않는 descriptor walk로 root와 invocation leaf를 만들고,
  * root lock을 유지한 채 fixed compiler argv와 bounded file limit로 repository의 exact
- * `tools/host/admit/main.c`를 `parus-admit`으로 컴파일한다. Source path나 임의 compiler
+ * `tools/host/admit/main.c`를 `luca-admit`으로 컴파일한다. Source path나 임의 compiler
  * argv를 받는 범용 실행 API가 아니다. `stage0_confit`은 CLI가 host kernel에서 구한
  * 현재 executable의 canonical absolute path이며 public `build-enter` 문법으로 별도
  * 주입할 수 없다. 이 parameter는 direct host-boundary test가 동일 receipt 경계를

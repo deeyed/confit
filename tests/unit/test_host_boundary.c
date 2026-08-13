@@ -274,23 +274,23 @@ int main(int argc, char **argv) {
       symlink(bmake_tool, bmake_alias) != 0 ||
       !confit_test_fs_path_join(build_root, sizeof(build_root),
                                 temporary_canonical,
-                                "parus-build") ||
+                                "luca-build") ||
       mkdir(build_root, 0700) != 0 ||
       !confit_test_fs_path_join(foreign_sentinel, sizeof(foreign_sentinel),
-                                build_root, "foreign-sentinel") ||
+                                build_root, ".parus-root-v1") ||
       !confit_test_fs_write_file(foreign_sentinel, "unchanged\n") ||
       confit_host_prepare_luca_build_root(
           build_root, source_repository, "122", stage0_tool, bmake_tool,
           compiler_tool, &diagnostic) !=
           CONFIT_ERR_GENERATION ||
       !confit_test_fs_path_join(root_marker, sizeof(root_marker), build_root,
-                                ".parus-root-v1") ||
+                                ".luca-root-v1") ||
       confit_host_file_exists(root_marker) ||
       !confit_test_fs_path_join(admission_root, sizeof(admission_root),
-                                build_root, ".parus-admission-bootstrap") ||
+                                build_root, ".luca-admission-bootstrap") ||
       confit_host_directory_exists(admission_root) ||
       !confit_test_directory_has_exact_entry(build_root,
-                                             "foreign-sentinel") ||
+                                             ".parus-root-v1") ||
       (text = confit_test_fs_read_file(foreign_sentinel)) == 0 ||
       strcmp(text, "unchanged\n") != 0) {
     confit_test_fs_free(text);
@@ -312,7 +312,7 @@ int main(int argc, char **argv) {
                                            compiler_tool, &diagnostic) !=
           CONFIT_OK ||
       !confit_test_fs_path_join(admission_root, sizeof(admission_root),
-                                build_root, ".parus-admission-bootstrap") ||
+                                build_root, ".luca-admission-bootstrap") ||
       !confit_test_fs_path_join(invocation_root, sizeof(invocation_root),
                                 admission_root, "123") ||
       !confit_host_directory_exists(invocation_root) ||
@@ -320,7 +320,7 @@ int main(int argc, char **argv) {
           stage0_tool, build_root, source_repository, "127", bmake_tool,
           compiler_tool) ||
       !confit_test_fs_path_join(forged_receipt, sizeof(forged_receipt),
-                                admission_root, "127/.parus-stage0-v1") ||
+                                admission_root, "127/.luca-stage0-v1") ||
       (text = confit_test_fs_read_file(forged_receipt)) == 0 ||
       snprintf(expected_stage0, sizeof(expected_stage0), "stage0.path=%s\n",
                stage0_tool) <= 0 ||
