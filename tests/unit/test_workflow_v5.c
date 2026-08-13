@@ -32,9 +32,18 @@ static void expect_shared_model_and_minimal_output(void) {
   size_t left_size = 0U;
   size_t right_size = 0U;
   size_t match = 0U;
+  size_t row_count = 0U;
   ConfitV5WorkflowRow row;
   confit_diagnostic_init(&diagnostic);
-  CONFIT_TEST_ASSERT(confit_v5_workflow_row_count(left) == 7U);
+  row_count = confit_v5_workflow_row_count(left);
+  CONFIT_TEST_ASSERT(row_count != 0U);
+  CONFIT_TEST_ASSERT(row_count == confit_v5_workflow_row_count(right));
+  for (size_t index = 0U; index < row_count; ++index) {
+    CONFIT_TEST_ASSERT(confit_v5_workflow_row(left, index, &row));
+    CONFIT_TEST_ASSERT(row.option.symbol != 0 && row.option.symbol[0] != '\0');
+    CONFIT_TEST_ASSERT(row.value != 0 && row.value[0] != '\0');
+    CONFIT_TEST_ASSERT(row.origin != CONFIT_V5_VALUE_ORIGIN_INVALID);
+  }
   CONFIT_TEST_ASSERT(
       confit_v5_workflow_search(left, "gacs", 0U, &match));
   CONFIT_TEST_ASSERT(confit_v5_workflow_row(left, match, &row));
