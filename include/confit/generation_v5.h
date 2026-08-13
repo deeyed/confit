@@ -69,12 +69,15 @@ const char *confit_v5_generation_directory(
     const ConfitV5GenerationTransaction *transaction);
 
 /**
- * @brief resolver 없이 artifact, membership와 verifier identity를 재검증한다.
+ * @brief resolver 없이 artifact, membership, build 축과 verifier identity를 재검증한다.
  *
  * 이 함수는 option semantics나 Make/source graph를 해석하지 않는다.
+ * expected_architecture와 expected_kernconf는 현재 build invocation이 요구한
+ * canonical atom이며 sealed selection과 byte-for-byte 같아야 한다.
  */
 ConfitStatus confit_v5_configseal_verify(
     const char *generation_directory, const char *repository_root,
+    const char *expected_architecture, const char *expected_kernconf,
     const ConfitV5ToolIdentity *verifier, ConfitDiagnostic *diagnostic);
 
 #ifdef __cplusplus

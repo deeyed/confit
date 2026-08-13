@@ -133,8 +133,21 @@ static void expect_generation_and_stale_detection(void) {
   (void)snprintf(generation_path, sizeof(generation_path), "%s",
                  confit_v5_generation_directory(transaction));
   CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
-                         generation_path, root, &tool, &diagnostic) ==
+                         generation_path, root, "arm64", "vm-v0", &tool,
+                         &diagnostic) ==
                      CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
+                         generation_path, root, "amd64", "vm-v0", &tool,
+                         &diagnostic) == CONFIT_ERR_COMPATIBILITY);
+  CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
+                         generation_path, root, "arm64", "VM-v0", &tool,
+                         &diagnostic) == CONFIT_ERR_COMPATIBILITY);
+  CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
+                         generation_path, root, "arm64", "vm/v0", &tool,
+                         &diagnostic) == CONFIT_ERR_COMPATIBILITY);
+  CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
+                         generation_path, root, "", "vm-v0", &tool,
+                         &diagnostic) == CONFIT_ERR_COMPATIBILITY);
   CONFIT_TEST_ASSERT(confit_v5_generation_apply(transaction, &diagnostic) ==
                      CONFIT_OK);
   CONFIT_TEST_ASSERT(confit_v5_generation_cancel(&transaction, &diagnostic) ==
@@ -179,7 +192,8 @@ static void expect_generation_and_stale_detection(void) {
     CONFIT_TEST_ASSERT(symlink("/bin/echo", artifact_path) == 0);
     CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
                            confit_v5_generation_directory(transaction), root,
-                           &tool, &diagnostic) != CONFIT_OK);
+                           "arm64", "vm-v0", &tool, &diagnostic) !=
+                       CONFIT_OK);
   }
   CONFIT_TEST_ASSERT(confit_v5_generation_cancel(&transaction, &diagnostic) ==
                      CONFIT_OK);
@@ -187,7 +201,8 @@ static void expect_generation_and_stale_detection(void) {
   make_dir(root, "config/options/added");
   write_file(root, "config/options/added/Config.toml", "schema_version = 5\n");
   CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
-                         generation_path, root, &tool, &diagnostic) !=
+                         generation_path, root, "arm64", "vm-v0", &tool,
+                         &diagnostic) !=
                      CONFIT_OK);
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(root));
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(out));

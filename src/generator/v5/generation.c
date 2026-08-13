@@ -1053,6 +1053,8 @@ static ConfitStatus scan_membership_directory(
 #endif
 
 static ConfitStatus verify_seal(const char *generation_directory,
+                                const char *expected_architecture,
+                                const char *expected_kernconf,
                                 ConfitDiagnostic *diagnostic) {
   char path[4096];
   char *seal = 0;
@@ -1116,7 +1118,9 @@ static ConfitStatus verify_seal(const char *generation_directory,
         }
         arch[ai] = '\0';
         conf[ki] = '\0';
-        if (!safe_atom(arch) || !safe_atom(conf))
+        if (!safe_atom(arch) || !safe_atom(conf) ||
+            strcmp(arch, expected_architecture) != 0 ||
+            strcmp(conf, expected_kernconf) != 0)
           status = CONFIT_ERR_COMPATIBILITY;
         else
           status = text_f(&manifest, "architecture=%s\nkernconf=%s\n",
@@ -1325,10 +1329,13 @@ done:
 
 ConfitStatus confit_v5_configseal_verify(
     const char *generation_directory, const char *repository_root,
+    const char *expected_architecture, const char *expected_kernconf,
     const ConfitV5ToolIdentity *verifier, ConfitDiagnostic *diagnostic) {
 #if defined(_WIN32)
   (void)generation_directory;
   (void)repository_root;
+  (void)expected_architecture;
+  (void)expected_kernconf;
   (void)verifier;
   (void)diagnostic;
   return CONFIT_ERR_UNSUPPORTED;
@@ -1336,11 +1343,13 @@ ConfitStatus confit_v5_configseal_verify(
   struct stat metadata;
   ConfitStatus status;
   if (!absolute_path(generation_directory) || !absolute_path(repository_root) ||
+      !safe_atom(expected_architecture) || !safe_atom(expected_kernconf) ||
       lstat(generation_directory, &metadata) != 0 ||
       S_ISLNK(metadata.st_mode) || !S_ISDIR(metadata.st_mode) ||
       !verify_exact_files(generation_directory))
     return CONFIT_ERR_COMPATIBILITY;
-  status = verify_seal(generation_directory, diagnostic);
+  status = verify_seal(generation_directory, expected_architecture,
+                       expected_kernconf, diagnostic);
   if (status == CONFIT_OK)
     status = verify_tool_identity(generation_directory, verifier, diagnostic);
   if (status == CONFIT_OK)

@@ -105,24 +105,31 @@ int confit_cli_v5_configure(int argc, char **argv) {
 int confit_cli_v5_verify(int argc, char **argv) {
   const char *repository = 0;
   const char *generation = 0;
+  const char *expected_architecture = 0;
+  const char *expected_kernconf = 0;
   ConfitV5ToolIdentity verifier;
   ConfitDiagnostic diagnostic;
   ConfitStatus status;
   char self[CONFIT_CLI_PATH_BYTES];
   char digest[65];
-  if (argc != 6 ||
+  if (argc != 10 ||
       !option_value(argc, argv, "--repository", &repository) ||
-      !option_value(argc, argv, "--generation", &generation)) {
+      !option_value(argc, argv, "--generation", &generation) ||
+      !option_value(argc, argv, "--expected-architecture",
+                    &expected_architecture) ||
+      !option_value(argc, argv, "--expected-kernconf", &expected_kernconf)) {
     (void)fprintf(stderr,
                   "confit: verify requires --repository ABS "
-                  "--generation ABS\n");
+                  "--generation ABS --expected-architecture ATOM "
+                  "--expected-kernconf ATOM\n");
     return confit_status_exit_code(CONFIT_ERR_INVALID_ARGUMENT);
   }
   confit_diagnostic_init(&diagnostic);
   status = self_identity(&verifier, self, digest, &diagnostic);
   if (status == CONFIT_OK)
-    status = confit_v5_configseal_verify(generation, repository, &verifier,
-                                         &diagnostic);
+    status = confit_v5_configseal_verify(
+        generation, repository, expected_architecture, expected_kernconf,
+        &verifier, &diagnostic);
   if (status == CONFIT_OK) (void)printf("configseal=verified\n");
   return report_status("verify", status, &diagnostic);
 }
