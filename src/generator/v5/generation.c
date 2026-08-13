@@ -240,8 +240,8 @@ static ConfitStatus make_config_header(const ConfitV5Catalog *catalog,
                                        const ConfitV5Evaluation *evaluation,
                                        ConfitV5Text *out) {
   ConfitStatus status = text_s(
-      out, "#ifndef PARUS_GENERATED_CONFIG_V5_H\n"
-           "#define PARUS_GENERATED_CONFIG_V5_H\n\n"
+      out, "#ifndef LUCA_GENERATED_CONFIG_V5_H\n"
+           "#define LUCA_GENERATED_CONFIG_V5_H\n\n"
            "/* Config v5 KERNCONF snapshot; generated, do not edit. */\n");
   for (size_t index = 0U;
        status == CONFIT_OK && index < confit_v5_catalog_option_count(catalog);
@@ -274,7 +274,7 @@ static ConfitStatus make_config_header(const ConfitV5Catalog *catalog,
     }
   }
   if (status == CONFIT_OK)
-    status = text_s(out, "\n#endif /* PARUS_GENERATED_CONFIG_V5_H */\n");
+    status = text_s(out, "\n#endif /* LUCA_GENERATED_CONFIG_V5_H */\n");
   return status;
 }
 

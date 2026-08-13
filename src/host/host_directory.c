@@ -516,9 +516,9 @@ static int confit_host_compile_admission(
     return 0;
   }
   if (snprintf(source_define, sizeof(source_define),
-               "-DPARUS_ADMIT_SOURCE_SHA256=\"%s\"", source_sha256) <= 0 ||
+               "-DLUCA_ADMIT_SOURCE_SHA256=\"%s\"", source_sha256) <= 0 ||
       snprintf(operation_define, sizeof(operation_define),
-               "-DPARUS_ADMIT_COMPILE_OPERATION=\"%s\"",
+               "-DLUCA_ADMIT_COMPILE_OPERATION=\"%s\"",
                CONFIT_STAGE0_ADMISSION_OPERATION) <= 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, source, 0U, 0U,
                           "admission compile identity encoding failed");
@@ -650,7 +650,7 @@ cleanup:
 }
 #endif
 
-ConfitStatus confit_host_prepare_parus_build_root(
+ConfitStatus confit_host_prepare_luca_build_root(
     const char *root, const char *repository, const char *invocation,
     const char *stage0_confit, const char *bmake, const char *host_compiler,
     ConfitDiagnostic *diagnostic) {
@@ -661,7 +661,7 @@ ConfitStatus confit_host_prepare_parus_build_root(
   (void)bmake;
   (void)host_compiler;
   confit_diagnostic_set(diagnostic, CONFIT_ERR_UNSUPPORTED, root, 0U, 0U,
-                        "Parus stage-0 root admission is unavailable on this host");
+                        "LUCA stage-0 root admission is unavailable on this host");
   return CONFIT_ERR_UNSUPPORTED;
 #else
   char parent[PATH_MAX];
@@ -697,7 +697,7 @@ ConfitStatus confit_host_prepare_parus_build_root(
   if (source_length <= 0 || (size_t)source_length >= sizeof(admission_source)) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, repository,
                           0U, 0U,
-                          "Parus admission source path exceeds host limit");
+                          "LUCA admission source path exceeds host limit");
     return CONFIT_ERR_INVALID_ARGUMENT;
   }
   parent_fd = open(parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);

@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     status = confit_host_self_executable(self_executable,
                                          sizeof(self_executable), &diagnostic);
     if (status == CONFIT_OK) {
-      status = confit_host_prepare_parus_build_root(
+      status = confit_host_prepare_luca_build_root(
           argv[3], argv[5], argv[7], self_executable, argv[9], argv[11],
           &diagnostic);
     }

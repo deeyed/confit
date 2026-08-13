@@ -279,7 +279,7 @@ int main(int argc, char **argv) {
       !confit_test_fs_path_join(foreign_sentinel, sizeof(foreign_sentinel),
                                 build_root, "foreign-sentinel") ||
       !confit_test_fs_write_file(foreign_sentinel, "unchanged\n") ||
-      confit_host_prepare_parus_build_root(
+      confit_host_prepare_luca_build_root(
           build_root, source_repository, "122", stage0_tool, bmake_tool,
           compiler_tool, &diagnostic) !=
           CONFIT_ERR_GENERATION ||
@@ -299,15 +299,15 @@ int main(int argc, char **argv) {
   confit_test_fs_free(text);
   text = 0;
   if (!confit_test_fs_remove_tree(build_root) ||
-      confit_host_prepare_parus_build_root(build_root, source_repository,
+      confit_host_prepare_luca_build_root(build_root, source_repository,
                                            "123", stage0_tool, bmake_tool,
                                            compiler_tool, &diagnostic) !=
           CONFIT_OK ||
-      confit_host_prepare_parus_build_root(build_root, source_repository,
+      confit_host_prepare_luca_build_root(build_root, source_repository,
                                            "123", stage0_tool, bmake_tool,
                                            compiler_tool, &diagnostic) !=
           CONFIT_ERR_GENERATION ||
-      confit_host_prepare_parus_build_root(build_root, source_repository,
+      confit_host_prepare_luca_build_root(build_root, source_repository,
                                            "124", stage0_tool, bmake_alias,
                                            compiler_tool, &diagnostic) !=
           CONFIT_OK ||
@@ -331,20 +331,20 @@ int main(int argc, char **argv) {
   confit_test_fs_free(text);
   text = 0;
   confit_diagnostic_clear(&diagnostic);
-  if (confit_host_prepare_parus_build_root(build_root, source_repository,
+  if (confit_host_prepare_luca_build_root(build_root, source_repository,
                                            "../escape", stage0_tool,
                                            bmake_tool, compiler_tool,
                                            &diagnostic) !=
           CONFIT_ERR_INVALID_ARGUMENT ||
-      confit_host_prepare_parus_build_root(build_root, build_root, "125",
+      confit_host_prepare_luca_build_root(build_root, build_root, "125",
                                            stage0_tool, bmake_tool,
                                            compiler_tool, &diagnostic) !=
           CONFIT_ERR_GENERATION ||
-      confit_host_prepare_parus_build_root("/tmp/.", source_repository,
+      confit_host_prepare_luca_build_root("/tmp/.", source_repository,
                                            "125", stage0_tool, bmake_tool,
                                            compiler_tool, &diagnostic) !=
           CONFIT_ERR_INVALID_ARGUMENT ||
-      confit_host_prepare_parus_build_root("/tmp/..", source_repository,
+      confit_host_prepare_luca_build_root("/tmp/..", source_repository,
                                            "126", stage0_tool, bmake_tool,
                                            compiler_tool, &diagnostic) !=
           CONFIT_ERR_INVALID_ARGUMENT ||

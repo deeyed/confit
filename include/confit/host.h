@@ -174,9 +174,9 @@ ConfitStatus confit_host_make_directories(const char *path,
                                           ConfitDiagnostic *diagnostic);
 
 /**
- * @brief 비어 있는 Parus object root와 invocation별 admission leaf를 준비한다.
+ * @brief 비어 있는 LUCA object root와 invocation별 admission leaf를 준비한다.
  *
- * 이 API는 Parus의 stage-0 bootstrap 전용이다. `root`의 parent는 이미 존재하는
+ * 이 API는 LUCA의 stage-0 bootstrap 전용이다. `root`의 parent는 이미 존재하는
  * canonical absolute directory여야 하며, `invocation`은 decimal PID token이다.
  * 구현은 symlink를 따르지 않는 descriptor walk로 root와 invocation leaf를 만들고,
  * root lock을 유지한 채 fixed compiler argv와 bounded file limit로 repository의 exact
@@ -186,7 +186,7 @@ ConfitStatus confit_host_make_directories(const char *path,
  * 주입할 수 없다. 이 parameter는 direct host-boundary test가 동일 receipt 경계를
  * 검증할 때만 명시적으로 전달한다.
  */
-ConfitStatus confit_host_prepare_parus_build_root(
+ConfitStatus confit_host_prepare_luca_build_root(
     const char *root, const char *repository, const char *invocation,
     const char *stage0_confit, const char *bmake, const char *host_compiler,
     ConfitDiagnostic *diagnostic);
