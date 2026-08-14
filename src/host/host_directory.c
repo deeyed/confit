@@ -117,7 +117,7 @@ static int confit_host_root_marker_text(
     return 0;
   }
   return snprintf(bytes, 4096U,
-                  "PARUS-CONFIT-ROOT-V1\n"
+                  "LUCA-CONFIT-ROOT-V1\n"
                   "root=%s\nrepository=%s\n"
                   "root.device=%llu\nroot.inode=%llu\n"
                   "repository.device=%llu\nrepository.inode=%llu\n"
@@ -427,7 +427,7 @@ static int confit_host_stage0_receipt(
   if (descriptor < 0) return 0;
   length = snprintf(
       bytes, sizeof(bytes),
-      "PARUS-STAGE0-RECEIPT-V1\n"
+      "LUCA-STAGE0-RECEIPT-V1\n"
       "root=%s\nrepository=%s\ninvocation=%s\n"
       "stage0.path=%s\nstage0.sha256=%s\nstage0.version=%s\n"
       "stage0.device=%llu\nstage0.inode=%llu\nstage0.size=%llu\n"
