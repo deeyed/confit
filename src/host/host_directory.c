@@ -553,9 +553,9 @@ static int confit_host_compile_admission(
     char *const arguments[] = {
         canonical_compiler, (char *)"-std=c17", (char *)"-O2",
         (char *)"-Wall", (char *)"-Wextra", (char *)"-Werror",
-        (char *)"-pedantic", (char *)"-D_POSIX_C_SOURCE=200809L",
-        (char *)"-D_DARWIN_C_SOURCE", source_define, operation_define,
-        (char *)"-o",
+        (char *)"-pedantic", (char *)"-D_XOPEN_SOURCE=700",
+        (char *)"-D_POSIX_C_SOURCE=200809L", (char *)"-D_DARWIN_C_SOURCE",
+        source_define, operation_define, (char *)"-o",
         (char *)temporary_name, canonical_source, 0};
     char *const environment[] = {(char *)"PATH=/usr/bin:/bin",
                                  (char *)"LC_ALL=C",
