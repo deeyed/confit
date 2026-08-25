@@ -90,17 +90,18 @@ static void fixture(char root[4096], char out[4096]) {
              "value = \"${:sh}#\"\n");
 }
 
-static void identity(ConfitV5ToolIdentity *tool, char digest[65]) {
+static void identity(ConfitV5ToolIdentity *tool, const char *executable,
+                     char digest[65]) {
   ConfitDiagnostic diagnostic;
   confit_diagnostic_init(&diagnostic);
-  CONFIT_TEST_ASSERT(confit_v5_sha256_file("/bin/echo", digest,
+  CONFIT_TEST_ASSERT(confit_v5_sha256_file(executable, digest,
                                            &diagnostic) == CONFIT_OK);
-  tool->path = "/bin/echo";
+  tool->path = executable;
   tool->version = "fixture-v1";
   tool->sha256 = digest;
 }
 
-static void expect_generation_and_stale_detection(void) {
+static void expect_generation_and_stale_detection(const char *executable) {
   char root[4096], out[4096], digest[65];
   char first_digest[65];
   char generation_path[4096];
@@ -109,7 +110,7 @@ static void expect_generation_and_stale_detection(void) {
   ConfitV5ToolIdentity tool;
   ConfitDiagnostic diagnostic;
   fixture(root, out);
-  identity(&tool, digest);
+  identity(&tool, executable, digest);
   memset(&request, 0, sizeof(request));
   request.repository_root = root;
   request.output_root = out;
@@ -192,7 +193,7 @@ static void expect_generation_and_stale_detection(void) {
     (void)snprintf(artifact_path, sizeof(artifact_path), "%s/config.h",
                    confit_v5_generation_directory(transaction));
     CONFIT_TEST_ASSERT(unlink(artifact_path) == 0);
-    CONFIT_TEST_ASSERT(symlink("/bin/echo", artifact_path) == 0);
+    CONFIT_TEST_ASSERT(symlink(executable, artifact_path) == 0);
     CONFIT_TEST_ASSERT(confit_v5_configseal_verify(
                            confit_v5_generation_directory(transaction), root,
                            "arm64", "vm-v0", &tool, &diagnostic) !=
@@ -211,11 +212,16 @@ static void expect_generation_and_stale_detection(void) {
   CONFIT_TEST_ASSERT(confit_test_fs_remove_tree(out));
 }
 
-int main(void) {
+int main(int argc, char **argv) {
 #if defined(_WIN32)
+  (void)argc;
+  (void)argv;
   return 0;
 #else
-  expect_generation_and_stale_detection();
+  char executable[4096];
+  CONFIT_TEST_ASSERT(argc > 0 && argv != NULL && argv[0] != NULL);
+  CONFIT_TEST_ASSERT(realpath(argv[0], executable) != NULL);
+  expect_generation_and_stale_detection(executable);
   return 0;
 #endif
 }
