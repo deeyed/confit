@@ -43,7 +43,7 @@ CONFIT_HOST_CC?=/usr/bin/cc
 .error CONFIT_HOST_CC must be one existing absolute compiler executable
 .endif
 
-# Host-boundary corpus와 stage-zero receipt가 같은 bmake executable을 봉인하도록
+# Host-boundary corpus와 stage-zero AuditRecord가 같은 bmake executable을 봉인하도록
 # invocation basename/PATH를 다시 해석하지 않는다.
 .if !defined(CONFIT_BMAKE_TOOL) || ${CONFIT_BMAKE_TOOL:[#]} != 1 || \
     ${CONFIT_BMAKE_TOOL:M/*} == "" || \

@@ -183,8 +183,8 @@ ConfitStatus confit_host_make_directories(const char *path,
  * `tools/host/admit/main.c`를 `luca-admit`으로 컴파일한다. Source path나 임의 compiler
  * argv를 받는 범용 실행 API가 아니다. `stage0_confit`은 CLI가 host kernel에서 구한
  * 현재 executable의 canonical absolute path이며 public `build-enter` 문법으로 별도
- * 주입할 수 없다. 이 parameter는 direct host-boundary test가 동일 receipt 경계를
- * 검증할 때만 명시적으로 전달한다.
+ * 주입할 수 없다. 이 parameter는 direct host-boundary test가 동일 AuditRecord
+ * 경계를 검증할 때만 명시적으로 전달한다.
  */
 ConfitStatus confit_host_prepare_luca_build_root(
     const char *root, const char *repository, const char *invocation,

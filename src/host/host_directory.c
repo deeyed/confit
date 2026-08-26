@@ -386,13 +386,13 @@ static int confit_host_measure_stage0_tool(
   return 1;
 }
 
-static int confit_host_stage0_receipt(
+static int confit_host_stage0_audit_record(
     int invocation_fd, const char *root, const char *repository,
     const char *invocation, const char *stage0_path, const char *bmake_path,
     const char *compiler_path, const char *source_path,
     const char *source_sha256, const char *admission_path,
     ConfitDiagnostic *diagnostic) {
-  static const char receipt_name[] = ".luca-stage0-v1";
+  static const char audit_record_name[] = ".luca-stage0-v1";
   ConfitHostStage0Tool stage0;
   ConfitHostStage0Tool bmake;
   ConfitHostStage0Tool compiler;
@@ -424,13 +424,13 @@ static int confit_host_stage0_receipt(
                           "generated admission identity measurement failed");
     return 0;
   }
-  descriptor = openat(invocation_fd, receipt_name,
+  descriptor = openat(invocation_fd, audit_record_name,
                       O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
                       0600);
   if (descriptor < 0) return 0;
   length = snprintf(
       bytes, sizeof(bytes),
-      "LUCA-STAGE0-RECEIPT-V1\n"
+      "LUCA-STAGE0-AUDIT-RECORD-V1\n"
       "root=%s\nrepository=%s\ninvocation=%s\n"
       "stage0.path=%s\nstage0.sha256=%s\nstage0.version=%s\n"
       "stage0.device=%llu\nstage0.inode=%llu\nstage0.size=%llu\n"
@@ -458,7 +458,7 @@ static int confit_host_stage0_receipt(
       close(descriptor) != 0 ||
       fsync(invocation_fd) != 0) {
     if (descriptor >= 0) (void)close(descriptor);
-    (void)unlinkat(invocation_fd, receipt_name, 0);
+    (void)unlinkat(invocation_fd, audit_record_name, 0);
     return 0;
   }
   return 1;
@@ -748,13 +748,13 @@ ConfitStatus confit_host_prepare_luca_build_root(
     }
     goto cleanup;
   }
-  if (!confit_host_stage0_receipt(
+  if (!confit_host_stage0_audit_record(
           invocation_fd, root, repository, invocation, stage0_confit, bmake,
           host_compiler, admission_source, source_sha256, admission_path,
           diagnostic)) {
     if (diagnostic->message == 0 || diagnostic->message[0] == '\0') {
       confit_diagnostic_set(diagnostic, CONFIT_ERR_GENERATION, root, 0U, 0U,
-                            "stage-0 tool receipt publication failed");
+                            "stage-0 tool AuditRecord publication failed");
     }
     goto cleanup;
   }

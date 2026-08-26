@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
   char self_executable[512];
   char foreign_sentinel[512];
   char root_marker[512];
-  char forged_receipt[512];
+  char forged_audit_record[512];
   char expected_stage0[640];
   char *text;
   size_t text_size;
@@ -326,9 +326,11 @@ int main(int argc, char **argv) {
       !confit_test_run_forged_argv0_build_enter(
           stage0_tool, build_root, source_repository, "127", bmake_tool,
           compiler_tool) ||
-      !confit_test_fs_path_join(forged_receipt, sizeof(forged_receipt),
+      !confit_test_fs_path_join(forged_audit_record,
+                                sizeof(forged_audit_record),
                                 admission_root, "127/.luca-stage0-v1") ||
-      (text = confit_test_fs_read_file(forged_receipt)) == 0 ||
+      (text = confit_test_fs_read_file(forged_audit_record)) == 0 ||
+      strstr(text, "LUCA-STAGE0-AUDIT-RECORD-V1\n") != text ||
       snprintf(expected_stage0, sizeof(expected_stage0), "stage0.path=%s\n",
                stage0_tool) <= 0 ||
       strstr(text, expected_stage0) == 0) {
