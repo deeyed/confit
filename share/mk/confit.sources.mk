@@ -30,7 +30,8 @@ CONFIT_RESOLVER_SOURCES= \
 	src/resolver/resolver.c
 
 CONFIT_SNAPSHOT_SOURCES= \
-	src/snapshot/snapshot.c
+	src/snapshot/snapshot.c \
+	src/migration/migration.c
 
 CONFIT_GENERATOR_SOURCES= \
 	src/emitter/emitter.c
@@ -62,6 +63,7 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_types.c \
 	tests/integration/test_config.c \
 	tests/integration/test_cli.c \
+	tests/integration/test_migration.c \
 	tests/integration/test_snapshot.c \
 	tests/integration/test_emitter_integration.c
 

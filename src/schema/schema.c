@@ -700,7 +700,7 @@ static ConfitStatus confit_schema_add_config(
                                     path, kInvalidSymbol);
   }
   status = confit_schema_copy_bytes(
-      symbol_bytes, symbol_size, 128U, 0, 0, &project->allocator,
+      symbol_bytes, symbol_size, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0, &project->allocator,
       &symbol_text, diagnostic, symbol, path, kInvalidSymbol);
   if (status == CONFIT_OK && !confit_symbol_is_valid(symbol_text))
     status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, symbol,
@@ -1117,7 +1117,7 @@ static ConfitStatus confit_user_document_from_input(
     const ConfitTomlValue *value = confit_toml_table_value_at(values, index);
     memset(&candidate, 0, sizeof(candidate));
     status = confit_schema_copy_bytes(
-        key, key_size, 128U, 0, 0, &resolved, &candidate.symbol, diagnostic,
+        key, key_size, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0, &resolved, &candidate.symbol, diagnostic,
         value, path, kInvalidUserSymbol);
     if (status == CONFIT_OK && !confit_symbol_is_valid(candidate.symbol))
       status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,

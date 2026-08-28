@@ -1,8 +1,10 @@
 #include "cli_internal.h"
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "confit/config.h"
@@ -10,6 +12,7 @@
 #include "confit/emitter.h"
 #include "confit/host.h"
 #include "confit/limits.h"
+#include "confit/migration.h"
 #include "confit/model.h"
 #include "confit/resolver.h"
 #include "confit/schema.h"
@@ -124,10 +127,13 @@ static const char kCliInvalidArguments[] = "invalid command arguments";
 static const char kCliUnknownSymbol[] = "configuration symbol was not found";
 static const char kCliTerminalUnavailable[] =
     "terminal menuconfig is not available until the terminal frontend round";
-static const char kCliMigrationUnavailable[] =
-    "configuration migration commands are not implemented until the migration round";
 static const char kCliOutputFailed[] = "failed to write command output";
 static const char kCliInternal[] = "configuration command invariant failed";
+static const char kCliSemanticReview[] =
+    "selected catalog has an incompatible semantic change";
+static const char kCliPromptCancelled[] =
+    "oldconfig input ended before every new symbol was reviewed";
+static const char kCliPromptInvalid[] = "oldconfig value is invalid";
 
 static const ConfitCliCommandSpec *confit_cli_find_command(const char *name) {
   size_t index;
@@ -153,10 +159,10 @@ static void confit_cli_print_help(void) {
       "  search           Search prompts, help text, and symbols\n"
       "  explain          Explain one resolved symbol\n"
       "  diff             Compare two user configurations\n"
-      "  listnewconfig    Migration command (reserved; unavailable)\n"
-      "  oldconfig        Migration command (reserved; unavailable)\n"
-      "  olddefconfig     Migration command (reserved; unavailable)\n"
-      "  savedefconfig    Migration command (reserved; unavailable)\n\n"
+      "  listnewconfig    List genuinely new configuration symbols\n"
+      "  oldconfig        Prompt for genuinely new symbols and publish\n"
+      "  olddefconfig     Accept new defaults and publish\n"
+      "  savedefconfig    Save selected non-default user intent\n\n"
       "Options:\n"
       "  --root ABSOLUTE_PROJECT_ROOT\n"
       "  --project RELATIVE_ENTRY_TOML\n"
@@ -560,9 +566,11 @@ static ConfitStatus confit_cli_command_check(const ConfitCliOptions *options,
   return status;
 }
 
-static ConfitStatus confit_cli_command_configure(
-    const ConfitCliOptions *options, ConfitDiagnostic *diagnostic) {
-  ConfitCliLoaded loaded;
+static ConfitStatus confit_cli_publish_loaded(
+    const ConfitCliOptions *options, const ConfitCliLoaded *loaded,
+    const ConfitResolution *resolution,
+    const ConfitAssignment *explicit_assignments,
+    size_t explicit_assignment_count, ConfitDiagnostic *diagnostic) {
   ConfitHostRoot *output_root = 0;
   ConfitEmission *emission = 0;
   ConfitSnapshotArtifactSpec artifacts[2];
@@ -570,12 +578,12 @@ static ConfitStatus confit_cli_command_configure(
   ConfitSnapshotPublication publication;
   size_t artifact_count = 0U;
   size_t index;
-  ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
+  ConfitStatus status = CONFIT_OK;
   memset(artifacts, 0, sizeof(artifacts));
   memset(&request, 0, sizeof(request));
   memset(&publication, 0, sizeof(publication));
   if (status == CONFIT_OK && (options->seen & CONFIT_CLI_OPTION_EMIT) != 0U)
-    status = confit_emit(loaded.resolution, &options->emit, 0, &emission,
+    status = confit_emit(resolution, &options->emit, 0, &emission,
                          diagnostic);
   for (index = 0U; status == CONFIT_OK && emission != 0 &&
                   index < confit_emission_artifact_count(emission);
@@ -605,9 +613,11 @@ static ConfitStatus confit_cli_command_configure(
     status = confit_host_root_open_absolute(options->output, 0, &output_root,
                                             diagnostic);
   if (status == CONFIT_OK) {
-    request.project = loaded.project;
-    request.user_config = loaded.config;
-    request.resolution = loaded.resolution;
+    request.project = loaded->project;
+    request.user_config = loaded->config;
+    request.resolution = resolution;
+    request.explicit_assignments = explicit_assignments;
+    request.explicit_assignment_count = explicit_assignment_count;
     request.optional_artifacts = artifacts;
     request.optional_artifact_count = artifact_count;
     request.resolved_values_printable = options->emit.emit_json;
@@ -622,6 +632,16 @@ static ConfitStatus confit_cli_command_configure(
   }
   confit_host_root_destroy(output_root);
   confit_emission_destroy(emission);
+  return status;
+}
+
+static ConfitStatus confit_cli_command_configure(
+    const ConfitCliOptions *options, ConfitDiagnostic *diagnostic) {
+  ConfitCliLoaded loaded;
+  ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_publish_loaded(options, &loaded, loaded.resolution, 0,
+                                       0U, diagnostic);
   confit_cli_loaded_destroy(&loaded);
   return status;
 }
@@ -629,6 +649,8 @@ static ConfitStatus confit_cli_command_configure(
 static ConfitStatus confit_cli_join_artifact(const char *output,
                                              const char *relative, char *out,
                                              size_t out_size) {
+  if (output == 0 || relative == 0 || out == 0)
+    return CONFIT_ERR_INTERNAL;
   const size_t output_size = strlen(output);
   const size_t relative_size = strlen(relative);
   const size_t separator = strcmp(output, "/") == 0 ? 0U : 1U;
@@ -848,6 +870,431 @@ static ConfitStatus confit_cli_command_diff(const ConfitCliOptions *options,
   return status;
 }
 
+static ConfitStatus confit_cli_load_review(
+    const ConfitCliOptions *options, const ConfitCliLoaded *loaded,
+    ConfitHostRoot **out_output_root, ConfitMigrationReview **out_review,
+    ConfitDiagnostic *diagnostic) {
+  ConfitStatus status;
+  *out_output_root = 0;
+  *out_review = 0;
+  status = confit_host_root_open_absolute(options->output, 0, out_output_root,
+                                          diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_migration_review_selected(
+        *out_output_root, confit_schema_project_catalog(loaded->project), 0,
+        out_review, diagnostic);
+  if (status != CONFIT_OK) {
+    confit_migration_review_destroy(*out_review);
+    *out_review = 0;
+    confit_host_root_destroy(*out_output_root);
+    *out_output_root = 0;
+  }
+  return status;
+}
+
+static ConfitStatus confit_cli_reject_semantic_review(
+    const ConfitMigrationReview *review, ConfitDiagnostic *diagnostic) {
+  size_t index;
+  if (!confit_migration_review_has_semantic_changes(review)) return CONFIT_OK;
+  for (index = 0U; index < confit_migration_review_change_count(review);
+       ++index) {
+    ConfitMigrationChangeView change;
+    const unsigned semantic =
+        CONFIT_MIGRATION_CHANGE_REMOVED | CONFIT_MIGRATION_CHANGE_TYPE |
+        CONFIT_MIGRATION_CHANGE_DOMAIN | CONFIT_MIGRATION_CHANGE_DEFAULT |
+        CONFIT_MIGRATION_CHANGE_DEPENDENCY;
+    if (confit_migration_review_change_at(review, index, &change) &&
+        (change.changes & semantic) != 0U) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_STALE, change.symbol, 0U,
+                            0U, kCliSemanticReview);
+      return CONFIT_ERR_STALE;
+    }
+  }
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                        kCliInternal);
+  return CONFIT_ERR_INTERNAL;
+}
+
+static ConfitStatus confit_cli_command_listnewconfig(
+    const ConfitCliOptions *options, ConfitDiagnostic *diagnostic) {
+  ConfitCliLoaded loaded;
+  ConfitHostRoot *output_root = 0;
+  ConfitMigrationReview *review = 0;
+  size_t index;
+  ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_load_review(options, &loaded, &output_root, &review,
+                                    diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_reject_semantic_review(review, diagnostic);
+  for (index = 0U; status == CONFIT_OK &&
+                  index < confit_migration_review_change_count(review);
+       ++index) {
+    ConfitMigrationChangeView change;
+    if (!confit_migration_review_change_at(review, index, &change)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                            kCliInternal);
+      status = CONFIT_ERR_INTERNAL;
+      break;
+    }
+    if ((change.changes & CONFIT_MIGRATION_CHANGE_NEW) == 0U) continue;
+    if (fprintf(stdout, "%s\t%s\t%s\n", change.symbol,
+                confit_cli_kind_name(change.current_kind),
+                change.current_prompt) < 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_IO, 0, 0U, 0U,
+                            kCliOutputFailed);
+      status = CONFIT_ERR_IO;
+    }
+  }
+  if (status != CONFIT_OK)
+    (void)confit_diagnostic_stabilize_path(diagnostic);
+  confit_migration_review_destroy(review);
+  confit_host_root_destroy(output_root);
+  confit_cli_loaded_destroy(&loaded);
+  return status;
+}
+
+static int confit_cli_read_prompt_line(char *line, size_t capacity) {
+  size_t size;
+  int byte;
+  if (line == 0 || capacity < 2U || fgets(line, (int)capacity, stdin) == 0)
+    return 0;
+  size = strlen(line);
+  if (size != 0U && line[size - 1U] == '\n') {
+    line[--size] = '\0';
+    if (size != 0U && line[size - 1U] == '\r') line[--size] = '\0';
+    return 1;
+  }
+  byte = fgetc(stdin);
+  if (byte == EOF) return 1;
+  do {
+    byte = fgetc(stdin);
+  } while (byte != EOF && byte != '\n');
+  return -1;
+}
+
+static int confit_cli_prompt_value(const ConfitConfigView *view,
+                                   ConfitValue *value,
+                                   int *out_use_default,
+                                   ConfitDiagnostic *diagnostic) {
+  char line[CONFIT_LIMIT_STRING_BYTES + 2U];
+  char default_text[CONFIT_LIMIT_STRING_BYTES * 2U + 32U];
+  size_t index;
+  int read_result;
+  *out_use_default = 0;
+  if (!confit_cli_format_value(view->default_value, default_text,
+                               sizeof(default_text)))
+    return 0;
+  if (fprintf(stdout, "%s (%s) ", view->symbol, view->prompt) < 0) return 0;
+  if (view->kind == CONFIT_VALUE_BOOL) {
+    if (fprintf(stdout, "[%s]: ", view->default_value->data.boolean != 0
+                                    ? "Y/n"
+                                    : "y/N") < 0)
+      return 0;
+  } else if (view->kind == CONFIT_VALUE_ENUM) {
+    if (fputc('[', stdout) == EOF) return 0;
+    for (index = 0U; index < view->enum_value_count; ++index)
+      if (fprintf(stdout, "%s%s", index == 0U ? "" : "/",
+                  view->enum_values[index]) < 0)
+        return 0;
+    if (fprintf(stdout, "] (%s): ", default_text) < 0) return 0;
+  } else if (fprintf(stdout, "[%s]: ", default_text) < 0) {
+    return 0;
+  }
+  if (fflush(stdout) == EOF) return 0;
+  read_result = confit_cli_read_prompt_line(line, sizeof(line));
+  if (read_result == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_TERMINAL, view->symbol, 0U,
+                          0U, kCliPromptCancelled);
+    return 0;
+  }
+  if (read_result < 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, view->symbol, 0U,
+                          0U, kCliPromptInvalid);
+    return 0;
+  }
+  if (line[0] == '\0') {
+    *out_use_default = 1;
+    return 1;
+  }
+  switch (view->kind) {
+  case CONFIT_VALUE_BOOL:
+    if (strcmp(line, "y") == 0 || strcmp(line, "Y") == 0 ||
+        strcmp(line, "yes") == 0 || strcmp(line, "true") == 0)
+      return confit_value_set_bool(value, 1, 0, diagnostic) == CONFIT_OK;
+    if (strcmp(line, "n") == 0 || strcmp(line, "N") == 0 ||
+        strcmp(line, "no") == 0 || strcmp(line, "false") == 0)
+      return confit_value_set_bool(value, 0, 0, diagnostic) == CONFIT_OK;
+    break;
+  case CONFIT_VALUE_INT: {
+    char *end = 0;
+    intmax_t parsed;
+    errno = 0;
+    parsed = strtoimax(line, &end, 10);
+    if (errno == 0 && end != line && *end == '\0' &&
+        parsed >= INT64_MIN && parsed <= INT64_MAX)
+      return confit_value_set_int(value, (int64_t)parsed, 0, diagnostic) ==
+             CONFIT_OK;
+    break;
+  }
+  case CONFIT_VALUE_HEX: {
+    char *end = 0;
+    uintmax_t parsed;
+    errno = 0;
+    if (line[0] != '0' || line[1] != 'x') break;
+    parsed = strtoumax(line + 2U, &end, 16);
+    if (errno == 0 && end != line + 2U && *end == '\0' &&
+        parsed <= INT64_MAX)
+      return confit_value_set_hex(value, (uint64_t)parsed, 0, diagnostic) ==
+             CONFIT_OK;
+    break;
+  }
+  case CONFIT_VALUE_STRING:
+    if (strcmp(line, "\"\"") == 0) line[0] = '\0';
+    return confit_value_set_string(value, line, strlen(line), 0, diagnostic) ==
+           CONFIT_OK;
+  case CONFIT_VALUE_ENUM:
+    for (index = 0U; index < view->enum_value_count; ++index)
+      if (strcmp(line, view->enum_values[index]) == 0)
+        return confit_value_set_enum(value, line, strlen(line), 0,
+                                     diagnostic) == CONFIT_OK;
+    break;
+  case CONFIT_VALUE_INVALID:
+  default:
+    break;
+  }
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, view->symbol, 0U,
+                        0U, kCliPromptInvalid);
+  return 0;
+}
+
+static void confit_cli_destroy_prompt_assignments(
+    ConfitAssignment *assignments, size_t first_owned, size_t count,
+    const ConfitAllocator *allocator) {
+  size_t index;
+  if (assignments == 0) return;
+  for (index = first_owned; index < count; ++index)
+    confit_assignment_destroy(&assignments[index]);
+  allocator->deallocate(allocator->context, assignments);
+}
+
+static ConfitStatus confit_cli_command_oldconfig(
+    const ConfitCliOptions *options, int use_defaults,
+    ConfitDiagnostic *diagnostic) {
+  ConfitAllocator allocator;
+  ConfitCliLoaded loaded;
+  ConfitHostRoot *output_root = 0;
+  ConfitMigrationReview *review = 0;
+  ConfitAssignment *assignments = 0;
+  ConfitResolution *resolution = 0;
+  const ConfitAssignment *existing = 0;
+  size_t existing_count = 0U;
+  size_t assignment_count = 0U;
+  size_t capacity;
+  size_t index;
+  ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
+  confit_allocator_default(&allocator);
+  if (status == CONFIT_OK)
+    status = confit_cli_load_review(options, &loaded, &output_root, &review,
+                                    diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_reject_semantic_review(review, diagnostic);
+  existing = confit_user_config_assignments(loaded.config, &existing_count);
+  capacity = confit_catalog_config_count(
+      loaded.project != 0 ? confit_schema_project_catalog(loaded.project) : 0);
+  if (status == CONFIT_OK && capacity != 0U) {
+    if (capacity > SIZE_MAX / sizeof(*assignments)) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                            kCliInternal);
+      status = CONFIT_ERR_INTERNAL;
+    } else {
+      assignments = (ConfitAssignment *)allocator.allocate(
+          allocator.context, capacity * sizeof(*assignments));
+      if (assignments == 0) {
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                              kCliInternal);
+        status = CONFIT_ERR_INTERNAL;
+      }
+    }
+  }
+  if (status == CONFIT_OK && existing_count != 0U) {
+    if (assignments == 0 || existing == 0 || existing_count > capacity) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                            kCliInternal);
+      status = CONFIT_ERR_INTERNAL;
+    } else {
+      memcpy(assignments, existing, existing_count * sizeof(*assignments));
+      assignment_count = existing_count;
+    }
+  }
+  for (index = 0U; status == CONFIT_OK &&
+                  index < confit_migration_review_change_count(review);
+       ++index) {
+    ConfitMigrationChangeView change;
+    ConfitConfigView view;
+    ConfitValue value;
+    int use_default = 1;
+    int already_assigned = 0;
+    size_t existing_index;
+    if (!confit_migration_review_change_at(review, index, &change) ||
+        (change.changes & CONFIT_MIGRATION_CHANGE_NEW) == 0U)
+      continue;
+    if (!confit_catalog_find_config(
+            confit_schema_project_catalog(loaded.project), change.symbol,
+            &view) || assignment_count >= capacity) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, change.symbol,
+                            0U, 0U, kCliInternal);
+      status = CONFIT_ERR_INTERNAL;
+      break;
+    }
+    for (existing_index = 0U; existing_index < existing_count;
+         ++existing_index)
+      if (strcmp(existing[existing_index].symbol, change.symbol) == 0) {
+        already_assigned = 1;
+        break;
+      }
+    if (already_assigned) continue;
+    if (use_defaults) continue;
+    confit_value_init(&value);
+    if (!confit_cli_prompt_value(&view, &value, &use_default, diagnostic)) {
+      if (diagnostic->status == CONFIT_OK)
+        confit_diagnostic_set(diagnostic, CONFIT_ERR_IO, change.symbol, 0U,
+                              0U, kCliOutputFailed);
+      status = diagnostic->status != CONFIT_OK ? diagnostic->status :
+                                                 CONFIT_ERR_IO;
+      confit_value_destroy(&value);
+      break;
+    }
+    if (!use_default && !confit_value_equal(&value, view.default_value)) {
+      confit_assignment_init(&assignments[assignment_count]);
+      status = confit_assignment_set(&assignments[assignment_count],
+                                     change.symbol, &value, 0, diagnostic);
+      if (status == CONFIT_OK)
+        assignment_count += 1U;
+      else
+        confit_assignment_destroy(&assignments[assignment_count]);
+    }
+    confit_value_destroy(&value);
+  }
+  if (status == CONFIT_OK)
+    status = confit_resolve(
+        confit_schema_project_catalog(loaded.project),
+        confit_schema_project_dependency_plan(loaded.project), assignments,
+        assignment_count, 0, &resolution, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_publish_loaded(options, &loaded, resolution,
+                                       assignments, assignment_count,
+                                       diagnostic);
+  if (status != CONFIT_OK)
+    (void)confit_diagnostic_stabilize_path(diagnostic);
+  confit_resolution_destroy(resolution);
+  confit_cli_destroy_prompt_assignments(assignments, existing_count,
+                                        assignment_count, &allocator);
+  confit_migration_review_destroy(review);
+  confit_host_root_destroy(output_root);
+  confit_cli_loaded_destroy(&loaded);
+  return status;
+}
+
+static ConfitStatus confit_cli_open_absolute_parent(
+    const char *path, ConfitHostRoot **out_root, char *leaf, size_t leaf_size,
+    ConfitDiagnostic *diagnostic) {
+  char parent[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  const char *slash = strrchr(path, '/');
+  size_t parent_size;
+  if (slash == 0 || slash[1] == '\0' ||
+      strlen(slash + 1U) + 1U > leaf_size) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, path, 0U, 0U,
+                          kCliInvalidArguments);
+    return CONFIT_ERR_USAGE;
+  }
+  parent_size = slash == path ? 1U : (size_t)(slash - path);
+  if (parent_size >= sizeof(parent)) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, path, 0U, 0U,
+                          kCliInvalidArguments);
+    return CONFIT_ERR_USAGE;
+  }
+  memcpy(parent, path, parent_size);
+  parent[parent_size] = '\0';
+  memcpy(leaf, slash + 1U, strlen(slash + 1U) + 1U);
+  return confit_host_root_open_absolute(parent, 0, out_root, diagnostic);
+}
+
+static ConfitStatus confit_cli_command_savedefconfig(
+    const ConfitCliOptions *options, ConfitDiagnostic *diagnostic) {
+  ConfitHostRoot *project_root = 0;
+  ConfitHostRoot *output_root = 0;
+  ConfitHostRoot *destination_root = 0;
+  ConfitSchemaProject *project = 0;
+  ConfitUserConfig *config = 0;
+  ConfitResolution *resolution = 0;
+  ConfitSnapshotVerifyRequest verify;
+  const ConfitAssignment *assignments;
+  size_t assignment_count = 0U;
+  char relative[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  char absolute[CONFIT_LIMIT_SOURCE_PATH_BYTES * 2U + 3U];
+  char destination_leaf[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  const char *destination_path = options->destination;
+  ConfitStatus status;
+  memset(&verify, 0, sizeof(verify));
+  status = confit_host_root_open_absolute(options->root, 0, &project_root,
+                                          diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_host_root_open_absolute(options->output, 0, &output_root,
+                                            diagnostic);
+  if (status == CONFIT_OK) {
+    verify.project_root = project_root;
+    verify.output_root = output_root;
+    verify.expected_entry_path = options->project;
+    verify.artifact_name = "user-values.toml";
+    status = confit_snapshot_verify(&verify, 0, relative, sizeof(relative),
+                                    diagnostic);
+  }
+  if (status == CONFIT_OK)
+    status = confit_cli_join_artifact(options->output, relative, absolute,
+                                      sizeof(absolute));
+  if (status == CONFIT_OK)
+    status = confit_schema_project_load(project_root, options->project, 0,
+                                        &project, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_user_config_load_absolute(
+        absolute, confit_schema_project_catalog(project), 0, &config,
+        diagnostic);
+  assignments = confit_user_config_assignments(config, &assignment_count);
+  if (status == CONFIT_OK)
+    status = confit_resolve(confit_schema_project_catalog(project),
+                            confit_schema_project_dependency_plan(project),
+                            assignments, assignment_count, 0, &resolution,
+                            diagnostic);
+  if (status == CONFIT_OK && options->destination[0] == '/') {
+    status = confit_cli_open_absolute_parent(
+        options->destination, &destination_root, destination_leaf,
+        sizeof(destination_leaf), diagnostic);
+    destination_path = destination_leaf;
+  } else {
+    destination_root = project_root;
+  }
+  if (status == CONFIT_OK)
+    status = confit_user_config_write_minimal(
+        destination_root, destination_path, resolution, 0, diagnostic);
+  if (status == CONFIT_OK &&
+      fprintf(stdout, "saved defconfig %s\n", options->destination) < 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_IO, 0, 0U, 0U,
+                          kCliOutputFailed);
+    status = CONFIT_ERR_IO;
+  }
+  if (status != CONFIT_OK)
+    (void)confit_diagnostic_stabilize_path(diagnostic);
+  if (destination_root != project_root)
+    confit_host_root_destroy(destination_root);
+  confit_resolution_destroy(resolution);
+  confit_user_config_destroy(config);
+  confit_schema_project_destroy(project);
+  confit_host_root_destroy(output_root);
+  confit_host_root_destroy(project_root);
+  return status;
+}
+
 static ConfitStatus confit_cli_dispatch(const ConfitCliOptions *options,
                                         ConfitDiagnostic *diagnostic) {
   switch (options->spec->command) {
@@ -868,12 +1315,13 @@ static ConfitStatus confit_cli_dispatch(const ConfitCliOptions *options,
   case CONFIT_CLI_COMMAND_DIFF:
     return confit_cli_command_diff(options, diagnostic);
   case CONFIT_CLI_COMMAND_LISTNEWCONFIG:
+    return confit_cli_command_listnewconfig(options, diagnostic);
   case CONFIT_CLI_COMMAND_OLDCONFIG:
+    return confit_cli_command_oldconfig(options, 0, diagnostic);
   case CONFIT_CLI_COMMAND_OLDDEFCONFIG:
+    return confit_cli_command_oldconfig(options, 1, diagnostic);
   case CONFIT_CLI_COMMAND_SAVEDEFCONFIG:
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, 0, 0U, 0U,
-                          kCliMigrationUnavailable);
-    return CONFIT_ERR_USAGE;
+    return confit_cli_command_savedefconfig(options, diagnostic);
   case CONFIT_CLI_COMMAND_INVALID:
   default:
     confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,

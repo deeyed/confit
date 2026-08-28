@@ -135,11 +135,12 @@ static int confit_test_process_make_command_line(const char *const *argv,
   return 1;
 }
 
-int confit_test_process_run(const char *const *argv,
-                            const char *working_directory,
-                            const char *stdout_path,
-                            const char *stderr_path,
-                            ConfitTestProcessResult *result) {
+int confit_test_process_run_with_input(const char *const *argv,
+                                       const char *working_directory,
+                                       const char *stdin_path,
+                                       const char *stdout_path,
+                                       const char *stderr_path,
+                                       ConfitTestProcessResult *result) {
   char command_line[8192];
   SECURITY_ATTRIBUTES security;
   STARTUPINFOA startup;
@@ -166,7 +167,8 @@ int confit_test_process_run(const char *const *argv,
   security.nLength = sizeof(security);
   security.bInheritHandle = TRUE;
 
-  stdin_file = CreateFileA("NUL", GENERIC_READ, FILE_SHARE_READ, &security,
+  stdin_file = CreateFileA(stdin_path != 0 ? stdin_path : "NUL", GENERIC_READ,
+                           FILE_SHARE_READ, &security,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
   if (stdin_file == INVALID_HANDLE_VALUE) {
     return 0;
@@ -219,13 +221,24 @@ int confit_test_process_run(const char *const *argv,
   confit_test_process_normalize_newlines(result->stderr_text);
   return result->stdout_text != 0 && result->stderr_text != 0;
 }
-#else
+
 int confit_test_process_run(const char *const *argv,
                             const char *working_directory,
                             const char *stdout_path,
                             const char *stderr_path,
                             ConfitTestProcessResult *result) {
+  return confit_test_process_run_with_input(argv, working_directory, 0,
+                                            stdout_path, stderr_path, result);
+}
+#else
+int confit_test_process_run_with_input(const char *const *argv,
+                                       const char *working_directory,
+                                       const char *stdin_path,
+                                       const char *stdout_path,
+                                       const char *stderr_path,
+                                       ConfitTestProcessResult *result) {
   pid_t pid;
+  int stdin_fd;
   int stdout_fd;
   int stderr_fd;
   int wait_status;
@@ -238,18 +251,23 @@ int confit_test_process_run(const char *const *argv,
   result->stdout_text = 0;
   result->stderr_text = 0;
 
+  stdin_fd = open(stdin_path != 0 ? stdin_path : "/dev/null", O_RDONLY);
+  if (stdin_fd < 0) return 0;
   stdout_fd = open(stdout_path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
   if (stdout_fd < 0) {
+    close(stdin_fd);
     return 0;
   }
   stderr_fd = open(stderr_path, O_CREAT | O_TRUNC | O_WRONLY, 0666);
   if (stderr_fd < 0) {
+    close(stdin_fd);
     close(stdout_fd);
     return 0;
   }
 
   pid = fork();
   if (pid < 0) {
+    close(stdin_fd);
     close(stdout_fd);
     close(stderr_fd);
     return 0;
@@ -263,12 +281,15 @@ int confit_test_process_run(const char *const *argv,
     }
     (void)dup2(stdout_fd, STDOUT_FILENO);
     (void)dup2(stderr_fd, STDERR_FILENO);
+    (void)dup2(stdin_fd, STDIN_FILENO);
+    close(stdin_fd);
     close(stdout_fd);
     close(stderr_fd);
     execv(argv[0], (char *const *)argv);
     _exit(127);
   }
 
+  close(stdin_fd);
   close(stdout_fd);
   close(stderr_fd);
   if (waitpid(pid, &wait_status, 0) < 0) {
@@ -288,5 +309,14 @@ int confit_test_process_run(const char *const *argv,
   confit_test_process_normalize_newlines(result->stdout_text);
   confit_test_process_normalize_newlines(result->stderr_text);
   return result->stdout_text != 0 && result->stderr_text != 0;
+}
+
+int confit_test_process_run(const char *const *argv,
+                            const char *working_directory,
+                            const char *stdout_path,
+                            const char *stderr_path,
+                            ConfitTestProcessResult *result) {
+  return confit_test_process_run_with_input(argv, working_directory, 0,
+                                            stdout_path, stderr_path, result);
 }
 #endif

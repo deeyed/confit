@@ -608,7 +608,7 @@ ConfitStatus confit_value_format_canonical(const ConfitValue *value,
 int confit_symbol_is_valid(const char *symbol) {
   size_t size;
   size_t index;
-  if (!confit_bounded_length(symbol, 128U, &size) || size == 0U ||
+  if (!confit_bounded_length(symbol, CONFIT_LIMIT_SYMBOL_BYTES, &size) || size == 0U ||
       symbol[0] < 'A' || symbol[0] > 'Z') {
     return 0;
   }
@@ -1044,7 +1044,7 @@ static ConfitStatus confit_config_record_build(
   candidate->kind = spec->kind;
   candidate->declaration_line = spec->declaration.line;
   candidate->declaration_column = spec->declaration.column;
-  status = confit_copy_c_string(spec->symbol, 128U, 0, 0, allocator,
+  status = confit_copy_c_string(spec->symbol, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0, allocator,
                                 &candidate->symbol, diagnostic);
   if (status == CONFIT_OK)
     status = confit_copy_c_string(spec->prompt, CONFIT_LIMIT_PROMPT_BYTES, 0, 0,
@@ -1230,7 +1230,7 @@ ConfitStatus confit_assignment_set(ConfitAssignment *assignment,
   confit_assignment_init(&candidate);
   if (!confit_allocator_resolve(allocator, &candidate.allocator))
     return confit_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidAllocator);
-  status = confit_copy_c_string(symbol, 128U, 0, 0, &candidate.allocator,
+  status = confit_copy_c_string(symbol, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0, &candidate.allocator,
                                 &candidate.symbol, diagnostic);
   if (status == CONFIT_OK)
     status = confit_value_copy(&candidate.value, value, &candidate.allocator,
@@ -1289,11 +1289,11 @@ ConfitStatus confit_reason_node_set(
   candidate.child_count = child_count;
   for (index = 0U; index < child_count; ++index) candidate.children[index] = children[index];
   if (subject_symbol != 0)
-    status = confit_copy_c_string(subject_symbol, 128U, 0, 0,
+    status = confit_copy_c_string(subject_symbol, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0,
                                   &candidate.allocator,
                                   &candidate.subject_symbol, diagnostic);
   if (status == CONFIT_OK && related_symbol != 0)
-    status = confit_copy_c_string(related_symbol, 128U, 0, 0,
+    status = confit_copy_c_string(related_symbol, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0,
                                   &candidate.allocator,
                                   &candidate.related_symbol, diagnostic);
   if (status == CONFIT_OK && detail != 0)
@@ -1346,7 +1346,7 @@ ConfitStatus confit_resolved_value_set(
   candidate.origin = origin;
   candidate.available = available != 0 ? 1 : 0;
   candidate.reason = reason;
-  status = confit_copy_c_string(symbol, 128U, 0, 0, &candidate.allocator,
+  status = confit_copy_c_string(symbol, CONFIT_LIMIT_SYMBOL_BYTES, 0, 0, &candidate.allocator,
                                 &candidate.symbol, diagnostic);
   if (status == CONFIT_OK)
     status = confit_value_copy(&candidate.default_value, default_value,

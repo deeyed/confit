@@ -46,4 +46,10 @@ ConfitStatus confit_snapshot_verify_observed(
     size_t out_artifact_relative_path_size,
     ConfitDiagnostic *diagnostic);
 
+ConfitStatus confit_snapshot_read_selected_artifact(
+    ConfitHostRoot *output_root, const char *artifact_name,
+    const ConfitAllocator *allocator, ConfitHostBuffer *out_artifact,
+    char out_selected_digest[CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES + 1U],
+    ConfitDiagnostic *diagnostic);
+
 #endif /* CONFIT_SNAPSHOT_INTERNAL_H */

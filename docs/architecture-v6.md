@@ -411,6 +411,7 @@ invokes `savedefconfig --destination`.
 
 A selected snapshot contains required roles:
 
+- `catalog.summary`;
 - `user-values.toml`;
 - `resolved-values.json`;
 - `inputs.manifest`;
@@ -418,6 +419,12 @@ A selected snapshot contains required roles:
 - `snapshot.seal`;
 
 and requested optional roles such as `values.mk` and `values.h`.
+
+`catalog.summary` is a non-printable, sealed, lexical identity of schema-6
+symbol membership, type, prompt/help, default, domain, and dependency. Migration
+review validates the selected seal and its exact artifact bytes without
+remeasuring the old manifest inputs, because changed definition bytes are the
+comparison subject. Ordinary `verify` retains exact manifest-input validation.
 
 `resolved-values.json` is always a sealed core role. An explicit JSON emitter
 request records that the same role is also a consumer projection eligible for
@@ -526,6 +533,14 @@ Output channels are separated:
 resolve. Search is catalog search, not filesystem search. Diff is semantic value
 comparison, not a general text or source-control diff. No command starts an
 ordinary build.
+
+`listnewconfig`, `oldconfig`, and `olddefconfig` compare only the selected sealed
+catalog with the current explicit graph. New symbols are exact membership
+differences; removal, type, range/enum-domain, default, or dependency changes
+stop automatic migration. `savedefconfig` full-verifies selected input and calls
+the shared minimal serializer only for an explicit destination. No migration
+command reads Git history, scans a directory, infers a rename, or coerces a
+typed value.
 
 ## 13. Terminal-independent UI state
 

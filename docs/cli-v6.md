@@ -12,7 +12,7 @@ depends_on:
 
 # Confit v6 conventional configuration CLI
 
-This document records the R16 implementation boundary for the conventional,
+This document records the R16-R17 implementation boundary for the conventional,
 non-interactive schema 6 command line. The normative public syntax remains
 `docs/config-v6.md`; this document says which frozen commands are executable in
 R16, how their output is bounded, and which names are only reserved for later
@@ -25,7 +25,7 @@ compilers, linkers, targets, profiles, or consumer repositories.
 
 ## 1. Implemented command set
 
-R16 implements these commands:
+The conventional controller implements these commands:
 
 | Command | Successful operation | Writes project source? |
 | --- | --- | :---: |
@@ -37,16 +37,18 @@ R16 implements these commands:
 | `search` | Match one bounded query against loaded symbols, prompts, and help. | No |
 | `explain` | Print one resolved symbol's type, values, origin, availability, and reason. | No |
 | `diff` | Resolve two user configurations and print semantic differences. | No |
+| `listnewconfig` | List genuinely new symbols against the selected sealed catalog. | No |
+| `oldconfig` | Prompt only for new symbols and publish a reviewed snapshot. | No |
+| `olddefconfig` | Accept new defaults and publish a reviewed snapshot. | No |
+| `savedefconfig` | Atomically write selected minimal intent to an explicit destination. | Yes, destination only |
 
 `menuconfig` is recognized with its frozen option matrix, but R16 returns the
 terminal-status exit code without loading a project or entering raw mode. The
 terminal-independent UI and POSIX frontend are R18-R20 work.
 
-The migration command names `listnewconfig`, `oldconfig`, `olddefconfig`, and
-`savedefconfig` are reserved so aliases cannot acquire those public names. R16
-validates their frozen option matrices and returns a usage-status diagnostic
-that the migration round has not implemented them. R17 owns their behavior.
-This is deliberate feature absence, not successful no-op behavior.
+The migration commands use the same frozen option matrix and are detailed in
+`docs/migration-v6.md`. No alias, rename map, schema-5 parser, or hidden history
+lookup accompanies them.
 
 ## 2. Closed parsing rules
 
@@ -208,7 +210,7 @@ failed configuration publication or failed verified-path output.
 
 ## 6. Security and genericity boundary
 
-The R16 CLI adds no subprocess, shell, environment lookup, directory walk,
+The CLI adds no subprocess, shell, environment lookup, directory walk,
 plugin, network, compiler probe, build invocation, or raw consumer-source read.
 Its only file inputs are those already authorized by the product contract. Its
 only mutation is immutable snapshot publication under an explicit output root.
@@ -218,9 +220,9 @@ membership inference, object graph, link ordering, Makefile interpretation, or
 project layout convention. Emitters are value projections; the CLI cannot turn
 them into build semantics.
 
-R16 integration evidence exercises exact option rejection, environment poison,
+R16-R17 integration evidence exercises exact option rejection, environment poison,
 relative and absolute user input, check, search, explain, semantic diff,
 requested-only emission, immutable publication, verify-before-print, stale
 external user input, and the explicit deferred-command statuses. That evidence
-does not establish TUI behavior, migration behavior, an ordinary project build,
+does not establish TUI behavior, schema-5 migration, an ordinary project build,
 release-candidate quality, or compatibility with schema 5.

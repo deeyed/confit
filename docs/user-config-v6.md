@@ -88,8 +88,9 @@ resolution, size query와 memory formatting은 source user file을 수정하지 
 path도 `.toml`이어야 한다. Symlink, unsafe leaf 또는 write/publish failure는 partial user
 file을 노출하는 fallback으로 이어지지 않으며 publication은 old 또는 complete-new image다.
 
-R13은 `savedefconfig` CLI command를 등록하지 않는다. Current selected snapshot에서 어떤
-resolution을 선택하고 `--destination`을 해석할지는 R17이 이 shared API 위에서 구현한다.
+R17의 `savedefconfig`는 current selected snapshot을 full verify한 뒤 sealed
+`user-values.toml`을 current catalog에 다시 link/resolve하고 이 shared API를 호출한다.
+`--destination` 외의 source file은 수정하지 않는다.
 Menuconfig save는 R14 immutable snapshot transaction을 사용하며 source user file을 암묵적으로
 overwrite하지 않는다.
 

@@ -30,6 +30,8 @@ typedef struct ConfitSnapshotPublishRequest {
   const ConfitSchemaProject *project;
   const ConfitUserConfig *user_config;
   const ConfitResolution *resolution;
+  const ConfitAssignment *explicit_assignments;
+  size_t explicit_assignment_count;
   const ConfitSnapshotArtifactSpec *optional_artifacts;
   size_t optional_artifact_count;
   int resolved_values_printable;
@@ -45,7 +47,11 @@ typedef struct ConfitSnapshotPublication {
  *
  * The request borrows all inputs for the duration of the call.  Definition and
  * user inputs are represented by their already-owned exact byte images; they
- * are not reopened during publication.  Optional artifacts are inert bounded
+ * are not reopened during publication.  When `explicit_assignments` is null,
+ * the optional user configuration is the exact user-origin authority.  A
+ * non-null explicit set lets an interactive controller publish newly reviewed
+ * values while retaining an optional original user input in provenance.
+ * Optional artifacts are inert bounded
  * byte strings and cannot replace a required core role.  On failure the
  * previous selected record remains the only active authority.
  */

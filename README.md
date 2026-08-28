@@ -22,6 +22,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 user configuration and minimal serialization](docs/user-config-v6.md)
 - [Schema 6 immutable selected snapshots](docs/snapshot-v6.md)
 - [Schema 6 conventional configuration CLI](docs/cli-v6.md)
+- [Schema 6 configuration review and oldconfig workflows](docs/migration-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -55,12 +56,13 @@ R15는 resolved value를 Make assignment, C header 또는 canonical JSON으로 �
 요청하지 않은 optional artifact를 만들지 않는다. R16은 닫힌 option matrix 위에 `check`,
 `configure`, `verify`, `search`, `explain`, `diff`를 연결했다. `configure`만 explicit output에
 immutable snapshot을 출판하고 `verify`는 resolver를 재실행하지 않은 채 sealed exact input만
-검증한다. `menuconfig`는 아직 terminal-unavailable로 종료하며 migration command는 R17까지
-명시적인 unavailable 진단을 반환한다.
+검증한다. `menuconfig`는 아직 terminal-unavailable로 종료한다. `listnewconfig`,
+`oldconfig`, `olddefconfig`, `savedefconfig`는 sealed schema-6 catalog comparison과
+shared minimal serializer 위에서 동작하며 incompatible semantic change를 자동 변환하지 않는다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 TUI와 migration command가 이미 구현됨
+- schema 6 TUI가 이미 구현됨
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨

@@ -609,6 +609,7 @@ The selected output root has this logical form:
 /objects/config/
 ├── snapshots/
 │   └── <sha256>/
+│       ├── catalog.summary
 │       ├── user-values.toml
 │       ├── resolved-values.json
 │       ├── inputs.manifest
@@ -619,11 +620,13 @@ The selected output root has this logical form:
 └── selected
 ```
 
-`user-values.toml`, `resolved-values.json`, `inputs.manifest`,
+`catalog.summary`, `user-values.toml`, `resolved-values.json`, `inputs.manifest`,
 `provenance.json`, and `snapshot.seal` are required core roles. `values.mk` and
 `values.h` exist only when their emitters are requested. `--emit json` marks the
 required resolved JSON role as an explicitly requested consumer projection; the
 sealed core role remains required and no duplicate JSON artifact is created.
+`catalog.summary` is a non-printable private role for bounded schema-6 catalog
+review and is intentionally absent from the `--print-artifact` vocabulary.
 
 `selected` is a bounded regular file containing a lowercase SHA-256 digest and a
 newline. It is not a symlink. Snapshot directories are content-addressed and

@@ -16,6 +16,12 @@ int confit_test_process_run(const char *const *argv,
                             const char *stdout_path,
                             const char *stderr_path,
                             ConfitTestProcessResult *result);
+int confit_test_process_run_with_input(const char *const *argv,
+                                       const char *working_directory,
+                                       const char *stdin_path,
+                                       const char *stdout_path,
+                                       const char *stderr_path,
+                                       ConfitTestProcessResult *result);
 void confit_test_process_result_clear(ConfitTestProcessResult *result);
 
 #ifdef __cplusplus

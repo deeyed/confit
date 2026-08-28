@@ -10,6 +10,7 @@
 #include "confit/resolver.h"
 #include "confit/schema.h"
 #include "confit/snapshot.h"
+#include "confit/migration.h"
 #include "confit/source.h"
 #include "confit/status.h"
 #include "confit/toml.h"

@@ -9,6 +9,7 @@
 #include "confit/limits.h"
 #include "confit/version.h"
 #include "../host/host_internal.h"
+#include "migration_internal.h"
 #include "snapshot_internal.h"
 
 typedef struct ConfitSnapshotBuffer {
@@ -416,6 +417,7 @@ static ConfitStatus confit_snapshot_parse_seal(
   char *end;
   size_t count = 0U;
   int saw_inputs = 0;
+  int saw_catalog = 0;
   int saw_provenance = 0;
   int saw_resolved = 0;
   int saw_user = 0;
@@ -454,7 +456,11 @@ static ConfitStatus confit_snapshot_parse_seal(
     if (count > 0U && strcmp(entries[count - 1U].name, entry->name) >= 0)
       return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE,
                                   "snapshot.seal", kSealInvalid);
-    if (strcmp(entry->name, "inputs.manifest") == 0) {
+    if (strcmp(entry->name, "catalog.summary") == 0) {
+      if (strcmp(entry->role, "catalog") != 0 || entry->printable)
+        goto invalid_core;
+      saw_catalog = 1;
+    } else if (strcmp(entry->name, "inputs.manifest") == 0) {
       if (strcmp(entry->role, "inputs") != 0 || !entry->printable)
         goto invalid_core;
       saw_inputs = 1;
@@ -476,7 +482,8 @@ static ConfitStatus confit_snapshot_parse_seal(
     count += 1U;
     cursor = newline + 1U;
   }
-  if (!saw_inputs || !saw_provenance || !saw_resolved || !saw_user)
+  if (!saw_catalog || !saw_inputs || !saw_provenance || !saw_resolved ||
+      !saw_user)
     return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE,
                                 "snapshot.seal", kSealInvalid);
   *out_count = count;
@@ -491,12 +498,14 @@ static ConfitStatus confit_snapshot_verify_artifacts(
     ConfitHostRoot *output_root, const char *directory,
     const ConfitSnapshotSealEntry *entries, size_t entry_count,
     size_t initial_bytes, const ConfitAllocator *allocator,
-    ConfitHostBuffer *out_manifest, ConfitDiagnostic *diagnostic) {
+    const char *capture_name, ConfitHostBuffer *out_capture,
+    ConfitDiagnostic *diagnostic) {
   char path[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
   size_t total = initial_bytes;
   size_t index;
-  if (out_manifest == 0 || out_manifest->bytes != 0 ||
-      out_manifest->size != 0U)
+  int captured = 0;
+  if (capture_name == 0 || out_capture == 0 || out_capture->bytes != 0 ||
+      out_capture->size != 0U)
     return confit_snapshot_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
                                 kManifestInvalid);
   for (index = 0U; index < entry_count; ++index) {
@@ -526,15 +535,16 @@ static ConfitStatus confit_snapshot_verify_artifacts(
                                   kArtifactInvalid);
     }
     total += buffer.size;
-    if (strcmp(entries[index].name, "inputs.manifest") == 0) {
-      *out_manifest = buffer;
+    if (strcmp(entries[index].name, capture_name) == 0) {
+      *out_capture = buffer;
       confit_host_buffer_init(&buffer);
+      captured = 1;
     }
     confit_host_buffer_destroy(&buffer);
   }
-  if (out_manifest->bytes == 0)
+  if (!captured || out_capture->bytes == 0)
     return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE,
-                                "inputs.manifest", kManifestInvalid);
+                                capture_name, kArtifactInvalid);
   return CONFIT_OK;
 }
 
@@ -778,7 +788,7 @@ ConfitStatus confit_snapshot_verify_observed(
   if (status != CONFIT_OK) goto cleanup;
   status = confit_snapshot_verify_artifacts(
       request->output_root, directory, entries, entry_count, seal.size,
-      &resolved, &manifest, diagnostic);
+      &resolved, "inputs.manifest", &manifest, diagnostic);
   if (status != CONFIT_OK) goto cleanup;
   status = confit_snapshot_verify_manifest(
       request->project_root, request->expected_entry_path, &manifest,
@@ -843,6 +853,87 @@ ConfitStatus confit_snapshot_verify(
   return confit_snapshot_verify_observed(
       request, allocator, 0, out_artifact_relative_path,
       out_artifact_relative_path_size, diagnostic);
+}
+
+ConfitStatus confit_snapshot_read_selected_artifact(
+    ConfitHostRoot *output_root, const char *artifact_name,
+    const ConfitAllocator *allocator, ConfitHostBuffer *out_artifact,
+    char out_selected_digest[CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES + 1U],
+    ConfitDiagnostic *diagnostic) {
+  ConfitAllocator resolved;
+  ConfitHostBuffer selected;
+  ConfitHostBuffer seal;
+  ConfitSnapshotSealEntry entries[CONFIT_LIMIT_SNAPSHOT_ARTIFACTS];
+  char directory[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  char seal_path[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  char actual_digest[65];
+  size_t entry_count = 0U;
+  ConfitStatus status;
+  confit_host_buffer_init(&selected);
+  confit_host_buffer_init(&seal);
+  if (output_root == 0 ||
+      !confit_snapshot_artifact_name_is_valid(artifact_name) ||
+      out_artifact == 0 || out_artifact->bytes != 0 ||
+      out_artifact->size != 0U || out_selected_digest == 0)
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_USAGE, 0,
+                                kInvalidArgument);
+  out_selected_digest[0] = '\0';
+  if (!confit_snapshot_resolve_allocator(allocator, &resolved))
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_USAGE, 0,
+                                kInvalidAllocator);
+  status = confit_snapshot_read_file(
+      output_root, "selected", CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES + 1U,
+      &resolved, &selected, diagnostic, kSelectedInvalid);
+  if (status != CONFIT_OK) goto cleanup;
+  if (selected.size != CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES + 1U ||
+      selected.bytes[CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES] != '\n') {
+    status = confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, "selected",
+                                  kSelectedInvalid);
+    goto cleanup;
+  }
+  memcpy(actual_digest, selected.bytes, CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES);
+  actual_digest[CONFIT_SNAPSHOT_DIGEST_TEXT_BYTES] = '\0';
+  if (!confit_snapshot_digest_is_valid(actual_digest) ||
+      strlen("snapshots/") + strlen(actual_digest) + 1U > sizeof(directory)) {
+    status = confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, "selected",
+                                  kSelectedInvalid);
+    goto cleanup;
+  }
+  memcpy(directory, "snapshots/", strlen("snapshots/"));
+  memcpy(directory + strlen("snapshots/"), actual_digest,
+         strlen(actual_digest) + 1U);
+  if (!confit_snapshot_join_artifact_path(seal_path, sizeof(seal_path),
+                                          directory, "snapshot.seal")) {
+    status = confit_snapshot_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                  kSealInvalid);
+    goto cleanup;
+  }
+  status = confit_snapshot_read_file(output_root, seal_path,
+                                     CONFIT_LIMIT_SNAPSHOT_BYTES, &resolved,
+                                     &seal, diagnostic, kSealInvalid);
+  if (status != CONFIT_OK) goto cleanup;
+  confit_sha256_bytes(seal.bytes, seal.size, out_selected_digest);
+  if (strcmp(out_selected_digest, actual_digest) != 0) {
+    status = confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, seal_path,
+                                  kSealInvalid);
+    goto cleanup;
+  }
+  status = confit_snapshot_parse_seal(&seal, entries, &entry_count,
+                                      diagnostic);
+  if (status != CONFIT_OK) goto cleanup;
+  status = confit_snapshot_verify_artifacts(
+      output_root, directory, entries, entry_count, seal.size, &resolved,
+      artifact_name, out_artifact, diagnostic);
+
+cleanup:
+  if (status != CONFIT_OK) {
+    out_selected_digest[0] = '\0';
+    confit_host_buffer_destroy(out_artifact);
+    (void)confit_diagnostic_stabilize_path(diagnostic);
+  }
+  confit_host_buffer_destroy(&seal);
+  confit_host_buffer_destroy(&selected);
+  return status;
 }
 
 static int confit_snapshot_resolve_allocator(const ConfitAllocator *requested,
@@ -1033,7 +1124,8 @@ static int confit_snapshot_role_is_valid(const char *role) {
 }
 
 static int confit_snapshot_is_core_name(const char *name) {
-  return strcmp(name, "inputs.manifest") == 0 ||
+  return strcmp(name, "catalog.summary") == 0 ||
+         strcmp(name, "inputs.manifest") == 0 ||
          strcmp(name, "provenance.json") == 0 ||
          strcmp(name, "resolved-values.json") == 0 ||
          strcmp(name, "snapshot.seal") == 0 ||
@@ -1044,9 +1136,11 @@ static int confit_snapshot_request_is_consistent(
     const ConfitSnapshotPublishRequest *request) {
   const ConfitCatalog *catalog;
   size_t assignment_count = 0U;
+  size_t source_assignment_count = 0U;
   size_t user_origins = 0U;
   size_t index;
   const ConfitAssignment *assignments;
+  const ConfitAssignment *source_assignments;
   if (request == 0 || request->project == 0 || request->resolution == 0 ||
       request->resolved_values_printable < 0 ||
       request->resolved_values_printable > 1)
@@ -1054,8 +1148,33 @@ static int confit_snapshot_request_is_consistent(
   catalog = confit_schema_project_catalog(request->project);
   if (catalog == 0 || confit_resolution_catalog(request->resolution) != catalog)
     return 0;
-  assignments = confit_user_config_assignments(request->user_config,
-                                                &assignment_count);
+  source_assignments = confit_user_config_assignments(
+      request->user_config, &source_assignment_count);
+  if (request->explicit_assignments != 0) {
+    assignments = request->explicit_assignments;
+    assignment_count = request->explicit_assignment_count;
+  } else {
+    if (request->explicit_assignment_count != 0U) return 0;
+    assignments = source_assignments;
+    assignment_count = source_assignment_count;
+  }
+  if ((assignment_count != 0U && assignments == 0) ||
+      source_assignment_count > assignment_count)
+    return 0;
+  for (index = 0U; index < source_assignment_count; ++index) {
+    size_t candidate;
+    int found = 0;
+    for (candidate = 0U; candidate < assignment_count; ++candidate) {
+      if (strcmp(source_assignments[index].symbol,
+                 assignments[candidate].symbol) == 0 &&
+          confit_value_equal(&source_assignments[index].value,
+                             &assignments[candidate].value)) {
+        found = 1;
+        break;
+      }
+    }
+    if (!found) return 0;
+  }
   for (index = 0U;
        index < confit_resolution_value_count(request->resolution); ++index) {
     const ConfitResolvedValue *resolved = 0;
@@ -1289,18 +1408,24 @@ static ConfitStatus confit_snapshot_build_prepare(
     ConfitDiagnostic *diagnostic) {
   ConfitSnapshotBuffer user_values;
   ConfitSnapshotBuffer resolved_values;
+  ConfitSnapshotBuffer catalog_summary;
   ConfitSnapshotBuffer manifest;
   ConfitSnapshotBuffer provenance;
   size_t index;
   ConfitStatus status;
   confit_snapshot_buffer_init(&user_values, allocator);
   confit_snapshot_buffer_init(&resolved_values, allocator);
+  confit_snapshot_buffer_init(&catalog_summary, allocator);
   confit_snapshot_buffer_init(&manifest, allocator);
   confit_snapshot_buffer_init(&provenance, allocator);
   status = confit_snapshot_make_user_values(request->resolution, allocator,
                                             &user_values, diagnostic);
   if (status != CONFIT_OK) goto fail;
-  confit_snapshot_buffer_init(&resolved_values, allocator);
+  status = confit_migration_catalog_summary_format(
+      confit_schema_project_catalog(request->project), allocator,
+      &catalog_summary.bytes, &catalog_summary.size, diagnostic);
+  if (status != CONFIT_OK) goto fail;
+  catalog_summary.capacity = catalog_summary.size;
   status = confit_snapshot_make_resolved_json(request->resolution,
                                               &resolved_values, diagnostic);
   if (status != CONFIT_OK) goto fail;
@@ -1308,6 +1433,10 @@ static ConfitStatus confit_snapshot_build_prepare(
                                          diagnostic);
   if (status != CONFIT_OK) goto fail;
   status = confit_snapshot_make_provenance(allocator, &provenance, diagnostic);
+  if (status != CONFIT_OK) goto fail;
+  status = confit_snapshot_add_artifact(
+      build, "catalog", "catalog.summary", catalog_summary.bytes,
+      catalog_summary.size, 0, &catalog_summary, diagnostic);
   if (status != CONFIT_OK) goto fail;
   status = confit_snapshot_add_artifact(
       build, "inputs", "inputs.manifest", manifest.bytes, manifest.size, 1,
@@ -1356,6 +1485,7 @@ fail:
   confit_snapshot_buffer_destroy(&provenance);
   confit_snapshot_buffer_destroy(&manifest);
   confit_snapshot_buffer_destroy(&resolved_values);
+  confit_snapshot_buffer_destroy(&catalog_summary);
   confit_snapshot_buffer_destroy(&user_values);
   return status;
 }

@@ -42,6 +42,7 @@ output/
 ├── .confit-snapshot.lock
 ├── snapshots/
 │   └── <lowercase-sha256>/
+│       ├── catalog.summary
 │       ├── inputs.manifest
 │       ├── provenance.json
 │       ├── resolved-values.json
@@ -68,7 +69,17 @@ R13 shared serializer가 만든 schema 6 minimal `[values]` document다. Default
 없고 lexical symbol order와 native TOML type을 보존한다. Source user file을 복사하거나
 overwrite하지 않는다.
 
-### 3.2 `resolved-values.json`
+### 3.2 `catalog.summary`
+
+R17부터 모든 새 snapshot은 lexical symbol membership와 type, prompt/help,
+typed default, range/enum domain, dependency identity를 담은 sealed bounded
+private summary를 가진다. 이 artifact는 role `catalog`의 non-printable core
+member이며 migration review만 사용한다. Review는 이전 definition input이 바뀐
+상황을 비교해야 하므로 seal과 모든 artifact digest는 검증하지만 old manifest
+input을 current bytes와 다시 비교하지 않는다. Ordinary `verify`의 exact-input
+검증은 완화되지 않는다.
+
+### 3.3 `resolved-values.json`
 
 모든 resolved symbol을 lexical order로 기록한다. 각 record는 `symbol`, `type`, effective
 `value`, declaration `default`, `origin`, `available`을 갖는다. Bool과 int는 JSON native scalar,
@@ -78,7 +89,7 @@ hex는 type identity가 보이는 lowercase quoted `0x...`, string/enum은 indep
 R15의 explicit JSON emitter request가 같은 core role을 consumer projection으로 표시하며 두 번째
 JSON file을 만들지는 않는다.
 
-### 3.3 `inputs.manifest`
+### 3.4 `inputs.manifest`
 
 Manifest는 private closed line protocol이다.
 
@@ -103,13 +114,13 @@ Manifest 생성은 R06 input image의 already-owned bytes, size와 SHA-256을 �
 중 project path를 다시 열어 hash하지 않는다. Definition graph와 user input의 combined byte
 ceiling도 publication 전에 검사한다.
 
-### 3.4 `provenance.json`
+### 3.5 `provenance.json`
 
 `confit-provenance-v1`, schema version 6과 Confit build/version identity를 기록한다. Project의
 absolute host path, Git state, environment selector, compiler 또는 consumer identity는 기록하지
 않으며 snapshot semantic identity를 host location에 결속하지 않는다.
 
-### 3.5 `snapshot.seal`
+### 3.6 `snapshot.seal`
 
 Seal은 다음 private closed line protocol이다.
 
