@@ -6,7 +6,7 @@
 
 .MAIN: all
 
-.PHONY: all confit tests check check-host check-cli clean help
+.PHONY: all confit tests check check-host check-cli help
 
 all: confit
 
@@ -24,12 +24,9 @@ check-cli: confit
 	@${CONFIT_BINARY} --version
 	@${CONFIT_BINARY} help
 
-clean:
-	@/bin/rm -f -- ${CONFIT_GENERATED_FILES}
-
 .if ${.TARGETS:Mhelp} != ""
 .info Confit host build (direct bmake)
-.info bmake CONFIT_OBJROOT=/absolute/output all | check-host
-.info CONFIT_HOST_CC is the absolute host compiler.
+.info /absolute/bmake CONFIT_OBJROOT=/existing/empty/output CONFIT_HOST_CC=/absolute/clang CONFIT_BMAKE_TOOL=/absolute/bmake CONFIT_SHELL=/absolute/shell all | check-host
+.info Use a fresh pre-created object root instead of a destructive clean target.
 .endif
 help:

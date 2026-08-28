@@ -1,29 +1,24 @@
 .if !defined(_CONFIT_HOST_MK_)
 _CONFIT_HOST_MK_=1
 
-# R03가 clang+bmake bootstrap contract를 다시 닫기 전까지 사용하는 standalone
-# development skeleton directory creator다. Product binary의 runtime capability가 아니다.
-CONFIT_STAGE0_MKDIR?=/bin/mkdir
-.if ${CONFIT_STAGE0_MKDIR:M/*} == "" || !exists(${CONFIT_STAGE0_MKDIR})
-.error standalone Confit requires one existing absolute directory creator
-.endif
-_CONFIT_PREPARE_DIRECTORY= ${CONFIT_STAGE0_MKDIR} -p -- ${.TARGET:H}
+# CONFIT_OBJROOT is the only output directory.  It already exists by contract,
+# so ordinary targets never execute mkdir and never need nested output paths.
+CONFIT_BINARY=${CONFIT_OBJROOT}/confit
+CONFIT_COMPILER_CONTRACT=${CONFIT_SOURCE_ROOT}/share/mk/confit.clang.h
 
-CONFIT_BIN_ROOT=${CONFIT_OBJROOT}/bin
-CONFIT_OBJ_ROOT=${CONFIT_OBJROOT}/obj
-CONFIT_TEST_BIN_ROOT=${CONFIT_OBJROOT}/tests/bin
-CONFIT_BINARY=${CONFIT_BIN_ROOT}/confit
-
-CONFIT_STRICT_CFLAGS= \
-	-std=c17 -Wall -Wextra -Werror -pedantic
+CONFIT_FIRST_PARTY_CFLAGS= \
+	-std=c17 -Wall -Wextra -Werror -pedantic \
+	-include ${CONFIT_COMPILER_CONTRACT}
+CONFIT_VENDOR_CFLAGS= \
+	-std=c17 -w -include ${CONFIT_COMPILER_CONTRACT}
 CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/include \
 	-I${CONFIT_SOURCE_ROOT}/src/parser \
-	-I${CONFIT_SOURCE_ROOT}/src/schema \
 	-I${CONFIT_SOURCE_ROOT}/vendor/tomlc17 \
 	-I${CONFIT_SOURCE_ROOT}/tests/support
-
 CONFIT_LINK_LIBS=
+CONFIT_TEST_DEFINES= \
+	-DCONFIT_TEST_SOURCE_DIR=\"${CONFIT_SOURCE_ROOT}\"
 
 CONFIT_PRODUCT_SOURCES= \
 	${CONFIT_CORE_SOURCES} \
@@ -33,11 +28,29 @@ CONFIT_PRODUCT_SOURCES= \
 	${CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES} \
 	${CONFIT_RESOLVER_SOURCES} \
 	${CONFIT_GENERATOR_SOURCES}
-
 CONFIT_TEST_SOURCES= \
 	${CONFIT_UNIT_TEST_SOURCES} \
-	${CONFIT_FUZZ_TEST_SOURCES} \
-	${CONFIT_INTEGRATION_TEST_SOURCES}
+	${CONFIT_INTEGRATION_TEST_SOURCES} \
+	${CONFIT_PTY_TEST_SOURCES} \
+	${CONFIT_FUZZ_TEST_SOURCES}
+CONFIT_ALL_DECLARED_SOURCES= \
+	${CONFIT_PRODUCT_SOURCES} \
+	${CONFIT_CLI_SOURCES} \
+	${CONFIT_TEST_SUPPORT_SOURCES} \
+	${CONFIT_TEST_SOURCES}
+
+.if ${CONFIT_ALL_DECLARED_SOURCES:[#]} != ${CONFIT_ALL_DECLARED_SOURCES:O:u:[#]}
+.error Confit source manifest contains a duplicate translation unit
+.endif
+.for _src in ${CONFIT_ALL_DECLARED_SOURCES}
+.if ${_src:M/*} != "" || ${_src:M*.c} == "" || ${_src:M*..*} != "" || \
+    ${_src:M*//*} != "" || ${_src:C,[A-Za-z0-9_./-],,g} != ""
+.error invalid literal Confit source path: ${_src}
+.endif
+.if !exists(${CONFIT_SOURCE_ROOT}/${_src})
+.error listed Confit source does not exist: ${_src}
+.endif
+.endfor
 
 CONFIT_PRODUCT_OBJECTS=
 CONFIT_CLI_OBJECTS=
@@ -46,81 +59,81 @@ CONFIT_TEST_OBJECTS=
 CONFIT_TEST_BINARIES=
 CONFIT_DEPFILES=
 
-CONFIT_BUILD_DEFINES= \
-	-DCONFIT_BUILD_MODE=\"bmake\" \
-	-DCONFIT_BUILD_C_COMPILER_ID=\"c17-probed\" \
-	-DCONFIT_BUILD_C_COMPILER_VERSION=\"external\" \
-	-DCONFIT_BUILD_SYSTEM_NAME=\"${.MAKE.OS}\"
-
-CONFIT_TEST_DEFINES= \
-	-DCONFIT_TEST_SOURCE_DIR=\"${CONFIT_SOURCE_ROOT}\"
-
 .for _src in ${CONFIT_PRODUCT_SOURCES}
-_obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_PRODUCT_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
-${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@${_CONFIT_PREPARE_DIRECTORY}
+_obj=${CONFIT_OBJROOT}/${_src:R:S,/,_,g}.o
+CONFIT_PRODUCT_OBJECTS:=${CONFIT_PRODUCT_OBJECTS} ${_obj}
+CONFIT_DEPFILES:=${CONFIT_DEPFILES} ${_obj:R}.d
+${_obj}: ${CONFIT_SOURCE_ROOT}/${_src} ${CONFIT_COMPILER_CONTRACT}
 .if ${_src} == "vendor/tomlc17/tomlc17.c"
-	${CONFIT_HOST_CC} -std=c17 -w ${CONFIT_INCLUDE_FLAGS} -MMD -MP \
-	    -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	${CONFIT_HOST_CC_CANONICAL} ${CONFIT_VENDOR_CFLAGS} \
+	    ${CONFIT_INCLUDE_FLAGS} -MMD -MP -MF ${.TARGET:R}.d \
+	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	@test -f ${.TARGET:Q}
 .else
-	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    -MMD -MP -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	${CONFIT_HOST_CC_CANONICAL} ${CONFIT_FIRST_PARTY_CFLAGS} \
+	    ${CONFIT_INCLUDE_FLAGS} -MMD -MP -MF ${.TARGET:R}.d \
+	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	@test -f ${.TARGET:Q}
 .endif
 .endfor
 
 .for _src in ${CONFIT_CLI_SOURCES}
-_obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_CLI_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
-${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@${_CONFIT_PREPARE_DIRECTORY}
-	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    ${CONFIT_BUILD_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
+_obj=${CONFIT_OBJROOT}/${_src:R:S,/,_,g}.o
+CONFIT_CLI_OBJECTS:=${CONFIT_CLI_OBJECTS} ${_obj}
+CONFIT_DEPFILES:=${CONFIT_DEPFILES} ${_obj:R}.d
+${_obj}: ${CONFIT_SOURCE_ROOT}/${_src} ${CONFIT_COMPILER_CONTRACT}
+	${CONFIT_HOST_CC_CANONICAL} ${CONFIT_FIRST_PARTY_CFLAGS} \
+	    ${CONFIT_INCLUDE_FLAGS} -MMD -MP -MF ${.TARGET:R}.d \
 	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	@test -f ${.TARGET:Q}
 .endfor
 
 .for _src in ${CONFIT_TEST_SUPPORT_SOURCES}
-_obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_TEST_SUPPORT_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
-${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@${_CONFIT_PREPARE_DIRECTORY}
-	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    -MMD -MP -MF ${.TARGET:R}.d -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+_obj=${CONFIT_OBJROOT}/${_src:R:S,/,_,g}.o
+CONFIT_TEST_SUPPORT_OBJECTS:=${CONFIT_TEST_SUPPORT_OBJECTS} ${_obj}
+CONFIT_DEPFILES:=${CONFIT_DEPFILES} ${_obj:R}.d
+${_obj}: ${CONFIT_SOURCE_ROOT}/${_src} ${CONFIT_COMPILER_CONTRACT}
+	${CONFIT_HOST_CC_CANONICAL} ${CONFIT_FIRST_PARTY_CFLAGS} \
+	    ${CONFIT_INCLUDE_FLAGS} -MMD -MP -MF ${.TARGET:R}.d \
+	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	@test -f ${.TARGET:Q}
 .endfor
 
 .for _src in ${CONFIT_TEST_SOURCES}
-_obj=${CONFIT_OBJ_ROOT}/${_src:R}.o
-_bin=${CONFIT_TEST_BIN_ROOT}/confit_${_src:T:R}
-CONFIT_TEST_OBJECTS+=${CONFIT_OBJ_ROOT}/${_src:R}.o
-CONFIT_TEST_BINARIES+=${CONFIT_TEST_BIN_ROOT}/confit_${_src:T:R}
-CONFIT_DEPFILES+=${CONFIT_OBJ_ROOT}/${_src:R}.d
-${_obj}: ${CONFIT_SOURCE_ROOT}/${_src}
-	@${_CONFIT_PREPARE_DIRECTORY}
-	${CONFIT_HOST_CC} ${CONFIT_STRICT_CFLAGS} ${CONFIT_INCLUDE_FLAGS} \
-	    ${CONFIT_TEST_DEFINES} -MMD -MP -MF ${.TARGET:R}.d \
+_obj=${CONFIT_OBJROOT}/${_src:R:S,/,_,g}.o
+_bin=${CONFIT_OBJROOT}/confit_${_src:T:R}
+CONFIT_TEST_OBJECTS:=${CONFIT_TEST_OBJECTS} ${_obj}
+CONFIT_TEST_BINARIES:=${CONFIT_TEST_BINARIES} ${_bin}
+CONFIT_DEPFILES:=${CONFIT_DEPFILES} ${_obj:R}.d
+${_obj}: ${CONFIT_SOURCE_ROOT}/${_src} ${CONFIT_COMPILER_CONTRACT}
+	${CONFIT_HOST_CC_CANONICAL} ${CONFIT_FIRST_PARTY_CFLAGS} \
+	    ${CONFIT_INCLUDE_FLAGS} ${CONFIT_TEST_DEFINES} \
+	    -MMD -MP -MF ${.TARGET:R}.d \
 	    -c ${CONFIT_SOURCE_ROOT}/${_src} -o ${.TARGET}
+	@test -f ${.TARGET:Q}
 ${_bin}: ${_obj} ${CONFIT_PRODUCT_OBJECTS} ${CONFIT_TEST_SUPPORT_OBJECTS}
-	@${_CONFIT_PREPARE_DIRECTORY}
-	${CONFIT_HOST_CC} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
+	${CONFIT_HOST_CC_CANONICAL} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
+	@test -x ${.TARGET:Q}
 .endfor
 
+CONFIT_ALL_OBJECTS= \
+	${CONFIT_PRODUCT_OBJECTS} \
+	${CONFIT_CLI_OBJECTS} \
+	${CONFIT_TEST_SUPPORT_OBJECTS} \
+	${CONFIT_TEST_OBJECTS}
+.if ${CONFIT_ALL_OBJECTS:[#]} != ${CONFIT_ALL_OBJECTS:O:u:[#]}
+.error flat object naming produced a collision
+.endif
+
 ${CONFIT_BINARY}: ${CONFIT_PRODUCT_OBJECTS} ${CONFIT_CLI_OBJECTS}
-	@${_CONFIT_PREPARE_DIRECTORY}
-	${CONFIT_HOST_CC} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
+	${CONFIT_HOST_CC_CANONICAL} -o ${.TARGET} ${.ALLSRC} ${CONFIT_LINK_LIBS}
+	@test -x ${.TARGET:Q}
 
-CONFIT_GENERATED_FILES= \
-	${CONFIT_PRODUCT_OBJECTS} ${CONFIT_CLI_OBJECTS} \
-	${CONFIT_TEST_SUPPORT_OBJECTS} ${CONFIT_TEST_OBJECTS} \
-	${CONFIT_DEPFILES} ${CONFIT_BINARY} ${CONFIT_TEST_BINARIES}
-
-# Test source path마다 고유 target을 parse time에 만든다. 각 recipe는 한 C executable만
-# 실행하며 shell loop나 runtime registry가 test selection을 소유하지 않는다.
+# Each test path owns one direct target.  No shell loop, directory scan, or
+# runtime registry decides which tests are required.
 CONFIT_DIRECT_TEST_TARGETS=
 .for _test_binary in ${CONFIT_TEST_BINARIES}
-CONFIT_DIRECT_TEST_TARGETS+=run-${_test_binary:T}
+CONFIT_DIRECT_TEST_TARGETS:=${CONFIT_DIRECT_TEST_TARGETS} run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
 .if ${_test_binary:T} == "confit_test_cli_skeleton"

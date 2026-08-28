@@ -38,6 +38,10 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_cli_skeleton.c \
 	tests/unit/test_public_headers.c
 
+CONFIT_INTEGRATION_TEST_SOURCES=
+
+CONFIT_PTY_TEST_SOURCES=
+
 CONFIT_FUZZ_TEST_SOURCES= \
 	tests/fuzz/test_toml_fuzz.c
 

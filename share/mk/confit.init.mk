@@ -1,7 +1,27 @@
 .if !defined(_CONFIT_INIT_MK_)
 _CONFIT_INIT_MK_=1
 
-CONFIT_BUILD_API_VERSION=1
+_CONFIT_PUBLIC_BUILD_PARAMETERS= \
+	CONFIT_OBJROOT \
+	CONFIT_HOST_CC \
+	CONFIT_BMAKE_TOOL \
+	CONFIT_SHELL
+
+# Command-line variables have higher precedence than makefile assignments.  A
+# closed override set keeps source membership, warnings, link inputs, and output
+# names under the reviewed bmake graph instead of caller-controlled text.
+.for _confit_override in ${.MAKEOVERRIDES}
+.if empty(_CONFIT_PUBLIC_BUILD_PARAMETERS:M${_confit_override})
+.error ${_confit_override} is not a public Confit build parameter
+.endif
+.endfor
+.for _confit_parameter in ${_CONFIT_PUBLIC_BUILD_PARAMETERS}
+.if empty(.MAKEOVERRIDES:M${_confit_parameter})
+.error ${_confit_parameter} must be supplied explicitly on the bmake command line
+.endif
+.endfor
+
+CONFIT_BUILD_API_VERSION=2
 CONFIT_BMAKE_MINIMUM=20240909
 CONFIT_SOURCE_ROOT:=${.PARSEDIR:H:H}
 CONFIT_MANIFEST_FILE:=${CONFIT_SOURCE_ROOT}/share/mk/confit.sources.mk
@@ -15,7 +35,9 @@ CONFIT_MANIFEST_FILE:=${CONFIT_SOURCE_ROOT}/share/mk/confit.sources.mk
 .error Confit rejects bmake -e because environment values must not override build authority
 .endif
 
-CONFIT_OBJROOT?=/tmp/confit-${.MAKE.OS:tl}-${MACHINE_ARCH:Uunknown}
+.if !defined(CONFIT_OBJROOT) || empty(CONFIT_OBJROOT)
+.error CONFIT_OBJROOT must name one existing writable object directory
+.endif
 .if empty(CONFIT_OBJROOT:M/*)
 .error CONFIT_OBJROOT must be an absolute pre-created directory
 .endif
@@ -24,6 +46,9 @@ CONFIT_OBJROOT?=/tmp/confit-${.MAKE.OS:tl}-${MACHINE_ARCH:Uunknown}
 .endif
 .if !exists(${CONFIT_OBJROOT})
 .error CONFIT_OBJROOT must exist before Confit is parsed
+.endif
+.if !exists(${CONFIT_OBJROOT}/.)
+.error CONFIT_OBJROOT must be a directory
 .endif
 .if ${CONFIT_OBJROOT} == "/" || empty(CONFIT_OBJROOT:T) || \
     ${CONFIT_OBJROOT:T} == "."
@@ -37,14 +62,45 @@ CONFIT_OBJROOT_CANONICAL:=${CONFIT_OBJROOT:tA}
 .error CONFIT_OBJROOT must not be inside the Confit source tree
 .endif
 
-CONFIT_HOST_CC?=/usr/bin/cc
-.if ${CONFIT_HOST_CC:[#]} != 1 || ${CONFIT_HOST_CC:M/*} == "" || \
+.if !defined(CONFIT_HOST_CC) || empty(CONFIT_HOST_CC) || \
+    ${CONFIT_HOST_CC:[#]} != 1 || ${CONFIT_HOST_CC:M/*} == "" || \
     ${CONFIT_HOST_CC:C,[A-Za-z0-9_./-],,g} != "" || !exists(${CONFIT_HOST_CC})
-.error CONFIT_HOST_CC must be one existing absolute compiler executable
+.error CONFIT_HOST_CC must be one existing absolute clang executable
+.endif
+CONFIT_HOST_CC_CANONICAL:=${CONFIT_HOST_CC:tA}
+
+.if !defined(CONFIT_BMAKE_TOOL) || empty(CONFIT_BMAKE_TOOL) || \
+    ${CONFIT_BMAKE_TOOL:[#]} != 1 || ${CONFIT_BMAKE_TOOL:M/*} == "" || \
+    ${CONFIT_BMAKE_TOOL:C,[A-Za-z0-9_./-],,g} != "" || \
+    !exists(${CONFIT_BMAKE_TOOL})
+.error CONFIT_BMAKE_TOOL must be one existing absolute bmake executable
+.endif
+CONFIT_BMAKE_TOOL_CANONICAL:=${CONFIT_BMAKE_TOOL:tA}
+CONFIT_RUNNING_BMAKE_CANONICAL:=${.MAKE:tA}
+.if ${CONFIT_BMAKE_TOOL_CANONICAL} != ${CONFIT_RUNNING_BMAKE_CANONICAL}
+.error CONFIT_BMAKE_TOOL must identify the bmake executable running this graph
 .endif
 
-# 이 임시 build include는 R03에서 bootstrap contract와 함께 정리한다. R02 제품
-# binary는 build tool identity를 읽거나 configuration 의미로 사용하지 않는다.
+.if !defined(CONFIT_SHELL) || empty(CONFIT_SHELL) || \
+    ${CONFIT_SHELL:[#]} != 1 || ${CONFIT_SHELL:M/*} == "" || \
+    ${CONFIT_SHELL:C,[A-Za-z0-9_./-],,g} != "" || !exists(${CONFIT_SHELL})
+.error CONFIT_SHELL must be one existing absolute shell executable
+.endif
+CONFIT_SHELL_CANONICAL:=${CONFIT_SHELL:tA}
+.SHELL: name=sh path=${CONFIT_SHELL_CANONICAL}
+
+# These checks are shell builtins under the explicitly provisioned shell.  They
+# reject non-executable tool identities and a non-writable object root before
+# any compiler recipe can create or replace an output.
+.BEGIN:
+	@test -d ${CONFIT_OBJROOT_CANONICAL:Q}
+	@test -w ${CONFIT_OBJROOT_CANONICAL:Q}
+	@test -x ${CONFIT_HOST_CC_CANONICAL:Q}
+	@test -x ${CONFIT_BMAKE_TOOL_CANONICAL:Q}
+	@test -x ${CONFIT_SHELL_CANONICAL:Q}
+
+# Source membership is literal and protected from command-line override.  The
+# manifest may use empty named groups, but ambient variables cannot populate them.
 
 .include "${CONFIT_MANIFEST_FILE}"
 .include "${.PARSEDIR}/confit.host.mk"

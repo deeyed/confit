@@ -10,6 +10,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 
 - [Schema 6 configuration contract](docs/config-v6.md)
 - [Schema 6 architecture and security contract](docs/architecture-v6.md)
+- [Schema 6 bootstrap contract](docs/bootstrap-v6.md)
 
 ## 현재 구현 상태
 
@@ -51,4 +52,6 @@ Confit은 그 Makefile이나 project source를 읽지 않는다.
 bmake, shell, 이미 빌드된 Confit, 그리고 clang으로 빌드한 Confit-owned C binary뿐이다.
 Python, CMake, Ninja, ncurses, parser generator와 외부 schema processor는 mandatory
 build 또는 runtime dependency가 아니다. 정확한 claim과 non-claim은 architecture
-contract에 기록한다.
+contract와 bootstrap contract에 기록한다. Build target은 이미 존재하는 object root를
+요구하며 외부 `mkdir`, `rm`, source/test discovery를 실행하지 않는다. Destructive clean
+target 대신 fresh pre-created object root를 사용한다.
