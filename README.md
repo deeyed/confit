@@ -1,45 +1,54 @@
 # Confit
 
-Confit은 Parus의 configure-time 선택 compiler다. Config v5의 source-local option,
-menu, choice, constraint와 ARCH-scoped KERNCONF를 bounded하게 해석하고 immutable
-configuration generation을 출판한다. `[target]`, `[profile]`, `[selection]`, product와
-provider graph는 문법이 아니다. Makefile, C source 목록, link 순서, test 목록,
-generator action과 Five-GEN action graph도 해석하거나 소유하지 않는다.
+Confit은 TOML로 작성한 명시적 configuration graph와 작은 사용자 값 파일을
+해석하여, typed configuration data를 결정론적으로 확정하고 immutable snapshot으로
+출판하는 generic configuration tool이다. Confit은 build를 실행하거나 project source,
+Makefile, compiler invocation, link graph를 분석하지 않는다.
 
-Production 흐름은 `confit configure --arch <ARCH> --kernconf <name>` 한 번과 이후의
-`bmake` 소비 단계로 분리된다.
-설정 입력이 바뀌지 않은 ordinary build에서는 resolver를 다시 실행하지 않는다. 이전
-manifest와 generated graph 형식의 생성기·호환 reader는 제공하지 않는다.
+이 checkout의 `codex/confit-v6` 브랜치는 schema 6 개발선이다. 현재 브랜치가 따라야 할
+정본 계약은 다음 두 문서다.
 
-독립 검증:
+- [Schema 6 configuration contract](docs/config-v6.md)
+- [Schema 6 architecture and security contract](docs/architecture-v6.md)
+
+## 현재 구현 상태
+
+Schema 6는 22개 검증 라운드로 구현한다. R01은 위 계약만 고정한다. 이 시점의 source
+tree에는 분기 기준점에서 상속한 schema 5 구현이 아직 남아 있으므로, 현재 binary의
+동작을 schema 6 구현 증거로 사용해서는 안 된다. 이후 hard-cut 라운드는 schema 5
+parser와 workflow를 제거하며 dual-schema compatibility mode를 만들지 않는다.
+
+따라서 이 문서는 다음을 주장하지 않는다.
+
+- schema 6 parser, resolver, snapshot writer 또는 TUI가 이미 구현됨
+- 기존 schema 5 configuration이 이 브랜치에서 호환됨
+- generic project의 build 성공이 Confit에 의해 검증됨
+- schema 6 release candidate가 완성됨
+
+## 목표 사용자 흐름
+
+Schema 6가 구현되면 configuration과 ordinary build는 명시적으로 분리된다.
 
 ```text
-bmake CONFIT_OBJROOT=/absolute/output \
-  CONFIT_BMAKE_TOOL=/absolute/bmake \
-  CONFIT_HOST_CC=/absolute/c-compiler check-host
+bmake menuconfig
+bmake all
 ```
 
-## 사람용 configuration workflow
-
-CLI와 TUI는 `confit_v5_evaluate()`의 동일 reason graph와
-`confit_v5_workflow_minimal()`의 동일 serializer를 소비한다. 별도 frontend가 option을
-자동 enable하거나 마지막 writer를 우선하는 규칙은 없다.
+또는 비대화형으로 다음처럼 사용한다.
 
 ```text
-confit search --repository /repo --arch arm64 --kernconf qemu_virt_dev --query iommu
-confit explain --repository /repo --arch arm64 --kernconf qemu_virt_dev --symbol DRIVER_IOMMU_SMMUV3
-confit why-unavailable --repository /repo --arch arm64 --kernconf qemu_virt_dev --symbol OPTION
-confit list-new --repository /repo --arch arm64 --kernconf qemu_virt_dev
-confit oldconfig --repository /repo --arch arm64 --kernconf qemu_virt_dev
-confit save-minimal --repository /repo --arch arm64 --kernconf qemu_virt_dev --output /absolute/file
-confit diff --repository /repo --arch arm64 --kernconf left --other right
-confit tui --repository /repo --out /object/gen/config-v5 --arch arm64 \
-  --kernconf qemu_virt_dev --transaction menuconfig-1
+bmake configure
+bmake all
 ```
 
-TUI는 shallow menu와 안정된 row 순서, 고정 detail pane을 표시하며 색상에 의존하지
-않는다. `/query`, `j`/`k` 또는 화살표, `set SYMBOL VALUE`, `preview`, `apply`, `cancel`만
-해석한다. 입력과 화면 크기는 bounded하며 다른 escape sequence와 command string은
-실행하지 않는다. Preview와 Cancel은 selected generation을 바꾸지 않고 Apply만 기존
-generation transaction을 통해 atomic publish한다. Unknown 또는 제거된 KERNCONF symbol은
-호환 alias 없이 catalog load 단계에서 실패한다.
+`all`은 configuration이 없거나 stale할 때 configure를 암묵 실행하지 않는다.
+Project의 Makefile은 `confit verify`로 선택된 value artifact를 검증한 뒤 소비한다.
+Confit은 그 Makefile이나 project source를 읽지 않는다.
+
+## Bootstrap 경계
+
+제품과 필수 C test binary의 목표 bootstrap dependency는 provisioned clang toolchain,
+bmake, shell, 이미 빌드된 Confit, 그리고 clang으로 빌드한 Confit-owned C binary뿐이다.
+Python, CMake, Ninja, ncurses, parser generator와 외부 schema processor는 mandatory
+build 또는 runtime dependency가 아니다. 정확한 claim과 non-claim은 architecture
+contract에 기록한다.

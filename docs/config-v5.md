@@ -1,10 +1,15 @@
 ---
 doc_type: contract
-status: accepted
-authority: confit-config-v5
+status: historical
+authority: historical-confit-config-v5-inventory
+superseded_by: docs/config-v6.md
 ---
 
 # Config v5
+
+> 이 문서는 분기 기준점에 존재한 schema 5 구현의 historical inventory다.
+> `codex/confit-v6`의 제품 계약이나 compatibility promise가 아니다. Schema 6의
+> 정본 문법은 `docs/config-v6.md`가 소유한다.
 
 Config v5는 선택 가능한 기능의 의미와 availability만 소유한다. Mandatory nucleus는
 Config.toml 없이 Bake Makefile에 존재한다. Local `constraints.all`은 prerequisite symbol의
