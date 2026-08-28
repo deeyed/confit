@@ -1056,44 +1056,42 @@ static int confit_schema_toml_suffix(const char *path) {
   return size >= 5U && memcmp(path + size - 5U, ".toml", 5U) == 0;
 }
 
-ConfitStatus confit_user_document_load_relative(
-    ConfitHostRoot *project_root, const char *path,
-    const ConfitAllocator *allocator, ConfitUserDocument **out_document,
-    ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_user_document_from_input(
+    ConfitInputImage *input, const char *diagnostic_path,
+    const ConfitAllocator *allocator,
+    ConfitUserDocument **out_document, ConfitDiagnostic *diagnostic) {
   static const char *const allowed[] = {"schema_version", "values"};
   ConfitAllocator resolved;
   ConfitUserDocument *document;
+  const char *path = diagnostic_path;
   const ConfitTomlValue *root;
   const ConfitTomlValue *version;
   const ConfitTomlValue *values;
   int64_t version_number = 0;
   size_t index;
   ConfitStatus status;
-  if (project_root == 0 || path == 0 || out_document == 0) {
+  if (input == 0 || path == 0 || out_document == 0) {
     return confit_schema_fail(diagnostic, CONFIT_ERR_USAGE, path, 0U, 0U,
                               kInvalidArgument);
   }
   *out_document = 0;
-  if (!confit_host_relative_path_is_valid(path) ||
-      !confit_schema_toml_suffix(path))
-    return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION, path, 0U, 0U,
-                              kInvalidUserPath);
-  if (!confit_schema_resolve_allocator(allocator, &resolved))
+  if (!confit_schema_resolve_allocator(allocator, &resolved)) {
+    confit_input_image_destroy(input);
     return confit_schema_fail(diagnostic, CONFIT_ERR_USAGE, path, 0U, 0U,
                               kInvalidAllocator);
+  }
   document = (ConfitUserDocument *)resolved.allocate(resolved.context,
                                                       sizeof(*document));
-  if (document == 0)
+  if (document == 0) {
+    confit_input_image_destroy(input);
     return confit_schema_fail(diagnostic, CONFIT_ERR_INTERNAL, path, 0U, 0U,
                               kOutOfMemory);
+  }
   memset(document, 0, sizeof(*document));
   document->allocator = resolved;
-  status = confit_input_load_toml(project_root, path, &resolved,
-                                  &document->input, diagnostic);
-  root = status == CONFIT_OK
-             ? confit_toml_document_root(
-                   confit_input_image_document(document->input))
-             : 0;
+  document->input = input;
+  status = CONFIT_OK;
+  root = confit_toml_document_root(confit_input_image_document(document->input));
   if (status == CONFIT_OK)
     status = confit_schema_validate_keys(root, allowed, 2U, path,
                                          kUnknownUserField, diagnostic);
@@ -1146,6 +1144,49 @@ ConfitStatus confit_user_document_load_relative(
   }
   *out_document = document;
   return CONFIT_OK;
+}
+
+ConfitStatus confit_user_document_load_relative(
+    ConfitHostRoot *project_root, const char *path,
+    const ConfitAllocator *allocator, ConfitUserDocument **out_document,
+    ConfitDiagnostic *diagnostic) {
+  ConfitInputImage *input = 0;
+  ConfitStatus status;
+  if (project_root == 0 || path == 0 || out_document == 0) {
+    return confit_schema_fail(diagnostic, CONFIT_ERR_USAGE, path, 0U, 0U,
+                              kInvalidArgument);
+  }
+  *out_document = 0;
+  if (!confit_host_relative_path_is_valid(path) ||
+      !confit_schema_toml_suffix(path))
+    return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION, path, 0U, 0U,
+                              kInvalidUserPath);
+  status = confit_input_load_toml(project_root, path, allocator, &input,
+                                  diagnostic);
+  if (status != CONFIT_OK) return status;
+  return confit_user_document_from_input(input, path, allocator, out_document,
+                                         diagnostic);
+}
+
+ConfitStatus confit_user_document_load_absolute(
+    const char *absolute_path, const ConfitAllocator *allocator,
+    ConfitUserDocument **out_document, ConfitDiagnostic *diagnostic) {
+  ConfitInputImage *input = 0;
+  ConfitStatus status;
+  if (absolute_path == 0 || out_document == 0) {
+    return confit_schema_fail(diagnostic, CONFIT_ERR_USAGE, absolute_path, 0U,
+                              0U, kInvalidArgument);
+  }
+  *out_document = 0;
+  if (!confit_host_absolute_path_is_valid(absolute_path) ||
+      !confit_schema_toml_suffix(absolute_path))
+    return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION, absolute_path,
+                              0U, 0U, kInvalidUserPath);
+  status = confit_input_load_toml_absolute(absolute_path, allocator, &input,
+                                           diagnostic);
+  if (status != CONFIT_OK) return status;
+  return confit_user_document_from_input(input, absolute_path, allocator,
+                                         out_document, diagnostic);
 }
 
 const ConfitInputImage *

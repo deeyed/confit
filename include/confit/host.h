@@ -54,6 +54,9 @@ typedef struct ConfitHostLock {
  */
 int confit_host_relative_path_is_valid(const char *path);
 
+/** @brief Validate one normalized bounded absolute path without I/O. */
+int confit_host_absolute_path_is_valid(const char *path);
+
 /**
  * @brief Open an absolute directory one component at a time without symlinks.
  *

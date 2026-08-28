@@ -86,14 +86,18 @@ Manifest는 private closed line protocol이다.
 confit-inputs-v1
 entry<TAB><size><TAB><sha256><TAB><relative-path>
 fragment<TAB><size><TAB><sha256><TAB><relative-path>
-user<TAB><size><TAB><sha256><TAB><relative-path>
+user<TAB><size><TAB><sha256><TAB><relative-or-absolute-explicit-path>
 ```
 
 첫 record는 caller-selected entry이고 다음 record는 source graph DFS presentation order의
 reachable fragment다. Explicit user configuration이 있을 때만 마지막 `user` record가 존재한다.
-Path는 normalized project-root-relative TOML path다. Absolute project root, inode, timestamp와
-host location은 semantic digest에 들어가지 않는다. 동일 relative inputs와 values를 다른
-absolute project root에서 검증할 수 있다.
+Entry와 fragment path는 normalized project-root-relative TOML path다. User record는
+project-root-relative path 또는 CLI가 명시한 normalized absolute user TOML path다. Absolute
+user path는 해당 external input의 identity 일부이며 verify는 exact path만 다시 연다. Entry와
+fragment에는 absolute path가 허용되지 않는다. Relative input만 사용한 snapshot은 absolute
+project root, inode, timestamp와 host location을 semantic digest에 넣지 않으므로 동일 relative
+inputs와 values를 다른 absolute project root에서 검증할 수 있다. External absolute user input을
+사용한 snapshot은 그 user path를 바꾸어 relocation할 수 있다고 주장하지 않는다.
 
 Manifest 생성은 R06 input image의 already-owned bytes, size와 SHA-256을 사용한다. Publication
 중 project path를 다시 열어 hash하지 않는다. Definition graph와 user input의 combined byte
@@ -168,7 +172,8 @@ Verify request는 project root, output root와 expected entry relative path를 �
 4. Seal에 열거된 exact artifact path만 reopen/hash한다.
 5. `inputs.manifest`를 bounded parser로 읽는다.
 6. 첫 entry가 caller의 expected entry와 같은지 확인한다.
-7. Manifest에 열거된 relative TOML path만 project root에서 no-follow reopen/read/hash한다.
+7. Manifest의 entry/fragment relative TOML과 user의 exact relative 또는 explicit absolute
+   TOML path만 no-follow reopen/read/hash한다.
 8. 모두 성공한 뒤에만 requested printable artifact의 output-root-relative path를 반환한다.
 
 `inputs.manifest`의 artifact digest 검증과 manifest field 해석은 반드시 같은 한 번의

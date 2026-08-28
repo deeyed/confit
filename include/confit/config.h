@@ -32,6 +32,12 @@ ConfitStatus confit_user_config_load_relative(
     const ConfitCatalog *catalog, const ConfitAllocator *allocator,
     ConfitUserConfig **out_config, ConfitDiagnostic *diagnostic);
 
+/** @brief Load and link one explicitly named absolute user configuration. */
+ConfitStatus confit_user_config_load_absolute(
+    const char *absolute_path, const ConfitCatalog *catalog,
+    const ConfitAllocator *allocator, ConfitUserConfig **out_config,
+    ConfitDiagnostic *diagnostic);
+
 void confit_user_config_destroy(ConfitUserConfig *config);
 
 /** @brief Borrow the exact input image owned by the user configuration. */

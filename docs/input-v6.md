@@ -41,6 +41,13 @@ for direct bounded unit and fuzz inputs.  It may copy caller memory because that
 API has no enclosing input-image lifetime.  Product file loading uses the
 input-image path and never routes a pathname to the TOML library.
 
+R16 adds `confit_input_load_toml_absolute()` for the already-frozen explicit
+absolute `--config` and `--other-config` forms. It separates the normalized
+absolute path into an explicit parent-directory capability and one relative
+leaf, then uses the same transactional loader below. The image owns the full
+absolute display path; it does not weaken literal `source` paths, enumerate the
+parent, or introduce an ambient current-directory lookup.
+
 ## 2. Parse and digest ordering
 
 After the host read completes, Confit validates the byte image, constructs its

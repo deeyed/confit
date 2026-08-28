@@ -132,6 +132,41 @@ static void test_loaded_image(const char *root_path, ConfitHostRoot *root) {
   confit_input_image_destroy(image);
 }
 
+static void test_absolute_loaded_image(const char *root_path) {
+  static const char source[] = "value = 42\n";
+  char path[TEST_PATH_BYTES];
+  char symlink_path[TEST_PATH_BYTES];
+  char invalid_path[TEST_PATH_BYTES];
+  ConfitDiagnostic diagnostic;
+  ConfitInputImage *image = 0;
+
+  join_path(path, root_path, "absolute.toml");
+  join_path(symlink_path, root_path, "absolute-link.toml");
+  write_bytes(path, source, sizeof(source) - 1U);
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_input_load_toml_absolute(
+                         path, 0, &image, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(image != 0 &&
+                     strcmp(confit_input_image_path(image), path) == 0);
+  confit_input_image_destroy(image);
+  image = 0;
+
+  CONFIT_TEST_ASSERT(symlink(path, symlink_path) == 0);
+  confit_diagnostic_clear(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_input_load_toml_absolute(
+                         symlink_path, 0, &image,
+                         &diagnostic) == CONFIT_ERR_IO);
+  CONFIT_TEST_ASSERT(image == 0);
+
+  CONFIT_TEST_ASSERT(snprintf(invalid_path, sizeof(invalid_path), "%s//bad.toml",
+                              root_path) > 0);
+  confit_diagnostic_clear(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_input_load_toml_absolute(
+                         invalid_path, 0, &image,
+                         &diagnostic) == CONFIT_ERR_USAGE);
+  CONFIT_TEST_ASSERT(image == 0);
+}
+
 static void test_invalid_inputs(const char *root_path, ConfitHostRoot *root) {
   static const char malformed[] =
       "[table]\n"
@@ -327,6 +362,7 @@ int main(void) {
   CONFIT_TEST_ASSERT(confit_host_root_open_absolute(
                          root_path, 0, &root, &diagnostic) == CONFIT_OK);
   test_loaded_image(root_path, root);
+  test_absolute_loaded_image(root_path);
   test_invalid_inputs(root_path, root);
   test_empty_and_file_limit(root_path, root);
   test_replaced_path_same_image(root_path, root);

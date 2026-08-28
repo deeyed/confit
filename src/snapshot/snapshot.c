@@ -356,6 +356,41 @@ static ConfitStatus confit_snapshot_read_file(
   return CONFIT_OK;
 }
 
+static ConfitStatus confit_snapshot_read_absolute_file(
+    const char *absolute_path, size_t maximum,
+    const ConfitAllocator *allocator, ConfitHostBuffer *out_buffer,
+    ConfitDiagnostic *diagnostic, const char *failure_message) {
+  char parent[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  const char *slash;
+  const char *leaf;
+  size_t parent_size;
+  ConfitHostRoot *root = 0;
+  ConfitStatus status;
+  if (!confit_host_absolute_path_is_valid(absolute_path))
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, absolute_path,
+                                failure_message);
+  slash = strrchr(absolute_path, '/');
+  if (slash == 0 || slash[1] == '\0')
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, absolute_path,
+                                failure_message);
+  leaf = slash + 1;
+  parent_size = slash == absolute_path ? 1U : (size_t)(slash - absolute_path);
+  if (parent_size >= sizeof(parent))
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, absolute_path,
+                                failure_message);
+  memcpy(parent, absolute_path, parent_size);
+  parent[parent_size] = '\0';
+  status = confit_host_root_open_absolute(parent, allocator, &root, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_snapshot_read_file(root, leaf, maximum, allocator,
+                                       out_buffer, diagnostic, failure_message);
+  confit_host_root_destroy(root);
+  if (status != CONFIT_OK)
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_STALE, absolute_path,
+                                failure_message);
+  return CONFIT_OK;
+}
+
 static int confit_snapshot_split_line(char *line, char **fields,
                                       size_t field_count) {
   size_t index = 0U;
@@ -512,9 +547,11 @@ void confit_snapshot_read_ledger_init(ConfitSnapshotReadLedger *ledger,
   ledger->count = 0U;
 }
 
-static int confit_snapshot_toml_path(const char *path) {
+static int confit_snapshot_toml_path(const char *path, int allow_absolute) {
   const size_t size = path != 0 ? strlen(path) : 0U;
-  return size >= 5U && confit_host_relative_path_is_valid(path) &&
+  return size >= 5U &&
+         (confit_host_relative_path_is_valid(path) ||
+          (allow_absolute && confit_host_absolute_path_is_valid(path))) &&
          strcmp(path + size - 5U, ".toml") == 0;
 }
 
@@ -546,7 +583,7 @@ static ConfitStatus confit_snapshot_verify_manifest(
   int saw_user = 0;
   ConfitStatus status = CONFIT_OK;
   if (manifest == 0 || project_root == 0 ||
-      !confit_snapshot_toml_path(expected_entry_path) ||
+      !confit_snapshot_toml_path(expected_entry_path, 0) ||
       manifest->size < sizeof(header) - 1U ||
       memcmp(manifest->bytes, header, sizeof(header) - 1U) != 0 ||
       confit_snapshot_has_embedded_nul(manifest))
@@ -591,7 +628,8 @@ static ConfitStatus confit_snapshot_verify_manifest(
         !confit_snapshot_decimal(fields[1], &declared_size) ||
         declared_size > CONFIT_LIMIT_TOML_FILE_BYTES ||
         !confit_snapshot_digest_is_valid(fields[2]) ||
-        !confit_snapshot_toml_path(fields[3]) ||
+        !confit_snapshot_toml_path(
+            fields[3], strcmp(fields[0], "user") == 0) ||
         !((count == 0U && strcmp(fields[0], "entry") == 0) ||
           (count > 0U && !saw_user &&
            (strcmp(fields[0], "fragment") == 0 ||
@@ -615,9 +653,13 @@ static ConfitStatus confit_snapshot_verify_manifest(
     }
     memcpy(paths[count].path, fields[3], strlen(fields[3]) + 1U);
     confit_host_buffer_init(&input);
-    status = confit_snapshot_read_file(
-        project_root, fields[3], CONFIT_LIMIT_TOML_FILE_BYTES, allocator,
-        &input, diagnostic, kInputStale);
+    status = fields[3][0] == '/'
+                 ? confit_snapshot_read_absolute_file(
+                       fields[3], CONFIT_LIMIT_TOML_FILE_BYTES, allocator,
+                       &input, diagnostic, kInputStale)
+                 : confit_snapshot_read_file(
+                       project_root, fields[3], CONFIT_LIMIT_TOML_FILE_BYTES,
+                       allocator, &input, diagnostic, kInputStale);
     if (status != CONFIT_OK) goto cleanup;
     confit_sha256_bytes(input.bytes, input.size, digest);
     if (input.size != declared_size || strcmp(digest, fields[2]) != 0 ||
@@ -678,7 +720,7 @@ ConfitStatus confit_snapshot_verify_observed(
     out_artifact_relative_path[0] = '\0';
   if (request == 0 || request->project_root == 0 ||
       request->output_root == 0 ||
-      !confit_snapshot_toml_path(request->expected_entry_path) ||
+      !confit_snapshot_toml_path(request->expected_entry_path, 0) ||
       ((request->artifact_name == 0) !=
        (out_artifact_relative_path == 0 &&
         out_artifact_relative_path_size == 0U)) ||

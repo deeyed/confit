@@ -184,8 +184,8 @@ static void confit_user_config_sort_assignments(
     memcpy(assignments, source, count * sizeof(*assignments));
 }
 
-ConfitStatus confit_user_config_load_relative(
-    ConfitHostRoot *project_root, const char *path,
+static ConfitStatus confit_user_config_load(
+    ConfitHostRoot *project_root, const char *path, int absolute,
     const ConfitCatalog *catalog, const ConfitAllocator *allocator,
     ConfitUserConfig **out_config, ConfitDiagnostic *diagnostic) {
   ConfitAllocator resolved;
@@ -196,7 +196,8 @@ ConfitStatus confit_user_config_load_relative(
   size_t index;
   ConfitStatus status;
 
-  if (project_root == 0 || path == 0 || catalog == 0 || out_config == 0)
+  if ((!absolute && project_root == 0) || path == 0 || catalog == 0 ||
+      out_config == 0)
     return confit_user_config_fail(diagnostic, CONFIT_ERR_USAGE, 0,
                                    kInvalidArgument);
   *out_config = 0;
@@ -210,8 +211,12 @@ ConfitStatus confit_user_config_load_relative(
                                    kOutOfMemory);
   memset(config, 0, sizeof(*config));
   config->allocator = resolved;
-  status = confit_user_document_load_relative(
-      project_root, path, &resolved, &config->document, diagnostic);
+  status = absolute
+               ? confit_user_document_load_absolute(
+                     path, &resolved, &config->document, diagnostic)
+               : confit_user_document_load_relative(
+                     project_root, path, &resolved, &config->document,
+                     diagnostic);
   if (status != CONFIT_OK) goto fail;
   count = confit_user_document_value_count(config->document);
   if (count != 0U) {
@@ -283,6 +288,22 @@ fail:
   if (scratch != 0) resolved.deallocate(resolved.context, scratch);
   confit_user_config_destroy(config);
   return status;
+}
+
+ConfitStatus confit_user_config_load_relative(
+    ConfitHostRoot *project_root, const char *path,
+    const ConfitCatalog *catalog, const ConfitAllocator *allocator,
+    ConfitUserConfig **out_config, ConfitDiagnostic *diagnostic) {
+  return confit_user_config_load(project_root, path, 0, catalog, allocator,
+                                 out_config, diagnostic);
+}
+
+ConfitStatus confit_user_config_load_absolute(
+    const char *absolute_path, const ConfitCatalog *catalog,
+    const ConfitAllocator *allocator, ConfitUserConfig **out_config,
+    ConfitDiagnostic *diagnostic) {
+  return confit_user_config_load(0, absolute_path, 1, catalog, allocator,
+                                 out_config, diagnostic);
 }
 
 const ConfitInputImage *

@@ -72,6 +72,11 @@ ConfitStatus confit_user_document_load_relative(
     const ConfitAllocator *allocator, ConfitUserDocument **out_document,
     ConfitDiagnostic *diagnostic);
 
+/** @brief Load one explicitly named absolute user TOML document. */
+ConfitStatus confit_user_document_load_absolute(
+    const char *absolute_path, const ConfitAllocator *allocator,
+    ConfitUserDocument **out_document, ConfitDiagnostic *diagnostic);
+
 void confit_user_document_destroy(ConfitUserDocument *document);
 const ConfitInputImage *
 confit_user_document_input(const ConfitUserDocument *document);

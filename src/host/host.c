@@ -218,6 +218,10 @@ int confit_host_relative_path_is_valid(const char *path) {
   return confit_host_path_is_valid(path, 0);
 }
 
+int confit_host_absolute_path_is_valid(const char *path) {
+  return confit_host_path_is_valid(path, 1);
+}
+
 static int confit_host_copy_component(const char *path, size_t start,
                                       size_t end, char *component,
                                       size_t component_size) {

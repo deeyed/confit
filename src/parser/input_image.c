@@ -166,7 +166,8 @@ ConfitStatus confit_input_image_from_host_buffer(
                              0U, kInvalidArgument);
   }
   *out_image = 0;
-  if (!confit_host_relative_path_is_valid(display_path)) {
+  if (!confit_host_relative_path_is_valid(display_path) &&
+      !confit_host_absolute_path_is_valid(display_path)) {
     return confit_input_fail(diagnostic, CONFIT_ERR_IO, display_path, 0U, 0U,
                              kInvalidPath);
   }
@@ -219,16 +220,16 @@ ConfitStatus confit_input_image_from_host_buffer(
   return CONFIT_OK;
 }
 
-ConfitStatus confit_input_load_toml(
-    ConfitHostRoot *root, const char *relative_path,
+ConfitStatus confit_input_load_toml_at(
+    ConfitHostRoot *root, const char *relative_path, const char *display_path,
     const ConfitAllocator *allocator, ConfitInputImage **out_image,
     ConfitDiagnostic *diagnostic) {
   ConfitHostBuffer buffer;
   ConfitHostFile *file = 0;
   ConfitStatus status;
 
-  if (root == 0 || relative_path == 0 || out_image == 0) {
-    return confit_input_fail(diagnostic, CONFIT_ERR_USAGE, relative_path, 0U,
+  if (root == 0 || relative_path == 0 || display_path == 0 || out_image == 0) {
+    return confit_input_fail(diagnostic, CONFIT_ERR_USAGE, display_path, 0U,
                              0U, kInvalidArgument);
   }
   *out_image = 0;
@@ -241,12 +242,59 @@ ConfitStatus confit_input_load_toml(
   confit_host_file_destroy(file);
   if (status == CONFIT_OK) {
     status = confit_input_image_from_host_buffer(
-        relative_path, &buffer, allocator, out_image, diagnostic);
+        display_path, &buffer, allocator, out_image, diagnostic);
   }
   if (status != CONFIT_OK && diagnostic != 0 && diagnostic->path == 0) {
-    diagnostic->path = relative_path;
+    diagnostic->path = display_path;
   }
   confit_host_buffer_destroy(&buffer);
+  return status;
+}
+
+ConfitStatus confit_input_load_toml(
+    ConfitHostRoot *root, const char *relative_path,
+    const ConfitAllocator *allocator, ConfitInputImage **out_image,
+    ConfitDiagnostic *diagnostic) {
+  return confit_input_load_toml_at(root, relative_path, relative_path,
+                                   allocator, out_image, diagnostic);
+}
+
+ConfitStatus confit_input_load_toml_absolute(
+    const char *absolute_path, const ConfitAllocator *allocator,
+    ConfitInputImage **out_image, ConfitDiagnostic *diagnostic) {
+  char parent[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  const char *slash;
+  const char *leaf;
+  size_t parent_size;
+  ConfitHostRoot *root = 0;
+  ConfitStatus status;
+
+  if (absolute_path == 0 || out_image == 0 ||
+      !confit_host_absolute_path_is_valid(absolute_path)) {
+    return confit_input_fail(diagnostic, CONFIT_ERR_USAGE, absolute_path, 0U,
+                             0U, kInvalidPath);
+  }
+  *out_image = 0;
+  slash = strrchr(absolute_path, '/');
+  if (slash == 0 || slash[1] == '\0') {
+    return confit_input_fail(diagnostic, CONFIT_ERR_USAGE, absolute_path, 0U,
+                             0U, kInvalidPath);
+  }
+  leaf = slash + 1;
+  parent_size = slash == absolute_path ? 1U : (size_t)(slash - absolute_path);
+  if (parent_size >= sizeof(parent)) {
+    return confit_input_fail(diagnostic, CONFIT_ERR_USAGE, absolute_path, 0U,
+                             0U, kInvalidPath);
+  }
+  memcpy(parent, absolute_path, parent_size);
+  parent[parent_size] = '\0';
+  status = confit_host_root_open_absolute(parent, allocator, &root, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_input_load_toml_at(root, leaf, absolute_path, allocator,
+                                       out_image, diagnostic);
+  confit_host_root_destroy(root);
+  if (status != CONFIT_OK && diagnostic != 0)
+    diagnostic->path = absolute_path;
   return status;
 }
 

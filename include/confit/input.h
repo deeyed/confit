@@ -30,6 +30,17 @@ ConfitStatus confit_input_load_toml(
     ConfitDiagnostic *diagnostic);
 
 /**
+ * @brief Load one explicitly named absolute TOML path without discovery.
+ *
+ * The path is normalized and split into an absolute directory capability plus
+ * one relative leaf walk.  The owned input image retains the complete absolute
+ * display path so a sealed manifest can later remeasure the exact capability.
+ */
+ConfitStatus confit_input_load_toml_absolute(
+    const char *absolute_path, const ConfitAllocator *allocator,
+    ConfitInputImage **out_image, ConfitDiagnostic *diagnostic);
+
+/**
  * @brief Release the parsed document, line index, exact bytes, and display path.
  *
  * Every pointer returned by an input-image accessor is borrowed until this

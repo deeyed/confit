@@ -21,6 +21,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 deterministic resolver](docs/resolver-v6.md)
 - [Schema 6 user configuration and minimal serialization](docs/user-config-v6.md)
 - [Schema 6 immutable selected snapshots](docs/snapshot-v6.md)
+- [Schema 6 conventional configuration CLI](docs/cli-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -50,18 +51,51 @@ TOML로 직렬화한다. Memory serializer와 explicit atomic destination writer
 R14는 이 exact project/user input과 resolved result를 sealed content-addressed directory로
 출판하고 regular `selected` 하나로만 활성화한다. Verify는 sealed manifest에 열거된 path만
 다시 hash하며 schema parse, resolver, directory scan 또는 project source 검사를 실행하지 않는다.
-Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
+R15는 resolved value를 Make assignment, C header 또는 canonical JSON으로 안전하게 투영하며
+요청하지 않은 optional artifact를 만들지 않는다. R16은 닫힌 option matrix 위에 `check`,
+`configure`, `verify`, `search`, `explain`, `diff`를 연결했다. `configure`만 explicit output에
+immutable snapshot을 출판하고 `verify`는 resolver를 재실행하지 않은 채 sealed exact input만
+검증한다. `menuconfig`는 아직 terminal-unavailable로 종료하며 migration command는 R17까지
+명시적인 unavailable 진단을 반환한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 emitter, configuration CLI 또는 TUI가 이미 구현됨
+- schema 6 TUI와 migration command가 이미 구현됨
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨
 
 ## 목표 사용자 흐름
 
-Schema 6가 구현되면 configuration과 ordinary build는 명시적으로 분리된다.
+Configuration과 ordinary build는 명시적으로 분리된다. 이미 존재하는 output directory에
+직접 non-interactive configuration을 출판하는 최소 흐름은 다음과 같다.
+
+```text
+confit check \
+  --root /absolute/path/to/project \
+  --project Confit.toml \
+  --config configs/development.toml
+
+confit configure \
+  --root /absolute/path/to/project \
+  --project Confit.toml \
+  --config configs/development.toml \
+  --output /absolute/path/to/objects/config \
+  --emit make \
+  --emit c-header
+
+confit verify \
+  --root /absolute/path/to/project \
+  --project Confit.toml \
+  --output /absolute/path/to/objects/config \
+  --print-artifact values.mk
+```
+
+Confit은 project entry, user config와 output을 이름이나 environment에서 찾지 않는다.
+Project 개발자는 Confit TOML과 ordinary Makefile을 직접 작성하며 generated value를 어떻게
+소비할지 Makefile에서 결정한다. R16의 `menuconfig`는 아직 사용할 수 없으므로 현재 wrapper의
+실행 가능한 non-interactive 경로는 `bmake configure`다. TUI가 구현된 뒤 일반 사용자가 보게 될
+목표 wrapper 흐름은 다음과 같다.
 
 ```text
 bmake menuconfig

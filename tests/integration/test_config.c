@@ -165,6 +165,17 @@ static ConfitUserConfig *load_config(ConfitHostRoot *root,
   return config;
 }
 
+static ConfitUserConfig *load_config_absolute(const ConfitCatalog *catalog,
+                                              const char *path) {
+  ConfitDiagnostic diagnostic;
+  ConfitUserConfig *config = 0;
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_user_config_load_absolute(
+                         path, catalog, 0, &config,
+                         &diagnostic) == CONFIT_OK);
+  return config;
+}
+
 static ConfitResolution *resolve_config(
     const ConfitSchemaProject *project, const ConfitUserConfig *config) {
   ConfitDiagnostic diagnostic;
@@ -205,6 +216,7 @@ static void test_load_resolve_serialize_round_trip(const char *root_path,
   ConfitSchemaProject *project = load_project(root);
   const ConfitCatalog *catalog = confit_schema_project_catalog(project);
   ConfitUserConfig *config;
+  ConfitUserConfig *absolute_config;
   ConfitUserConfig *reparsed;
   ConfitResolution *resolution;
   ConfitResolution *reparsed_resolution;
@@ -217,11 +229,20 @@ static void test_load_resolve_serialize_round_trip(const char *root_path,
   size_t assignment_count;
   size_t serialized_size;
   size_t again_size;
+  char absolute_path[TEST_PATH_BYTES];
 
   write_text(root_path, "users/all-types.toml", kUserAllTypes);
+  join_path(absolute_path, root_path, "users/all-types.toml");
   before = read_text(root_path, "users/all-types.toml");
   CONFIT_TEST_ASSERT(before != 0);
   config = load_config(root, catalog, "users/all-types.toml");
+  absolute_config = load_config_absolute(catalog, absolute_path);
+  CONFIT_TEST_ASSERT(
+      confit_user_config_assignment_count(absolute_config) == 5U &&
+      strcmp(confit_input_image_path(
+                 confit_user_config_input(absolute_config)),
+             absolute_path) == 0);
+  confit_user_config_destroy(absolute_config);
   CONFIT_TEST_ASSERT(confit_user_config_input(config) != 0);
   assignment_count = confit_user_config_assignment_count(config);
   CONFIT_TEST_ASSERT(assignment_count == 5U);
@@ -486,6 +507,8 @@ static void test_load_allocation_failure(ConfitHostRoot *root,
       reached_success = 1;
     } else {
       CONFIT_TEST_ASSERT(config == 0);
+      CONFIT_TEST_ASSERT(diagnostic.path == 0 ||
+                         strcmp(diagnostic.path, "users/all-types.toml") == 0);
     }
     CONFIT_TEST_ASSERT(state.outstanding == 0U);
   }

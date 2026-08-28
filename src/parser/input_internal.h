@@ -14,4 +14,9 @@ ConfitStatus confit_input_image_from_host_buffer(
     const ConfitAllocator *allocator, ConfitInputImage **out_image,
     ConfitDiagnostic *diagnostic);
 
+ConfitStatus confit_input_load_toml_at(
+    ConfitHostRoot *root, const char *relative_path, const char *display_path,
+    const ConfitAllocator *allocator, ConfitInputImage **out_image,
+    ConfitDiagnostic *diagnostic);
+
 #endif /* CONFIT_INPUT_INTERNAL_H */

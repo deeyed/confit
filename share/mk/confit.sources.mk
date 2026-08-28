@@ -36,6 +36,7 @@ CONFIT_GENERATOR_SOURCES= \
 	src/emitter/emitter.c
 
 CONFIT_CLI_SOURCES= \
+	src/cli/cli.c \
 	src/cli/main.c
 
 CONFIT_TEST_SUPPORT_SOURCES= \
@@ -53,7 +54,6 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_resolver.c \
 	tests/unit/test_emitter.c \
 	tests/unit/test_toml_adapter.c \
-	tests/unit/test_cli_skeleton.c \
 	tests/unit/test_public_headers.c
 
 CONFIT_INTEGRATION_TEST_SOURCES= \
@@ -61,6 +61,7 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_schema.c \
 	tests/integration/test_types.c \
 	tests/integration/test_config.c \
+	tests/integration/test_cli.c \
 	tests/integration/test_snapshot.c \
 	tests/integration/test_emitter_integration.c
 
