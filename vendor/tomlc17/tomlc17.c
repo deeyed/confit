@@ -856,8 +856,9 @@ void toml_free(toml_result_t result) {
   pool_destroy((pool_t *)result.__internal);
 }
 
+#if !defined(TOMLC17_NO_FILE_IO)
 /**
- *  Parse a toml document.
+ *  Parse a toml document from a file.
  */
 toml_result_t toml_parse_file_ex(const char *fname) {
   toml_result_t result = {0};
@@ -933,6 +934,7 @@ toml_result_t toml_parse_file_named(FILE *fp, const char *name) {
   cell_free(buf);
   return result;
 }
+#endif
 
 static void set_source_recursive(toml_datum_t *datum, const char *source) {
   datum->source = source;

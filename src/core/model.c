@@ -826,6 +826,9 @@ ConfitStatus confit_catalog_add_fragment(
   if (catalog == 0 || spec == 0 || spec->path == 0) {
     return confit_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
   }
+  if (catalog->fragment_count >= CONFIT_LIMIT_SOURCE_FRAGMENTS) {
+    return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kCatalogLimit);
+  }
   if (spec->parent_fragment != CONFIT_INDEX_NONE &&
       spec->parent_fragment >= catalog->fragment_count) {
     return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kInvalidRelation);
@@ -886,6 +889,9 @@ ConfitStatus confit_catalog_add_menu(ConfitCatalog *catalog,
       (spec->parent_menu != CONFIT_INDEX_NONE &&
        spec->parent_menu >= catalog->menu_count)) {
     return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kInvalidRelation);
+  }
+  if (catalog->menu_count >= CONFIT_LIMIT_MENUS) {
+    return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kCatalogLimit);
   }
   for (index = 0U; index < catalog->menu_count; ++index) {
     if (catalog->menus[index].fragment == spec->fragment) {
@@ -1082,7 +1088,7 @@ static ConfitStatus confit_config_record_build(
   }
   if (status == CONFIT_OK && spec->dependency_text != 0)
     status = confit_copy_c_string(spec->dependency_text,
-                                  CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 1, 1,
+                                  CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 1, 0,
                                   allocator, &candidate->dependency_text,
                                   diagnostic);
   if (status == CONFIT_OK)
@@ -1102,6 +1108,9 @@ ConfitStatus confit_catalog_add_config(ConfitCatalog *catalog,
   ConfitStatus status;
   if (catalog == 0) {
     return confit_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+  }
+  if (catalog->config_count >= CONFIT_LIMIT_CONFIG_SYMBOLS) {
+    return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kCatalogLimit);
   }
   status = confit_config_validate(catalog, spec, diagnostic);
   if (status != CONFIT_OK) return status;

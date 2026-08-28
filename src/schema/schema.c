@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "confit/limits.h"
+#include "toml_internal.h"
 
 struct ConfitSchemaProject {
   ConfitAllocator allocator;
@@ -438,7 +439,7 @@ static ConfitStatus confit_schema_typed_value(
     return confit_value_set_int(out, integer, allocator, diagnostic);
   case CONFIT_VALUE_HEX:
     if (!confit_toml_value_int64(value, &integer) || integer < 0 ||
-        !confit_toml_value_integer_base(document, value, &base) ||
+        !confit_toml_integer_base_from_image(document, value, &base) ||
         base != CONFIT_TOML_INTEGER_BASE_HEXADECIMAL)
       return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
                                       path, invalid_message != 0

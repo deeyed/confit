@@ -64,7 +64,8 @@ range
 따르고 reachable graph 전체에서 유일해야 한다. Type은 `bool`, `int`, `hex`,
 `string`, `enum`으로 닫혀 있고 R09 type contract에 따라 default, range, values의
 적용 가능성을 검증한다. Prompt와 help의 text 정책은 menu와 같다. `depends_on`은
-bounded string으로 소유하지만 expression parsing은 R11에 맡긴다.
+bounded single-line string으로 소유하고 layout/control byte를 거부하지만 expression
+parsing은 R11에 맡긴다.
 
 `default`는 scalar TOML node, `values`는 array node, `range`는 table node여야 한다.
 R09는 이 node를 같은 input image에서 type-check한 뒤 generic catalog가 default, range와

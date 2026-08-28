@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -481,6 +482,154 @@ static void test_catalog(void) {
   confit_value_destroy(&minimum);
 }
 
+static void test_dependency_text_boundaries(void) {
+  ConfitCatalog *catalog = 0;
+  ConfitConfigSpec config;
+  ConfitDiagnostic diagnostic;
+  ConfitSourceFragmentSpec fragment;
+  ConfitValue default_value;
+  char *dependency;
+
+  confit_diagnostic_init(&diagnostic);
+  confit_value_init(&default_value);
+  CONFIT_TEST_ASSERT(confit_value_set_bool(&default_value, 0, 0,
+                                           &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_catalog_create(0, &catalog, &diagnostic) ==
+                     CONFIT_OK);
+  fragment.path = "Confit.toml";
+  fragment.parent_fragment = CONFIT_INDEX_NONE;
+  fragment.source_ordinal = 0U;
+  CONFIT_TEST_ASSERT(confit_catalog_add_fragment(catalog, &fragment, 0,
+                                                 &diagnostic) == CONFIT_OK);
+
+  dependency = (char *)malloc(CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES + 2U);
+  CONFIT_TEST_ASSERT(dependency != 0);
+  memset(dependency, 'A', CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES + 1U);
+  dependency[CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES] = '\0';
+
+  memset(&config, 0, sizeof(config));
+  config.fragment = 0U;
+  config.menu = CONFIT_INDEX_NONE;
+  config.symbol = "DEPENDENCY_EXACT";
+  config.kind = CONFIT_VALUE_BOOL;
+  config.prompt = "Exact dependency text";
+  config.help = "Exercise the exact dependency text storage boundary.";
+  config.default_value = &default_value;
+  config.dependency_text = dependency;
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &config, 0,
+                                               &diagnostic) == CONFIT_OK);
+
+  dependency[CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES] = 'A';
+  dependency[CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES + 1U] = '\0';
+  config.symbol = "DEPENDENCY_OVER";
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &config, 0,
+                                               &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  config.symbol = "DEPENDENCY_LAYOUT";
+  config.dependency_text = "A\nB";
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &config, 0,
+                                               &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  CONFIT_TEST_ASSERT(confit_catalog_config_count(catalog) == 1U);
+
+  free(dependency);
+  confit_catalog_destroy(catalog);
+  confit_value_destroy(&default_value);
+}
+
+static void test_catalog_count_boundaries(void) {
+  ConfitCatalog *catalog = 0;
+  ConfitConfigSpec config;
+  ConfitDiagnostic diagnostic;
+  ConfitMenuSpec menu;
+  ConfitSourceFragmentSpec fragment;
+  ConfitValue default_value;
+  char fragment_path[64];
+  char symbol[32];
+  char *maximum_help;
+  char *maximum_prompt;
+  size_t index;
+
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_catalog_create(0, &catalog, &diagnostic) ==
+                     CONFIT_OK);
+  maximum_prompt = (char *)malloc(CONFIT_LIMIT_PROMPT_BYTES + 1U);
+  maximum_help = (char *)malloc(CONFIT_LIMIT_HELP_BYTES + 1U);
+  CONFIT_TEST_ASSERT(maximum_prompt != 0 && maximum_help != 0);
+  memset(maximum_prompt, 'P', CONFIT_LIMIT_PROMPT_BYTES);
+  maximum_prompt[CONFIT_LIMIT_PROMPT_BYTES] = '\0';
+  memset(maximum_help, 'H', CONFIT_LIMIT_HELP_BYTES);
+  maximum_help[CONFIT_LIMIT_HELP_BYTES] = '\0';
+
+  memset(&fragment, 0, sizeof(fragment));
+  fragment.parent_fragment = CONFIT_INDEX_NONE;
+  memset(&menu, 0, sizeof(menu));
+  menu.parent_menu = CONFIT_INDEX_NONE;
+  for (index = 0U; index < CONFIT_LIMIT_SOURCE_FRAGMENTS; ++index) {
+    CONFIT_TEST_ASSERT(snprintf(fragment_path, sizeof(fragment_path),
+                                "config/f%04zu.toml", index) > 0);
+    fragment.path = fragment_path;
+    fragment.source_ordinal = index;
+    CONFIT_TEST_ASSERT(confit_catalog_add_fragment(
+                           catalog, &fragment, 0, &diagnostic) == CONFIT_OK);
+    menu.fragment = index;
+    menu.prompt = index == 0U ? maximum_prompt : "Menu";
+    menu.help = index == 0U ? maximum_help : "Menu help.";
+    CONFIT_TEST_ASSERT(confit_catalog_add_menu(catalog, &menu, 0,
+                                               &diagnostic) == CONFIT_OK);
+  }
+  CONFIT_TEST_ASSERT(confit_catalog_fragment_count(catalog) ==
+                     CONFIT_LIMIT_SOURCE_FRAGMENTS);
+  CONFIT_TEST_ASSERT(confit_catalog_menu_count(catalog) ==
+                     CONFIT_LIMIT_MENUS);
+  fragment.path = "config/over.toml";
+  CONFIT_TEST_ASSERT(confit_catalog_add_fragment(catalog, &fragment, 0,
+                                                 &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  menu.fragment = 0U;
+  menu.prompt = "Over";
+  menu.help = "Exceed the menu count.";
+  CONFIT_TEST_ASSERT(confit_catalog_add_menu(catalog, &menu, 0,
+                                             &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  free(maximum_help);
+  free(maximum_prompt);
+  confit_catalog_destroy(catalog);
+
+  catalog = 0;
+  confit_value_init(&default_value);
+  CONFIT_TEST_ASSERT(confit_value_set_bool(&default_value, 0, 0,
+                                           &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_catalog_create(0, &catalog, &diagnostic) ==
+                     CONFIT_OK);
+  fragment.path = "Confit.toml";
+  fragment.parent_fragment = CONFIT_INDEX_NONE;
+  fragment.source_ordinal = 0U;
+  CONFIT_TEST_ASSERT(confit_catalog_add_fragment(catalog, &fragment, 0,
+                                                 &diagnostic) == CONFIT_OK);
+  memset(&config, 0, sizeof(config));
+  config.fragment = 0U;
+  config.menu = CONFIT_INDEX_NONE;
+  config.kind = CONFIT_VALUE_BOOL;
+  config.prompt = "Option";
+  config.help = "Exercise the exact configuration symbol count boundary.";
+  config.default_value = &default_value;
+  for (index = 0U; index < CONFIT_LIMIT_CONFIG_SYMBOLS; ++index) {
+    CONFIT_TEST_ASSERT(snprintf(symbol, sizeof(symbol), "O%05zu", index) > 0);
+    config.symbol = symbol;
+    CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &config, 0,
+                                                 &diagnostic) == CONFIT_OK);
+  }
+  CONFIT_TEST_ASSERT(confit_catalog_config_count(catalog) ==
+                     CONFIT_LIMIT_CONFIG_SYMBOLS);
+  config.symbol = "OVER_LIMIT";
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &config, 0,
+                                               &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  confit_catalog_destroy(catalog);
+  confit_value_destroy(&default_value);
+}
+
 static void test_assignment_reason_resolved(void) {
   ConfitAllocator allocator;
   ConfitAssignment assignment;
@@ -600,6 +749,8 @@ int main(void) {
   test_symbol_and_enum_validation();
   test_value_allocation_failure();
   test_catalog();
+  test_dependency_text_boundaries();
+  test_catalog_count_boundaries();
   test_assignment_reason_resolved();
   test_transactional_allocation_failure();
   return 0;

@@ -17,6 +17,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 explicit source graph](docs/source-v6.md)
 - [Schema 6 minimal structural loader](docs/schema-v6.md)
 - [Schema 6 typed declaration semantics](docs/types-v6.md)
+- [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
 
@@ -29,8 +30,10 @@ in-memory generic model을 구현했다. R05는 descriptor-rooted bounded POSIX 
 추가했다. R08은 reachable input image에 대해서만 닫힌 entry, menu, config, user-value
 문서 구조를 검증하는 schema loader를 추가했다. R09는 다섯 public type의 native TOML
 default, numeric range, enum domain과 field applicability를 검증하여 generic typed catalog에
-소유시키고, hex token의 lexical identity를 같은 input byte image에서 보존한다. 현재 binary는
-여전히 `help`와 `--version`만 성공하는 development skeleton이다.
+소유시키고, hex token의 lexical identity를 같은 input byte image에서 보존한다.
+R10 강감사에서 vendored TOML file-parser capability를 compile out하고 schema 전용 hex
+lexeme helper를 internal ownership-checked seam으로 축소했다. 현재 binary는 여전히 `help`와
+`--version`만 성공하는 development skeleton이다.
 Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.

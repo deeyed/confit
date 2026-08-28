@@ -391,9 +391,9 @@ int confit_toml_value_int64(const ConfitTomlValue *value,
   return 1;
 }
 
-int confit_toml_value_integer_base(const ConfitTomlDocument *document,
-                                   const ConfitTomlValue *value,
-                                   ConfitTomlIntegerBase *out_base) {
+int confit_toml_integer_base_from_image(const ConfitTomlDocument *document,
+                                        const ConfitTomlValue *value,
+                                        ConfitTomlIntegerBase *out_base) {
   const toml_datum_t *datum = confit_toml_as_datum(value);
   const char *text;
   size_t column;
@@ -402,7 +402,9 @@ int confit_toml_value_integer_base(const ConfitTomlDocument *document,
   size_t size;
 
   if (document == 0 || datum == 0 || out_base == 0 ||
-      datum->type != TOML_INT64 || datum->lineno <= 0 || datum->colno <= 0) {
+      datum->type != TOML_INT64 || datum->lineno <= 0 || datum->colno <= 0 ||
+      datum->source == 0 ||
+      datum->source != document->result.toptab.source) {
     return 0;
   }
   text = document->source_text;

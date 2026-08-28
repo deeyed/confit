@@ -10,7 +10,8 @@ CONFIT_FIRST_PARTY_CFLAGS= \
 	-std=c17 -Wall -Wextra -Werror -pedantic \
 	-include ${CONFIT_COMPILER_CONTRACT}
 CONFIT_VENDOR_CFLAGS= \
-	-std=c17 -w -include ${CONFIT_COMPILER_CONTRACT}
+	-std=c17 -w -DTOMLC17_NO_FILE_IO=1 \
+	-include ${CONFIT_COMPILER_CONTRACT}
 CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/include \
 	-I${CONFIT_SOURCE_ROOT}/src/parser \

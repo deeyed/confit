@@ -26,15 +26,6 @@ typedef enum ConfitTomlValueType {
   CONFIT_TOML_VALUE_TABLE,
 } ConfitTomlValueType;
 
-/** @brief Lexical base of one native TOML integer token. */
-typedef enum ConfitTomlIntegerBase {
-  CONFIT_TOML_INTEGER_BASE_UNKNOWN = 0,
-  CONFIT_TOML_INTEGER_BASE_BINARY = 2,
-  CONFIT_TOML_INTEGER_BASE_OCTAL = 8,
-  CONFIT_TOML_INTEGER_BASE_DECIMAL = 10,
-  CONFIT_TOML_INTEGER_BASE_HEXADECIMAL = 16,
-} ConfitTomlIntegerBase;
-
 /** @brief tomlc17 result와 source text를 소유하는 TOML document다. */
 typedef struct ConfitTomlDocument ConfitTomlDocument;
 
@@ -103,20 +94,6 @@ int confit_toml_value_string(const ConfitTomlValue *value,
 /** @brief int64 value를 반환한다. value type이 다르면 0을 반환한다. */
 int confit_toml_value_int64(const ConfitTomlValue *value,
                                 int64_t *out_value);
-
-/**
- * @brief Recover an integer token's base from the document's owned byte image.
- *
- * tomlc17 intentionally normalizes all native TOML integer spellings to an
- * int64 value.  Schema types such as `hex` also need the lexical distinction.
- * This accessor uses only the already parsed document bytes and the value's
- * recorded source line/column; it does not reopen a path or reparse a file.
- *
- * @return nonzero for an integer value whose exact token start is available.
- */
-int confit_toml_value_integer_base(const ConfitTomlDocument *document,
-                                   const ConfitTomlValue *value,
-                                   ConfitTomlIntegerBase *out_base);
 
 /** @brief float64 value를 반환한다. value type이 다르면 0을 반환한다. */
 int confit_toml_value_float64(const ConfitTomlValue *value,

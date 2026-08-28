@@ -82,8 +82,10 @@ confit_test_digest
 
 Flattening means compilation needs no nested output directory creator. First-
 party code uses C17 with `-Wall -Wextra -Werror -pedantic`. Vendored tomlc17 uses
-its separately reviewed warning policy, while the same clang/C17 contract remains
-mandatory. Linking is performed through the provisioned clang driver.
+its separately reviewed warning policy and is compiled with
+`TOMLC17_NO_FILE_IO=1`; only its memory parser is present in the product object.
+The same clang/C17 contract remains mandatory. Linking is performed through the
+provisioned clang driver.
 
 ## Executable boundary
 

@@ -116,6 +116,13 @@ memory corpus.  Compiled-object review distinguishes the input/parser objects
 from the host object: the former import no `open`, `fopen`, directory
 enumeration, subprocess, or external hash API.
 
+R10 additionally compiles the vendored TOML translation unit in memory-only
+mode. Its optional pathname and `FILE *` parser entry points are absent from the
+product object, so the final product no longer inherits unused `fopen`, `fread`,
+or `fclose` imports. Hex spelling recovery is an internal schema seam, requires
+the value to belong to the supplied document, and reads only that document's
+already-owned byte image.
+
 This evidence does not establish schema interpretation, reachable membership,
 manifest serialization, snapshot verification, arbitrary-input safety,
 filesystem authenticity, or protection from every same-user denial of service.

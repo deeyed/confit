@@ -148,7 +148,8 @@ A declaration stores:
 - an optional int/hex range whose minimum is not above its maximum and contains
   the default;
 - an enum domain with no duplicate atoms and a member default;
-- optional owned dependency text that is not parsed or evaluated in R04;
+- optional owned dependency text that is bounded, free of layout/control bytes,
+  and not parsed or evaluated in R04;
 - fragment/menu indexes and an owned declaration span.
 
 Symbols use `[A-Z][A-Z0-9_]{0,127}` and are unique in the catalog.  Model-level

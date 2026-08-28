@@ -20,7 +20,7 @@
 /*
  *  USAGE:
  *
- *  1. Call toml_parse(), toml_parse_file(), or toml_parse_file_ex()
+ *  1. Call toml_parse(), or one of the file helpers when file I/O is enabled.
  *  2. Check result.ok
  *  3. Use toml_get() or toml_seek() to query and traverse the
  *     result.toptab
@@ -29,8 +29,11 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+#if !defined(TOMLC17_NO_FILE_IO)
 #include <stdio.h>
+#endif
 
 #ifdef __cplusplus
 #define TOML_EXTERN extern "C"
@@ -136,6 +139,7 @@ TOML_EXTERN toml_result_t toml_parse(const char *src, int len);
 TOML_EXTERN toml_result_t toml_parse_named(const char *src, int len,
                                            const char *name);
 
+#if !defined(TOMLC17_NO_FILE_IO)
 /**
  * @brief Parse a TOML document from a file pointer.
  *
@@ -166,6 +170,7 @@ TOML_EXTERN toml_result_t toml_parse_file_named(FILE *fp, const char *name);
  * @return A toml_result_t structure. Must be freed with toml_free().
  */
 TOML_EXTERN toml_result_t toml_parse_file_ex(const char *fname);
+#endif
 
 /**
  * @brief Release resources allocated for a TOML result.

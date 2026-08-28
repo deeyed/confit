@@ -5,6 +5,7 @@
 #include "confit/toml.h"
 #include "confit/status.h"
 #include "test_fs.h"
+#include "toml_internal.h"
 
 #ifndef CONFIT_TEST_SOURCE_DIR
 #define CONFIT_TEST_SOURCE_DIR "."
@@ -186,12 +187,31 @@ int main(void) {
     for (index = 0U; index < sizeof(keys) / sizeof(keys[0]); ++index) {
       ConfitTomlIntegerBase base = CONFIT_TOML_INTEGER_BASE_UNKNOWN;
       const ConfitTomlValue *integer = confit_toml_table_find(root, keys[index]);
-      if (!confit_toml_value_integer_base(document, integer, &base) ||
+      if (!confit_toml_integer_base_from_image(document, integer, &base) ||
           base != bases[index]) {
         confit_toml_document_free(document);
         return 7;
       }
     }
+  }
+  {
+    ConfitTomlDocument *other = 0;
+    ConfitTomlIntegerBase base = CONFIT_TOML_INTEGER_BASE_UNKNOWN;
+    const ConfitTomlValue *other_integer;
+    if (confit_toml_parse_text("integer-bases", "hexadecimal = 0x2\n",
+                              strlen("hexadecimal = 0x2\n"), &other,
+                              &diagnostic) != CONFIT_OK) {
+      confit_toml_document_free(document);
+      return 7;
+    }
+    other_integer = confit_toml_table_find(
+        confit_toml_document_root(other), "hexadecimal");
+    if (confit_toml_integer_base_from_image(document, other_integer, &base)) {
+      confit_toml_document_free(other);
+      confit_toml_document_free(document);
+      return 7;
+    }
+    confit_toml_document_free(other);
   }
   confit_toml_document_free(document);
 
