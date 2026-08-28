@@ -285,6 +285,7 @@ typedef enum ConfitReasonKind {
 
 typedef struct ConfitReasonNode {
   ConfitReasonKind kind;
+  int result;
   char *subject_symbol;
   char *related_symbol;
   char *detail;
@@ -296,7 +297,7 @@ typedef struct ConfitReasonNode {
 void confit_reason_node_init(ConfitReasonNode *reason);
 void confit_reason_node_destroy(ConfitReasonNode *reason);
 ConfitStatus confit_reason_node_set(
-    ConfitReasonNode *reason, ConfitReasonKind kind,
+    ConfitReasonNode *reason, ConfitReasonKind kind, int result,
     const char *subject_symbol, const char *related_symbol,
     const char *detail, const size_t *children, size_t child_count,
     const ConfitAllocator *allocator, ConfitDiagnostic *diagnostic);

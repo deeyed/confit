@@ -25,7 +25,8 @@ CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
 	src/expression/expression.c
 
-CONFIT_RESOLVER_SOURCES=
+CONFIT_RESOLVER_SOURCES= \
+	src/resolver/resolver.c
 
 CONFIT_GENERATOR_SOURCES=
 
@@ -44,6 +45,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_input_image.c \
 	tests/unit/test_model.c \
 	tests/unit/test_expression.c \
+	tests/unit/test_resolver.c \
 	tests/unit/test_toml_adapter.c \
 	tests/unit/test_cli_skeleton.c \
 	tests/unit/test_public_headers.c

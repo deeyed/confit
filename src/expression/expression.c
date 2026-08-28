@@ -1,5 +1,7 @@
 #include "confit/expression.h"
 
+#include "expression_internal.h"
+
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -1196,6 +1198,11 @@ size_t confit_dependency_plan_edge_count(const ConfitDependencyPlan *plan) {
   return plan != 0 ? plan->edge_count : 0U;
 }
 
+int confit_dependency_plan_matches_catalog(const ConfitDependencyPlan *plan,
+                                           const ConfitCatalog *catalog) {
+  return plan != 0 && catalog != 0 && plan->catalog == catalog;
+}
+
 int confit_dependency_plan_has_expression(const ConfitDependencyPlan *plan,
                                           size_t config_index) {
   return plan != 0 && config_index < plan->config_count &&
@@ -1377,12 +1384,12 @@ static ConfitStatus confit_dependency_evaluate_expression(
   return CONFIT_OK;
 }
 
-ConfitStatus confit_dependency_plan_evaluate(
+static ConfitStatus confit_dependency_plan_evaluate_impl(
     const ConfitDependencyPlan *plan, size_t config_index,
     const ConfitValue *values, size_t value_count,
     const ConfitAllocator *allocator,
     ConfitDependencyEvaluation **out_evaluation,
-    ConfitDiagnostic *diagnostic) {
+    ConfitDiagnostic *diagnostic, int validate_values) {
   ConfitAllocator resolved;
   ConfitDependencyEvaluation *evaluation;
   ConfitConfigView owner;
@@ -1405,7 +1412,7 @@ ConfitStatus confit_dependency_plan_evaluate(
   if (!confit_catalog_config_at(plan->catalog, config_index, &owner))
     return confit_expression_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
                                   kInternalExpression);
-  for (index = 0U; index < value_count; ++index) {
+  for (index = 0U; validate_values && index < value_count; ++index) {
     ConfitConfigView view;
     if (!confit_catalog_config_at(plan->catalog, index, &view) ||
         values[index].kind != view.kind)
@@ -1446,6 +1453,28 @@ ConfitStatus confit_dependency_plan_evaluate(
   }
   *out_evaluation = evaluation;
   return CONFIT_OK;
+}
+
+ConfitStatus confit_dependency_plan_evaluate(
+    const ConfitDependencyPlan *plan, size_t config_index,
+    const ConfitValue *values, size_t value_count,
+    const ConfitAllocator *allocator,
+    ConfitDependencyEvaluation **out_evaluation,
+    ConfitDiagnostic *diagnostic) {
+  return confit_dependency_plan_evaluate_impl(
+      plan, config_index, values, value_count, allocator, out_evaluation,
+      diagnostic, 1);
+}
+
+ConfitStatus confit_dependency_plan_evaluate_prevalidated(
+    const ConfitDependencyPlan *plan, size_t config_index,
+    const ConfitValue *values, size_t value_count,
+    const ConfitAllocator *allocator,
+    ConfitDependencyEvaluation **out_evaluation,
+    ConfitDiagnostic *diagnostic) {
+  return confit_dependency_plan_evaluate_impl(
+      plan, config_index, values, value_count, allocator, out_evaluation,
+      diagnostic, 0);
 }
 
 void confit_dependency_evaluation_destroy(

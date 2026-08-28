@@ -660,10 +660,11 @@ static void test_assignment_reason_resolved(void) {
                                            &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(strcmp(assignment.symbol, "ENABLE_LOGGING") == 0);
   CONFIT_TEST_ASSERT(confit_reason_node_set(
-                         &reason, CONFIT_REASON_AND, "ENABLE_LOGGING",
+                         &reason, CONFIT_REASON_AND, 1, "ENABLE_LOGGING",
                          "RUNTIME_SUPPORT", "both inputs are required",
                          children, 2U, &allocator, &diagnostic) == CONFIT_OK);
-  CONFIT_TEST_ASSERT(reason.child_count == 2U && reason.children[1] == 5U);
+  CONFIT_TEST_ASSERT(reason.result == 1 && reason.child_count == 2U &&
+                     reason.children[1] == 5U);
   CONFIT_TEST_ASSERT(confit_resolved_value_set(
                          &resolved, "ENABLE_LOGGING", &default_value,
                          &effective_value, CONFIT_ORIGIN_USER, 1,

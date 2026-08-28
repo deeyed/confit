@@ -1266,7 +1266,7 @@ void confit_reason_node_destroy(ConfitReasonNode *reason) {
 }
 
 ConfitStatus confit_reason_node_set(
-    ConfitReasonNode *reason, ConfitReasonKind kind,
+    ConfitReasonNode *reason, ConfitReasonKind kind, int result,
     const char *subject_symbol, const char *related_symbol,
     const char *detail, const size_t *children, size_t child_count,
     const ConfitAllocator *allocator, ConfitDiagnostic *diagnostic) {
@@ -1285,6 +1285,7 @@ ConfitStatus confit_reason_node_set(
   if (!confit_allocator_resolve(allocator, &candidate.allocator))
     return confit_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidAllocator);
   candidate.kind = kind;
+  candidate.result = result != 0;
   candidate.child_count = child_count;
   for (index = 0U; index < child_count; ++index) candidate.children[index] = children[index];
   if (subject_symbol != 0)

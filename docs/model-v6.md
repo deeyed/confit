@@ -185,13 +185,14 @@ origin (`CONFIT_ORIGIN_DEFAULT` or `CONFIT_ORIGIN_USER`), normalized availabilit
 and an optional reason index.  The record constructor requires default and
 effective kinds to match.  It does not calculate either value.
 
-`ConfitReasonNode` is a bounded owned data shape for later resolved results. A node
-may own subject/related symbols, bounded detail text, and at most two child
-indexes.  Its kinds can describe literal, reference, boolean composition,
-comparison, and unavailable outcomes. R11 evaluation exposes the same causal
-kinds through an evaluation-owned borrowed view; R12 may copy selected causes
-into resolved-result ownership. A reason is diagnostic configuration causality,
-not a task graph or execution plan.
+`ConfitReasonNode` is a bounded owned data shape for resolved results. A node
+owns its boolean result, may own subject/related symbols and bounded detail text,
+and has at most two child indexes. Its kinds describe literal, reference,
+boolean composition, comparison, and unavailable outcomes. R11 evaluation
+exposes the same causal shape through an evaluation-owned borrowed view; R12
+copies it into immutable resolution ownership and adds an unavailable wrapper
+when appropriate. A reason is diagnostic configuration causality, not a task
+graph or execution plan.
 
 ## 8. Lifecycle evidence and non-claims
 
@@ -203,7 +204,11 @@ failure at each catalog-add allocation point.
 
 This evidence establishes pure in-memory model behavior for the executed corpus.
 It does not by itself establish TOML schema acceptance, source-graph reachability,
-dependency semantics, configuration resolution, safe host I/O, immutable
+dependency semantics, safe host I/O, immutable
 publication, generated artifact safety, or interactive behavior. Later round
 documents own evidence for the first implemented layers. The public C
 layout is still a development API and is not declared to be a stable 1.0 ABI.
+
+R12 adds the resolver lifecycle and exact 16,384-symbol graph evidence described
+in `docs/resolver-v6.md`; it does not retroactively turn the R04 model test into
+file-format, snapshot, emitter, CLI, or TUI evidence.

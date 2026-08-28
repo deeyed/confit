@@ -40,6 +40,9 @@ void confit_dependency_plan_destroy(ConfitDependencyPlan *plan);
 
 size_t confit_dependency_plan_config_count(const ConfitDependencyPlan *plan);
 size_t confit_dependency_plan_edge_count(const ConfitDependencyPlan *plan);
+/** @brief Return nonzero only when the plan borrows this exact catalog. */
+int confit_dependency_plan_matches_catalog(const ConfitDependencyPlan *plan,
+                                           const ConfitCatalog *catalog);
 int confit_dependency_plan_has_expression(const ConfitDependencyPlan *plan,
                                           size_t config_index);
 

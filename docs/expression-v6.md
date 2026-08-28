@@ -65,6 +65,12 @@ Availability는 값의 소비 가능성만 설명한다. Evaluator는 referenced
 않고, non-bool 값을 바꾸지 않으며, unavailable owner의 값을 default로 되돌리지 않는다.
 그 default/user/unavailable 정책은 R12 resolver의 별도 책임이다.
 
+Public evaluator는 독립 API caller를 위해 aligned array 전체의 kind를 검사한다. R12
+resolver는 모든 default와 assignment candidate를 먼저 한 번 검증한 뒤 internal-only
+prevalidated seam으로 같은 evaluator를 호출한다. 이는 최대 symbol graph에서 N개 option마다
+N개 kind를 반복 검사하는 비용을 피하기 위한 implementation boundary이며 public 우회 API가
+아니다.
+
 ## 4. Ownership and genericity boundary
 
 Expression plan은 catalog보다 먼저 destroy되어야 한다. Evaluation은 plan과 catalog가

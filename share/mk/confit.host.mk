@@ -16,6 +16,7 @@ CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/include \
 	-I${CONFIT_SOURCE_ROOT}/src/parser \
 	-I${CONFIT_SOURCE_ROOT}/src/schema \
+	-I${CONFIT_SOURCE_ROOT}/src/expression \
 	-I${CONFIT_SOURCE_ROOT}/vendor/tomlc17 \
 	-I${CONFIT_SOURCE_ROOT}/tests/support
 CONFIT_LINK_LIBS=

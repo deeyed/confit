@@ -1,4 +1,5 @@
 #include "confit/schema.h"
+#include "confit/resolver.h"
 
 #include "test_assert.h"
 #include "test_fs.h"
@@ -134,6 +135,8 @@ static void test_valid_project_and_user(const char *root_path,
   ConfitDiagnostic diagnostic;
   ConfitSchemaProject *project = 0;
   ConfitUserDocument *document = 0;
+  ConfitResolution *resolution = 0;
+  const ConfitResolvedValue *resolved_value;
   ConfitSchemaConfigView config;
   ConfitUserValueView value;
   ConfitMenuView menu;
@@ -192,6 +195,17 @@ static void test_valid_project_and_user(const char *root_path,
                      memcmp(config.default_value->data.text.data, "normal",
                             6U) == 0 &&
                      strcmp(config.dependency_text, "ENABLE_METRICS") == 0);
+
+  CONFIT_TEST_ASSERT(confit_resolve(catalog, dependency_plan, 0, 0U, 0,
+                                   &resolution, &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_resolution_find_value(
+                         resolution, "LOG_LEVEL", &resolved_value));
+  CONFIT_TEST_ASSERT(resolved_value->available == 0 &&
+                     resolved_value->origin == CONFIT_ORIGIN_DEFAULT &&
+                     strcmp(resolved_value->effective_value.data.text.data,
+                            "normal") == 0);
+  confit_resolution_destroy(resolution);
+  resolution = 0;
 
   CONFIT_TEST_ASSERT(confit_user_document_load_relative(
                          root, user_path, 0, &document,

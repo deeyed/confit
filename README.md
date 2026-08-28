@@ -18,6 +18,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 minimal structural loader](docs/schema-v6.md)
 - [Schema 6 typed declaration semantics](docs/types-v6.md)
 - [Schema 6 bounded dependency expressions](docs/expression-v6.md)
+- [Schema 6 deterministic resolver](docs/resolver-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -37,11 +38,15 @@ lexeme helper를 internal ownership-checked seam으로 축소했다. 현재 bina
 `--version`만 성공하는 development skeleton이다. R11은 동결된 `depends_on` grammar의
 bounded lexer/parser, 전 reference link와 type/domain 검사, cycle rejection, stable
 prerequisite order, read-only short-circuit evaluator와 reason tree를 추가했다.
+R12는 declaration default와 unordered typed assignment를 single-writer 규칙으로 resolve하고,
+availability, default/user origin, effective value와 owned causal reason을 lexical-order의
+immutable result로 만든다. Unknown/duplicate/wrong-domain assignment와 unavailable non-default
+값은 partial result 없이 거부한다.
 Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 resolver, snapshot writer 또는 TUI가 이미 구현됨
+- schema 6 snapshot writer 또는 TUI가 이미 구현됨
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨

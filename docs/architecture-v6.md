@@ -131,7 +131,11 @@ ownership and evidence boundary.
 
 The resolver applies one declaration default and at most one explicit user value
 per symbol. It produces an immutable successful result or no publishable result.
-It never calls an emitter, writes a user file, or changes another declaration.
+Assignment order has no precedence; lookup and result iteration use a lexical
+symbol index while availability uses the linked stable topological plan. It
+copies the bounded causal reason, rejects unavailable non-default user intent,
+and never calls an emitter, writes a user file, or changes another declaration.
+`docs/resolver-v6.md` records the R12 API, ownership, bounds, and evidence.
 
 ### 2.7 Emitters
 
