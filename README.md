@@ -19,6 +19,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 typed declaration semantics](docs/types-v6.md)
 - [Schema 6 bounded dependency expressions](docs/expression-v6.md)
 - [Schema 6 deterministic resolver](docs/resolver-v6.md)
+- [Schema 6 user configuration and minimal serialization](docs/user-config-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -41,7 +42,10 @@ prerequisite order, read-only short-circuit evaluator와 reason tree를 추가�
 R12는 declaration default와 unordered typed assignment를 single-writer 규칙으로 resolve하고,
 availability, default/user origin, effective value와 owned causal reason을 lexical-order의
 immutable result로 만든다. Unknown/duplicate/wrong-domain assignment와 unavailable non-default
-값은 partial result 없이 거부한다.
+값은 partial result 없이 거부한다. R13은 explicit user TOML의 native scalar를 catalog에
+link한 typed assignment로 만들고, 성공한 resolution을 default filler 없는 stable `[values]`
+TOML로 직렬화한다. Memory serializer와 explicit atomic destination writer는 하나의 구현을
+공유하고 load/resolve/format 단계는 source user file을 수정하지 않는다.
 Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.

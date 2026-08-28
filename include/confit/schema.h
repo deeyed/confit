@@ -62,9 +62,10 @@ typedef struct ConfitUserValueView {
 /**
  * @brief Load an explicitly named project-root-relative user TOML document.
  *
- * R08 validates only `schema_version` and optional `[values]` structure.  R13
- * later links symbols and interprets native scalar types.  No file is searched
- * or inferred when the explicit path is absent.
+ * This structural layer validates only `schema_version` and optional
+ * `[values]` shape.  The higher-level API in `confit/config.h` links symbols
+ * and interprets native scalar types.  No file is searched or inferred when
+ * the explicit path is absent.
  */
 ConfitStatus confit_user_document_load_relative(
     ConfitHostRoot *project_root, const char *path,

@@ -20,7 +20,8 @@ CONFIT_PARSER_SOURCES= \
 
 CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 	src/schema/source_graph.c \
-	src/schema/schema.c
+	src/schema/schema.c \
+	src/schema/user_config.c
 
 CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
 	src/expression/expression.c
@@ -53,7 +54,8 @@ CONFIT_UNIT_TEST_SOURCES= \
 CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_source_graph.c \
 	tests/integration/test_schema.c \
-	tests/integration/test_types.c
+	tests/integration/test_types.c \
+	tests/integration/test_config.c
 
 CONFIT_PTY_TEST_SOURCES=
 

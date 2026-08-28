@@ -1,3 +1,4 @@
+#include "confit/config.h"
 #include "confit/diagnostic.h"
 #include "confit/digest.h"
 #include "confit/expression.h"
@@ -22,6 +23,7 @@ int main(void) {
   ConfitDependencyPlan *dependency_plan = 0;
   ConfitDependencyEvaluation *dependency_evaluation = 0;
   ConfitResolution *resolution = 0;
+  ConfitUserConfig *user_config = 0;
   ConfitUserDocument *user_document = 0;
   ConfitValue value;
   char digest[65];
@@ -36,6 +38,7 @@ int main(void) {
                  image == 0 && graph == 0 && project == 0 &&
                  dependency_plan == 0 && dependency_evaluation == 0 &&
                  resolution == 0 &&
+                 user_config == 0 &&
                  user_document == 0 &&
                  digest[0] != '\0' && CONFIT_SCHEMA_CONTRACT_VERSION == 6 &&
                  CONFIT_LIMIT_CONFIG_SYMBOLS == 16384U
