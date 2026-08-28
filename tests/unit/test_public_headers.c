@@ -1,6 +1,7 @@
 #include "confit/config.h"
 #include "confit/diagnostic.h"
 #include "confit/digest.h"
+#include "confit/emitter.h"
 #include "confit/expression.h"
 #include "confit/host.h"
 #include "confit/input.h"
@@ -23,6 +24,7 @@ int main(void) {
   ConfitSchemaProject *project = 0;
   ConfitDependencyPlan *dependency_plan = 0;
   ConfitDependencyEvaluation *dependency_evaluation = 0;
+  ConfitEmission *emission = 0;
   ConfitResolution *resolution = 0;
   ConfitUserConfig *user_config = 0;
   ConfitUserDocument *user_document = 0;
@@ -41,6 +43,7 @@ int main(void) {
                  lock.descriptor == -1 && value.kind == CONFIT_VALUE_INVALID &&
                  image == 0 && graph == 0 && project == 0 &&
                  dependency_plan == 0 && dependency_evaluation == 0 &&
+                 emission == 0 &&
                  resolution == 0 &&
                  user_config == 0 &&
                  user_document == 0 &&

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "confit/digest.h"
+#include "confit/emitter.h"
 #include "confit/input.h"
 #include "confit/limits.h"
 #include "confit/version.h"
@@ -892,18 +893,6 @@ static int confit_snapshot_buffer_unsigned(ConfitSnapshotBuffer *buffer,
   return confit_snapshot_buffer_append(buffer, forward, count);
 }
 
-static int confit_snapshot_buffer_integer(ConfitSnapshotBuffer *buffer,
-                                          int64_t value) {
-  uint64_t magnitude;
-  if (value < 0) {
-    if (!confit_snapshot_buffer_text(buffer, "-")) return 0;
-    magnitude = (uint64_t)(-(value + INT64_C(1))) + UINT64_C(1);
-  } else {
-    magnitude = (uint64_t)value;
-  }
-  return confit_snapshot_buffer_unsigned(buffer, magnitude, 10U);
-}
-
 static int confit_snapshot_json_string(ConfitSnapshotBuffer *buffer,
                                        const char *text, size_t size) {
   static const char hex[] = "0123456789abcdef";
@@ -938,91 +927,29 @@ static int confit_snapshot_json_string(ConfitSnapshotBuffer *buffer,
   return confit_snapshot_buffer_text(buffer, "\"");
 }
 
-static const char *confit_snapshot_kind_name(ConfitValueKind kind) {
-  switch (kind) {
-  case CONFIT_VALUE_BOOL: return "bool";
-  case CONFIT_VALUE_INT: return "int";
-  case CONFIT_VALUE_HEX: return "hex";
-  case CONFIT_VALUE_STRING: return "string";
-  case CONFIT_VALUE_ENUM: return "enum";
-  case CONFIT_VALUE_INVALID:
-  default: return 0;
-  }
-}
-
-static int confit_snapshot_json_value(ConfitSnapshotBuffer *buffer,
-                                      const ConfitValue *value) {
-  if (value == 0) return 0;
-  switch (value->kind) {
-  case CONFIT_VALUE_BOOL:
-    if (value->data.boolean == 0)
-      return confit_snapshot_buffer_text(buffer, "false");
-    if (value->data.boolean == 1)
-      return confit_snapshot_buffer_text(buffer, "true");
-    return 0;
-  case CONFIT_VALUE_INT:
-    return confit_snapshot_buffer_integer(buffer, value->data.integer);
-  case CONFIT_VALUE_HEX:
-    return value->data.hexadecimal <= UINT64_C(0x7fffffffffffffff) &&
-           confit_snapshot_buffer_text(buffer, "\"0x") &&
-           confit_snapshot_buffer_unsigned(buffer, value->data.hexadecimal,
-                                           16U) &&
-           confit_snapshot_buffer_text(buffer, "\"");
-  case CONFIT_VALUE_STRING:
-  case CONFIT_VALUE_ENUM:
-    return confit_snapshot_json_string(buffer, value->data.text.data,
-                                       value->data.text.size);
-  case CONFIT_VALUE_INVALID:
-  default:
-    return 0;
-  }
-}
-
 static ConfitStatus confit_snapshot_make_resolved_json(
     const ConfitResolution *resolution, ConfitSnapshotBuffer *buffer,
     ConfitDiagnostic *diagnostic) {
-  size_t index;
-  const size_t count = confit_resolution_value_count(resolution);
-  if (!confit_snapshot_buffer_text(buffer,
-                                  "{\"schema_version\":6,\"values\":["))
-    goto failed;
-  for (index = 0U; index < count; ++index) {
-    const ConfitResolvedValue *value = 0;
-    const char *kind;
-    const char *origin;
-    if (!confit_resolution_value_at(resolution, index, &value) || value == 0 ||
-        value->symbol == 0 ||
-        (kind = confit_snapshot_kind_name(value->effective_value.kind)) == 0 ||
-        value->default_value.kind != value->effective_value.kind)
-      return confit_snapshot_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
-                                  kSerializeFailed);
-    origin = value->origin == CONFIT_ORIGIN_USER ? "user" :
-             value->origin == CONFIT_ORIGIN_DEFAULT ? "default" : 0;
-    if (origin == 0) return confit_snapshot_fail(
-        diagnostic, CONFIT_ERR_INTERNAL, 0, kSerializeFailed);
-    if ((index != 0U && !confit_snapshot_buffer_text(buffer, ",")) ||
-        !confit_snapshot_buffer_text(buffer, "{\"symbol\":") ||
-        !confit_snapshot_json_string(buffer, value->symbol,
-                                     strlen(value->symbol)) ||
-        !confit_snapshot_buffer_text(buffer, ",\"type\":") ||
-        !confit_snapshot_json_string(buffer, kind, strlen(kind)) ||
-        !confit_snapshot_buffer_text(buffer, ",\"value\":") ||
-        !confit_snapshot_json_value(buffer, &value->effective_value) ||
-        !confit_snapshot_buffer_text(buffer, ",\"default\":") ||
-        !confit_snapshot_json_value(buffer, &value->default_value) ||
-        !confit_snapshot_buffer_text(buffer, ",\"origin\":") ||
-        !confit_snapshot_json_string(buffer, origin, strlen(origin)) ||
-        !confit_snapshot_buffer_text(buffer, ",\"available\":") ||
-        !confit_snapshot_buffer_text(buffer,
-                                     value->available ? "true}" : "false}"))
-      goto failed;
+  ConfitEmitRequest request;
+  ConfitEmission *emission = 0;
+  ConfitEmittedArtifactView artifact;
+  ConfitStatus status;
+  memset(&request, 0, sizeof(request));
+  request.emit_json = 1;
+  status = confit_emit(resolution, &request, &buffer->allocator, &emission,
+                       diagnostic);
+  if (status != CONFIT_OK) return status;
+  if (!confit_emission_find_artifact(emission, CONFIT_EMITTER_JSON,
+                                     &artifact) ||
+      strcmp(artifact.role, "resolved-values") != 0 ||
+      strcmp(artifact.name, "resolved-values.json") != 0 ||
+      !confit_snapshot_buffer_append(buffer, artifact.bytes, artifact.size)) {
+    confit_emission_destroy(emission);
+    return confit_snapshot_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                kSerializeFailed);
   }
-  if (!confit_snapshot_buffer_text(buffer, "]}\n")) goto failed;
+  confit_emission_destroy(emission);
   return CONFIT_OK;
-
-failed:
-  return confit_snapshot_fail(diagnostic, CONFIT_ERR_VALIDATION, 0,
-                              kTooLarge);
 }
 
 static int confit_snapshot_artifact_name_is_valid(const char *name) {
