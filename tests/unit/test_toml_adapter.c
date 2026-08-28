@@ -126,6 +126,11 @@ int main(void) {
   root = confit_toml_document_root(document);
   if (confit_toml_value_type(root) != CONFIT_TOML_VALUE_TABLE ||
       confit_toml_table_size(root) != 9U ||
+      confit_toml_table_key_at(root, 0U) == 0 ||
+      confit_toml_table_key_size_at(root, 0U) != strlen("title") ||
+      memcmp(confit_toml_table_key_at(root, 0U), "title", strlen("title")) !=
+          0 ||
+      confit_toml_table_key_size_at(root, 9U) != 0U ||
       confit_toml_document_source_size(document) == 0U ||
       confit_toml_document_source_text(document) == 0 ||
       !expect_scalar_values(root) || !expect_composite_values(root) ||

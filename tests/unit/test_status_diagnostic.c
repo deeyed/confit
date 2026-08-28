@@ -6,6 +6,7 @@
 
 int main(void) {
   ConfitDiagnostic diagnostic;
+  char transient_path[] = "config/transient.toml";
 
   if (!confit_status_is_ok(CONFIT_OK)) {
     return 1;
@@ -48,6 +49,19 @@ int main(void) {
   }
   if (strcmp(diagnostic.message, "invalid project name") != 0) {
     return 10;
+  }
+
+  confit_diagnostic_set(&diagnostic, CONFIT_ERR_VALIDATION, transient_path,
+                        11U, 5U, "borrowed path");
+  if (!confit_diagnostic_stabilize_path(&diagnostic) ||
+      diagnostic.path != diagnostic.stable_path ||
+      strcmp(diagnostic.path, "config/transient.toml") != 0) {
+    return 14;
+  }
+  transient_path[7] = 'X';
+  if (strcmp(diagnostic.path, "config/transient.toml") != 0 ||
+      !confit_diagnostic_stabilize_path(&diagnostic)) {
+    return 15;
   }
 
   confit_diagnostic_clear(&diagnostic);

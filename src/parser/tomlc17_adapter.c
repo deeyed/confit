@@ -431,6 +431,16 @@ const char *confit_toml_table_key_at(const ConfitTomlValue *table,
   return datum->u.tab.key[index];
 }
 
+size_t confit_toml_table_key_size_at(const ConfitTomlValue *table,
+                                     size_t index) {
+  const toml_datum_t *datum = confit_toml_as_datum(table);
+  if (datum == 0 || datum->type != TOML_TABLE || datum->u.tab.size < 0 ||
+      index >= (size_t)datum->u.tab.size || datum->u.tab.len[index] < 0) {
+    return 0U;
+  }
+  return (size_t)datum->u.tab.len[index];
+}
+
 const ConfitTomlValue *
 confit_toml_table_value_at(const ConfitTomlValue *table, size_t index) {
   const toml_datum_t *datum = confit_toml_as_datum(table);
@@ -453,7 +463,10 @@ confit_toml_table_find(const ConfitTomlValue *table, const char *key) {
   size = confit_toml_table_size(table);
   for (index = 0U; index < size; ++index) {
     const char *candidate = confit_toml_table_key_at(table, index);
-    if (candidate != 0 && strcmp(candidate, key) == 0) {
+    const size_t candidate_size = confit_toml_table_key_size_at(table, index);
+    const size_t key_size = strlen(key);
+    if (candidate != 0 && candidate_size == key_size &&
+        memcmp(candidate, key, key_size) == 0) {
       return confit_toml_table_value_at(table, index);
     }
   }

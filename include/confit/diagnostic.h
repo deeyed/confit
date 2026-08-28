@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 
+#include "confit/limits.h"
 #include "confit/status.h"
 
 #ifdef __cplusplus
@@ -60,6 +61,8 @@ typedef struct ConfitDiagnostic {
   /** 자동 적용하지 않는 수정 후보 목록이다. */
   const ConfitDiagnosticFixCandidate *fix_candidates;
   size_t fix_candidate_count;
+  /** Optional stable copy used when the source owner is about to be released. */
+  char stable_path[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
 } ConfitDiagnostic;
 
 /**
@@ -106,6 +109,16 @@ void confit_diagnostic_set_detail(
  * @return 실패 status가 기록되어 있으면 1, 아니면 0.
  */
 int confit_diagnostic_has_error(const ConfitDiagnostic *diagnostic);
+
+/**
+ * @brief Copy the current relative path into diagnostic-owned storage.
+ *
+ * This is used by transactional loaders before destroying a failed input
+ * graph.  It does not normalize, open, or otherwise interpret the path.
+ * A null path is already stable.  Paths beyond the public source-path limit
+ * are rejected and the existing borrowed pointer is left unchanged.
+ */
+int confit_diagnostic_stabilize_path(ConfitDiagnostic *diagnostic);
 
 #ifdef __cplusplus
 }

@@ -453,12 +453,8 @@ ConfitStatus confit_source_graph_load_observed(
                                    CONFIT_INDEX_NONE, 0U, 0U, 1, ledger,
                                    diagnostic);
   if (status != CONFIT_OK) {
+    (void)confit_diagnostic_stabilize_path(diagnostic);
     confit_source_graph_destroy(graph);
-    if (diagnostic != 0) {
-      diagnostic->path = entry_path;
-      diagnostic->line = 0U;
-      diagnostic->column = 0U;
-    }
     return status;
   }
   *out_graph = graph;

@@ -109,6 +109,10 @@ size_t confit_toml_table_size(const ConfitTomlValue *table);
 const char *confit_toml_table_key_at(const ConfitTomlValue *table,
                                          size_t index);
 
+/** @brief table entry key의 decoded byte 길이를 반환한다. */
+size_t confit_toml_table_key_size_at(const ConfitTomlValue *table,
+                                     size_t index);
+
 /** @brief table entry value를 index 순서대로 반환한다. */
 const ConfitTomlValue *
 confit_toml_table_value_at(const ConfitTomlValue *table, size_t index);
