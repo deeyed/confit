@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "confit/diagnostic.h"
+#include "confit/expression.h"
 #include "confit/host.h"
 #include "confit/model.h"
 #include "confit/source.h"
@@ -39,6 +40,8 @@ const ConfitSourceGraph *
 confit_schema_project_source_graph(const ConfitSchemaProject *project);
 const ConfitCatalog *
 confit_schema_project_catalog(const ConfitSchemaProject *project);
+const ConfitDependencyPlan *
+confit_schema_project_dependency_plan(const ConfitSchemaProject *project);
 size_t confit_schema_project_config_count(const ConfitSchemaProject *project);
 int confit_schema_project_config_at(const ConfitSchemaProject *project,
                                     size_t index,

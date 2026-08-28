@@ -138,6 +138,7 @@ static void test_valid_project_and_user(const char *root_path,
   ConfitUserValueView value;
   ConfitMenuView menu;
   const ConfitCatalog *catalog;
+  const ConfitDependencyPlan *dependency_plan;
   char user_path[] = "valid/user.toml";
 
   make_directory(root_path, "valid");
@@ -152,7 +153,12 @@ static void test_valid_project_and_user(const char *root_path,
                          &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(project != 0);
   catalog = confit_schema_project_catalog(project);
+  dependency_plan = confit_schema_project_dependency_plan(project);
   CONFIT_TEST_ASSERT(catalog != 0);
+  CONFIT_TEST_ASSERT(dependency_plan != 0 &&
+                     confit_dependency_plan_config_count(dependency_plan) ==
+                         3U &&
+                     confit_dependency_plan_edge_count(dependency_plan) == 1U);
   CONFIT_TEST_ASSERT(strcmp(confit_catalog_mainmenu(catalog),
                             "Example configuration") == 0);
   CONFIT_TEST_ASSERT(confit_catalog_fragment_count(catalog) == 4U);
@@ -382,6 +388,20 @@ static void test_config_fields_and_legacy(const char *root_path,
   expect_project_failure(root, "fields/root.toml",
                          "config depends_on must be a bounded string",
                          "fields/leaf.toml", 6U, 14U);
+  write_config_fragment(root_path, "fields/leaf.toml", "depends_on = \"\"\n");
+  expect_project_failure(root, "fields/root.toml",
+                         "config depends_on must be a bounded string",
+                         "fields/leaf.toml", 6U, 15U);
+  write_config_fragment(root_path, "fields/leaf.toml",
+                        "depends_on = \"UNKNOWN_SYMBOL\"\n");
+  expect_project_failure(root, "fields/root.toml",
+                         "dependency expression references an unknown symbol",
+                         "fields/leaf.toml", 1U, 3U);
+  write_config_fragment(root_path, "fields/leaf.toml",
+                        "depends_on = \"VALID_SYMBOL\"\n");
+  expect_project_failure(root, "fields/root.toml",
+                         "dependency expression graph contains a cycle",
+                         "fields/leaf.toml", 1U, 3U);
 }
 
 static void test_duplicate_depth_and_control(const char *root_path,

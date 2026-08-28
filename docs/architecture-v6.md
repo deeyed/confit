@@ -122,8 +122,12 @@ It does not evaluate dependencies, select sources for a build, or publish data.
 ### 2.6 Expression and resolver layers
 
 The expression layer implements only the grammar in `config-v6.md`. It lexes,
-parses, type-checks, links symbol references, extracts dependency edges, rejects
-cycles, and evaluates availability without mutation.
+parses, type-checks, links every symbol reference before evaluation, extracts
+unique availability edges, rejects cycles, constructs a symbol-stable
+prerequisite-first order, and evaluates availability without mutation. Logical
+evaluation short-circuits, but linking never does, so an invalid reference in a
+non-evaluated branch is still an error. `docs/expression-v6.md` records the R11
+ownership and evidence boundary.
 
 The resolver applies one declaration default and at most one explicit user value
 per symbol. It produces an immutable successful result or no publishable result.

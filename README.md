@@ -17,6 +17,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 explicit source graph](docs/source-v6.md)
 - [Schema 6 minimal structural loader](docs/schema-v6.md)
 - [Schema 6 typed declaration semantics](docs/types-v6.md)
+- [Schema 6 bounded dependency expressions](docs/expression-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -33,12 +34,14 @@ default, numeric range, enum domain과 field applicability를 검증하여 gener
 소유시키고, hex token의 lexical identity를 같은 input byte image에서 보존한다.
 R10 강감사에서 vendored TOML file-parser capability를 compile out하고 schema 전용 hex
 lexeme helper를 internal ownership-checked seam으로 축소했다. 현재 binary는 여전히 `help`와
-`--version`만 성공하는 development skeleton이다.
+`--version`만 성공하는 development skeleton이다. R11은 동결된 `depends_on` grammar의
+bounded lexer/parser, 전 reference link와 type/domain 검사, cycle rejection, stable
+prerequisite order, read-only short-circuit evaluator와 reason tree를 추가했다.
 Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 dependency/resolver, snapshot writer 또는 TUI가 이미 구현됨
+- schema 6 resolver, snapshot writer 또는 TUI가 이미 구현됨
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨

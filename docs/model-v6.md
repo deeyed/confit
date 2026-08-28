@@ -149,7 +149,7 @@ A declaration stores:
   the default;
 - an enum domain with no duplicate atoms and a member default;
 - optional owned dependency text that is bounded, free of layout/control bytes,
-  and not parsed or evaluated in R04;
+  and compiled only by the separate R11 dependency layer;
 - fragment/menu indexes and an owned declaration span.
 
 Symbols use `[A-Z][A-Z0-9_]{0,127}` and are unique in the catalog.  Model-level
@@ -161,7 +161,20 @@ No declaration contains an ownership label, maturity label, placement,
 configuration precedence, compilation input, command, or project-specific
 metadata.
 
-## 6. Assignment, resolved value, and causal reason
+## 6. Dependency plan and evaluation
+
+`ConfitDependencyPlan` borrows a completed catalog and owns only bounded ASTs,
+linked configuration indexes, unique availability edges, and a stable
+prerequisite-first order. It performs no I/O and does not own values. The schema
+project destroys this plan before destroying its catalog.
+
+`ConfitDependencyEvaluation` borrows its plan and owns a bounded reason array.
+The evaluator accepts a read-only typed value array aligned with catalog indexes;
+wrong length or kind fails before evaluation. Reason views borrow symbol text from
+the catalog and remain valid only until evaluation destroy. See
+`docs/expression-v6.md` for the closed grammar and short-circuit semantics.
+
+## 7. Assignment, resolved value, and causal reason
 
 `ConfitAssignment` owns exactly one symbol and one typed value.  It represents
 explicit user intent only; it has no priority, ordering, inherited source, or
@@ -172,14 +185,15 @@ origin (`CONFIT_ORIGIN_DEFAULT` or `CONFIT_ORIGIN_USER`), normalized availabilit
 and an optional reason index.  The record constructor requires default and
 effective kinds to match.  It does not calculate either value.
 
-`ConfitReasonNode` is a bounded data shape for a later expression layer.  A node
+`ConfitReasonNode` is a bounded owned data shape for later resolved results. A node
 may own subject/related symbols, bounded detail text, and at most two child
 indexes.  Its kinds can describe literal, reference, boolean composition,
-comparison, and unavailable outcomes, but R04 supplies no lexer, parser, linker,
-cycle detector, or evaluator.  A reason is diagnostic configuration causality,
+comparison, and unavailable outcomes. R11 evaluation exposes the same causal
+kinds through an evaluation-owned borrowed view; R12 may copy selected causes
+into resolved-result ownership. A reason is diagnostic configuration causality,
 not a task graph or execution plan.
 
-## 7. Lifecycle evidence and non-claims
+## 8. Lifecycle evidence and non-claims
 
 R04 unit tests cover all five value kinds, minimum/maximum values, UTF-8 and
 control rejection, symbol and enum domains, value copy/compare/format, catalog
@@ -188,7 +202,8 @@ assignment/resolved/reason ownership, reset/destroy, and injected allocation
 failure at each catalog-add allocation point.
 
 This evidence establishes pure in-memory model behavior for the executed corpus.
-It does not establish TOML schema acceptance, source-graph reachability,
+It does not by itself establish TOML schema acceptance, source-graph reachability,
 dependency semantics, configuration resolution, safe host I/O, immutable
-publication, generated artifact safety, or interactive behavior.  The public C
+publication, generated artifact safety, or interactive behavior. Later round
+documents own evidence for the first implemented layers. The public C
 layout is still a development API and is not declared to be a stable 1.0 ABI.

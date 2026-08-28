@@ -10,6 +10,7 @@ struct ConfitSchemaProject {
   ConfitAllocator allocator;
   ConfitSourceGraph *source_graph;
   ConfitCatalog *catalog;
+  ConfitDependencyPlan *dependency_plan;
 };
 
 typedef struct ConfitUserValueRecord {
@@ -744,7 +745,7 @@ static ConfitStatus confit_schema_add_config(
   dependency = confit_toml_table_find(table, "depends_on");
   if (status == CONFIT_OK && dependency != 0)
     status = confit_schema_copy_string(
-        dependency, CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 1, 0,
+        dependency, CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 0, 0,
         &project->allocator, &dependency_text, diagnostic, path,
         kInvalidDependencyShape);
   if (status == CONFIT_OK)
@@ -862,6 +863,7 @@ void confit_schema_project_destroy(ConfitSchemaProject *project) {
   ConfitAllocator allocator;
   if (project == 0) return;
   allocator = project->allocator;
+  confit_dependency_plan_destroy(project->dependency_plan);
   confit_catalog_destroy(project->catalog);
   confit_source_graph_destroy(project->source_graph);
   memset(project, 0, sizeof(*project));
@@ -945,6 +947,10 @@ ConfitStatus confit_schema_project_load(
     status = confit_schema_parse_fragment(project, index, &node, parent_menu,
                                           &attachment[index], diagnostic);
   }
+  if (status == CONFIT_OK)
+    status = confit_dependency_plan_create(project->catalog, &resolved,
+                                           &project->dependency_plan,
+                                           diagnostic);
   if (attachment != 0) resolved.deallocate(resolved.context, attachment);
   if (status != CONFIT_OK) {
     (void)confit_diagnostic_stabilize_path(diagnostic);
@@ -963,6 +969,11 @@ confit_schema_project_source_graph(const ConfitSchemaProject *project) {
 const ConfitCatalog *
 confit_schema_project_catalog(const ConfitSchemaProject *project) {
   return project != 0 ? project->catalog : 0;
+}
+
+const ConfitDependencyPlan *
+confit_schema_project_dependency_plan(const ConfitSchemaProject *project) {
+  return project != 0 ? project->dependency_plan : 0;
 }
 
 size_t confit_schema_project_config_count(const ConfitSchemaProject *project) {

@@ -22,7 +22,8 @@ CONFIT_MODEL_AND_SCHEMA_SOURCES= \
 	src/schema/source_graph.c \
 	src/schema/schema.c
 
-CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES=
+CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
+	src/expression/expression.c
 
 CONFIT_RESOLVER_SOURCES=
 
@@ -42,6 +43,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_host.c \
 	tests/unit/test_input_image.c \
 	tests/unit/test_model.c \
+	tests/unit/test_expression.c \
 	tests/unit/test_toml_adapter.c \
 	tests/unit/test_cli_skeleton.c \
 	tests/unit/test_public_headers.c
@@ -54,6 +56,7 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 CONFIT_PTY_TEST_SOURCES=
 
 CONFIT_FUZZ_TEST_SOURCES= \
-	tests/fuzz/test_toml_fuzz.c
+	tests/fuzz/test_toml_fuzz.c \
+	tests/fuzz/test_expression_fuzz.c
 
 .endif

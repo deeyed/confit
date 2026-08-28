@@ -1,5 +1,6 @@
 #include "confit/diagnostic.h"
 #include "confit/digest.h"
+#include "confit/expression.h"
 #include "confit/host.h"
 #include "confit/input.h"
 #include "confit/limits.h"
@@ -17,6 +18,8 @@ int main(void) {
   ConfitInputImage *image = 0;
   ConfitSourceGraph *graph = 0;
   ConfitSchemaProject *project = 0;
+  ConfitDependencyPlan *dependency_plan = 0;
+  ConfitDependencyEvaluation *dependency_evaluation = 0;
   ConfitUserDocument *user_document = 0;
   ConfitValue value;
   char digest[65];
@@ -29,6 +32,7 @@ int main(void) {
   return diagnostic.status == CONFIT_OK && buffer.bytes == 0 &&
                  lock.descriptor == -1 && value.kind == CONFIT_VALUE_INVALID &&
                  image == 0 && graph == 0 && project == 0 &&
+                 dependency_plan == 0 && dependency_evaluation == 0 &&
                  user_document == 0 &&
                  digest[0] != '\0' && CONFIT_SCHEMA_CONTRACT_VERSION == 6 &&
                  CONFIT_LIMIT_CONFIG_SYMBOLS == 16384U
