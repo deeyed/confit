@@ -102,6 +102,8 @@ int main(void) {
       "format_revision = 2\r\n";
   static const char invalid_utf8[] = {'n', 'a', 'm', 'e', ' ', '=', ' ',
                                       '\"', (char)0xFF, '\"', '\n'};
+  static const char embedded_nul[] = {'a', ' ', '=', ' ', '1', '\n',
+                                      'b', ' ', '=', ' ', 0, '2', '\n'};
   ConfitDiagnostic diagnostic;
   ConfitTomlDocument *document;
   const ConfitTomlValue *root;
@@ -181,6 +183,18 @@ int main(void) {
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "TOML source is not valid UTF-8") != 0) {
     return 8;
+  }
+
+  document = 0;
+  confit_diagnostic_clear(&diagnostic);
+  if (confit_toml_parse_text("embedded-nul", embedded_nul,
+                             sizeof(embedded_nul), &document,
+                             &diagnostic) != CONFIT_ERR_VALIDATION ||
+      document != 0 || diagnostic.line != 2U || diagnostic.column != 5U ||
+      diagnostic.message == 0 ||
+      strcmp(diagnostic.message,
+             "TOML source contains an embedded NUL byte") != 0) {
+    return 9;
   }
 
   return 0;

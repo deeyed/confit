@@ -35,8 +35,10 @@ typedef struct ConfitTomlValue ConfitTomlValue;
 /**
  * @brief memory source를 TOML document로 parse한다.
  *
- * adapter는 UTF-8을 검사하고 source text를 복사한다. `source_name`은 parsed value의
- * source span과 diagnostic path에만 사용하며, `NULL`을 허용한다.
+ * adapter는 public one-file limit, embedded NUL, UTF-8과 TOML syntax를 검사하고
+ * source text를 복사한다. `source_name`은 parsed value의 source span과 diagnostic
+ * path에만 사용하며, `NULL`을 허용한다. Product file loading은
+ * `confit_input_load_toml`을 사용해 one-image ownership을 유지한다.
  *
  * @param source_name source span에 기록할 이름. 없으면 NULL.
  * @param text NUL 종료가 아니어도 되는 TOML source byte.

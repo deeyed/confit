@@ -5,16 +5,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "confit/limits.h"
+#include "toml_internal.h"
 #include "tomlc17.h"
 
 struct ConfitTomlDocument {
-  char *source_text;
+  const char *source_text;
+  char *owned_source_text;
   size_t source_size;
   toml_result_t result;
 };
 
 static const char kConfitTomlInvalidArgument[] = "invalid TOML argument";
 static const char kConfitTomlInvalidUtf8[] = "TOML source is not valid UTF-8";
+static const char kConfitTomlEmbeddedNul[] =
+    "TOML source contains an embedded NUL byte";
 static const char kConfitTomlParseFailed[] = "tomlc17 rejected TOML input";
 static const char kConfitTomlOutOfMemory[] = "failed to allocate TOML document";
 static const char kConfitTomlTooLarge[] = "TOML source exceeds parser size limit";
@@ -41,6 +46,31 @@ static char *confit_toml_copy_text(const char *text, size_t text_size) {
   }
   copy[text_size] = '\0';
   return copy;
+}
+
+static int confit_toml_find_nul(const char *text, size_t text_size,
+                                size_t *out_line, size_t *out_column) {
+  size_t index;
+  size_t line = 1U;
+  size_t column = 1U;
+  for (index = 0U; index < text_size; ++index) {
+    if (text[index] == '\0') {
+      if (out_line != 0) {
+        *out_line = line;
+      }
+      if (out_column != 0) {
+        *out_column = column;
+      }
+      return 1;
+    }
+    if (text[index] == '\n') {
+      line += 1U;
+      column = 1U;
+    } else {
+      column += 1U;
+    }
+  }
+  return 0;
 }
 
 static int confit_toml_utf8_continuation(unsigned char byte) {
@@ -188,47 +218,50 @@ confit_toml_map_type(toml_type_t type) {
   }
 }
 
-ConfitStatus confit_toml_parse_text(const char *source_name,
-                                       const char *text, size_t text_size,
-                                       ConfitTomlDocument **out_document,
-                                       ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_toml_parse_prepared(
+    const char *source_name, const char *text, size_t text_size,
+    char *owned_text, ConfitTomlDocument **out_document,
+    ConfitDiagnostic *diagnostic) {
   ConfitTomlDocument *document;
-  char *owned_text;
   size_t column;
   size_t line;
   toml_result_t result;
 
   if (out_document == 0 || text == 0) {
+    free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, source_name,
                           0U, 0U, kConfitTomlInvalidArgument);
     return CONFIT_ERR_USAGE;
   }
   *out_document = 0;
-  if (text_size > (size_t)INT_MAX) {
+  if (text_size > CONFIT_LIMIT_TOML_FILE_BYTES ||
+      text_size > (size_t)INT_MAX) {
+    free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, 0U, 0U,
                           kConfitTomlTooLarge);
+    return CONFIT_ERR_VALIDATION;
+  }
+
+  if (confit_toml_find_nul(text, text_size, &line, &column)) {
+    free(owned_text);
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, line,
+                          column, kConfitTomlEmbeddedNul);
     return CONFIT_ERR_VALIDATION;
   }
 
   line = 0U;
   column = 0U;
   if (!confit_toml_validate_utf8(text, text_size, &line, &column)) {
+    free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, line,
                           column, kConfitTomlInvalidUtf8);
     return CONFIT_ERR_VALIDATION;
   }
 
-  owned_text = confit_toml_copy_text(text, text_size);
-  if (owned_text == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source_name, 0U,
-                          0U, kConfitTomlOutOfMemory);
-    return CONFIT_ERR_INTERNAL;
-  }
-
-  result = toml_parse_named(owned_text, (int)text_size, source_name);
+  result = toml_parse_named(text, (int)text_size, source_name);
   if (!result.ok) {
     line = confit_toml_error_line(result.errmsg);
-    column = confit_toml_error_column(owned_text, text_size, line);
+    column = confit_toml_error_column(text, text_size, line);
     toml_free(result);
     free(owned_text);
     confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, line, column,
@@ -245,11 +278,46 @@ ConfitStatus confit_toml_parse_text(const char *source_name,
     return CONFIT_ERR_INTERNAL;
   }
 
-  document->source_text = owned_text;
+  document->source_text = text;
+  document->owned_source_text = owned_text;
   document->source_size = text_size;
   document->result = result;
   *out_document = document;
   return CONFIT_OK;
+}
+
+ConfitStatus confit_toml_parse_text(const char *source_name,
+                                    const char *text, size_t text_size,
+                                    ConfitTomlDocument **out_document,
+                                    ConfitDiagnostic *diagnostic) {
+  char *owned_text;
+  if (out_document == 0 || text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, source_name, 0U, 0U,
+                          kConfitTomlInvalidArgument);
+    return CONFIT_ERR_USAGE;
+  }
+  *out_document = 0;
+  if (text_size > CONFIT_LIMIT_TOML_FILE_BYTES ||
+      text_size > (size_t)INT_MAX) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, 0U,
+                          0U, kConfitTomlTooLarge);
+    return CONFIT_ERR_VALIDATION;
+  }
+  owned_text = confit_toml_copy_text(text, text_size);
+  if (owned_text == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, source_name, 0U, 0U,
+                          kConfitTomlOutOfMemory);
+    return CONFIT_ERR_INTERNAL;
+  }
+  return confit_toml_parse_prepared(source_name, owned_text, text_size,
+                                    owned_text, out_document, diagnostic);
+}
+
+ConfitStatus confit_toml_parse_borrowed(
+    const char *source_name, const char *text, size_t text_size,
+    ConfitTomlDocument **out_document, ConfitDiagnostic *diagnostic) {
+  return confit_toml_parse_prepared(source_name, text, text_size, 0,
+                                    out_document, diagnostic);
 }
 
 void confit_toml_document_free(ConfitTomlDocument *document) {
@@ -257,7 +325,7 @@ void confit_toml_document_free(ConfitTomlDocument *document) {
     return;
   }
   toml_free(document->result);
-  free(document->source_text);
+  free(document->owned_source_text);
   free(document);
 }
 

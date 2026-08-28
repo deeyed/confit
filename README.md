@@ -13,6 +13,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 bootstrap contract](docs/bootstrap-v6.md)
 - [Schema 6 generic core model](docs/model-v6.md)
 - [Schema 6 descriptor-rooted host I/O](docs/host-v6.md)
+- [Schema 6 exact input-image ownership](docs/input-v6.md)
 
 ## 현재 구현 상태
 
@@ -20,8 +21,9 @@ Schema 6는 22개 검증 라운드로 구현한다. R01은 위 계약을 고정�
 기준점의 schema 5 parser, workflow, generator와 consumer-specific host capability를
 제거했다. R03은 explicit clang+bmake bootstrap을 닫았고 R04는 public limits와 pure
 in-memory generic model을 구현했다. R05는 descriptor-rooted bounded POSIX host I/O primitive를
-추가했다. 현재 binary는 여전히 `help`와 `--version`만 성공하는 development skeleton이다.
-Configuration command는 아직 project 입력을 열지 않고 usage error로 종료한다.
+추가했고 R06은 한 번 읽은 byte image의 TOML parse, SHA-256, file identity, line index ownership을
+결속했다. 현재 binary는 여전히 `help`와 `--version`만 성공하는 development skeleton이다.
+Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 

@@ -72,6 +72,8 @@ int main(void) {
       "#\\/ \t\r\n";
   static const char invalid_utf8[] = {'k', ' ', '=', ' ', '=', ' ',
                                       (char)0xc3, '\0'};
+  static const char embedded_nul[] = {'k', ' ', '=', ' ', '1', '\n',
+                                      0, 'x', '\n'};
   uint32_t state = 0xC0FFEEU;
   size_t index;
 
@@ -79,7 +81,9 @@ int main(void) {
       !parse_seed_file("valid-nested.toml") ||
       !parse_seed_file("invalid-unclosed.toml") ||
       !parse_one("toml-invalid-utf8", invalid_utf8,
-                 sizeof(invalid_utf8) - 1U)) {
+                 sizeof(invalid_utf8) - 1U) ||
+      !parse_one("toml-embedded-nul", embedded_nul,
+                 sizeof(embedded_nul))) {
     return 2;
   }
   for (index = 0U; index < 2048U; ++index) {
