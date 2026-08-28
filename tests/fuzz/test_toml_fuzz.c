@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "confit/diagnostic.h"
-#include "confit/host.h"
 #include "confit/toml.h"
 #include "confit/status.h"
 
@@ -36,7 +35,8 @@ static int parse_one(const char *source_name, const char *text, size_t size) {
       return 0;
     }
   } else if (document != 0 ||
-             (status != CONFIT_ERR_PARSE && status != CONFIT_ERR_INTERNAL)) {
+             (status != CONFIT_ERR_VALIDATION &&
+              status != CONFIT_ERR_INTERNAL)) {
     confit_toml_document_free(document);
     return 0;
   }
@@ -49,15 +49,11 @@ static int parse_seed_file(const char *name) {
   char path[1024];
   char *text;
   size_t size;
-  ConfitDiagnostic diagnostic;
   int result;
 
-  confit_diagnostic_init(&diagnostic);
-  if (confit_host_path_join(corpus, sizeof(corpus), CONFIT_TEST_SOURCE_DIR,
-                            "tests/fuzz/corpus/toml", &diagnostic) !=
-          CONFIT_OK ||
-      confit_host_path_join(path, sizeof(path), corpus, name, &diagnostic) !=
-          CONFIT_OK) {
+  if (!confit_test_fs_path_join(corpus, sizeof(corpus), CONFIT_TEST_SOURCE_DIR,
+                                "tests/fuzz/corpus/toml") ||
+      !confit_test_fs_path_join(path, sizeof(path), corpus, name)) {
     return 0;
   }
   text = confit_test_fs_read_file(path);

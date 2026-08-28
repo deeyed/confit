@@ -13,15 +13,15 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 
 ## 현재 구현 상태
 
-Schema 6는 22개 검증 라운드로 구현한다. R01은 위 계약만 고정한다. 이 시점의 source
-tree에는 분기 기준점에서 상속한 schema 5 구현이 아직 남아 있으므로, 현재 binary의
-동작을 schema 6 구현 증거로 사용해서는 안 된다. 이후 hard-cut 라운드는 schema 5
-parser와 workflow를 제거하며 dual-schema compatibility mode를 만들지 않는다.
+Schema 6는 22개 검증 라운드로 구현한다. R01은 위 계약을 고정했고 R02는 분기
+기준점의 schema 5 parser, workflow, generator와 consumer-specific host capability를
+제거했다. 현재 binary는 `help`와 `--version`만 성공하는 development skeleton이다.
+Configuration command는 어떤 project 입력도 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
 - schema 6 parser, resolver, snapshot writer 또는 TUI가 이미 구현됨
-- 기존 schema 5 configuration이 이 브랜치에서 호환됨
+- 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨
 

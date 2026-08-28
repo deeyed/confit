@@ -22,14 +22,14 @@ check-host: check-cli ${CONFIT_DIRECT_TEST_TARGETS}
 
 check-cli: confit
 	@${CONFIT_BINARY} --version
-	@${CONFIT_BINARY} doctor
+	@${CONFIT_BINARY} help
 
 clean:
 	@/bin/rm -f -- ${CONFIT_GENERATED_FILES}
 
 .if ${.TARGETS:Mhelp} != ""
 .info Confit host build (direct bmake)
-.info bmake CONFIT_OBJROOT=/absolute/output CONFIT_BMAKE_TOOL=/absolute/bmake all | check-host
+.info bmake CONFIT_OBJROOT=/absolute/output all | check-host
 .info CONFIT_HOST_CC is the absolute host compiler.
 .endif
 help:

@@ -1,26 +1,13 @@
 .if !defined(_CONFIT_HOST_MK_)
 _CONFIT_HOST_MK_=1
 
-.if defined(CONFIT_ADMISSION_TOOL) || defined(CONFIT_ADMISSION_ROOT) || \
-    defined(CONFIT_ADMISSION_FD)
-.if !defined(CONFIT_ADMISSION_TOOL) || ${CONFIT_ADMISSION_TOOL:M/*} == "" || \
-    !defined(CONFIT_ADMISSION_ROOT) || ${CONFIT_ADMISSION_ROOT:M/*} == "" || \
-    !defined(CONFIT_ADMISSION_FD) || empty(CONFIT_ADMISSION_FD:M[0-9]*) || \
-    ${CONFIT_OBJROOT:M${CONFIT_ADMISSION_ROOT}/*} == ""
-.error Confit admission variables must describe one inherited output root
-.endif
-_CONFIT_PREPARE_DIRECTORY= ${CONFIT_ADMISSION_TOOL} mkdir \
-    ${CONFIT_ADMISSION_ROOT} ${CONFIT_ADMISSION_FD} \
-    ${.TARGET:H:S,${CONFIT_ADMISSION_ROOT}/,,}
-.else
-# Confit를 독립 저장소로 빌드할 때의 explicit stage-0 TCB다. Parus production은
-# 위 descriptor-rooted admission branch만 사용하며 PATH fallback은 없다.
+# R03가 clang+bmake bootstrap contract를 다시 닫기 전까지 사용하는 standalone
+# development skeleton directory creator다. Product binary의 runtime capability가 아니다.
 CONFIT_STAGE0_MKDIR?=/bin/mkdir
 .if ${CONFIT_STAGE0_MKDIR:M/*} == "" || !exists(${CONFIT_STAGE0_MKDIR})
 .error standalone Confit requires one existing absolute directory creator
 .endif
 _CONFIT_PREPARE_DIRECTORY= ${CONFIT_STAGE0_MKDIR} -p -- ${.TARGET:H}
-.endif
 
 CONFIT_BIN_ROOT=${CONFIT_OBJROOT}/bin
 CONFIT_OBJ_ROOT=${CONFIT_OBJROOT}/obj
@@ -136,8 +123,8 @@ CONFIT_DIRECT_TEST_TARGETS=
 CONFIT_DIRECT_TEST_TARGETS+=run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
-.if ${_test_binary:T} == "confit_test_host_boundary"
-	@${_test_binary} ${CONFIT_BINARY} ${CONFIT_BMAKE_TOOL:tA} ${CONFIT_HOST_CC:tA}
+.if ${_test_binary:T} == "confit_test_cli_skeleton"
+	@${_test_binary} ${CONFIT_BINARY}
 .else
 	@${_test_binary}
 .endif

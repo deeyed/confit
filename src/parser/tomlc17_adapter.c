@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "confit/host.h"
 #include "tomlc17.h"
 
 struct ConfitTomlDocument {
@@ -200,23 +199,23 @@ ConfitStatus confit_toml_parse_text(const char *source_name,
   toml_result_t result;
 
   if (out_document == 0 || text == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, source_name,
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_USAGE, source_name,
                           0U, 0U, kConfitTomlInvalidArgument);
-    return CONFIT_ERR_INVALID_ARGUMENT;
+    return CONFIT_ERR_USAGE;
   }
   *out_document = 0;
   if (text_size > (size_t)INT_MAX) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, 0U, 0U,
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, 0U, 0U,
                           kConfitTomlTooLarge);
-    return CONFIT_ERR_PARSE;
+    return CONFIT_ERR_VALIDATION;
   }
 
   line = 0U;
   column = 0U;
   if (!confit_toml_validate_utf8(text, text_size, &line, &column)) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line,
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, line,
                           column, kConfitTomlInvalidUtf8);
-    return CONFIT_ERR_PARSE;
+    return CONFIT_ERR_VALIDATION;
   }
 
   owned_text = confit_toml_copy_text(text, text_size);
@@ -232,9 +231,9 @@ ConfitStatus confit_toml_parse_text(const char *source_name,
     column = confit_toml_error_column(owned_text, text_size, line);
     toml_free(result);
     free(owned_text);
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_PARSE, source_name, line, column,
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, source_name, line, column,
                           kConfitTomlParseFailed);
-    return CONFIT_ERR_PARSE;
+    return CONFIT_ERR_VALIDATION;
   }
 
   document = (ConfitTomlDocument *)calloc(1U, sizeof(*document));
@@ -251,31 +250,6 @@ ConfitStatus confit_toml_parse_text(const char *source_name,
   document->result = result;
   *out_document = document;
   return CONFIT_OK;
-}
-
-ConfitStatus confit_toml_parse_file(const char *path,
-                                       ConfitTomlDocument **out_document,
-                                       ConfitDiagnostic *diagnostic) {
-  ConfitStatus status;
-  char *text;
-  size_t text_size;
-
-  if (out_document == 0 || path == 0) {
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_INVALID_ARGUMENT, path, 0U,
-                          0U, kConfitTomlInvalidArgument);
-    return CONFIT_ERR_INVALID_ARGUMENT;
-  }
-  *out_document = 0;
-  text = 0;
-  text_size = 0U;
-  status = confit_host_read_text_file(path, &text, &text_size, diagnostic);
-  if (status != CONFIT_OK) {
-    return status;
-  }
-  status = confit_toml_parse_text(path, text, text_size, out_document,
-                                      diagnostic);
-  confit_host_free(text);
-  return status;
 }
 
 void confit_toml_document_free(ConfitTomlDocument *document) {

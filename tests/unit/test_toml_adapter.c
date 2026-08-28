@@ -2,20 +2,17 @@
 #include <string.h>
 
 #include "confit/diagnostic.h"
-#include "confit/host.h"
 #include "confit/toml.h"
 #include "confit/status.h"
+#include "test_fs.h"
 
 #ifndef CONFIT_TEST_SOURCE_DIR
 #define CONFIT_TEST_SOURCE_DIR "."
 #endif
 
 static int join_fixture(char *out, size_t out_size, const char *fixture) {
-  ConfitDiagnostic diagnostic;
-
-  confit_diagnostic_init(&diagnostic);
-  return confit_host_path_join(out, out_size, CONFIT_TEST_SOURCE_DIR, fixture,
-                               &diagnostic) == CONFIT_OK;
+  return confit_test_fs_path_join(out, out_size, CONFIT_TEST_SOURCE_DIR,
+                                  fixture);
 }
 
 static int expect_string(const ConfitTomlValue *value, const char *expected) {
@@ -36,7 +33,7 @@ static int expect_scalar_values(const ConfitTomlValue *root) {
 
   value = confit_toml_table_find(root, "title");
   if (confit_toml_value_type(value) != CONFIT_TOML_VALUE_STRING ||
-      !expect_string(value, "Confit parser v2")) {
+      !expect_string(value, "Confit TOML adapter")) {
     return 0;
   }
   value = confit_toml_table_find(root, "enabled");
@@ -83,7 +80,7 @@ static int expect_composite_values(const ConfitTomlValue *root) {
 
   project = confit_toml_table_find(root, "project");
   if (confit_toml_value_type(project) != CONFIT_TOML_VALUE_TABLE ||
-      !expect_string(confit_toml_table_find(project, "name"), "delos")) {
+      !expect_string(confit_toml_table_find(project, "name"), "example")) {
     return 0;
   }
 
@@ -101,14 +98,15 @@ static int expect_composite_values(const ConfitTomlValue *root) {
 int main(void) {
   static const char crlf_source[] =
       "[project]\r\n"
-      "name = \"delos\"\r\n"
-      "schema_version = 2\r\n";
+      "name = \"example\"\r\n"
+      "format_revision = 2\r\n";
   static const char invalid_utf8[] = {'n', 'a', 'm', 'e', ' ', '=', ' ',
                                       '\"', (char)0xFF, '\"', '\n'};
   ConfitDiagnostic diagnostic;
   ConfitTomlDocument *document;
   const ConfitTomlValue *root;
   char path[512];
+  char *text;
 
   if (!join_fixture(path, sizeof(path),
                     "tests/fixtures/toml/valid/full.toml")) {
@@ -116,9 +114,13 @@ int main(void) {
   }
   confit_diagnostic_init(&diagnostic);
   document = 0;
-  if (confit_toml_parse_file(path, &document, &diagnostic) != CONFIT_OK) {
+  text = confit_test_fs_read_file(path);
+  if (text == 0 || confit_toml_parse_text(path, text, strlen(text), &document,
+                                           &diagnostic) != CONFIT_OK) {
+    confit_test_fs_free(text);
     return 2;
   }
+  confit_test_fs_free(text);
   root = confit_toml_document_root(document);
   if (confit_toml_value_type(root) != CONFIT_TOML_VALUE_TABLE ||
       confit_toml_table_size(root) != 9U ||
@@ -157,20 +159,24 @@ int main(void) {
   }
   document = 0;
   confit_diagnostic_clear(&diagnostic);
-  if (confit_toml_parse_file(path, &document, &diagnostic) !=
-          CONFIT_ERR_PARSE ||
+  text = confit_test_fs_read_file(path);
+  if (text == 0 || confit_toml_parse_text(path, text, strlen(text), &document,
+                                           &diagnostic) !=
+          CONFIT_ERR_VALIDATION ||
       document != 0 || !confit_diagnostic_has_error(&diagnostic) ||
       diagnostic.line != 3U || diagnostic.column != 1U ||
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "tomlc17 rejected TOML input") != 0) {
+    confit_test_fs_free(text);
     return 7;
   }
+  confit_test_fs_free(text);
 
   document = 0;
   confit_diagnostic_clear(&diagnostic);
   if (confit_toml_parse_text("invalid-utf8", invalid_utf8,
                                 sizeof(invalid_utf8), &document,
-                                &diagnostic) != CONFIT_ERR_PARSE ||
+                                &diagnostic) != CONFIT_ERR_VALIDATION ||
       document != 0 || diagnostic.line != 1U || diagnostic.column != 9U ||
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "TOML source is not valid UTF-8") != 0) {

@@ -33,21 +33,6 @@ typedef struct ConfitTomlDocument ConfitTomlDocument;
 typedef struct ConfitTomlValue ConfitTomlValue;
 
 /**
- * @brief host path에서 TOML source를 읽고 strict syntax parse한다.
- *
- * 파일 I/O는 Confit host adapter가 담당한다. 성공한 document와 모든 value handle은
- * `confit_toml_document_free()` 전까지 유효하다.
- *
- * @param path 읽을 TOML file path.
- * @param out_document 성공 시 caller가 소유할 document output.
- * @param diagnostic 실패 위치와 원인을 기록할 optional record.
- * @return 성공하면 CONFIT_OK, syntax 오류면 CONFIT_ERR_PARSE.
- */
-ConfitStatus confit_toml_parse_file(const char *path,
-                                       ConfitTomlDocument **out_document,
-                                       ConfitDiagnostic *diagnostic);
-
-/**
  * @brief memory source를 TOML document로 parse한다.
  *
  * adapter는 UTF-8을 검사하고 source text를 복사한다. `source_name`은 parsed value의
@@ -58,7 +43,7 @@ ConfitStatus confit_toml_parse_file(const char *path,
  * @param text_size text의 byte 길이.
  * @param out_document 성공 시 caller가 소유할 document output.
  * @param diagnostic 실패 위치와 원인을 기록할 optional record.
- * @return 성공하면 CONFIT_OK, 실패하면 적절한 status.
+ * @return 성공하면 CONFIT_OK, 문법 또는 UTF-8 오류면 CONFIT_ERR_VALIDATION.
  */
 ConfitStatus confit_toml_parse_text(const char *source_name,
                                        const char *text, size_t text_size,
@@ -130,7 +115,7 @@ confit_toml_table_value_at(const ConfitTomlValue *table, size_t index);
  * @brief table에서 exact key를 직접 순회해 찾는다.
  *
  * multipart-key helper의 길이와 escape 제약을 피하기 위해 key path를 해석하지
- * 않는다. V2 loader는 각 table level을 명시적으로 순회해야 한다.
+ * 않는다. Schema loader는 각 table level을 명시적으로 순회해야 한다.
  */
 const ConfitTomlValue *
 confit_toml_table_find(const ConfitTomlValue *table, const char *key);

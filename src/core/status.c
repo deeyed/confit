@@ -5,14 +5,12 @@ int confit_status_is_ok(ConfitStatus status) { return status == CONFIT_OK; }
 int confit_status_exit_code(ConfitStatus status) {
   switch (status) {
   case CONFIT_OK:
-  case CONFIT_ERR_INVALID_ARGUMENT:
-  case CONFIT_ERR_PARSE:
-  case CONFIT_ERR_SCHEMA:
-  case CONFIT_ERR_DEPENDENCY:
-  case CONFIT_ERR_COMPATIBILITY:
-  case CONFIT_ERR_GENERATION:
+  case CONFIT_ERR_USAGE:
+  case CONFIT_ERR_VALIDATION:
+  case CONFIT_ERR_STALE:
+  case CONFIT_ERR_IO:
+  case CONFIT_ERR_TERMINAL:
   case CONFIT_ERR_INTERNAL:
-  case CONFIT_ERR_UNSUPPORTED:
     return (int)status;
   default:
     return (int)CONFIT_ERR_INTERNAL;
@@ -23,22 +21,18 @@ const char *confit_status_name(ConfitStatus status) {
   switch (status) {
   case CONFIT_OK:
     return "ok";
-  case CONFIT_ERR_INVALID_ARGUMENT:
-    return "invalid argument";
-  case CONFIT_ERR_PARSE:
-    return "parse error";
-  case CONFIT_ERR_SCHEMA:
-    return "schema error";
-  case CONFIT_ERR_DEPENDENCY:
-    return "dependency or conflict error";
-  case CONFIT_ERR_COMPATIBILITY:
-    return "compatibility error";
-  case CONFIT_ERR_GENERATION:
-    return "generation error";
+  case CONFIT_ERR_USAGE:
+    return "usage error";
+  case CONFIT_ERR_VALIDATION:
+    return "validation error";
+  case CONFIT_ERR_STALE:
+    return "missing or stale configuration";
+  case CONFIT_ERR_IO:
+    return "input or output error";
+  case CONFIT_ERR_TERMINAL:
+    return "terminal error";
   case CONFIT_ERR_INTERNAL:
     return "internal error";
-  case CONFIT_ERR_UNSUPPORTED:
-    return "unsupported command or platform";
   default:
     return "unknown status";
   }

@@ -1,4 +1,4 @@
-title = "Confit parser v2"
+title = "Confit TOML adapter"
 enabled = true
 count = 42
 ratio = 3.125
@@ -7,8 +7,8 @@ items = ["one", "two"]
 inline = { color = "green", retries = 3 }
 
 [project]
-name = "delos"
-schema_version = 2
+name = "example"
+format_revision = 2
 
 [[board]]
 id = "host-sim"

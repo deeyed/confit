@@ -8,31 +8,23 @@ extern "C" {
 /**
  * @brief Confit 작업 결과를 나타내는 작은 numeric status code다.
  *
- * 값은 CLI exit code 정책과 맞춘다. Dependency 오류와 conflict 오류는
- * 현재 같은 exit code 4를 공유하며, 이후 graph checker가 세부 diagnostic을
- * 추가해 사용자가 실제 원인을 구분할 수 있게 한다.
+ * 값은 schema 6 계약의 CLI exit code 정책과 정확히 맞춘다.
  */
 typedef enum ConfitStatus {
   /** 성공. */
   CONFIT_OK = 0,
-  /** 명령행 인자 또는 API 인자가 잘못되었다. */
-  CONFIT_ERR_INVALID_ARGUMENT = 1,
-  /** 입력 파일 parse에 실패했다. */
-  CONFIT_ERR_PARSE = 2,
-  /** schema 검증에 실패했다. */
-  CONFIT_ERR_SCHEMA = 3,
-  /** dependency 또는 conflict 검증에 실패했다. */
-  CONFIT_ERR_DEPENDENCY = 4,
-  /** dependency 또는 conflict 검증에 실패했다. */
-  CONFIT_ERR_CONFLICT = 4,
-  /** cross-project compatibility 검증에 실패했다. */
-  CONFIT_ERR_COMPATIBILITY = 5,
-  /** generated artifact 생성에 실패했다. */
-  CONFIT_ERR_GENERATION = 6,
+  /** 명령행 또는 API 사용법이 잘못되었거나 아직 구현되지 않았다. */
+  CONFIT_ERR_USAGE = 2,
+  /** 입력 parse, schema 또는 값 검증에 실패했다. */
+  CONFIT_ERR_VALIDATION = 3,
+  /** 선택된 configuration이 없거나 현재 입력과 일치하지 않는다. */
+  CONFIT_ERR_STALE = 4,
+  /** 허용된 host I/O가 실패했다. */
+  CONFIT_ERR_IO = 5,
+  /** terminal을 안전하게 사용할 수 없거나 복구하지 못했다. */
+  CONFIT_ERR_TERMINAL = 6,
   /** Confit 내부 invariant가 깨졌다. */
-  CONFIT_ERR_INTERNAL = 7,
-  /** 명령 또는 host platform이 현재 지원되지 않는다. */
-  CONFIT_ERR_UNSUPPORTED = 8,
+  CONFIT_ERR_INTERNAL = 70,
 } ConfitStatus;
 
 /**

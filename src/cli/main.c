@@ -3,100 +3,65 @@
 
 #include "confit/status.h"
 #include "confit/version.h"
-#include "confit/diagnostic.h"
-#include "confit/host.h"
 
-#include "v5_workflow.h"
+static const char *const kPublicCommands[] = {
+    "check",          "configure",    "menuconfig", "verify",
+    "search",         "explain",      "diff",       "listnewconfig",
+    "oldconfig",      "olddefconfig", "savedefconfig",
+};
 
 static void confit_cli_print_help(void) {
   (void)fputs(
-      "Confit bmake configuration resolver\n\n"
+      "Confit generic configuration tool (schema 6 development skeleton)\n\n"
       "Usage: confit <command> [options]\n\n"
       "Commands:\n"
-      "  configure --repository ABS --out ABS --arch ATOM "
-      "--kernconf ATOM --transaction ATOM\n"
-      "  verify --repository ABS --generation ABS\n"
-      "  search|explain|why-unavailable --repository ABS --arch ATOM "
-      "--kernconf ATOM --query-or-symbol VALUE\n"
-      "  list-new|oldconfig --repository ABS --arch ATOM --kernconf ATOM\n"
-      "  save-minimal --repository ABS --arch ATOM --kernconf ATOM "
-      "--output ABS\n"
-      "  diff --repository ABS --arch ATOM --kernconf ATOM --other ATOM\n"
-      "  tui --repository ABS --out ABS --arch ATOM --kernconf ATOM "
-      "--transaction ATOM\n"
-      "  build-enter --root ABSOLUTE --repository ABSOLUTE "
-      "--invocation DECIMAL --bmake ABSOLUTE --compiler ABSOLUTE\n\n"
-      "Only schema_version = 5 is accepted. Ordinary builds consume the "
-      "immutable config seal without rerunning Confit.\n",
+      "  help             Show this help text\n"
+      "  check            Validate configuration inputs\n"
+      "  configure        Resolve and publish configuration data\n"
+      "  menuconfig       Edit values in the terminal interface\n"
+      "  verify           Verify a selected immutable snapshot\n"
+      "  search           Search prompts, help text, and symbols\n"
+      "  explain          Explain one symbol\n"
+      "  diff             Compare two user configurations\n"
+      "  listnewconfig    List newly introduced symbols\n"
+      "  oldconfig        Prompt for newly introduced symbols\n"
+      "  olddefconfig     Accept defaults for new symbols\n"
+      "  savedefconfig    Write only values that differ from defaults\n\n"
+      "Only help and --version are implemented in this development skeleton.\n"
+      "Configuration commands fail without opening project or source files.\n",
       stdout);
 }
 
-static int confit_cli_is_help(const char *argument) {
-  return strcmp(argument, "help") == 0 || strcmp(argument, "--help") == 0 ||
-         strcmp(argument, "-h") == 0;
+static int confit_cli_public_command(const char *argument) {
+  size_t index;
+
+  for (index = 0U; index < sizeof(kPublicCommands) / sizeof(kPublicCommands[0]);
+       ++index) {
+    if (strcmp(argument, kPublicCommands[index]) == 0) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 int main(int argc, char **argv) {
-  if (argc < 2 || confit_cli_is_help(argv[1])) {
+  if (argc == 2 && strcmp(argv[1], "help") == 0) {
     confit_cli_print_help();
     return 0;
   }
-  if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "version") == 0) {
-    (void)printf("%s\nartifact_abi=%s\n", confit_version_string(),
-                 CONFIT_ARTIFACT_ABI_V5);
+  if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+    (void)printf("%s\nschema_contract=%d\nschema_implementation=unavailable\n",
+                 confit_version_string(), CONFIT_SCHEMA_CONTRACT_VERSION);
     return 0;
   }
-  if (strcmp(argv[1], "doctor") == 0) {
-    (void)printf("doctor ok\nengine=bmake\nschema_version=5\nartifact_abi=%s\n",
-                 CONFIT_ARTIFACT_ABI_V5);
-    return 0;
-  }
-  if (strcmp(argv[1], "build-enter") == 0) {
-    ConfitDiagnostic diagnostic;
-    ConfitStatus status;
-    char self_executable[4096];
-    confit_diagnostic_init(&diagnostic);
-    if (argc != 12 || strcmp(argv[2], "--root") != 0 ||
-        strcmp(argv[4], "--repository") != 0 ||
-        strcmp(argv[6], "--invocation") != 0 ||
-        strcmp(argv[8], "--bmake") != 0 ||
-        strcmp(argv[10], "--compiler") != 0) {
-      (void)fprintf(stderr,
-                    "confit: build-enter requires --root ABSOLUTE "
-                    "--repository ABSOLUTE --invocation DECIMAL "
-                    "--bmake ABSOLUTE --compiler ABSOLUTE\n");
-      return confit_status_exit_code(CONFIT_ERR_INVALID_ARGUMENT);
-    }
-    status = confit_host_self_executable(self_executable,
-                                         sizeof(self_executable), &diagnostic);
-    if (status == CONFIT_OK) {
-      status = confit_host_prepare_luca_build_root(
-          argv[3], argv[5], argv[7], self_executable, argv[9], argv[11],
-          &diagnostic);
-    }
-    if (status != CONFIT_OK) {
-      (void)fprintf(stderr, "confit: build-enter failed: %s\n",
-                    diagnostic.message == 0 || diagnostic.message[0] == '\0'
-                        ? confit_status_name(status)
-                        : diagnostic.message);
-    }
-    return confit_status_exit_code(status);
+  if (argc >= 2 && confit_cli_public_command(argv[1])) {
+    (void)fprintf(stderr,
+                  "confit: %s: schema 6 implementation is unavailable in "
+                  "this development skeleton\n",
+                  argv[1]);
+    return confit_status_exit_code(CONFIT_ERR_USAGE);
   }
 
-  if (strcmp(argv[1], "configure") == 0)
-    return confit_cli_v5_configure(argc, argv);
-  if (strcmp(argv[1], "verify") == 0)
-    return confit_cli_v5_verify(argc, argv);
-  if (strcmp(argv[1], "search") == 0 || strcmp(argv[1], "explain") == 0 ||
-      strcmp(argv[1], "why-unavailable") == 0 ||
-      strcmp(argv[1], "list-new") == 0 ||
-      strcmp(argv[1], "oldconfig") == 0 ||
-      strcmp(argv[1], "save-minimal") == 0 ||
-      strcmp(argv[1], "diff") == 0 || strcmp(argv[1], "tui") == 0)
-    return confit_cli_v5_ux(argc, argv);
-
-  (void)fprintf(stderr,
-                "confit: unsupported: command or source schema is outside "
-                "the Config v5 KERNCONF-only contract\n");
-  return confit_status_exit_code(CONFIT_ERR_UNSUPPORTED);
+  (void)fputs("confit: usage error; run 'confit help'\n", stderr);
+  return confit_status_exit_code(CONFIT_ERR_USAGE);
 }

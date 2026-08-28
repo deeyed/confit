@@ -10,18 +10,17 @@ int main(void) {
   if (!confit_status_is_ok(CONFIT_OK)) {
     return 1;
   }
-  if (confit_status_exit_code(CONFIT_ERR_SCHEMA) != 3) {
+  if (confit_status_exit_code(CONFIT_ERR_VALIDATION) != 3) {
     return 2;
   }
-  if (confit_status_exit_code(CONFIT_ERR_UNSUPPORTED) != 8) {
+  if (confit_status_exit_code(CONFIT_ERR_INTERNAL) != 70) {
     return 12;
   }
-  if (strcmp(confit_status_name(CONFIT_ERR_CONFLICT),
-             "dependency or conflict error") != 0) {
+  if (strcmp(confit_status_name(CONFIT_ERR_STALE),
+             "missing or stale configuration") != 0) {
     return 3;
   }
-  if (strcmp(confit_status_name(CONFIT_ERR_UNSUPPORTED),
-             "unsupported command or platform") != 0) {
+  if (strcmp(confit_status_name(CONFIT_ERR_USAGE), "usage error") != 0) {
     return 13;
   }
   if (strcmp(confit_version_string(), CONFIT_VERSION_DISPLAY) != 0) {
@@ -33,12 +32,12 @@ int main(void) {
     return 5;
   }
 
-  confit_diagnostic_set(&diagnostic, CONFIT_ERR_INVALID_ARGUMENT,
+  confit_diagnostic_set(&diagnostic, CONFIT_ERR_USAGE,
                         "config/project.toml", 7, 3, "invalid project name");
   if (!confit_diagnostic_has_error(&diagnostic)) {
     return 6;
   }
-  if (diagnostic.status != CONFIT_ERR_INVALID_ARGUMENT) {
+  if (diagnostic.status != CONFIT_ERR_USAGE) {
     return 7;
   }
   if (diagnostic.line != 7 || diagnostic.column != 3) {
