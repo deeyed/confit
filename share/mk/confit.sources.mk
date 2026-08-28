@@ -18,7 +18,8 @@ CONFIT_PARSER_SOURCES= \
 	src/parser/input_image.c \
 	src/parser/tomlc17_adapter.c
 
-CONFIT_MODEL_AND_SCHEMA_SOURCES=
+CONFIT_MODEL_AND_SCHEMA_SOURCES= \
+	src/schema/source_graph.c
 
 CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES=
 
@@ -44,7 +45,8 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_cli_skeleton.c \
 	tests/unit/test_public_headers.c
 
-CONFIT_INTEGRATION_TEST_SOURCES=
+CONFIT_INTEGRATION_TEST_SOURCES= \
+	tests/integration/test_source_graph.c
 
 CONFIT_PTY_TEST_SOURCES=
 
