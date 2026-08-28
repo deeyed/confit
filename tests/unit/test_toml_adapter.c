@@ -100,6 +100,11 @@ int main(void) {
       "[project]\r\n"
       "name = \"example\"\r\n"
       "format_revision = 2\r\n";
+  static const char integer_source[] =
+      "decimal = -12\n"
+      "hexadecimal = 0x7fff_ffff\n"
+      "octal = 0o755\n"
+      "binary = 0b1010\n";
   static const char invalid_utf8[] = {'n', 'a', 'm', 'e', ' ', '=', ' ',
                                       '\"', (char)0xFF, '\"', '\n'};
   static const char embedded_nul[] = {'a', ' ', '=', ' ', '1', '\n',
@@ -160,9 +165,39 @@ int main(void) {
   }
   confit_toml_document_free(document);
 
+  document = 0;
+  confit_diagnostic_clear(&diagnostic);
+  if (confit_toml_parse_text("integer-bases", integer_source,
+                             strlen(integer_source), &document,
+                             &diagnostic) != CONFIT_OK) {
+    confit_toml_document_free(document);
+    return 6;
+  }
+  root = confit_toml_document_root(document);
+  {
+    static const char *const keys[] = {"decimal", "hexadecimal", "octal",
+                                       "binary"};
+    static const ConfitTomlIntegerBase bases[] = {
+        CONFIT_TOML_INTEGER_BASE_DECIMAL,
+        CONFIT_TOML_INTEGER_BASE_HEXADECIMAL,
+        CONFIT_TOML_INTEGER_BASE_OCTAL,
+        CONFIT_TOML_INTEGER_BASE_BINARY};
+    size_t index;
+    for (index = 0U; index < sizeof(keys) / sizeof(keys[0]); ++index) {
+      ConfitTomlIntegerBase base = CONFIT_TOML_INTEGER_BASE_UNKNOWN;
+      const ConfitTomlValue *integer = confit_toml_table_find(root, keys[index]);
+      if (!confit_toml_value_integer_base(document, integer, &base) ||
+          base != bases[index]) {
+        confit_toml_document_free(document);
+        return 7;
+      }
+    }
+  }
+  confit_toml_document_free(document);
+
   if (!join_fixture(path, sizeof(path),
                     "tests/fixtures/toml/invalid/unclosed-string.toml")) {
-    return 6;
+    return 8;
   }
   document = 0;
   confit_diagnostic_clear(&diagnostic);
@@ -175,7 +210,7 @@ int main(void) {
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "tomlc17 rejected TOML input") != 0) {
     confit_test_fs_free(text);
-    return 7;
+    return 9;
   }
   confit_test_fs_free(text);
 
@@ -187,7 +222,7 @@ int main(void) {
       document != 0 || diagnostic.line != 1U || diagnostic.column != 9U ||
       diagnostic.message == 0 ||
       strcmp(diagnostic.message, "TOML source is not valid UTF-8") != 0) {
-    return 8;
+    return 10;
   }
 
   document = 0;
@@ -199,7 +234,7 @@ int main(void) {
       diagnostic.message == 0 ||
       strcmp(diagnostic.message,
              "TOML source contains an embedded NUL byte") != 0) {
-    return 9;
+    return 11;
   }
 
   return 0;

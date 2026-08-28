@@ -391,6 +391,62 @@ int confit_toml_value_int64(const ConfitTomlValue *value,
   return 1;
 }
 
+int confit_toml_value_integer_base(const ConfitTomlDocument *document,
+                                   const ConfitTomlValue *value,
+                                   ConfitTomlIntegerBase *out_base) {
+  const toml_datum_t *datum = confit_toml_as_datum(value);
+  const char *text;
+  size_t column;
+  size_t index = 0U;
+  size_t line = 1U;
+  size_t size;
+
+  if (document == 0 || datum == 0 || out_base == 0 ||
+      datum->type != TOML_INT64 || datum->lineno <= 0 || datum->colno <= 0) {
+    return 0;
+  }
+  text = document->source_text;
+  size = document->source_size;
+  while (index < size && line < (size_t)datum->lineno) {
+    if (text[index++] == '\n') {
+      line += 1U;
+    }
+  }
+  if (line != (size_t)datum->lineno) {
+    return 0;
+  }
+  column = (size_t)datum->colno;
+  if (column - 1U > size - index) {
+    return 0;
+  }
+  index += column - 1U;
+  if (index >= size || text[index] == '\n' || text[index] == '\r') {
+    return 0;
+  }
+  if (text[index] == '+' || text[index] == '-') {
+    index += 1U;
+  }
+  if (index >= size || text[index] < '0' || text[index] > '9') {
+    return 0;
+  }
+  if (text[index] == '0' && index + 1U < size) {
+    if (text[index + 1U] == 'x') {
+      *out_base = CONFIT_TOML_INTEGER_BASE_HEXADECIMAL;
+      return 1;
+    }
+    if (text[index + 1U] == 'o') {
+      *out_base = CONFIT_TOML_INTEGER_BASE_OCTAL;
+      return 1;
+    }
+    if (text[index + 1U] == 'b') {
+      *out_base = CONFIT_TOML_INTEGER_BASE_BINARY;
+      return 1;
+    }
+  }
+  *out_base = CONFIT_TOML_INTEGER_BASE_DECIMAL;
+  return 1;
+}
+
 int confit_toml_value_float64(const ConfitTomlValue *value,
                                   double *out_value) {
   const toml_datum_t *datum = confit_toml_as_datum(value);

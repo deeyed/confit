@@ -1,6 +1,6 @@
 ---
 document: confit-schema-v6-minimal-loader
-status: implemented-r08
+status: implemented-r09
 authority: config-v6-and-architecture-v6
 schema_version: 6
 ---
@@ -12,8 +12,8 @@ schema_version: 6
 R08은 R07이 명시적으로 읽어 소유한 input image만 사용하여 schema 6 문서의 구조를
 검증한다. Loader는 project directory를 열거하거나 다른 파일을 추측하지 않으며, 이미
 구성된 source graph의 byte image를 다시 열지 않는다. Project load가 성공하면 opaque
-`ConfitSchemaProject`가 source graph, presentation catalog, raw config declaration을 함께
-소유한다. 실패하면 partial project를 공개하지 않는다.
+`ConfitSchemaProject`가 source graph와 typed presentation catalog를 함께 소유한다.
+실패하면 partial project를 공개하지 않는다.
 
 이 단계가 허용하는 entry key는 정확히 다음 셋이다.
 
@@ -61,17 +61,15 @@ range
 ```
 
 `symbol`, `type`, `prompt`, `help`는 필수다. Symbol은 generic public symbol grammar를
-따르고 reachable graph 전체에서 유일해야 한다. Type은 이 라운드에서는 bounded
-non-empty string으로만 보존한다. R09가 `bool`, `int`, `hex`, `string`, `enum`이라는
-닫힌 type domain과 각 field의 적용 가능성을 검증한다. Prompt와 help의 text 정책은
-menu와 같다. `depends_on`은 bounded string candidate로 보존하고 expression parsing은
-R11에 맡긴다.
+따르고 reachable graph 전체에서 유일해야 한다. Type은 `bool`, `int`, `hex`,
+`string`, `enum`으로 닫혀 있고 R09 type contract에 따라 default, range, values의
+적용 가능성을 검증한다. Prompt와 help의 text 정책은 menu와 같다. `depends_on`은
+bounded string으로 소유하지만 expression parsing은 R11에 맡긴다.
 
 `default`는 scalar TOML node, `values`는 array node, `range`는 table node여야 한다.
-R08은 이 세 node를 복사하거나 재직렬화하지 않고 project-owned byte image에 대한
-read-only candidate로 보존한다. 따라서 project가 살아 있는 동안만 public view가
-유효하다. Type별 default, enum membership, range endpoint와 prohibited field
-combination은 R09가 검증한다.
+R09는 이 node를 같은 input image에서 type-check한 뒤 generic catalog가 default, range와
+enum domain을 owned typed value로 deep-copy하게 한다. 자세한 규칙은
+`docs/types-v6.md`가 기록한다.
 
 ## 2. User document shape
 
@@ -126,11 +124,10 @@ allocation이 실패해도 published project는 null이고 그 시도에서 소�
 모두 해제된다. Failing allocator test가 각 allocation point를 순서대로 실패시켜 cleanup
 closure를 검사한다.
 
-Catalog에는 R08에서 fragment와 menu만 들어간다. Raw config declaration을 catalog의
-typed config로 조기에 승격하지 않으므로 `confit_catalog_config_count()`는 아직 0이다.
-`confit_schema_project_config_count()`가 R08 raw declaration 수를 제공한다. R09가 type
-domain을 검증한 뒤 generic typed model로 옮기는 것이 의도된 다음 단계다. 이 분리는
-unknown type이나 잘못된 default를 typed model에 반쯤 게시하는 임시 상태를 막는다.
+Catalog에는 fragment, menu와 검증이 끝난 typed config가 함께 들어간다.
+`confit_schema_project_config_count()`와 `confit_catalog_config_count()`는 같은 declaration
+set을 본다. R08의 raw candidate 배열은 type transition을 위한 임시 구조였으며 R09에서
+제거되었다. Unknown type이나 잘못된 default는 catalog에 반쯤 게시되지 않는다.
 
 Diagnostic의 file, line, column은 TOML adapter가 보존한 exact source span에서 온다.
 Transactional failure cleanup이 source graph 또는 user document를 해제해야 할 때는
@@ -158,11 +155,15 @@ sibling file이 loader 결과에 관찰되지 않는다는 경계도 유지된�
 schema loader가 추가한 direct file open, directory enumeration 또는 subprocess import가
 없어야 한다.
 
+R09 focused evidence는 omitted/explicit default, five-type native TOML identity, int64와
+hex boundary, exact/one-over string·enum limits, range 원인별 diagnostic, enum domain,
+excluded type와 wrong-field applicability를 추가한다. Typed boundary와 integer overflow는
+TOML fuzz seed에도 포함된다. 상세 evidence boundary는 `docs/types-v6.md`에 기록한다.
+
 ## 6. Non-claims
 
 R08 완료는 다음을 의미하지 않는다.
 
-- `type` 이름이나 type별 default, range, values 조합이 검증되었다;
 - dependency expression이 parse, type-check 또는 evaluate되었다;
 - user value가 project symbol과 연결되거나 resolved value가 생성되었다;
 - config file이 serialize되거나 snapshot, Make, C header, JSON이 생성되었다;

@@ -48,7 +48,8 @@ CONFIT_UNIT_TEST_SOURCES= \
 
 CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_source_graph.c \
-	tests/integration/test_schema.c
+	tests/integration/test_schema.c \
+	tests/integration/test_types.c
 
 CONFIT_PTY_TEST_SOURCES=
 

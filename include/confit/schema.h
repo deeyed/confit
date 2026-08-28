@@ -17,35 +17,16 @@ extern "C" {
 /** @brief Opaque owner of one structurally validated schema 6 project. */
 typedef struct ConfitSchemaProject ConfitSchemaProject;
 
-/**
- * @brief Borrowed R08 declaration view before type-domain validation.
- *
- * `default_candidate`, `values_candidate`, and `range_candidate` are the exact
- * read-only TOML nodes retained by the project's owned input graph.  R09 owns
- * their type-specific interpretation.  A null pointer means the optional field
- * was omitted.
- */
-typedef struct ConfitSchemaConfigView {
-  size_t fragment;
-  size_t menu;
-  const char *symbol;
-  const char *type_name;
-  const char *prompt;
-  const char *help;
-  const char *dependency_text;
-  const ConfitTomlValue *default_candidate;
-  const ConfitTomlValue *values_candidate;
-  const ConfitTomlValue *range_candidate;
-  ConfitSourceSpan declaration;
-} ConfitSchemaConfigView;
+/** @brief Typed declaration view borrowed from the project's generic catalog. */
+typedef ConfitConfigView ConfitSchemaConfigView;
 
 /**
  * @brief Load the explicit source graph and validate schema 6 structure.
  *
  * The loader follows no paths beyond the R07 literal source graph.  It
- * validates the closed entry/menu/config key sets and constructs presentation
- * fragments and menus, while retaining raw type candidates for R09.  Failure
- * publishes no partial project.
+ * validates the closed entry/menu/config key sets and all five schema 6 value
+ * domains, then constructs the generic typed catalog.  Failure publishes no
+ * partial project.
  */
 ConfitStatus confit_schema_project_load(
     ConfitHostRoot *project_root, const char *entry_path,

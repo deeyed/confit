@@ -1,0 +1,8 @@
+bool_value = true
+int_min = -9223372036854775808
+int_max = 9223372036854775807
+hex_zero = 0x0
+hex_max = 0x7fff_ffff_ffff_ffff
+string_value = "safe UTF-8 value"
+enum_values = ["quiet", "normal", "verbose"]
+range = { min = 0x0, max = 0x7fff_ffff_ffff_ffff }

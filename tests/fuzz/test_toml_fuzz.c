@@ -79,7 +79,9 @@ int main(void) {
 
   if (!parse_seed_file("valid-basic.toml") ||
       !parse_seed_file("valid-nested.toml") ||
+      !parse_seed_file("valid-type-boundaries.toml") ||
       !parse_seed_file("invalid-unclosed.toml") ||
+      !parse_seed_file("invalid-integer-overflow.toml") ||
       !parse_one("toml-invalid-utf8", invalid_utf8,
                  sizeof(invalid_utf8) - 1U) ||
       !parse_one("toml-embedded-nul", embedded_nul,

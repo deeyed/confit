@@ -5,29 +5,10 @@
 
 #include "confit/limits.h"
 
-typedef struct ConfitSchemaConfigRecord {
-  size_t fragment;
-  size_t menu;
-  char *symbol;
-  char *type_name;
-  char *prompt;
-  char *help;
-  char *dependency_text;
-  const ConfitTomlValue *default_candidate;
-  const ConfitTomlValue *values_candidate;
-  const ConfitTomlValue *range_candidate;
-  const char *declaration_path;
-  size_t declaration_line;
-  size_t declaration_column;
-} ConfitSchemaConfigRecord;
-
 struct ConfitSchemaProject {
   ConfitAllocator allocator;
   ConfitSourceGraph *source_graph;
   ConfitCatalog *catalog;
-  ConfitSchemaConfigRecord *configs;
-  size_t config_count;
-  size_t config_capacity;
 };
 
 typedef struct ConfitUserValueRecord {
@@ -71,7 +52,6 @@ static const char kMissingConfigType[] = "config declaration requires type";
 static const char kMissingConfigPrompt[] = "config declaration requires prompt";
 static const char kMissingConfigHelp[] = "config declaration requires help";
 static const char kInvalidSymbol[] = "configuration symbol is invalid";
-static const char kInvalidTypeName[] = "configuration type must be a bounded string";
 static const char kInvalidPrompt[] = "config prompt must be a bounded one-line string";
 static const char kInvalidHelp[] = "config help must be a bounded non-empty string";
 static const char kInvalidDefaultShape[] = "config default must be a TOML scalar";
@@ -79,6 +59,33 @@ static const char kInvalidValuesShape[] = "config values must be an array";
 static const char kInvalidRangeShape[] = "config range must be a table";
 static const char kInvalidDependencyShape[] = "config depends_on must be a bounded string";
 static const char kDuplicateSymbol[] = "configuration symbol is duplicated";
+static const char kInvalidType[] =
+    "configuration type must be bool, int, hex, string, or enum";
+static const char kInvalidBoolDefault[] =
+    "bool default must be a native TOML boolean";
+static const char kInvalidIntDefault[] =
+    "int default must be a native TOML integer";
+static const char kInvalidHexDefault[] =
+    "hex default must use native nonnegative TOML hexadecimal spelling";
+static const char kInvalidStringDefault[] =
+    "string default must be a bounded safe TOML string";
+static const char kMissingEnumDefault[] = "enum requires an explicit default";
+static const char kInvalidEnumDefault[] =
+    "enum default must be a member of its string atom domain";
+static const char kMissingEnumValues[] = "enum requires a values array";
+static const char kInvalidEnumValues[] =
+    "enum values must be a nonempty bounded array of unique string atoms";
+static const char kForbiddenValues[] = "values is valid only for enum";
+static const char kForbiddenRange[] = "range is valid only for int and hex";
+static const char kInvalidRange[] =
+    "range must contain exactly min and max";
+static const char kInvalidRangeMinimum[] =
+    "range min must use the declared native TOML type";
+static const char kInvalidRangeMaximum[] =
+    "range max must use the declared native TOML type";
+static const char kReversedRange[] = "range min must not exceed max";
+static const char kDefaultOutsideRange[] =
+    "default must lie within the inclusive range";
 static const char kConfigLimit[] = "configuration symbol limit is exceeded";
 static const char kInvalidUserValues[] = "user values must be a table";
 static const char kInvalidUserSymbol[] = "user value symbol is invalid";
@@ -271,70 +278,6 @@ static ConfitStatus confit_schema_validate_source(
   return CONFIT_OK;
 }
 
-static void confit_schema_config_record_destroy(
-    ConfitSchemaConfigRecord *record, const ConfitAllocator *allocator) {
-  if (record == 0) return;
-  if (record->symbol != 0)
-    allocator->deallocate(allocator->context, record->symbol);
-  if (record->type_name != 0)
-    allocator->deallocate(allocator->context, record->type_name);
-  if (record->prompt != 0)
-    allocator->deallocate(allocator->context, record->prompt);
-  if (record->help != 0)
-    allocator->deallocate(allocator->context, record->help);
-  if (record->dependency_text != 0)
-    allocator->deallocate(allocator->context, record->dependency_text);
-  memset(record, 0, sizeof(*record));
-}
-
-static ConfitStatus confit_schema_grow_configs(
-    ConfitSchemaProject *project, ConfitDiagnostic *diagnostic,
-    const ConfitTomlValue *location, const char *path) {
-  ConfitSchemaConfigRecord *replacement;
-  size_t capacity;
-  size_t bytes;
-  if (project->config_count < project->config_capacity) return CONFIT_OK;
-  if (project->config_count >= CONFIT_LIMIT_CONFIG_SYMBOLS) {
-    return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
-                                    location, path, kConfigLimit);
-  }
-  capacity = project->config_capacity == 0U ? 8U
-                                            : project->config_capacity * 2U;
-  if (capacity > CONFIT_LIMIT_CONFIG_SYMBOLS)
-    capacity = CONFIT_LIMIT_CONFIG_SYMBOLS;
-  if (capacity < project->config_count ||
-      capacity > SIZE_MAX / sizeof(*replacement)) {
-    return confit_schema_fail_value(diagnostic, CONFIT_ERR_INTERNAL, location,
-                                    path, kOutOfMemory);
-  }
-  bytes = capacity * sizeof(*replacement);
-  replacement = (ConfitSchemaConfigRecord *)project->allocator.allocate(
-      project->allocator.context, bytes);
-  if (replacement == 0) {
-    return confit_schema_fail_value(diagnostic, CONFIT_ERR_INTERNAL, location,
-                                    path, kOutOfMemory);
-  }
-  memset(replacement, 0, bytes);
-  if (project->config_count != 0U) {
-    memcpy(replacement, project->configs,
-           project->config_count * sizeof(*replacement));
-  }
-  if (project->configs != 0)
-    project->allocator.deallocate(project->allocator.context, project->configs);
-  project->configs = replacement;
-  project->config_capacity = capacity;
-  return CONFIT_OK;
-}
-
-static int confit_schema_symbol_exists(const ConfitSchemaProject *project,
-                                       const char *symbol) {
-  size_t index;
-  for (index = 0U; index < project->config_count; ++index) {
-    if (strcmp(project->configs[index].symbol, symbol) == 0) return 1;
-  }
-  return 0;
-}
-
 static void confit_schema_anchor_model_error(ConfitDiagnostic *diagnostic,
                                              const ConfitTomlValue *value,
                                              const char *path) {
@@ -442,23 +385,295 @@ static ConfitStatus confit_schema_add_menu(
   return status;
 }
 
+static int confit_schema_type_kind(const ConfitTomlValue *type_name,
+                                   ConfitValueKind *out_kind) {
+  const char *text = 0;
+  size_t size = 0U;
+  if (out_kind == 0 ||
+      !confit_toml_value_string(type_name, &text, &size)) {
+    return 0;
+  }
+  if (size == 4U && memcmp(text, "bool", 4U) == 0) {
+    *out_kind = CONFIT_VALUE_BOOL;
+  } else if (size == 3U && memcmp(text, "int", 3U) == 0) {
+    *out_kind = CONFIT_VALUE_INT;
+  } else if (size == 3U && memcmp(text, "hex", 3U) == 0) {
+    *out_kind = CONFIT_VALUE_HEX;
+  } else if (size == 6U && memcmp(text, "string", 6U) == 0) {
+    *out_kind = CONFIT_VALUE_STRING;
+  } else if (size == 4U && memcmp(text, "enum", 4U) == 0) {
+    *out_kind = CONFIT_VALUE_ENUM;
+  } else {
+    return 0;
+  }
+  return 1;
+}
+
+static ConfitStatus confit_schema_typed_value(
+    const ConfitTomlDocument *document, const ConfitTomlValue *value,
+    ConfitValueKind kind, const ConfitAllocator *allocator, ConfitValue *out,
+    ConfitDiagnostic *diagnostic, const char *path,
+    const char *invalid_message) {
+  const char *text = 0;
+  size_t text_size = 0U;
+  int boolean = 0;
+  int64_t integer = 0;
+  ConfitTomlIntegerBase base = CONFIT_TOML_INTEGER_BASE_UNKNOWN;
+  ConfitStatus status;
+
+  switch (kind) {
+  case CONFIT_VALUE_BOOL:
+    if (!confit_toml_value_bool(value, &boolean))
+      return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
+                                      path, invalid_message != 0
+                                                ? invalid_message
+                                                : kInvalidBoolDefault);
+    return confit_value_set_bool(out, boolean, allocator, diagnostic);
+  case CONFIT_VALUE_INT:
+    if (!confit_toml_value_int64(value, &integer))
+      return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
+                                      path, invalid_message != 0
+                                                ? invalid_message
+                                                : kInvalidIntDefault);
+    return confit_value_set_int(out, integer, allocator, diagnostic);
+  case CONFIT_VALUE_HEX:
+    if (!confit_toml_value_int64(value, &integer) || integer < 0 ||
+        !confit_toml_value_integer_base(document, value, &base) ||
+        base != CONFIT_TOML_INTEGER_BASE_HEXADECIMAL)
+      return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
+                                      path, invalid_message != 0
+                                                ? invalid_message
+                                                : kInvalidHexDefault);
+    return confit_value_set_hex(out, (uint64_t)integer, allocator, diagnostic);
+  case CONFIT_VALUE_STRING:
+    if (!confit_toml_value_string(value, &text, &text_size) ||
+        !confit_schema_text_valid(text, text_size, CONFIT_LIMIT_STRING_BYTES, 1,
+                                  1))
+      return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
+                                      path, invalid_message != 0
+                                                ? invalid_message
+                                                : kInvalidStringDefault);
+    status = confit_value_set_string(out, text, text_size, allocator,
+                                     diagnostic);
+    break;
+  case CONFIT_VALUE_ENUM:
+    if (!confit_toml_value_string(value, &text, &text_size))
+      return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, value,
+                                      path, invalid_message != 0
+                                                ? invalid_message
+                                                : kInvalidEnumDefault);
+    status = confit_value_set_enum(out, text, text_size, allocator, diagnostic);
+    if (status == CONFIT_ERR_VALIDATION)
+      return confit_schema_fail_value(diagnostic, status, value, path,
+                                      invalid_message != 0
+                                          ? invalid_message
+                                          : kInvalidEnumDefault);
+    break;
+  case CONFIT_VALUE_INVALID:
+  default:
+    return confit_schema_fail_value(diagnostic, CONFIT_ERR_INTERNAL, value,
+                                    path, kInvalidType);
+  }
+  if (status != CONFIT_OK)
+    confit_schema_anchor_model_error(diagnostic, value, path);
+  return status;
+}
+
+static ConfitStatus confit_schema_default_value(
+    const ConfitTomlDocument *document, const ConfitTomlValue *candidate,
+    ConfitValueKind kind, const ConfitAllocator *allocator, ConfitValue *out,
+    ConfitDiagnostic *diagnostic, const char *path) {
+  if (candidate != 0)
+    return confit_schema_typed_value(document, candidate, kind, allocator, out,
+                                     diagnostic, path, 0);
+  switch (kind) {
+  case CONFIT_VALUE_BOOL:
+    return confit_value_set_bool(out, 0, allocator, diagnostic);
+  case CONFIT_VALUE_INT:
+    return confit_value_set_int(out, INT64_C(0), allocator, diagnostic);
+  case CONFIT_VALUE_HEX:
+    return confit_value_set_hex(out, UINT64_C(0), allocator, diagnostic);
+  case CONFIT_VALUE_STRING:
+    return confit_value_set_string(out, "", 0U, allocator, diagnostic);
+  case CONFIT_VALUE_ENUM:
+    return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION, path, 0U, 0U,
+                              kMissingEnumDefault);
+  case CONFIT_VALUE_INVALID:
+  default:
+    return confit_schema_fail(diagnostic, CONFIT_ERR_INTERNAL, path, 0U, 0U,
+                              kInvalidType);
+  }
+}
+
+static void confit_schema_enum_values_destroy(
+    char **values, size_t count, const ConfitAllocator *allocator) {
+  size_t index;
+  if (values == 0) return;
+  for (index = 0U; index < count; ++index) {
+    if (values[index] != 0)
+      allocator->deallocate(allocator->context, values[index]);
+  }
+  allocator->deallocate(allocator->context, values);
+}
+
+static ConfitStatus confit_schema_enum_values(
+    const ConfitTomlValue *candidate, const ConfitAllocator *allocator,
+    char ***out_values, size_t *out_count, ConfitDiagnostic *diagnostic,
+    const char *path) {
+  char **values;
+  size_t count;
+  size_t index;
+  ConfitStatus status = CONFIT_OK;
+  if (candidate == 0)
+    return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION, path, 0U, 0U,
+                              kMissingEnumValues);
+  count = confit_toml_array_size(candidate);
+  if (confit_toml_value_type(candidate) != CONFIT_TOML_VALUE_ARRAY ||
+      count == 0U || count > CONFIT_LIMIT_ENUM_VALUES)
+    return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                    candidate, path, kInvalidEnumValues);
+  if (count > SIZE_MAX / sizeof(*values))
+    return confit_schema_fail_value(diagnostic, CONFIT_ERR_INTERNAL, candidate,
+                                    path, kOutOfMemory);
+  values = (char **)allocator->allocate(allocator->context,
+                                        count * sizeof(*values));
+  if (values == 0)
+    return confit_schema_fail_value(diagnostic, CONFIT_ERR_INTERNAL, candidate,
+                                    path, kOutOfMemory);
+  memset(values, 0, count * sizeof(*values));
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    const ConfitTomlValue *atom = confit_toml_array_at(candidate, index);
+    status = confit_schema_copy_string(
+        atom, CONFIT_LIMIT_ENUM_ATOM_BYTES, 0, 0, allocator, &values[index],
+        diagnostic, path, kInvalidEnumValues);
+  }
+  if (status == CONFIT_OK)
+    status = confit_enum_domain_validate((const char *const *)values, count,
+                                         diagnostic);
+  if (status != CONFIT_OK) {
+    if (status == CONFIT_ERR_VALIDATION)
+      (void)confit_schema_fail_value(diagnostic, status, candidate, path,
+                                     kInvalidEnumValues);
+    confit_schema_enum_values_destroy(values, count, allocator);
+    return status;
+  }
+  *out_values = values;
+  *out_count = count;
+  return CONFIT_OK;
+}
+
+static int confit_schema_enum_contains(char *const *values, size_t count,
+                                       const ConfitValue *value) {
+  size_t index;
+  if (value == 0 || value->kind != CONFIT_VALUE_ENUM) return 0;
+  for (index = 0U; index < count; ++index) {
+    const size_t size = strlen(values[index]);
+    if (size == value->data.text.size &&
+        memcmp(values[index], value->data.text.data, size) == 0)
+      return 1;
+  }
+  return 0;
+}
+
+static int confit_schema_range_contains(const ConfitValue *minimum,
+                                        const ConfitValue *value,
+                                        const ConfitValue *maximum) {
+  if (minimum->kind == CONFIT_VALUE_INT && value->kind == CONFIT_VALUE_INT &&
+      maximum->kind == CONFIT_VALUE_INT)
+    return minimum->data.integer <= value->data.integer &&
+           value->data.integer <= maximum->data.integer;
+  if (minimum->kind == CONFIT_VALUE_HEX && value->kind == CONFIT_VALUE_HEX &&
+      maximum->kind == CONFIT_VALUE_HEX)
+    return minimum->data.hexadecimal <= value->data.hexadecimal &&
+           value->data.hexadecimal <= maximum->data.hexadecimal;
+  return 0;
+}
+
+static int confit_schema_range_ordered(const ConfitValue *minimum,
+                                       const ConfitValue *maximum) {
+  if (minimum->kind == CONFIT_VALUE_INT && maximum->kind == CONFIT_VALUE_INT)
+    return minimum->data.integer <= maximum->data.integer;
+  if (minimum->kind == CONFIT_VALUE_HEX && maximum->kind == CONFIT_VALUE_HEX)
+    return minimum->data.hexadecimal <= maximum->data.hexadecimal;
+  return 0;
+}
+
+static ConfitStatus confit_schema_range(
+    const ConfitTomlDocument *document, const ConfitTomlValue *candidate,
+    ConfitValueKind kind, const ConfitValue *default_value,
+    const ConfitAllocator *allocator, ConfitValue *minimum,
+    ConfitValue *maximum, int *out_present, ConfitDiagnostic *diagnostic,
+    const char *path) {
+  static const char *const allowed[] = {"min", "max"};
+  const ConfitTomlValue *min_value;
+  const ConfitTomlValue *max_value;
+  ConfitStatus status;
+  if (candidate == 0) return CONFIT_OK;
+  if (kind != CONFIT_VALUE_INT && kind != CONFIT_VALUE_HEX)
+    return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                    candidate, path, kForbiddenRange);
+  status = confit_schema_validate_keys(candidate, allowed, 2U, path,
+                                       kInvalidRange, diagnostic);
+  min_value = status == CONFIT_OK ? confit_toml_table_find(candidate, "min") : 0;
+  max_value = status == CONFIT_OK ? confit_toml_table_find(candidate, "max") : 0;
+  if (status == CONFIT_OK && (min_value == 0 || max_value == 0))
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      candidate, path, kInvalidRange);
+  if (status == CONFIT_OK)
+    status = confit_schema_typed_value(document, min_value, kind, allocator,
+                                       minimum, diagnostic, path,
+                                       kInvalidRangeMinimum);
+  if (status == CONFIT_OK)
+    status = confit_schema_typed_value(document, max_value, kind, allocator,
+                                       maximum, diagnostic, path,
+                                       kInvalidRangeMaximum);
+  if (status == CONFIT_OK &&
+      !confit_schema_range_ordered(minimum, maximum))
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      candidate, path, kReversedRange);
+  if (status == CONFIT_OK &&
+      !confit_schema_range_contains(minimum, default_value, maximum))
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      candidate, path, kDefaultOutsideRange);
+  if (status == CONFIT_OK) *out_present = 1;
+  return status;
+}
+
 static ConfitStatus confit_schema_add_config(
     ConfitSchemaProject *project, size_t fragment, size_t menu,
-    const ConfitTomlValue *table, const char *path,
+    const ConfitTomlDocument *document, const ConfitTomlValue *table,
+    const char *path,
     ConfitDiagnostic *diagnostic) {
   static const char *const allowed[] = {
       "symbol", "type", "prompt", "help", "default", "depends_on",
       "values", "range"};
-  ConfitSchemaConfigRecord candidate;
+  ConfitConfigSpec spec;
+  ConfitValue default_value;
+  ConfitValue range_minimum;
+  ConfitValue range_maximum;
   const ConfitTomlValue *symbol;
   const ConfitTomlValue *type_name;
   const ConfitTomlValue *prompt;
   const ConfitTomlValue *help;
   const ConfitTomlValue *dependency;
+  const ConfitTomlValue *default_candidate;
+  const ConfitTomlValue *values_candidate;
+  const ConfitTomlValue *range_candidate;
   ConfitStatus status;
   const char *symbol_bytes = 0;
   size_t symbol_size = 0U;
-  memset(&candidate, 0, sizeof(candidate));
+  char *symbol_text = 0;
+  char *prompt_text = 0;
+  char *help_text = 0;
+  char *dependency_text = 0;
+  char **enum_values = 0;
+  size_t enum_value_count = 0U;
+  ConfitValueKind kind = CONFIT_VALUE_INVALID;
+  int has_range = 0;
+  memset(&spec, 0, sizeof(spec));
+  confit_value_init(&default_value);
+  confit_value_init(&range_minimum);
+  confit_value_init(&range_maximum);
   status = confit_schema_validate_keys(table, allowed, 8U, path,
                                        kUnknownConfigField, diagnostic);
   if (status != CONFIT_OK) return status;
@@ -484,65 +699,110 @@ static ConfitStatus confit_schema_add_config(
   }
   status = confit_schema_copy_bytes(
       symbol_bytes, symbol_size, 128U, 0, 0, &project->allocator,
-      &candidate.symbol, diagnostic, symbol, path, kInvalidSymbol);
-  if (status == CONFIT_OK && !confit_symbol_is_valid(candidate.symbol))
+      &symbol_text, diagnostic, symbol, path, kInvalidSymbol);
+  if (status == CONFIT_OK && !confit_symbol_is_valid(symbol_text))
     status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, symbol,
                                       path, kInvalidSymbol);
-  if (status == CONFIT_OK &&
-      confit_schema_symbol_exists(project, candidate.symbol))
-    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION, symbol,
-                                      path, kDuplicateSymbol);
-  if (status == CONFIT_OK)
-    status = confit_schema_copy_string(
-        type_name, 128U, 0, 0, &project->allocator, &candidate.type_name,
-        diagnostic, path, kInvalidTypeName);
+  if (status == CONFIT_OK) {
+    ConfitConfigView existing;
+    if (confit_catalog_find_config(project->catalog, symbol_text, &existing))
+      status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                        symbol, path, kDuplicateSymbol);
+  }
+  if (status == CONFIT_OK && !confit_schema_type_kind(type_name, &kind))
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      type_name, path, kInvalidType);
   if (status == CONFIT_OK)
     status = confit_schema_copy_string(
         prompt, CONFIT_LIMIT_PROMPT_BYTES, 0, 0, &project->allocator,
-        &candidate.prompt, diagnostic, path, kInvalidPrompt);
+        &prompt_text, diagnostic, path, kInvalidPrompt);
   if (status == CONFIT_OK)
     status = confit_schema_copy_string(
         help, CONFIT_LIMIT_HELP_BYTES, 0, 1, &project->allocator,
-        &candidate.help, diagnostic, path, kInvalidHelp);
-  candidate.default_candidate = confit_toml_table_find(table, "default");
-  candidate.values_candidate = confit_toml_table_find(table, "values");
-  candidate.range_candidate = confit_toml_table_find(table, "range");
-  if (status == CONFIT_OK && candidate.default_candidate != 0 &&
-      !confit_schema_scalar(candidate.default_candidate))
+        &help_text, diagnostic, path, kInvalidHelp);
+  default_candidate = confit_toml_table_find(table, "default");
+  values_candidate = confit_toml_table_find(table, "values");
+  range_candidate = confit_toml_table_find(table, "range");
+  if (status == CONFIT_OK && default_candidate != 0 &&
+      !confit_schema_scalar(default_candidate))
     status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
-                                      candidate.default_candidate, path,
+                                      default_candidate, path,
                                       kInvalidDefaultShape);
-  if (status == CONFIT_OK && candidate.values_candidate != 0 &&
-      confit_toml_value_type(candidate.values_candidate) !=
+  if (status == CONFIT_OK && values_candidate != 0 &&
+      confit_toml_value_type(values_candidate) !=
           CONFIT_TOML_VALUE_ARRAY)
     status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
-                                      candidate.values_candidate, path,
+                                      values_candidate, path,
                                       kInvalidValuesShape);
-  if (status == CONFIT_OK && candidate.range_candidate != 0 &&
-      confit_toml_value_type(candidate.range_candidate) !=
+  if (status == CONFIT_OK && range_candidate != 0 &&
+      confit_toml_value_type(range_candidate) !=
           CONFIT_TOML_VALUE_TABLE)
     status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
-                                      candidate.range_candidate, path,
+                                      range_candidate, path,
                                       kInvalidRangeShape);
   dependency = confit_toml_table_find(table, "depends_on");
   if (status == CONFIT_OK && dependency != 0)
     status = confit_schema_copy_string(
         dependency, CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 1, 0,
-        &project->allocator, &candidate.dependency_text, diagnostic, path,
+        &project->allocator, &dependency_text, diagnostic, path,
         kInvalidDependencyShape);
-  candidate.fragment = fragment;
-  candidate.menu = menu;
-  candidate.declaration_path = path;
-  candidate.declaration_line = confit_toml_value_line(table);
-  candidate.declaration_column = confit_toml_value_column(table);
   if (status == CONFIT_OK)
-    status = confit_schema_grow_configs(project, diagnostic, table, path);
-  if (status != CONFIT_OK) {
-    confit_schema_config_record_destroy(&candidate, &project->allocator);
-    return status;
+    status = confit_schema_default_value(
+        document, default_candidate, kind, &project->allocator, &default_value,
+        diagnostic, path);
+  if (status == CONFIT_OK && kind == CONFIT_VALUE_ENUM)
+    status = confit_schema_enum_values(values_candidate, &project->allocator,
+                                       &enum_values, &enum_value_count,
+                                       diagnostic, path);
+  if (status == CONFIT_OK && kind == CONFIT_VALUE_ENUM &&
+      !confit_schema_enum_contains(enum_values, enum_value_count,
+                                   &default_value))
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      default_candidate, path,
+                                      kInvalidEnumDefault);
+  if (status == CONFIT_OK && kind != CONFIT_VALUE_ENUM &&
+      values_candidate != 0)
+    status = confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
+                                      values_candidate, path, kForbiddenValues);
+  if (status == CONFIT_OK)
+    status = confit_schema_range(
+        document, range_candidate, kind, &default_value, &project->allocator,
+        &range_minimum, &range_maximum, &has_range, diagnostic, path);
+  if (status == CONFIT_OK) {
+    spec.fragment = fragment;
+    spec.menu = menu;
+    spec.symbol = symbol_text;
+    spec.kind = kind;
+    spec.prompt = prompt_text;
+    spec.help = help_text;
+    spec.default_value = &default_value;
+    spec.range.present = has_range;
+    spec.range.minimum = has_range ? &range_minimum : 0;
+    spec.range.maximum = has_range ? &range_maximum : 0;
+    spec.enum_values = (const char *const *)enum_values;
+    spec.enum_value_count = enum_value_count;
+    spec.dependency_text = dependency_text;
+    spec.declaration.path = path;
+    spec.declaration.line = confit_toml_value_line(table);
+    spec.declaration.column = confit_toml_value_column(table);
+    status = confit_catalog_add_config(project->catalog, &spec, 0, diagnostic);
+    if (status != CONFIT_OK)
+      confit_schema_anchor_model_error(diagnostic, table, path);
   }
-  project->configs[project->config_count++] = candidate;
-  return CONFIT_OK;
+  confit_schema_enum_values_destroy(enum_values, enum_value_count,
+                                    &project->allocator);
+  confit_value_destroy(&range_maximum);
+  confit_value_destroy(&range_minimum);
+  confit_value_destroy(&default_value);
+  if (dependency_text != 0)
+    project->allocator.deallocate(project->allocator.context, dependency_text);
+  if (help_text != 0)
+    project->allocator.deallocate(project->allocator.context, help_text);
+  if (prompt_text != 0)
+    project->allocator.deallocate(project->allocator.context, prompt_text);
+  if (symbol_text != 0)
+    project->allocator.deallocate(project->allocator.context, symbol_text);
+  return status;
 }
 
 static ConfitStatus confit_schema_parse_fragment(
@@ -552,6 +812,8 @@ static ConfitStatus confit_schema_parse_fragment(
   static const char *const allowed[] = {"menu", "config"};
   const ConfitTomlValue *root =
       confit_toml_document_root(confit_input_image_document(node->input));
+  const ConfitTomlDocument *document =
+      confit_input_image_document(node->input);
   const ConfitTomlValue *menu = confit_toml_table_find(root, "menu");
   const ConfitTomlValue *configs = confit_toml_table_find(root, "config");
   size_t attachment = parent_menu;
@@ -585,8 +847,9 @@ static ConfitStatus confit_schema_parse_fragment(
         return confit_schema_fail_value(diagnostic, CONFIT_ERR_VALIDATION,
                                         config, node->path,
                                         kInvalidConfigArray);
-      status = confit_schema_add_config(project, fragment, attachment, config,
-                                        node->path, diagnostic);
+      status = confit_schema_add_config(project, fragment, attachment,
+                                        document, config, node->path,
+                                        diagnostic);
       if (status != CONFIT_OK) return status;
     }
   }
@@ -596,14 +859,8 @@ static ConfitStatus confit_schema_parse_fragment(
 
 void confit_schema_project_destroy(ConfitSchemaProject *project) {
   ConfitAllocator allocator;
-  size_t index;
   if (project == 0) return;
   allocator = project->allocator;
-  for (index = project->config_count; index > 0U; --index)
-    confit_schema_config_record_destroy(&project->configs[index - 1U],
-                                        &allocator);
-  if (project->configs != 0)
-    allocator.deallocate(allocator.context, project->configs);
   confit_catalog_destroy(project->catalog);
   confit_source_graph_destroy(project->source_graph);
   memset(project, 0, sizeof(*project));
@@ -708,41 +965,21 @@ confit_schema_project_catalog(const ConfitSchemaProject *project) {
 }
 
 size_t confit_schema_project_config_count(const ConfitSchemaProject *project) {
-  return project != 0 ? project->config_count : 0U;
+  return project != 0 ? confit_catalog_config_count(project->catalog) : 0U;
 }
 
 int confit_schema_project_config_at(const ConfitSchemaProject *project,
                                     size_t index,
                                     ConfitSchemaConfigView *out_view) {
-  const ConfitSchemaConfigRecord *record;
-  if (project == 0 || out_view == 0 || index >= project->config_count) return 0;
-  record = &project->configs[index];
-  out_view->fragment = record->fragment;
-  out_view->menu = record->menu;
-  out_view->symbol = record->symbol;
-  out_view->type_name = record->type_name;
-  out_view->prompt = record->prompt;
-  out_view->help = record->help;
-  out_view->dependency_text = record->dependency_text;
-  out_view->default_candidate = record->default_candidate;
-  out_view->values_candidate = record->values_candidate;
-  out_view->range_candidate = record->range_candidate;
-  out_view->declaration.path = record->declaration_path;
-  out_view->declaration.line = record->declaration_line;
-  out_view->declaration.column = record->declaration_column;
-  return 1;
+  return project != 0 &&
+         confit_catalog_config_at(project->catalog, index, out_view);
 }
 
 int confit_schema_project_find_config(const ConfitSchemaProject *project,
                                       const char *symbol,
                                       ConfitSchemaConfigView *out_view) {
-  size_t index;
-  if (project == 0 || symbol == 0 || out_view == 0) return 0;
-  for (index = 0U; index < project->config_count; ++index) {
-    if (strcmp(project->configs[index].symbol, symbol) == 0)
-      return confit_schema_project_config_at(project, index, out_view);
-  }
-  return 0;
+  return project != 0 &&
+         confit_catalog_find_config(project->catalog, symbol, out_view);
 }
 
 static void confit_user_value_record_destroy(

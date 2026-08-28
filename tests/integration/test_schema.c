@@ -157,25 +157,34 @@ static void test_valid_project_and_user(const char *root_path,
                             "Example configuration") == 0);
   CONFIT_TEST_ASSERT(confit_catalog_fragment_count(catalog) == 4U);
   CONFIT_TEST_ASSERT(confit_catalog_menu_count(catalog) == 2U);
-  CONFIT_TEST_ASSERT(confit_catalog_config_count(catalog) == 0U);
+  CONFIT_TEST_ASSERT(confit_catalog_config_count(catalog) == 3U);
   CONFIT_TEST_ASSERT(confit_schema_project_config_count(project) == 3U);
   CONFIT_TEST_ASSERT(confit_catalog_menu_at(catalog, 1U, &menu));
   CONFIT_TEST_ASSERT(menu.parent_menu == 0U);
   CONFIT_TEST_ASSERT(confit_schema_project_find_config(
       project, "WORKER_COUNT", &config));
   CONFIT_TEST_ASSERT(config.fragment == 1U && config.menu == 0U);
-  CONFIT_TEST_ASSERT(strcmp(config.type_name, "int") == 0);
-  CONFIT_TEST_ASSERT(config.default_candidate != 0 &&
-                     config.range_candidate != 0 &&
-                     config.values_candidate == 0);
+  CONFIT_TEST_ASSERT(config.kind == CONFIT_VALUE_INT);
+  CONFIT_TEST_ASSERT(config.default_value != 0 &&
+                     config.default_value->data.integer == 4 &&
+                     config.has_range &&
+                     config.range_minimum->data.integer == 1 &&
+                     config.range_maximum->data.integer == 64 &&
+                     config.enum_value_count == 0U);
   CONFIT_TEST_ASSERT(confit_schema_project_find_config(
       project, "ENABLE_METRICS", &config));
   CONFIT_TEST_ASSERT(config.fragment == 2U && config.menu == 0U);
+  CONFIT_TEST_ASSERT(config.kind == CONFIT_VALUE_BOOL &&
+                     config.default_value->data.boolean == 0);
   CONFIT_TEST_ASSERT(confit_schema_project_find_config(project, "LOG_LEVEL",
                                                        &config));
   CONFIT_TEST_ASSERT(config.fragment == 3U && config.menu == 1U);
-  CONFIT_TEST_ASSERT(config.values_candidate != 0 &&
-                     config.default_candidate != 0 &&
+  CONFIT_TEST_ASSERT(config.kind == CONFIT_VALUE_ENUM &&
+                     config.enum_value_count == 3U &&
+                     strcmp(config.enum_values[1], "normal") == 0 &&
+                     config.default_value->data.text.size == 6U &&
+                     memcmp(config.default_value->data.text.data, "normal",
+                            6U) == 0 &&
                      strcmp(config.dependency_text, "ENABLE_METRICS") == 0);
 
   CONFIT_TEST_ASSERT(confit_user_document_load_relative(
@@ -343,7 +352,7 @@ static void test_config_fields_and_legacy(const char *root_path,
              "[[config]]\nsymbol = \"A\"\ntype = 1\n"
              "prompt = \"P\"\nhelp = \"H\"\n");
   expect_project_failure(root, "fields/root.toml",
-                         "configuration type must be a bounded string",
+                         "configuration type must be bool, int, hex, string, or enum",
                          "fields/leaf.toml", 3U, 8U);
   write_text(root_path, "fields/leaf.toml",
              "[[config]]\nsymbol = \"A\"\ntype = \"bool\"\n"
