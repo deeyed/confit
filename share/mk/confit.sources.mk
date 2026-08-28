@@ -10,7 +10,8 @@ CONFIT_CORE_SOURCES= \
 	src/core/status.c \
 	src/core/version.c
 
-CONFIT_HOST_SOURCES=
+CONFIT_HOST_SOURCES= \
+	src/host/host.c
 
 CONFIT_PARSER_SOURCES= \
 	vendor/tomlc17/tomlc17.c \
@@ -35,6 +36,7 @@ CONFIT_TEST_SUPPORT_SOURCES= \
 CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_status_diagnostic.c \
 	tests/unit/test_digest.c \
+	tests/unit/test_host.c \
 	tests/unit/test_model.c \
 	tests/unit/test_toml_adapter.c \
 	tests/unit/test_cli_skeleton.c \
