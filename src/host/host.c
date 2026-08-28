@@ -6,6 +6,7 @@
 #endif
 
 #include "confit/host.h"
+#include "host_internal.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -46,6 +47,20 @@ struct ConfitHostFile {
   ConfitAllocator allocator;
 };
 
+struct ConfitHostDirectoryTransaction {
+  ConfitHostRoot *root;
+  ConfitAllocator allocator;
+  int parent_descriptor;
+  int directory_descriptor;
+  int active;
+  int sealed;
+  char candidate_leaf[CONFIT_HOST_CANDIDATE_NAME_BYTES];
+  char relative_path[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  char created[CONFIT_LIMIT_SNAPSHOT_ARTIFACTS]
+              [CONFIT_LIMIT_SNAPSHOT_ARTIFACT_NAME_BYTES + 1U];
+  size_t created_count;
+};
+
 static atomic_uint confit_host_candidate_sequence;
 
 static const char kInvalidArgument[] = "invalid host I/O argument";
@@ -64,6 +79,14 @@ static const char kDestinationUnsafe[] = "atomic destination is not absent or re
 static const char kPublicationFailed[] = "failed to replace and sync the regular file";
 static const char kLockFailed[] = "failed to acquire the regular-file lock";
 static const char kUnlockFailed[] = "failed to release the regular-file lock";
+static const char kDirectoryFailed[] =
+    "failed to create a private snapshot directory";
+static const char kDirectoryWriteFailed[] =
+    "failed to create and verify a snapshot file";
+static const char kDirectorySyncFailed[] =
+    "failed to seal and sync a snapshot directory";
+static const char kDirectoryPublishFailed[] =
+    "failed to publish a create-only snapshot directory";
 
 static ConfitStatus confit_host_fail(ConfitDiagnostic *diagnostic,
                                      ConfitStatus status,
@@ -771,4 +794,285 @@ ConfitStatus confit_host_lock_release(ConfitHostLock *lock,
     return confit_host_fail(diagnostic, CONFIT_ERR_IO, kUnlockFailed);
   }
   return CONFIT_OK;
+}
+
+static int confit_host_leaf_is_valid(const char *leaf, size_t maximum) {
+  size_t size;
+  return confit_host_bounded_length(leaf, maximum, &size) && size != 0U &&
+         strchr(leaf, '/') == 0 && confit_host_relative_path_is_valid(leaf);
+}
+
+static int confit_host_open_or_create_directory(ConfitHostRoot *root,
+                                                 const char *relative_path,
+                                                 int *out_descriptor) {
+  char leaf[CONFIT_LIMIT_SOURCE_PATH_BYTES + 1U];
+  struct stat information;
+  int descriptor;
+  int parent;
+  int parent_owned;
+  if (root == 0 || out_descriptor == 0 ||
+      !confit_host_open_parent(root, relative_path, &parent, &parent_owned,
+                               leaf, sizeof(leaf))) {
+    return 0;
+  }
+  descriptor = confit_host_open_directory_component(parent, leaf);
+  if (descriptor < 0 && errno == ENOENT) {
+    if (mkdirat(parent, leaf, 0700) != 0) {
+      if (parent_owned) (void)close(parent);
+      return 0;
+    }
+    if (fsync(parent) != 0) {
+      if (parent_owned) (void)close(parent);
+      return 0;
+    }
+    descriptor = confit_host_open_directory_component(parent, leaf);
+  }
+  if (parent_owned) (void)close(parent);
+  if (descriptor < 0 || fstat(descriptor, &information) != 0 ||
+      !S_ISDIR(information.st_mode)) {
+    if (descriptor >= 0) (void)close(descriptor);
+    return 0;
+  }
+  *out_descriptor = descriptor;
+  return 1;
+}
+
+ConfitStatus confit_host_directory_transaction_begin(
+    ConfitHostRoot *root, const char *parent_path,
+    ConfitHostDirectoryTransaction **out_transaction,
+    ConfitDiagnostic *diagnostic) {
+  ConfitHostDirectoryTransaction *transaction;
+  unsigned attempt;
+  int descriptor = -1;
+  if (root == 0 || parent_path == 0 || out_transaction == 0 ||
+      !confit_host_relative_path_is_valid(parent_path)) {
+    return confit_host_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+  }
+  *out_transaction = 0;
+  transaction = (ConfitHostDirectoryTransaction *)root->allocator.allocate(
+      root->allocator.context, sizeof(*transaction));
+  if (transaction == 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_INTERNAL, kOutOfMemory);
+  memset(transaction, 0, sizeof(*transaction));
+  transaction->root = root;
+  transaction->allocator = root->allocator;
+  transaction->parent_descriptor = -1;
+  transaction->directory_descriptor = -1;
+  if (!confit_host_open_or_create_directory(root, parent_path,
+                                             &transaction->parent_descriptor))
+    goto fail;
+  for (attempt = 0U; attempt < CONFIT_HOST_CANDIDATE_ATTEMPTS; ++attempt) {
+    const unsigned sequence = atomic_fetch_add_explicit(
+        &confit_host_candidate_sequence, 1U, memory_order_relaxed);
+    const int length = snprintf(transaction->candidate_leaf,
+                                sizeof(transaction->candidate_leaf),
+                                ".confit-snapshot-%ld-%u", (long)getpid(),
+                                sequence);
+    if (length < 0 || (size_t)length >= sizeof(transaction->candidate_leaf))
+      goto fail;
+    if (mkdirat(transaction->parent_descriptor,
+                transaction->candidate_leaf, 0700) == 0) {
+      descriptor = confit_host_open_directory_component(
+          transaction->parent_descriptor, transaction->candidate_leaf);
+      if (descriptor < 0) goto fail;
+      break;
+    }
+    if (errno != EEXIST) goto fail;
+  }
+  if (descriptor < 0) goto fail;
+  transaction->directory_descriptor = descriptor;
+  if (snprintf(transaction->relative_path,
+               sizeof(transaction->relative_path), "%s/%s", parent_path,
+               transaction->candidate_leaf) < 0 ||
+      !confit_host_relative_path_is_valid(transaction->relative_path))
+    goto fail;
+  transaction->active = 1;
+  *out_transaction = transaction;
+  return CONFIT_OK;
+
+fail:
+  if (descriptor >= 0) (void)close(descriptor);
+  if (transaction->parent_descriptor >= 0 &&
+      transaction->candidate_leaf[0] != '\0')
+    (void)unlinkat(transaction->parent_descriptor,
+                   transaction->candidate_leaf, AT_REMOVEDIR);
+  if (transaction->parent_descriptor >= 0)
+    (void)close(transaction->parent_descriptor);
+  transaction->allocator.deallocate(transaction->allocator.context,
+                                    transaction);
+  return confit_host_fail(diagnostic, CONFIT_ERR_IO, kDirectoryFailed);
+}
+
+const char *confit_host_directory_transaction_relative_path(
+    const ConfitHostDirectoryTransaction *transaction) {
+  return transaction != 0 && transaction->active
+             ? transaction->relative_path
+             : 0;
+}
+
+static int confit_host_verify_file_bytes(int parent, const char *leaf,
+                                         const unsigned char *bytes,
+                                         size_t size) {
+  unsigned char buffer[4096];
+  struct stat information;
+  size_t offset = 0U;
+  int descriptor = openat(parent, leaf,
+                          O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+  if (descriptor < 0 || fstat(descriptor, &information) != 0 ||
+      !S_ISREG(information.st_mode) || information.st_nlink != 1 ||
+      information.st_size < 0 ||
+      (uint64_t)information.st_size != (uint64_t)size) {
+    if (descriptor >= 0) (void)close(descriptor);
+    return 0;
+  }
+  while (offset < size) {
+    const size_t wanted = size - offset < sizeof(buffer)
+                              ? size - offset
+                              : sizeof(buffer);
+    ssize_t amount = pread(descriptor, buffer, wanted, (off_t)offset);
+    if (amount < 0 && errno == EINTR) continue;
+    if (amount <= 0 || (size_t)amount != wanted ||
+        memcmp(buffer, bytes + offset, wanted) != 0) {
+      (void)close(descriptor);
+      return 0;
+    }
+    offset += wanted;
+  }
+  if (close(descriptor) != 0) return 0;
+  return 1;
+}
+
+ConfitStatus confit_host_directory_transaction_write(
+    ConfitHostDirectoryTransaction *transaction, const char *leaf,
+    const void *bytes, size_t size, unsigned permissions,
+    ConfitDiagnostic *diagnostic) {
+  const unsigned char *source = (const unsigned char *)bytes;
+  struct stat information;
+  int descriptor;
+  int write_ok;
+  if (transaction == 0 || !transaction->active || transaction->sealed ||
+      !confit_host_leaf_is_valid(
+          leaf, CONFIT_LIMIT_SNAPSHOT_ARTIFACT_NAME_BYTES) ||
+      (bytes == 0 && size != 0U) || size > CONFIT_LIMIT_SNAPSHOT_BYTES ||
+      permissions > 0777U ||
+      transaction->created_count >= CONFIT_LIMIT_SNAPSHOT_ARTIFACTS) {
+    return confit_host_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+  }
+  descriptor = openat(transaction->directory_descriptor, leaf,
+                      O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                      0600);
+  if (descriptor < 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryWriteFailed);
+  memcpy(transaction->created[transaction->created_count], leaf,
+         strlen(leaf) + 1U);
+  transaction->created_count += 1U;
+  write_ok = fstat(descriptor, &information) == 0 &&
+             S_ISREG(information.st_mode) && information.st_nlink == 1 &&
+             confit_host_write_all(descriptor, source, size) &&
+             fchmod(descriptor, (mode_t)permissions) == 0 &&
+             fsync(descriptor) == 0;
+  if (!write_ok) {
+    (void)close(descriptor);
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryWriteFailed);
+  }
+  if (close(descriptor) != 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryWriteFailed);
+  if (!confit_host_verify_file_bytes(transaction->directory_descriptor, leaf,
+                                     source, size))
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryWriteFailed);
+  return CONFIT_OK;
+}
+
+ConfitStatus confit_host_directory_transaction_seal(
+    ConfitHostDirectoryTransaction *transaction, unsigned permissions,
+    ConfitDiagnostic *diagnostic) {
+  if (transaction == 0 || !transaction->active || transaction->sealed ||
+      permissions > 0777U)
+    return confit_host_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+  if (fchmod(transaction->directory_descriptor, (mode_t)permissions) != 0 ||
+      fsync(transaction->directory_descriptor) != 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO, kDirectorySyncFailed);
+  transaction->sealed = 1;
+  return CONFIT_OK;
+}
+
+static int confit_host_existing_directory(int parent, const char *leaf) {
+  struct stat information;
+  if (fstatat(parent, leaf, &information, AT_SYMLINK_NOFOLLOW) != 0)
+    return errno == ENOENT ? 0 : -1;
+  return S_ISDIR(information.st_mode) ? 1 : -1;
+}
+
+ConfitStatus confit_host_directory_transaction_publish(
+    ConfitHostDirectoryTransaction *transaction, const char *final_leaf,
+    int *out_created, ConfitDiagnostic *diagnostic) {
+  int exists;
+  int renamed = 0;
+  if (transaction == 0 || !transaction->active || !transaction->sealed ||
+      out_created == 0 ||
+      !confit_host_leaf_is_valid(
+          final_leaf, CONFIT_LIMIT_SNAPSHOT_ARTIFACT_NAME_BYTES))
+    return confit_host_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+  *out_created = 0;
+  exists = confit_host_existing_directory(transaction->parent_descriptor,
+                                           final_leaf);
+  if (exists < 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryPublishFailed);
+  if (exists > 0) return CONFIT_OK;
+#if defined(__APPLE__)
+  if (renameatx_np(transaction->parent_descriptor,
+                   transaction->candidate_leaf,
+                   transaction->parent_descriptor, final_leaf,
+                   RENAME_EXCL) == 0)
+    renamed = 1;
+  else if (errno == EEXIST &&
+           confit_host_existing_directory(transaction->parent_descriptor,
+                                           final_leaf) > 0)
+    return CONFIT_OK;
+#else
+  /*
+   * POSIX renameat() may replace a destination created after the check above.
+   * Until a host supplies an atomic no-replace directory rename, fail closed
+   * instead of weakening the create-only snapshot invariant.
+   */
+  errno = ENOTSUP;
+#endif
+  if (!renamed)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryPublishFailed);
+  transaction->active = 0;
+  *out_created = 1;
+  if (fsync(transaction->parent_descriptor) != 0)
+    return confit_host_fail(diagnostic, CONFIT_ERR_IO,
+                            kDirectoryPublishFailed);
+  return CONFIT_OK;
+}
+
+void confit_host_directory_transaction_destroy(
+    ConfitHostDirectoryTransaction *transaction) {
+  ConfitAllocator allocator;
+  size_t index;
+  if (transaction == 0) return;
+  allocator = transaction->allocator;
+  if (transaction->active && transaction->directory_descriptor >= 0) {
+    (void)fchmod(transaction->directory_descriptor, 0700);
+    for (index = transaction->created_count; index > 0U; --index)
+      (void)unlinkat(transaction->directory_descriptor,
+                     transaction->created[index - 1U], 0);
+  }
+  if (transaction->directory_descriptor >= 0)
+    (void)close(transaction->directory_descriptor);
+  if (transaction->active && transaction->parent_descriptor >= 0 &&
+      transaction->candidate_leaf[0] != '\0')
+    (void)unlinkat(transaction->parent_descriptor,
+                   transaction->candidate_leaf, AT_REMOVEDIR);
+  if (transaction->parent_descriptor >= 0)
+    (void)close(transaction->parent_descriptor);
+  memset(transaction, 0, sizeof(*transaction));
+  allocator.deallocate(allocator.context, transaction);
 }

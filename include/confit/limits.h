@@ -27,6 +27,11 @@
 #define CONFIT_LIMIT_DEPENDENCY_AST_NODES ((size_t)512U)
 #define CONFIT_LIMIT_DEPENDENCY_NESTING ((size_t)32U)
 #define CONFIT_LIMIT_DIAGNOSTICS ((size_t)1024U)
+#define CONFIT_LIMIT_SNAPSHOT_ARTIFACTS ((size_t)64U)
+#define CONFIT_LIMIT_SNAPSHOT_ARTIFACT_NAME_BYTES ((size_t)128U)
+#define CONFIT_LIMIT_SNAPSHOT_ROLE_BYTES ((size_t)64U)
+#define CONFIT_LIMIT_SNAPSHOT_BYTES                                      \
+  ((size_t)64U * (size_t)1024U * (size_t)1024U)
 #define CONFIT_LIMIT_RENDER_COLUMNS ((size_t)512U)
 #define CONFIT_LIMIT_RENDER_ROWS ((size_t)256U)
 

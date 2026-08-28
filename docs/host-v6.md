@@ -12,8 +12,10 @@ depends_on:
 
 This document defines the implemented R05 filesystem capability boundary.  It
 does not claim that TOML input images, source-graph loading, schema parsing,
-snapshot publication, verification, emitters, CLI configuration commands, or
-the terminal interface are implemented.
+emitters, CLI configuration commands, or the terminal interface are implemented.
+R14 now composes these primitives through a private directory transaction
+described in `docs/snapshot-v6.md`; that transaction does not expand the public
+host API with directory enumeration.
 
 ## 1. Responsibility
 
@@ -153,7 +155,10 @@ product still must not import `opendir`, `readdir`, `scandir`, `glob`, `nftw`,
 Test binaries may use `fork` to create lock and writer contention; that test-only
 capability is not linked into the product binary.
 
-R05 evidence is local POSIX filesystem behavior for the executed corpus.  It is
+R05 evidence is local POSIX filesystem behavior for the executed corpus.  R14
+adds create-only private-directory publication, exact member reopening and
+selected activation while retaining the same descriptor/no-follow boundary.
+The R05 evidence alone is
 not schema parsing, source reachability, parse/hash identity, multi-file
 snapshot crash certification, arbitrary-filesystem certification, consumer
 build evidence, or protection from every same-user denial of service.

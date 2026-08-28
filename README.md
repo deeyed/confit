@@ -20,6 +20,7 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 bounded dependency expressions](docs/expression-v6.md)
 - [Schema 6 deterministic resolver](docs/resolver-v6.md)
 - [Schema 6 user configuration and minimal serialization](docs/user-config-v6.md)
+- [Schema 6 immutable selected snapshots](docs/snapshot-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 
 ## 현재 구현 상태
@@ -46,11 +47,14 @@ immutable result로 만든다. Unknown/duplicate/wrong-domain assignment와 unav
 link한 typed assignment로 만들고, 성공한 resolution을 default filler 없는 stable `[values]`
 TOML로 직렬화한다. Memory serializer와 explicit atomic destination writer는 하나의 구현을
 공유하고 load/resolve/format 단계는 source user file을 수정하지 않는다.
+R14는 이 exact project/user input과 resolved result를 sealed content-addressed directory로
+출판하고 regular `selected` 하나로만 활성화한다. Verify는 sealed manifest에 열거된 path만
+다시 hash하며 schema parse, resolver, directory scan 또는 project source 검사를 실행하지 않는다.
 Configuration command는 아직 project graph를 열지 않고 usage error로 종료한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 snapshot writer 또는 TUI가 이미 구현됨
+- schema 6 emitter, configuration CLI 또는 TUI가 이미 구현됨
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨

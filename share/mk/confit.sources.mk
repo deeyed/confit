@@ -29,6 +29,9 @@ CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
 CONFIT_RESOLVER_SOURCES= \
 	src/resolver/resolver.c
 
+CONFIT_SNAPSHOT_SOURCES= \
+	src/snapshot/snapshot.c
+
 CONFIT_GENERATOR_SOURCES=
 
 CONFIT_CLI_SOURCES= \
@@ -55,7 +58,8 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_source_graph.c \
 	tests/integration/test_schema.c \
 	tests/integration/test_types.c \
-	tests/integration/test_config.c
+	tests/integration/test_config.c \
+	tests/integration/test_snapshot.c
 
 CONFIT_PTY_TEST_SOURCES=
 
