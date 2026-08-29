@@ -1,0 +1,3 @@
+schema_version = 6
+mainmenu = "Generic application configuration"
+source = ["config/runtime.toml"]

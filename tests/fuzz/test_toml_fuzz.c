@@ -2,9 +2,10 @@
 #include <string.h>
 
 #include "confit/diagnostic.h"
-#include "confit/toml.h"
 #include "confit/status.h"
+#include "confit/toml.h"
 
+#if !defined(CONFIT_LIBFUZZER)
 #include "test_fs.h"
 
 #ifndef CONFIT_TEST_SOURCE_DIR
@@ -17,6 +18,7 @@ static uint32_t next_state(uint32_t *state) {
   *state ^= *state << 5U;
   return *state;
 }
+#endif
 
 static int parse_one(const char *source_name, const char *text, size_t size) {
   ConfitTomlDocument *document = 0;
@@ -24,8 +26,8 @@ static int parse_one(const char *source_name, const char *text, size_t size) {
   ConfitStatus status;
 
   confit_diagnostic_init(&diagnostic);
-  status = confit_toml_parse_text(source_name, text, size, &document,
-                                     &diagnostic);
+  status =
+      confit_toml_parse_text(source_name, text, size, &document, &diagnostic);
   if (status == CONFIT_OK) {
     const ConfitTomlValue *root = confit_toml_document_root(document);
 
@@ -34,9 +36,8 @@ static int parse_one(const char *source_name, const char *text, size_t size) {
       confit_toml_document_free(document);
       return 0;
     }
-  } else if (document != 0 ||
-             (status != CONFIT_ERR_VALIDATION &&
-              status != CONFIT_ERR_INTERNAL)) {
+  } else if (document != 0 || (status != CONFIT_ERR_VALIDATION &&
+                               status != CONFIT_ERR_INTERNAL)) {
     confit_toml_document_free(document);
     return 0;
   }
@@ -44,6 +45,12 @@ static int parse_one(const char *source_name, const char *text, size_t size) {
   return 1;
 }
 
+#if defined(CONFIT_LIBFUZZER)
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  (void)parse_one("toml-libfuzzer", (const char *)data, size);
+  return 0;
+}
+#else
 static int parse_seed_file(const char *name) {
   char corpus[1024];
   char path[1024];
@@ -67,13 +74,13 @@ static int parse_seed_file(const char *name) {
 }
 
 int main(void) {
-  static const char alphabet[] =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-[]{}=,\"'"
-      "#\\/ \t\r\n";
-  static const char invalid_utf8[] = {'k', ' ', '=', ' ', '=', ' ',
-                                      (char)0xc3, '\0'};
-  static const char embedded_nul[] = {'k', ' ', '=', ' ', '1', '\n',
-                                      0, 'x', '\n'};
+  static const char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRS"
+                                 "TUVWXYZ0123456789._-[]{}=,\"'"
+                                 "#\\/ \t\r\n";
+  static const char invalid_utf8[] = {'k', ' ', '=',        ' ',
+                                      '=', ' ', (char)0xc3, '\0'};
+  static const char embedded_nul[] = {'k',  ' ', '=', ' ', '1',
+                                      '\n', 0,   'x', '\n'};
   uint32_t state = 0xC0FFEEU;
   size_t index;
 
@@ -84,8 +91,7 @@ int main(void) {
       !parse_seed_file("invalid-integer-overflow.toml") ||
       !parse_one("toml-invalid-utf8", invalid_utf8,
                  sizeof(invalid_utf8) - 1U) ||
-      !parse_one("toml-embedded-nul", embedded_nul,
-                 sizeof(embedded_nul))) {
+      !parse_one("toml-embedded-nul", embedded_nul, sizeof(embedded_nul))) {
     return 2;
   }
   for (index = 0U; index < 2048U; ++index) {
@@ -94,7 +100,8 @@ int main(void) {
     size_t cursor;
 
     for (cursor = 0U; cursor < length; ++cursor) {
-      generated[cursor] = alphabet[next_state(&state) % (sizeof(alphabet) - 1U)];
+      generated[cursor] =
+          alphabet[next_state(&state) % (sizeof(alphabet) - 1U)];
     }
     generated[length] = '\0';
     if (!parse_one("toml-generated", generated, length)) {
@@ -103,3 +110,4 @@ int main(void) {
   }
   return 0;
 }
+#endif

@@ -1,0 +1,20 @@
+[menu]
+prompt = "Runtime"
+help = "Configure generic runtime behavior."
+source = ["config/logging.toml"]
+
+[[config]]
+symbol = "WORKER_COUNT"
+type = "int"
+prompt = "Worker count"
+help = "Set the maximum number of generic worker contexts."
+default = 4
+range = { min = 1, max = 64 }
+
+[[config]]
+symbol = "DEVICE_ID"
+type = "hex"
+prompt = "Device identifier"
+help = "Set an inert hexadecimal identifier emitted as configuration data."
+default = 0x10e8
+range = { min = 0x0, max = 0xffff }

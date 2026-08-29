@@ -148,6 +148,7 @@ CONFIT_DIRECT_TEST_TARGETS:=${CONFIT_DIRECT_TEST_TARGETS} run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
 .if ${_test_binary:T} == "confit_test_cli" || \
+    ${_test_binary:T} == "confit_test_generic_project" || \
     ${_test_binary:T} == "confit_test_terminal"
 	@${_test_binary} ${CONFIT_BINARY}
 .else

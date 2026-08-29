@@ -1,0 +1,6 @@
+schema_version = 6
+
+[values]
+ENABLE_METRICS = true
+WORKER_COUNT = 8
+LOG_LEVEL = "verbose"

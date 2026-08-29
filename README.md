@@ -24,6 +24,8 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 conventional configuration CLI](docs/cli-v6.md)
 - [Schema 6 configuration review and oldconfig workflows](docs/migration-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
+- [Schema 6 R21 security and generic integration closure](docs/audits/confit-v6-r21.md)
+- [Direct-authoring generic example](examples/generic/README.md)
 
 ## 현재 구현 상태
 
@@ -38,8 +40,7 @@ in-memory generic model을 구현했다. R05는 descriptor-rooted bounded POSIX 
 default, numeric range, enum domain과 field applicability를 검증하여 generic typed catalog에
 소유시키고, hex token의 lexical identity를 같은 input byte image에서 보존한다.
 R10 강감사에서 vendored TOML file-parser capability를 compile out하고 schema 전용 hex
-lexeme helper를 internal ownership-checked seam으로 축소했다. 현재 binary는 여전히 `help`와
-`--version`만 성공하는 development skeleton이다. R11은 동결된 `depends_on` grammar의
+lexeme helper를 internal ownership-checked seam으로 축소했다. R11은 동결된 `depends_on` grammar의
 bounded lexer/parser, 전 reference link와 type/domain 검사, cycle rejection, stable
 prerequisite order, read-only short-circuit evaluator와 reason tree를 추가했다.
 R12는 declaration default와 unordered typed assignment를 single-writer 규칙으로 resolve하고,
@@ -61,10 +62,15 @@ poll, bounded ANSI renderer와 연결하며 snapshot save는 기존 publisher에
 비-TTY와 40x10 미만 화면은 raw mode 전에 거부한다. `listnewconfig`,
 `oldconfig`, `olddefconfig`, `savedefconfig`는 sealed schema-6 catalog comparison과
 shared minimal serializer 위에서 동작하며 incompatible semantic change를 자동 변환하지 않는다.
+R20은 넓은 split pane과 좁은 list/detail pane, typed editor, closed command mode를 마감했다.
+`Esc`와 plain `q`는 종료하지 않고, `:q`, `:q!`, `:w`, `:wq`, `:x`가 clean/dirty/save 결과에
+따라 명시적으로 session lifetime을 결정한다. R21은 hostile path, exact-read, snapshot race,
+emitter injection, randomized UI, PTY signal, sanitizer, bounded libFuzzer와 handwritten generic
+example의 configure/verify/bmake consumption을 한 product plane에서 다시 검증한다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 TUI가 모든 terminal에서 사용성 검토와 호환성 인증을 마침
+- schema 6 TUI가 모든 terminal에서 호환성·접근성 인증을 마침
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨
@@ -97,9 +103,8 @@ confit verify \
 
 Confit은 project entry, user config와 output을 이름이나 environment에서 찾지 않는다.
 Project 개발자는 Confit TOML과 ordinary Makefile을 직접 작성하며 generated value를 어떻게
-소비할지 Makefile에서 결정한다. R16의 `menuconfig`는 아직 사용할 수 없으므로 현재 wrapper의
-실행 가능한 non-interactive 경로는 `bmake configure`다. TUI가 구현된 뒤 일반 사용자가 보게 될
-목표 wrapper 흐름은 다음과 같다.
+소비할지 Makefile에서 결정한다. `examples/generic`은 scaffold 없이 이 경로를 그대로 실행하는
+tracked 예제다. 일반 사용자의 interactive wrapper 흐름은 다음과 같다.
 
 ```text
 bmake menuconfig

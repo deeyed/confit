@@ -1,0 +1,19 @@
+[menu]
+prompt = "Logging"
+help = "Configure optional generic logging and metrics."
+
+[[config]]
+symbol = "ENABLE_METRICS"
+type = "bool"
+prompt = "Enable metrics"
+help = "Compile the example metrics implementation."
+default = false
+
+[[config]]
+symbol = "LOG_LEVEL"
+type = "enum"
+prompt = "Log level"
+help = "Select the amount of example log output."
+values = ["quiet", "normal", "verbose"]
+default = "normal"
+depends_on = "ENABLE_METRICS"

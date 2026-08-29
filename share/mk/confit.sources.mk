@@ -70,7 +70,8 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_cli.c \
 	tests/integration/test_migration.c \
 	tests/integration/test_snapshot.c \
-	tests/integration/test_emitter_integration.c
+	tests/integration/test_emitter_integration.c \
+	tests/integration/test_generic_project.c
 
 CONFIT_PTY_TEST_SOURCES= \
 	tests/pty/test_terminal.c
