@@ -5,8 +5,9 @@ Confit은 TOML로 작성한 명시적 configuration graph와 작은 사용자 �
 출판하는 generic configuration tool이다. Confit은 build를 실행하거나 project source,
 Makefile, compiler invocation, link graph를 분석하지 않는다.
 
-이 checkout의 `codex/confit-v6` 브랜치는 schema 6 개발선이다. 현재 브랜치가 따라야 할
-정본 계약은 다음 두 문서다.
+이 checkout의 `codex/confit-v6` 브랜치는 Confit 1.0.0-rc1/schema 6
+release-candidate 선이다. 현재 브랜치의 핵심 정본 계약과 구현·검증
+문서는 다음과 같다.
 
 - [Schema 6 configuration contract](docs/config-v6.md)
 - [Schema 6 architecture and security contract](docs/architecture-v6.md)
@@ -25,6 +26,8 @@ Makefile, compiler invocation, link graph를 분석하지 않는다.
 - [Schema 6 configuration review and oldconfig workflows](docs/migration-v6.md)
 - [Schema 6 R10 mid-program audit](docs/audits/confit-v6-r10.md)
 - [Schema 6 R21 security and generic integration closure](docs/audits/confit-v6-r21.md)
+- [Schema 6 R22 final adversarial audit](docs/audits/confit-v6-r22.md)
+- [Confit 1.0.0-rc1 release notes](docs/release-v6-rc1.md)
 - [Direct-authoring generic example](examples/generic/README.md)
 
 ## 현재 구현 상태
@@ -67,13 +70,20 @@ R20은 넓은 split pane과 좁은 list/detail pane, typed editor, closed comman
 따라 명시적으로 session lifetime을 결정한다. R21은 hostile path, exact-read, snapshot race,
 emitter injection, randomized UI, PTY signal, sanitizer, bounded libFuzzer와 handwritten generic
 example의 configure/verify/bmake consumption을 한 product plane에서 다시 검증한다.
+R22는 동결된 문법과 공개 C/CLI 표면, compiled capability, exact-read,
+snapshot, emitter, dependency, TUI, sanitizer, fuzz, bootstrap, direct-authoring
+경계를 독립적으로 다시 대조했다. 발견한 불필요한 legacy diagnostic
+transport와 오래된 문서 예제, 정적 분석을 방해하던 test assertion
+구조를 교정하고 `1.0.0-rc1` release identity를 확정했다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
 - schema 6 TUI가 모든 terminal에서 호환성·접근성 인증을 마침
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
-- schema 6 release candidate가 완성됨
+- 모든 host·terminal·filesystem에 대한 포터빌리티 인증이 완료됨
+- 임의 입력 안전성, power-loss 내구성, 접근성 인증이 완료됨
+- 기존 schema 5 consumer가 자동으로 schema 6으로 전환됨
 
 ## 목표 사용자 흐름
 

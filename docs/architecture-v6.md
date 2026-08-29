@@ -3,7 +3,7 @@ doc_type: architecture-contract
 status: accepted
 authority: confit-architecture-v6
 schema_version: 6
-implementation_status: contract-frozen-implementation-in-progress
+implementation_status: release-candidate-implemented
 ---
 
 # Confit schema 6 architecture and security contract
@@ -15,12 +15,12 @@ This document fixes the architecture that implements
 product boundary ends at typed configuration data and immutable configuration
 snapshots. It neither analyzes nor drives a consumer's ordinary build.
 
-R01 freezes this architecture but does not claim that inherited source already
-implements it. A later round must remove the inherited schema 5 surface before
-new components can count as schema 6 evidence. Every implementation claim must
-identify its evidence class: source review, compile, unit, integration,
-exact-I/O observation, compiled import surface, sanitizer, bounded fuzz, PTY, or
-manual terminal review.
+R01 froze this architecture before the inherited schema 5 surface was removed.
+R22 has now closed the schema 6 release-candidate audit. Every implementation
+claim still identifies its evidence class: source review, compile, unit,
+integration, exact-I/O observation, compiled import surface, sanitizer, bounded
+fuzz, PTY, or manual terminal review; the R22 audit is the current evidence
+ledger.
 
 The architecture is designed around four constraints:
 

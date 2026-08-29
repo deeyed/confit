@@ -3,7 +3,7 @@ doc_type: contract
 status: accepted
 authority: confit-schema-v6
 schema_version: 6
-implementation_status: contract-frozen-implementation-in-progress
+implementation_status: release-candidate-implemented
 ---
 
 # Confit schema 6 configuration contract
@@ -20,10 +20,10 @@ Schema 6 is a hard cut. It does not provide a legacy parser, a dual-schema
 dispatcher, field aliases, ordered overrides, or a compatibility fallback.
 Unknown fields and unsupported types are errors.
 
-At R01 this is a frozen contract, not an implementation-completion statement.
-The inherited source tree still contains an older implementation until later
-rounds remove it. Examples in this document describe required schema 6 behavior;
-they are not evidence that the current binary already provides it.
+R01 froze this contract before implementation. R22 has now compared the complete
+schema 6 product surface against it and closed the release-candidate audit. The
+contract remains normative; implementation evidence and its limits are recorded
+in the R22 audit rather than inferred from examples in this document.
 
 Confit owns only configuration-document membership, typed option declarations,
 explicit user values, dependency availability, deterministic resolution, safe
@@ -789,13 +789,13 @@ CONFIG_VALUES_MK!=${CONFIT:Q} verify \
 	--root ${.CURDIR:Q} \
 	--project Confit.toml \
 	--output ${CONFIG_OUTPUT:Q} \
-	--print-artifact values.mk
+	--print-artifact values.mk || :
 
-.if ${.SHELLSTATUS} != 0 || empty(CONFIG_VALUES_MK)
+.if empty(CONFIG_VALUES_MK)
 .error configuration is missing or stale; run bmake menuconfig or bmake configure
-.endif
-
+.else
 .include "${CONFIG_VALUES_MK}"
+.endif
 .endif
 
 SRCS=src/main.c

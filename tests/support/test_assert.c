@@ -4,19 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-void confit_test_fail_at(const char *file, int line, const char *message) {
+_Noreturn void confit_test_fail_at(const char *file, int line,
+                                   const char *message) {
   fprintf(stderr, "%s:%d: test failure: %s\n", file, line,
           message != 0 ? message : "(null)");
   exit(1);
-}
-
-void confit_test_assert_true_at(const char *file, int line, int condition,
-                                const char *expression) {
-  if (!condition) {
-    fprintf(stderr, "%s:%d: assertion failed: %s\n", file, line,
-            expression != 0 ? expression : "(null)");
-    exit(1);
-  }
 }
 
 void confit_test_assert_equal_int_at(const char *file, int line, int expected,
