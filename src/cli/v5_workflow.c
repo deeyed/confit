@@ -369,8 +369,14 @@ static int command_tui(int argc, char **argv, const char *repository,
     else if (action.kind == CONFIT_V5_TUI_ACTION_UP &&
              selected != 0U)
       --selected;
-    else if (action.kind == CONFIT_V5_TUI_ACTION_SEARCH)
-      (void)snprintf(query, sizeof(query), "%s", action.value);
+    else if (action.kind == CONFIT_V5_TUI_ACTION_SEARCH) {
+      size_t query_size = strlen(action.value);
+      if (query_size > CONFIT_V5_WORKFLOW_QUERY_MAX) {
+        status = CONFIT_ERR_INVALID_ARGUMENT;
+        break;
+      }
+      memcpy(query, action.value, query_size + 1U);
+    }
     else if (action.kind == CONFIT_V5_TUI_ACTION_SET)
       status = confit_v5_workflow_set(workflow, action.symbol, action.value,
                                       diagnostic);
