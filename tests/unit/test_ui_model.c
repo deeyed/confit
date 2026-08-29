@@ -296,6 +296,38 @@ static void test_edits_history_and_transaction(void) {
   fixture_destroy(&fixture);
 }
 
+static void test_row_render_metadata(void) {
+  Fixture fixture = fixture_create();
+  ConfitDiagnostic diagnostic;
+  ConfitUiEffect effect;
+  ConfitUiRowView row;
+  confit_diagnostic_init(&diagnostic);
+  open_runtime(&fixture);
+  select_symbol(fixture.ui, "COUNT");
+  CONFIT_TEST_ASSERT(
+      confit_ui_row_at(fixture.ui, confit_ui_cursor(fixture.ui), &row));
+  CONFIT_TEST_ASSERT(row.has_range && row.range_minimum != 0 &&
+                     row.range_maximum != 0 && !row.changed);
+  select_symbol(fixture.ui, "ONLY_WHEN_BASE");
+  CONFIT_TEST_ASSERT(
+      confit_ui_row_at(fixture.ui, confit_ui_cursor(fixture.ui), &row));
+  CONFIT_TEST_ASSERT(!row.available && row.dependency_text != 0 &&
+                     strcmp(row.dependency_text, "ENABLE_BASE") == 0 &&
+                     row.reason_detail != 0);
+  select_symbol(fixture.ui, "ENABLE_BASE");
+  CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_TOGGLE, &effect,
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(
+      confit_ui_row_at(fixture.ui, confit_ui_cursor(fixture.ui), &row) &&
+      row.changed);
+  select_symbol(fixture.ui, "MODE");
+  CONFIT_TEST_ASSERT(
+      confit_ui_row_at(fixture.ui, confit_ui_cursor(fixture.ui), &row));
+  CONFIT_TEST_ASSERT(row.enum_value_count == 3U && row.enum_values != 0 &&
+                     strcmp(row.enum_values[2], "verbose") == 0);
+  fixture_destroy(&fixture);
+}
+
 static void test_search_modes_and_commands(void) {
   Fixture fixture = fixture_create();
   ConfitDiagnostic diagnostic;
@@ -422,6 +454,7 @@ static void test_history_bound_and_random_actions(void) {
 int main(void) {
   test_rows_and_view();
   test_edits_history_and_transaction();
+  test_row_render_metadata();
   test_search_modes_and_commands();
   test_history_bound_and_random_actions();
   return 0;

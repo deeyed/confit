@@ -73,6 +73,14 @@ typedef struct ConfitUiRowView {
   const ConfitValue *default_value;
   ConfitValueOrigin origin;
   int available;
+  int changed;
+  int has_range;
+  const ConfitValue *range_minimum;
+  const ConfitValue *range_maximum;
+  const char *const *enum_values;
+  size_t enum_value_count;
+  const char *dependency_text;
+  const char *reason_detail;
 } ConfitUiRowView;
 
 typedef struct ConfitUiDiffView {

@@ -65,8 +65,11 @@ order. This ordering is presentation only; it cannot establish value
 precedence. A root menu is not synthesized as a writable symbol.
 
 Each row exposes a stable menu or config index, depth, prompt, help, and, for a
-config, symbol, type, effective/default value, origin, and availability. Menu
-parent traversal uses only the catalog's declared presentation relation.
+config, symbol, type, effective/default value, origin, availability, semantic
+changed state, optional range, enum domain, dependency text, and borrowed
+causal-reason detail. These are already-loaded generic catalog/resolution
+views; exposing them does not add file or consumer-source access. Menu parent
+traversal uses only the catalog's declared presentation relation.
 
 Cursor and viewport are model state. The controller supplies a bounded number
 of viewport rows; the core does not query a terminal and does not know columns,
@@ -163,7 +166,11 @@ the pending baseline, preserves working values and dirty state, returns no exit
 effect, and exposes a failure notice. Thus a publish failure cannot accidentally
 exit or silently mark changes saved.
 
-Dirty `:q` is rejected. Plain q and Esc are not aliases for any command.
+Dirty `:q` is rejected. Like a completed Vim command-line attempt, rejection
+returns to `NORMAL` after presenting the diagnostic, so a user can immediately
+enter `:wq` or `:q!` instead of becoming trapped in the old text. An unknown
+closed-set command behaves the same way. Plain q and Esc are not aliases for
+any command.
 
 ## 7. Semantic view and evidence
 

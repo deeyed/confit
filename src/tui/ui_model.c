@@ -715,8 +715,12 @@ static ConfitStatus confit_ui_command(ConfitUiModel *model,
     model->exit_after_save = 0;
     *out_effect = CONFIT_UI_EFFECT_REQUEST_SAVE;
   } else if (strcmp(model->input, ":q") == 0) {
-    if (confit_ui_dirty(model))
+    if (confit_ui_dirty(model)) {
+      model->state = CONFIT_UI_NORMAL;
+      model->input[0] = '\0';
+      model->input_size = 0U;
       return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kDirtyQuit);
+    }
     *out_effect = CONFIT_UI_EFFECT_EXIT;
   } else if (strcmp(model->input, ":q!") == 0) {
     *out_effect = CONFIT_UI_EFFECT_DISCARD_AND_EXIT;
@@ -750,6 +754,9 @@ static ConfitStatus confit_ui_command(ConfitUiModel *model,
     model->show_unavailable = 0;
     confit_ui_rebuild_rows(model);
   } else {
+    model->state = CONFIT_UI_NORMAL;
+    model->input[0] = '\0';
+    model->input_size = 0U;
     return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kUnknownCommand);
   }
   model->state = CONFIT_UI_NORMAL;
@@ -921,6 +928,21 @@ int confit_ui_row_at(const ConfitUiModel *model, size_t row_index,
     out_view->default_value = config.default_value;
     out_view->origin = resolved->origin;
     out_view->available = resolved->available;
+    out_view->changed = confit_ui_value_dirty(model, row->index);
+    out_view->has_range = config.has_range;
+    out_view->range_minimum = config.range_minimum;
+    out_view->range_maximum = config.range_maximum;
+    out_view->enum_values = config.enum_values;
+    out_view->enum_value_count = config.enum_value_count;
+    out_view->dependency_text = config.dependency_text;
+    if (resolved->reason != CONFIT_INDEX_NONE &&
+        (config.dependency_text != 0 || !resolved->available)) {
+      const ConfitReasonNode *reason = 0;
+      if (confit_resolution_reason_at(model->resolution, resolved->reason,
+                                      &reason) &&
+          reason != 0)
+        out_view->reason_detail = reason->detail;
+    }
   }
   return 1;
 }

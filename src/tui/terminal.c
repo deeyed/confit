@@ -64,6 +64,7 @@ typedef enum ConfitTerminalEventKind {
   CONFIT_TERMINAL_EVENT_DOWN,
   CONFIT_TERMINAL_EVENT_LEFT,
   CONFIT_TERMINAL_EVENT_RIGHT,
+  CONFIT_TERMINAL_EVENT_TAB,
   CONFIT_TERMINAL_EVENT_CTRL_R,
 } ConfitTerminalEventKind;
 
@@ -390,6 +391,24 @@ static void confit_terminal_value_text(const ConfitValue *value, char *out,
   }
 }
 
+static const char *confit_terminal_value_kind_name(ConfitValueKind kind) {
+  switch (kind) {
+  case CONFIT_VALUE_BOOL:
+    return "bool";
+  case CONFIT_VALUE_INT:
+    return "int";
+  case CONFIT_VALUE_HEX:
+    return "hex";
+  case CONFIT_VALUE_STRING:
+    return "string";
+  case CONFIT_VALUE_ENUM:
+    return "enum";
+  case CONFIT_VALUE_INVALID:
+  default:
+    return "invalid";
+  }
+}
+
 static int confit_terminal_selected_row(const ConfitUiModel *model,
                                         ConfitUiRowView *out) {
   return confit_ui_cursor(model) < confit_ui_row_count(model) &&
@@ -413,8 +432,9 @@ static void confit_terminal_render_list_line(ConfitTerminalWriter *writer,
               : row.depth;
   (void)snprintf(prefix, sizeof(prefix), "%c%c ",
                  row_index == confit_ui_cursor(model) ? '>' : ' ',
-                 row.kind == CONFIT_UI_ROW_MENU ? '+'
-                                                : (row.available ? ' ' : '-'));
+                 row.kind == CONFIT_UI_ROW_MENU
+                     ? '+'
+                     : (!row.available ? '-' : (row.changed ? '*' : ' ')));
   value[0] = '\0';
   if (row.kind == CONFIT_UI_ROW_CONFIG)
     confit_terminal_value_text(row.effective_value, value, sizeof(value));
@@ -429,37 +449,108 @@ static void confit_terminal_render_detail(ConfitTerminalWriter *writer,
                                           size_t columns, size_t line) {
   ConfitUiRowView row;
   char value[96];
+  char other[96];
   char text[CONFIT_LIMIT_HELP_BYTES + 256U];
+  const ConfitUiState state = confit_ui_state(model);
   text[0] = '\0';
+  if (state == CONFIT_UI_HELP) {
+    static const char *const help_lines[] = {
+        "Menuconfig help (Esc returns)",
+        "j/k or arrows: move selection",
+        "Enter/right: open menu or edit value",
+        "Space: toggle bool   e: typed editor",
+        "/: search   n/N: next/previous match",
+        "u/Ctrl-R: undo/redo   d: semantic diff",
+        ": enters command mode; q never exits",
+        ":w save   :q clean exit   :q! discard exit",
+        ":wq save+exit   :x save only when modified",
+        ":set unavailable | :set nounavailable",
+        "No shell, pipe, mapping, macro, or plugin commands.",
+    };
+    if (line < sizeof(help_lines) / sizeof(help_lines[0]))
+      confit_terminal_writer_safe_text(writer, help_lines[line], columns);
+    else
+      confit_terminal_writer_repeat(writer, ' ', columns);
+    return;
+  }
+  if (state == CONFIT_UI_DIFF) {
+    if (line == 0U) {
+      (void)snprintf(text, sizeof(text), "Semantic diff (%zu changed)",
+                     confit_ui_diff_count(model));
+    } else if (line >= 2U) {
+      ConfitUiDiffView diff;
+      const size_t diff_index = line - 2U;
+      if (confit_ui_diff_at(model, diff_index, &diff)) {
+        confit_terminal_value_text(diff.saved_value, value, sizeof(value));
+        confit_terminal_value_text(diff.working_value, other, sizeof(other));
+        (void)snprintf(text, sizeof(text), "%s: %s -> %s", diff.symbol, value,
+                       other);
+      }
+    }
+    confit_terminal_writer_safe_text(writer, text, columns);
+    return;
+  }
   if (!confit_terminal_selected_row(model, &row)) {
     confit_terminal_writer_repeat(writer, ' ', columns);
     return;
   }
   if (line == 0U) {
-    (void)snprintf(text, sizeof(text), "%s",
-                   row.symbol != 0 ? row.symbol : "Menu");
+    (void)snprintf(text, sizeof(text), "%s", row.prompt != 0 ? row.prompt : "");
   } else if (line == 1U && row.kind == CONFIT_UI_ROW_CONFIG) {
+    (void)snprintf(text, sizeof(text), "%s  type: %s",
+                   row.symbol != 0 ? row.symbol : "",
+                   confit_terminal_value_kind_name(row.value_kind));
+  } else if (line == 2U && row.kind == CONFIT_UI_ROW_CONFIG) {
     confit_terminal_value_text(row.effective_value, value, sizeof(value));
-    (void)snprintf(text, sizeof(text), "value: %s  origin: %s  %s", value,
+    confit_terminal_value_text(row.default_value, other, sizeof(other));
+    (void)snprintf(text, sizeof(text), "value: %s  default: %s", value, other);
+  } else if (line == 3U && row.kind == CONFIT_UI_ROW_CONFIG) {
+    (void)snprintf(text, sizeof(text), "origin: %s  %s%s",
                    row.origin == CONFIT_ORIGIN_USER ? "user" : "default",
-                   row.available ? "available" : "unavailable");
-  } else if (line == 2U) {
-    (void)snprintf(text, sizeof(text), "%s", row.help != 0 ? row.help : "");
-  } else if (line == 4U && confit_ui_state(model) == CONFIT_UI_DIFF) {
-    (void)snprintf(text, sizeof(text), "changed symbols: %zu",
-                   confit_ui_diff_count(model));
-  } else if (line == 4U && confit_ui_state(model) == CONFIT_UI_HELP) {
+                   row.available ? "available" : "UNAVAILABLE",
+                   row.changed ? "  MODIFIED" : "");
+  } else if (state == CONFIT_UI_ENUM_PICKER && line == 4U) {
     (void)snprintf(text, sizeof(text),
-                   "j/k move  Space toggle  e edit  / search  : command");
+                   "Choose a value (Enter applies; Esc cancels)");
+  } else if (state == CONFIT_UI_ENUM_PICKER && line == 5U &&
+             confit_ui_enum_selection(model) < row.enum_value_count) {
+    const size_t index = confit_ui_enum_selection(model);
+    (void)snprintf(text, sizeof(text), "> %s  (%zu/%zu)",
+                   row.enum_values[index], index + 1U, row.enum_value_count);
+  } else if (state == CONFIT_UI_ENUM_PICKER && line == 6U) {
+    (void)snprintf(text, sizeof(text), "values:");
+  } else if (state == CONFIT_UI_ENUM_PICKER && line >= 7U &&
+             line - 7U < row.enum_value_count) {
+    const size_t index = line - 7U;
+    (void)snprintf(text, sizeof(text), "  %s", row.enum_values[index]);
+  } else if (line == 4U) {
+    (void)snprintf(text, sizeof(text), "help: %s",
+                   row.help != 0 ? row.help : "");
+  } else if (line == 5U && row.kind == CONFIT_UI_ROW_CONFIG &&
+             row.dependency_text != 0) {
+    (void)snprintf(text, sizeof(text), "depends on: %s", row.dependency_text);
+  } else if (line == 6U && row.kind == CONFIT_UI_ROW_CONFIG &&
+             row.reason_detail != 0) {
+    (void)snprintf(text, sizeof(text), "reason: %s", row.reason_detail);
+  } else if (line == 7U && row.kind == CONFIT_UI_ROW_CONFIG && row.has_range) {
+    confit_terminal_value_text(row.range_minimum, value, sizeof(value));
+    confit_terminal_value_text(row.range_maximum, other, sizeof(other));
+    (void)snprintf(text, sizeof(text), "range: %s .. %s", value, other);
   }
   confit_terminal_writer_safe_text(writer, text, columns);
 }
 
 static ConfitStatus confit_terminal_render(ConfitUiModel *model, int output_fd,
                                            const ConfitTerminalSize *size,
+                                           int narrow_detail,
                                            const char *message,
                                            ConfitDiagnostic *diagnostic) {
   const int split = size->columns >= CONFIT_TERMINAL_SPLIT_COLUMNS;
+  const ConfitUiState state = confit_ui_state(model);
+  const int special_detail = state == CONFIT_UI_HELP ||
+                             state == CONFIT_UI_DIFF ||
+                             state == CONFIT_UI_ENUM_PICKER;
+  const int show_detail = !split && (narrow_detail || special_detail);
   const size_t body_rows = size->rows - 4U;
   const size_t list_columns = split ? (size->columns * 3U) / 5U : size->columns;
   const size_t detail_columns = split ? size->columns - list_columns - 3U : 0U;
@@ -480,19 +571,24 @@ static ConfitStatus confit_terminal_render(ConfitUiModel *model, int output_fd,
   writer.capacity = capacity;
   writer.used = 0U;
   writer.valid = 1;
-  (void)snprintf(title, sizeof(title), "+-- Confit menuconfig [%s] [%s]%s --+",
+  (void)snprintf(title, sizeof(title),
+                 "+-- Confit menuconfig [%s]%s [%s]%s --+",
                  split ? "split" : "tabbed",
-                 confit_terminal_state_name(confit_ui_state(model)),
+                 split ? "" : (show_detail ? " [detail]" : " [list]"),
+                 confit_terminal_state_name(state),
                  confit_ui_dirty(model) ? " [modified]" : "");
   confit_terminal_writer_text(&writer, "\033[H");
   confit_terminal_writer_safe_text(&writer, title, size->columns);
   for (row = 0U; row < body_rows; ++row) {
     const size_t model_row = confit_ui_viewport_offset(model) + row;
     confit_terminal_writer_text(&writer, "\r\n");
-    if (model_row < confit_ui_row_count(model))
+    if (show_detail) {
+      confit_terminal_render_detail(&writer, model, size->columns, row);
+    } else if (model_row < confit_ui_row_count(model)) {
       confit_terminal_render_list_line(&writer, model, model_row, list_columns);
-    else
+    } else {
       confit_terminal_writer_repeat(&writer, ' ', list_columns);
+    }
     if (split) {
       confit_terminal_writer_text(&writer, " | ");
       confit_terminal_render_detail(&writer, model, detail_columns, row);
@@ -500,17 +596,26 @@ static ConfitStatus confit_terminal_render(ConfitUiModel *model, int output_fd,
   }
   confit_terminal_writer_text(&writer, "\r\n");
   input = confit_ui_input(model, &input_size);
-  if (confit_ui_state(model) == CONFIT_UI_EDIT ||
-      confit_ui_state(model) == CONFIT_UI_SEARCH ||
-      confit_ui_state(model) == CONFIT_UI_COMMAND) {
-    (void)snprintf(footer, sizeof(footer), "%s> %.*s",
-                   confit_terminal_state_name(confit_ui_state(model)),
-                   (int)(input_size < 180U ? input_size : 180U),
-                   input != 0 ? input : "");
-  } else {
+  if (state == CONFIT_UI_EDIT || state == CONFIT_UI_SEARCH ||
+      state == CONFIT_UI_COMMAND) {
     (void)snprintf(
-        footer, sizeof(footer),
-        "j/k move  Enter open  Space toggle  e edit  / search  : command");
+        footer, sizeof(footer), "%s> %.*s  [Enter apply, Esc cancel]",
+        confit_terminal_state_name(state),
+        (int)(input_size < 180U ? input_size : 180U), input != 0 ? input : "");
+  } else if (state == CONFIT_UI_ENUM_PICKER) {
+    (void)snprintf(footer, sizeof(footer),
+                   "j/k choose  Enter apply  Esc cancel");
+  } else if (state == CONFIT_UI_HELP || state == CONFIT_UI_DIFF) {
+    (void)snprintf(footer, sizeof(footer), "Esc returns to Normal mode");
+  } else {
+    if (split)
+      (void)snprintf(
+          footer, sizeof(footer),
+          "j/k move  Enter open  Space bool  e edit  / search  : commands");
+    else
+      (void)snprintf(
+          footer, sizeof(footer),
+          "j/k move Enter open Space bool e edit / search : cmd Tab pane");
   }
   confit_terminal_writer_safe_text(&writer, footer, size->columns);
   confit_terminal_writer_text(&writer, "\r\n");
@@ -520,7 +625,10 @@ static ConfitStatus confit_terminal_render(ConfitUiModel *model, int output_fd,
           ? message
           : (confit_ui_notice(model) != 0
                  ? confit_ui_notice(model)
-                 : "Esc cancels a mode; exit with :q, :wq, :q!, or :x"),
+                 : (state == CONFIT_UI_COMMAND
+                        ? ":w :q :q! :wq :x :help :set unavailable :set "
+                          "nounavailable"
+                        : "Esc cancels a mode; exit with :q, :wq, :q!, or :x")),
       size->columns);
   confit_terminal_writer_text(&writer, "\033[J");
   if (!writer.valid ||
@@ -548,6 +656,8 @@ confit_terminal_decode(ConfitTerminalDecoder *decoder, unsigned char byte) {
     }
     if (byte == '\r' || byte == '\n')
       return confit_terminal_event(CONFIT_TERMINAL_EVENT_ENTER, 0U);
+    if (byte == '\t')
+      return confit_terminal_event(CONFIT_TERMINAL_EVENT_TAB, 0U);
     if (byte == 0x7fU || byte == 0x08U)
       return confit_terminal_event(CONFIT_TERMINAL_EVENT_BACKSPACE, 0U);
     if (byte == 0x12U)
@@ -560,6 +670,8 @@ confit_terminal_decode(ConfitTerminalDecoder *decoder, unsigned char byte) {
       if (byte == '\r' || byte == '\n')
         decoder->pending =
             confit_terminal_event(CONFIT_TERMINAL_EVENT_ENTER, 0U);
+      else if (byte == '\t')
+        decoder->pending = confit_terminal_event(CONFIT_TERMINAL_EVENT_TAB, 0U);
       else if (byte == 0x7fU || byte == 0x08U)
         decoder->pending =
             confit_terminal_event(CONFIT_TERMINAL_EVENT_BACKSPACE, 0U);
@@ -650,9 +762,44 @@ confit_terminal_input_replace(ConfitUiModel *model, unsigned char byte,
   return confit_ui_set_input(model, candidate, size, diagnostic);
 }
 
-static ConfitStatus confit_terminal_dispatch_event(
-    ConfitUiModel *model, const ConfitTerminalEvent *event,
-    ConfitUiEffect *out_effect, ConfitDiagnostic *diagnostic) {
+static ConfitStatus
+confit_terminal_complete_command(ConfitUiModel *model,
+                                 ConfitDiagnostic *diagnostic) {
+  static const char *const commands[] = {
+      ":w",
+      ":q",
+      ":q!",
+      ":wq",
+      ":x",
+      ":help",
+      ":set unavailable",
+      ":set nounavailable",
+  };
+  const char *input;
+  const char *match = 0;
+  size_t input_size;
+  size_t matches = 0U;
+  size_t index;
+  input = confit_ui_input(model, &input_size);
+  if (input == 0)
+    return CONFIT_OK;
+  for (index = 0U; index < sizeof(commands) / sizeof(commands[0]); ++index) {
+    if (strlen(commands[index]) >= input_size &&
+        memcmp(commands[index], input, input_size) == 0) {
+      match = commands[index];
+      ++matches;
+    }
+  }
+  if (matches == 1U)
+    return confit_ui_set_input(model, match, strlen(match), diagnostic);
+  return CONFIT_OK;
+}
+
+static ConfitStatus
+confit_terminal_dispatch_event(ConfitUiModel *model,
+                               const ConfitTerminalEvent *event, int split,
+                               int *narrow_detail, ConfitUiEffect *out_effect,
+                               ConfitDiagnostic *diagnostic) {
   const ConfitUiState state = confit_ui_state(model);
   ConfitUiAction action = (ConfitUiAction)0;
   *out_effect = CONFIT_UI_EFFECT_NONE;
@@ -661,6 +808,13 @@ static ConfitStatus confit_terminal_dispatch_event(
   if (event->kind == CONFIT_TERMINAL_EVENT_ESCAPE)
     return confit_ui_action(model, CONFIT_UI_ACTION_CANCEL, out_effect,
                             diagnostic);
+  if (event->kind == CONFIT_TERMINAL_EVENT_TAB) {
+    if (state == CONFIT_UI_COMMAND)
+      return confit_terminal_complete_command(model, diagnostic);
+    if (!split && state == CONFIT_UI_NORMAL && narrow_detail != 0)
+      *narrow_detail = !*narrow_detail;
+    return CONFIT_OK;
+  }
   if (state == CONFIT_UI_EDIT || state == CONFIT_UI_SEARCH ||
       state == CONFIT_UI_COMMAND) {
     if (event->kind == CONFIT_TERMINAL_EVENT_ENTER)
@@ -793,6 +947,8 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
   char message[512];
   ConfitStatus status = CONFIT_OK;
   int done = 0;
+  int narrow_detail = 0;
+  int redraw = 1;
   int restored;
   if (model == 0 || input_fd < 0 || output_fd < 0)
     return confit_terminal_fail(diagnostic, CONFIT_ERR_USAGE, kTerminalInvalid);
@@ -843,15 +999,20 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
                                       kTerminalTooSmall);
         break;
       }
+      redraw = 1;
     }
-    status = confit_ui_set_viewport_rows(model, size.rows - 4U, diagnostic);
-    if (status != CONFIT_OK)
-      break;
-    status = confit_terminal_render(
-        model, output_fd, &size, message[0] != '\0' ? message : 0, diagnostic);
-    message[0] = '\0';
-    if (status != CONFIT_OK)
-      break;
+    if (redraw) {
+      status = confit_ui_set_viewport_rows(model, size.rows - 4U, diagnostic);
+      if (status != CONFIT_OK)
+        break;
+      status =
+          confit_terminal_render(model, output_fd, &size, narrow_detail,
+                                 message[0] != '\0' ? message : 0, diagnostic);
+      message[0] = '\0';
+      redraw = 0;
+      if (status != CONFIT_OK)
+        break;
+    }
     input.fd = input_fd;
     input.events = POLLIN;
     input.revents = 0;
@@ -870,8 +1031,9 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
       if (event.kind == CONFIT_TERMINAL_EVENT_NONE)
         continue;
       confit_diagnostic_init(&action_diagnostic);
-      status = confit_terminal_dispatch_event(model, &event, &effect,
-                                              &action_diagnostic);
+      status = confit_terminal_dispatch_event(
+          model, &event, size.columns >= CONFIT_TERMINAL_SPLIT_COLUMNS,
+          &narrow_detail, &effect, &action_diagnostic);
       if (status == CONFIT_ERR_VALIDATION || status == CONFIT_ERR_USAGE) {
         confit_terminal_copy_message(message, sizeof(message),
                                      &action_diagnostic);
@@ -881,6 +1043,7 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
             confit_terminal_handle_effect(model, effect, controller, &done,
                                           message, sizeof(message), diagnostic);
       }
+      redraw = 1;
       continue;
     }
     if ((input.revents & (POLLERR | POLLNVAL)) != 0) {
@@ -919,8 +1082,9 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
         if (event.kind == CONFIT_TERMINAL_EVENT_NONE)
           break;
         confit_diagnostic_init(&action_diagnostic);
-        status = confit_terminal_dispatch_event(model, &event, &effect,
-                                                &action_diagnostic);
+        status = confit_terminal_dispatch_event(
+            model, &event, size.columns >= CONFIT_TERMINAL_SPLIT_COLUMNS,
+            &narrow_detail, &effect, &action_diagnostic);
         if (status == CONFIT_ERR_VALIDATION || status == CONFIT_ERR_USAGE) {
           confit_terminal_copy_message(message, sizeof(message),
                                        &action_diagnostic);
@@ -932,6 +1096,7 @@ ConfitStatus confit_terminal_run(ConfitUiModel *model, int input_fd,
         }
       }
     }
+    redraw = 1;
   }
 
 cleanup:
