@@ -29,6 +29,9 @@ CONFIT_EXPRESSION_AND_CONSTRAINT_SOURCES= \
 CONFIT_RESOLVER_SOURCES= \
 	src/resolver/resolver.c
 
+CONFIT_UI_MODEL_SOURCES= \
+	src/tui/ui_model.c
+
 CONFIT_SNAPSHOT_SOURCES= \
 	src/snapshot/snapshot.c \
 	src/migration/migration.c
@@ -53,6 +56,7 @@ CONFIT_UNIT_TEST_SOURCES= \
 	tests/unit/test_model.c \
 	tests/unit/test_expression.c \
 	tests/unit/test_resolver.c \
+	tests/unit/test_ui_model.c \
 	tests/unit/test_emitter.c \
 	tests/unit/test_toml_adapter.c \
 	tests/unit/test_public_headers.c

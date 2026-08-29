@@ -166,6 +166,12 @@ The POSIX frontend owns termios, bounded input decoding, polling, resize,
 rendering, and terminal restoration. It cannot edit schema definitions, inspect
 project source, invoke an external editor, or execute a command.
 
+R18 implements the first half of this split in `include/confit/ui.h` and
+`src/tui/ui_model.c`. The exact owned state, copy-on-write edit transaction,
+bounded history, closed command language, and controller save handshake are
+recorded in [`ui-model-v6.md`](ui-model-v6.md). No terminal backend is linked by
+that implementation round.
+
 ## 3. Product capability boundary
 
 ### 3.1 Files the product may read
