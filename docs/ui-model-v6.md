@@ -24,9 +24,10 @@ borrowed objects must outlive the UI model. All borrowed row, diff, and
 resolution views remain valid only until the next successful mutation or model
 destruction.
 
-R18 does not make `confit menuconfig` interactive. CLI/controller integration,
-raw input decoding, POSIX terminal operation, resize, signal handling, and
-visual rendering belong to R19 and R20.
+R18 alone did not make `confit menuconfig` interactive. R19 connects this model
+to the POSIX controller, raw input decoder, resize and signal loop, and bounded
+renderer documented in [`terminal-v6.md`](terminal-v6.md). R20 retains final
+human interaction review and UX correction authority.
 
 ## 2. Closed state machine
 

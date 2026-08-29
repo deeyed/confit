@@ -56,13 +56,15 @@ R15는 resolved value를 Make assignment, C header 또는 canonical JSON으로 �
 요청하지 않은 optional artifact를 만들지 않는다. R16은 닫힌 option matrix 위에 `check`,
 `configure`, `verify`, `search`, `explain`, `diff`를 연결했다. `configure`만 explicit output에
 immutable snapshot을 출판하고 `verify`는 resolver를 재실행하지 않은 채 sealed exact input만
-검증한다. `menuconfig`는 아직 terminal-unavailable로 종료한다. `listnewconfig`,
+검증한다. R18/R19의 `menuconfig`는 terminal-independent 편집 모델을 POSIX termios,
+poll, bounded ANSI renderer와 연결하며 snapshot save는 기존 publisher에 위임한다.
+비-TTY와 40x10 미만 화면은 raw mode 전에 거부한다. `listnewconfig`,
 `oldconfig`, `olddefconfig`, `savedefconfig`는 sealed schema-6 catalog comparison과
 shared minimal serializer 위에서 동작하며 incompatible semantic change를 자동 변환하지 않는다.
 
 따라서 이 문서는 다음을 주장하지 않는다.
 
-- schema 6 TUI가 이미 구현됨
+- schema 6 TUI가 모든 terminal에서 사용성 검토와 호환성 인증을 마침
 - 기존 schema 5 configuration의 compatibility 또는 migration
 - generic project의 build 성공이 Confit에 의해 검증됨
 - schema 6 release candidate가 완성됨

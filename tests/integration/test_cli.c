@@ -448,7 +448,7 @@ static void test_terminal_and_current_migration(const char *binary,
                                                 const char *root,
                                                 const char *output) {
   const TestCommandExpectation terminal = {
-      6, "", 0, 0, "terminal menuconfig is not available"};
+      6, "", 0, 0, "menuconfig requires POSIX TTY input and output"};
   const TestCommandExpectation no_new = {0, "", 0, "", 0};
   const char *menuconfig[] = {binary, "menuconfig", "--root", root,
                               "--project", "Confit.toml", "--output", output,

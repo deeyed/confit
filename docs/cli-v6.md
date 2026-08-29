@@ -42,9 +42,11 @@ The conventional controller implements these commands:
 | `olddefconfig` | Accept new defaults and publish a reviewed snapshot. | No |
 | `savedefconfig` | Atomically write selected minimal intent to an explicit destination. | Yes, destination only |
 
-`menuconfig` is recognized with its frozen option matrix, but R16 returns the
-terminal-status exit code without loading a project or entering raw mode. The
-terminal-independent UI and POSIX frontend are R18-R20 work.
+`menuconfig` runs the full-screen POSIX terminal frontend over the same loaded
+catalog, resolver, emitter request, and immutable snapshot publisher used by
+`configure`. It requires TTY standard input and output; redirected or piped
+use fails before raw mode. The terminal layer owns no project filesystem I/O
+and delegates an explicit save request back to the CLI snapshot adapter.
 
 The migration commands use the same frozen option matrix and are detailed in
 `docs/migration-v6.md`. No alias, rename map, schema-5 parser, or hidden history
@@ -202,7 +204,7 @@ Exit status follows the frozen status table:
 | 3 | parse |
 | 4 | validation or stale configuration |
 | 5 | I/O or publication |
-| 6 | terminal frontend unavailable/failure |
+| 6 | terminal frontend unavailable, interrupted, or failed |
 | 70 | internal invariant |
 
 Output stream failure is an I/O error. A command never reports success after

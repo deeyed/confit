@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "confit/config.h"
 #include "confit/diagnostic.h"
@@ -18,7 +19,9 @@
 #include "confit/schema.h"
 #include "confit/snapshot.h"
 #include "confit/status.h"
+#include "confit/ui.h"
 #include "confit/version.h"
+#include "terminal_internal.h"
 
 typedef enum ConfitCliCommand {
   CONFIT_CLI_COMMAND_INVALID = 0,
@@ -125,8 +128,6 @@ static const ConfitCliCommandSpec kConfitCliCommands[] = {
 
 static const char kCliInvalidArguments[] = "invalid command arguments";
 static const char kCliUnknownSymbol[] = "configuration symbol was not found";
-static const char kCliTerminalUnavailable[] =
-    "terminal menuconfig is not available until the terminal frontend round";
 static const char kCliOutputFailed[] = "failed to write command output";
 static const char kCliInternal[] = "configuration command invariant failed";
 static const char kCliSemanticReview[] =
@@ -154,7 +155,7 @@ static void confit_cli_print_help(void) {
       "  help             Show this help text\n"
       "  check            Validate and resolve without writing\n"
       "  configure        Resolve and publish an immutable snapshot\n"
-      "  menuconfig       Terminal editor (reserved; unavailable)\n"
+      "  menuconfig       Edit and publish in a POSIX terminal\n"
       "  verify           Verify the selected immutable snapshot\n"
       "  search           Search prompts, help text, and symbols\n"
       "  explain          Explain one resolved symbol\n"
@@ -570,7 +571,8 @@ static ConfitStatus confit_cli_publish_loaded(
     const ConfitCliOptions *options, const ConfitCliLoaded *loaded,
     const ConfitResolution *resolution,
     const ConfitAssignment *explicit_assignments,
-    size_t explicit_assignment_count, ConfitDiagnostic *diagnostic) {
+    size_t explicit_assignment_count, int announce,
+    ConfitDiagnostic *diagnostic) {
   ConfitHostRoot *output_root = 0;
   ConfitEmission *emission = 0;
   ConfitSnapshotArtifactSpec artifacts[2];
@@ -624,7 +626,7 @@ static ConfitStatus confit_cli_publish_loaded(
     status = confit_snapshot_publish(output_root, &request, 0, &publication,
                                      diagnostic);
   }
-  if (status == CONFIT_OK &&
+  if (status == CONFIT_OK && announce &&
       fprintf(stdout, "configured snapshot %s\n", publication.digest) < 0) {
     confit_diagnostic_set(diagnostic, CONFIT_ERR_IO, 0, 0U, 0U,
                           kCliOutputFailed);
@@ -641,7 +643,120 @@ static ConfitStatus confit_cli_command_configure(
   ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
   if (status == CONFIT_OK)
     status = confit_cli_publish_loaded(options, &loaded, loaded.resolution, 0,
-                                       0U, diagnostic);
+                                       0U, 1, diagnostic);
+  confit_cli_loaded_destroy(&loaded);
+  return status;
+}
+
+static void confit_cli_assignments_destroy(ConfitAssignment *assignments,
+                                           size_t count) {
+  size_t index;
+  if (assignments == 0) return;
+  for (index = count; index > 0U; --index)
+    confit_assignment_destroy(&assignments[index - 1U]);
+  free(assignments);
+}
+
+static ConfitStatus confit_cli_resolution_assignments(
+    const ConfitResolution *resolution, ConfitAssignment **out_assignments,
+    size_t *out_count, ConfitDiagnostic *diagnostic) {
+  ConfitAssignment *assignments = 0;
+  size_t count = 0U;
+  size_t initialized = 0U;
+  size_t index;
+  const size_t value_count = confit_resolution_value_count(resolution);
+  *out_assignments = 0;
+  *out_count = 0U;
+  if (value_count != 0U) {
+    assignments = (ConfitAssignment *)calloc(value_count, sizeof(*assignments));
+    if (assignments == 0) {
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                            kCliInternal);
+      return CONFIT_ERR_INTERNAL;
+    }
+  }
+  for (index = 0U; index < value_count; ++index) {
+    const ConfitResolvedValue *resolved = 0;
+    ConfitStatus status;
+    if (!confit_resolution_value_at(resolution, index, &resolved) ||
+        resolved == 0) {
+      confit_cli_assignments_destroy(assignments, initialized);
+      confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                            kCliInternal);
+      return CONFIT_ERR_INTERNAL;
+    }
+    if (resolved->origin != CONFIT_ORIGIN_USER) continue;
+    confit_assignment_init(&assignments[count]);
+    ++initialized;
+    status = confit_assignment_set(&assignments[count], resolved->symbol,
+                                   &resolved->effective_value, 0, diagnostic);
+    if (status != CONFIT_OK) {
+      confit_cli_assignments_destroy(assignments, initialized);
+      return status;
+    }
+    ++count;
+  }
+  *out_assignments = assignments;
+  *out_count = count;
+  return CONFIT_OK;
+}
+
+typedef struct ConfitCliMenuSave {
+  const ConfitCliOptions *options;
+  const ConfitCliLoaded *loaded;
+} ConfitCliMenuSave;
+
+static ConfitStatus confit_cli_menu_save(void *context,
+                                         const ConfitResolution *resolution,
+                                         ConfitDiagnostic *diagnostic) {
+  ConfitCliMenuSave *save = (ConfitCliMenuSave *)context;
+  ConfitAssignment *assignments = 0;
+  size_t assignment_count = 0U;
+  ConfitStatus status;
+  if (save == 0 || save->options == 0 || save->loaded == 0 ||
+      resolution == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                          kCliInternal);
+    return CONFIT_ERR_INTERNAL;
+  }
+  status = confit_cli_resolution_assignments(
+      resolution, &assignments, &assignment_count, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_cli_publish_loaded(save->options, save->loaded, resolution,
+                                       assignments, assignment_count, 0,
+                                       diagnostic);
+  confit_cli_assignments_destroy(assignments, assignment_count);
+  return status;
+}
+
+static ConfitStatus confit_cli_command_menuconfig(
+    const ConfitCliOptions *options, ConfitDiagnostic *diagnostic) {
+  ConfitCliLoaded loaded;
+  ConfitUiModel *model = 0;
+  ConfitCliMenuSave save;
+  ConfitTerminalController controller;
+  const ConfitAssignment *assignments = 0;
+  size_t assignment_count = 0U;
+  ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
+  if (status == CONFIT_OK) {
+    assignments =
+        confit_user_config_assignments(loaded.config, &assignment_count);
+    status = confit_ui_create(
+        confit_schema_project_catalog(loaded.project),
+        confit_schema_project_dependency_plan(loaded.project), assignments,
+        assignment_count, 0, &model, diagnostic);
+  }
+  if (status == CONFIT_OK) {
+    save.options = options;
+    save.loaded = &loaded;
+    controller.context = &save;
+    controller.save = confit_cli_menu_save;
+    status = confit_terminal_run(model, STDIN_FILENO, STDOUT_FILENO,
+                                 &controller, diagnostic);
+  }
+  if (status != CONFIT_OK)
+    (void)confit_diagnostic_stabilize_path(diagnostic);
+  confit_ui_destroy(model);
   confit_cli_loaded_destroy(&loaded);
   return status;
 }
@@ -1184,7 +1299,7 @@ static ConfitStatus confit_cli_command_oldconfig(
   if (status == CONFIT_OK)
     status = confit_cli_publish_loaded(options, &loaded, resolution,
                                        assignments, assignment_count,
-                                       diagnostic);
+                                       1, diagnostic);
   if (status != CONFIT_OK)
     (void)confit_diagnostic_stabilize_path(diagnostic);
   confit_resolution_destroy(resolution);
@@ -1303,9 +1418,7 @@ static ConfitStatus confit_cli_dispatch(const ConfitCliOptions *options,
   case CONFIT_CLI_COMMAND_CONFIGURE:
     return confit_cli_command_configure(options, diagnostic);
   case CONFIT_CLI_COMMAND_MENUCONFIG:
-    confit_diagnostic_set(diagnostic, CONFIT_ERR_TERMINAL, 0, 0U, 0U,
-                          kCliTerminalUnavailable);
-    return CONFIT_ERR_TERMINAL;
+    return confit_cli_command_menuconfig(options, diagnostic);
   case CONFIT_CLI_COMMAND_VERIFY:
     return confit_cli_command_verify(options, diagnostic);
   case CONFIT_CLI_COMMAND_SEARCH:

@@ -20,6 +20,7 @@ CONFIT_INCLUDE_FLAGS= \
 	-I${CONFIT_SOURCE_ROOT}/src/emitter \
 	-I${CONFIT_SOURCE_ROOT}/src/snapshot \
 	-I${CONFIT_SOURCE_ROOT}/src/migration \
+	-I${CONFIT_SOURCE_ROOT}/src/tui \
 	-I${CONFIT_SOURCE_ROOT}/vendor/tomlc17 \
 	-I${CONFIT_SOURCE_ROOT}/tests/support
 CONFIT_LINK_LIBS=
@@ -146,7 +147,8 @@ CONFIT_DIRECT_TEST_TARGETS=
 CONFIT_DIRECT_TEST_TARGETS:=${CONFIT_DIRECT_TEST_TARGETS} run-${_test_binary:T}
 .PHONY: run-${_test_binary:T}
 run-${_test_binary:T}: ${_test_binary}
-.if ${_test_binary:T} == "confit_test_cli"
+.if ${_test_binary:T} == "confit_test_cli" || \
+    ${_test_binary:T} == "confit_test_terminal"
 	@${_test_binary} ${CONFIT_BINARY}
 .else
 	@${_test_binary}

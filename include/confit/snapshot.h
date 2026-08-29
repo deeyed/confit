@@ -50,7 +50,10 @@ typedef struct ConfitSnapshotPublication {
  * are not reopened during publication.  When `explicit_assignments` is null,
  * the optional user configuration is the exact user-origin authority.  A
  * non-null explicit set lets an interactive controller publish newly reviewed
- * values while retaining an optional original user input in provenance.
+ * values while retaining an optional original user input as an exact manifest
+ * input. The explicit set is current authority and may intentionally differ
+ * from that starting document; it must exactly match every user-origin value
+ * in `resolution`.
  * Optional artifacts are inert bounded
  * byte strings and cannot replace a required core role.  On failure the
  * previous selected record remains the only active authority.

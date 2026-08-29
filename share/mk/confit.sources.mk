@@ -30,7 +30,8 @@ CONFIT_RESOLVER_SOURCES= \
 	src/resolver/resolver.c
 
 CONFIT_UI_MODEL_SOURCES= \
-	src/tui/ui_model.c
+	src/tui/ui_model.c \
+	src/tui/terminal.c
 
 CONFIT_SNAPSHOT_SOURCES= \
 	src/snapshot/snapshot.c \
@@ -71,7 +72,8 @@ CONFIT_INTEGRATION_TEST_SOURCES= \
 	tests/integration/test_snapshot.c \
 	tests/integration/test_emitter_integration.c
 
-CONFIT_PTY_TEST_SOURCES=
+CONFIT_PTY_TEST_SOURCES= \
+	tests/pty/test_terminal.c
 
 CONFIT_FUZZ_TEST_SOURCES= \
 	tests/fuzz/test_toml_fuzz.c \

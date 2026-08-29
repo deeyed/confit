@@ -1136,11 +1136,9 @@ static int confit_snapshot_request_is_consistent(
     const ConfitSnapshotPublishRequest *request) {
   const ConfitCatalog *catalog;
   size_t assignment_count = 0U;
-  size_t source_assignment_count = 0U;
   size_t user_origins = 0U;
   size_t index;
   const ConfitAssignment *assignments;
-  const ConfitAssignment *source_assignments;
   if (request == 0 || request->project == 0 || request->resolution == 0 ||
       request->resolved_values_printable < 0 ||
       request->resolved_values_printable > 1)
@@ -1148,33 +1146,16 @@ static int confit_snapshot_request_is_consistent(
   catalog = confit_schema_project_catalog(request->project);
   if (catalog == 0 || confit_resolution_catalog(request->resolution) != catalog)
     return 0;
-  source_assignments = confit_user_config_assignments(
-      request->user_config, &source_assignment_count);
   if (request->explicit_assignments != 0) {
     assignments = request->explicit_assignments;
     assignment_count = request->explicit_assignment_count;
   } else {
     if (request->explicit_assignment_count != 0U) return 0;
-    assignments = source_assignments;
-    assignment_count = source_assignment_count;
+    assignments = confit_user_config_assignments(request->user_config,
+                                                  &assignment_count);
   }
-  if ((assignment_count != 0U && assignments == 0) ||
-      source_assignment_count > assignment_count)
+  if (assignment_count != 0U && assignments == 0)
     return 0;
-  for (index = 0U; index < source_assignment_count; ++index) {
-    size_t candidate;
-    int found = 0;
-    for (candidate = 0U; candidate < assignment_count; ++candidate) {
-      if (strcmp(source_assignments[index].symbol,
-                 assignments[candidate].symbol) == 0 &&
-          confit_value_equal(&source_assignments[index].value,
-                             &assignments[candidate].value)) {
-        found = 1;
-        break;
-      }
-    }
-    if (!found) return 0;
-  }
   for (index = 0U;
        index < confit_resolution_value_count(request->resolution); ++index) {
     const ConfitResolvedValue *resolved = 0;
