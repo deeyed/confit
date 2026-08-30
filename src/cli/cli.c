@@ -1184,13 +1184,118 @@ static int confit_cli_prompt_value(const ConfitConfigView *view,
 }
 
 static void confit_cli_destroy_prompt_assignments(
-    ConfitAssignment *assignments, size_t first_owned, size_t count,
+    ConfitAssignment *assignments, size_t capacity,
     const ConfitAllocator *allocator) {
   size_t index;
   if (assignments == 0) return;
-  for (index = first_owned; index < count; ++index)
+  for (index = 0U; index < capacity; ++index)
     confit_assignment_destroy(&assignments[index]);
   allocator->deallocate(allocator->context, assignments);
+}
+
+static int confit_cli_choice_seen(const char *const *groups, size_t count,
+                                  const char *group) {
+  size_t index;
+  for (index = 0U; index < count; ++index)
+    if (strcmp(groups[index], group) == 0) return 1;
+  return 0;
+}
+
+static int confit_cli_prompt_choice(const ConfitCatalog *catalog,
+                                    const ConfitConfigView *owner,
+                                    char selected[CONFIT_LIMIT_SYMBOL_BYTES + 1U],
+                                    ConfitDiagnostic *diagnostic) {
+  char line[CONFIT_LIMIT_SYMBOL_BYTES + 2U];
+  const char *default_symbol = 0;
+  size_t index;
+  size_t member_count = 0U;
+  int read_result;
+  if (catalog == 0 || owner == 0 || owner->choice_group == 0 || selected == 0)
+    return 0;
+  if (fprintf(stdout, "%s (choice %s) [", owner->prompt,
+              owner->choice_group) < 0)
+    return 0;
+  for (index = 0U; index < confit_catalog_config_count(catalog); ++index) {
+    ConfitConfigView member;
+    if (!confit_catalog_config_at(catalog, index, &member)) return 0;
+    if (member.choice_group == 0 ||
+        strcmp(member.choice_group, owner->choice_group) != 0)
+      continue;
+    if (fprintf(stdout, "%s%s", member_count == 0U ? "" : "/",
+                member.symbol) < 0)
+      return 0;
+    if (member.default_value->data.boolean != 0) default_symbol = member.symbol;
+    ++member_count;
+  }
+  if (member_count < 2U || default_symbol == 0 ||
+      fprintf(stdout, "] (%s): ", default_symbol) < 0 ||
+      fflush(stdout) == EOF)
+    return 0;
+  read_result = confit_cli_read_prompt_line(line, sizeof(line));
+  if (read_result == 0) {
+    confit_diagnostic_set(diagnostic, CONFIT_ERR_TERMINAL, owner->symbol, 0U,
+                          0U, kCliPromptCancelled);
+    return 0;
+  }
+  if (read_result < 0) goto invalid;
+  if (line[0] == '\0') {
+    memcpy(selected, default_symbol, strlen(default_symbol) + 1U);
+    return 1;
+  }
+  for (index = 0U; index < confit_catalog_config_count(catalog); ++index) {
+    ConfitConfigView member;
+    if (!confit_catalog_config_at(catalog, index, &member)) return 0;
+    if (member.choice_group != 0 &&
+        strcmp(member.choice_group, owner->choice_group) == 0 &&
+        strcmp(member.symbol, line) == 0) {
+      memcpy(selected, member.symbol, strlen(member.symbol) + 1U);
+      return 1;
+    }
+  }
+invalid:
+  confit_diagnostic_set(diagnostic, CONFIT_ERR_VALIDATION, owner->symbol, 0U,
+                        0U, kCliPromptInvalid);
+  return 0;
+}
+
+static ConfitStatus confit_cli_assignment_set_bool(
+    ConfitAssignment *assignments, size_t capacity, size_t *count,
+    const char *symbol, int boolean, ConfitDiagnostic *diagnostic) {
+  ConfitValue value;
+  size_t index;
+  ConfitStatus status;
+  if (assignments == 0 || count == 0 || symbol == 0) return CONFIT_ERR_INTERNAL;
+  for (index = 0U; index < *count; ++index)
+    if (strcmp(assignments[index].symbol, symbol) == 0) break;
+  if (index == *count && *count >= capacity) return CONFIT_ERR_INTERNAL;
+  confit_value_init(&value);
+  status = confit_value_set_bool(&value, boolean, 0, diagnostic);
+  if (status == CONFIT_OK)
+    status = confit_assignment_set(&assignments[index], symbol, &value, 0,
+                                   diagnostic);
+  confit_value_destroy(&value);
+  if (status == CONFIT_OK && index == *count) ++(*count);
+  return status;
+}
+
+static ConfitStatus confit_cli_assign_choice(
+    const ConfitCatalog *catalog, const char *group, const char *selected,
+    ConfitAssignment *assignments, size_t capacity, size_t *assignment_count,
+    ConfitDiagnostic *diagnostic) {
+  size_t index;
+  for (index = 0U; index < confit_catalog_config_count(catalog); ++index) {
+    ConfitConfigView member;
+    ConfitStatus status;
+    if (!confit_catalog_config_at(catalog, index, &member))
+      return CONFIT_ERR_INTERNAL;
+    if (member.choice_group == 0 || strcmp(member.choice_group, group) != 0)
+      continue;
+    status = confit_cli_assignment_set_bool(
+        assignments, capacity, assignment_count, member.symbol,
+        strcmp(member.symbol, selected) == 0, diagnostic);
+    if (status != CONFIT_OK) return status;
+  }
+  return CONFIT_OK;
 }
 
 static ConfitStatus confit_cli_command_oldconfig(
@@ -1207,6 +1312,8 @@ static ConfitStatus confit_cli_command_oldconfig(
   size_t assignment_count = 0U;
   size_t capacity;
   size_t index;
+  const char **reviewed_choices = 0;
+  size_t reviewed_choice_count = 0U;
   ConfitStatus status = confit_cli_load(options, &loaded, diagnostic);
   confit_allocator_default(&allocator);
   if (status == CONFIT_OK)
@@ -1229,6 +1336,16 @@ static ConfitStatus confit_cli_command_oldconfig(
         confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
                               kCliInternal);
         status = CONFIT_ERR_INTERNAL;
+      } else {
+        for (index = 0U; index < capacity; ++index)
+          confit_assignment_init(&assignments[index]);
+        reviewed_choices = (const char **)allocator.allocate(
+            allocator.context, capacity * sizeof(*reviewed_choices));
+        if (reviewed_choices == 0) {
+          confit_diagnostic_set(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                                kCliInternal);
+          status = CONFIT_ERR_INTERNAL;
+        }
       }
     }
   }
@@ -1238,8 +1355,12 @@ static ConfitStatus confit_cli_command_oldconfig(
                             kCliInternal);
       status = CONFIT_ERR_INTERNAL;
     } else {
-      memcpy(assignments, existing, existing_count * sizeof(*assignments));
-      assignment_count = existing_count;
+      for (index = 0U; status == CONFIT_OK && index < existing_count; ++index) {
+        status = confit_assignment_set(&assignments[index],
+                                       existing[index].symbol,
+                                       &existing[index].value, 0, diagnostic);
+        if (status == CONFIT_OK) ++assignment_count;
+      }
     }
   }
   for (index = 0U; status == CONFIT_OK &&
@@ -1270,6 +1391,27 @@ static ConfitStatus confit_cli_command_oldconfig(
       }
     if (already_assigned) continue;
     if (use_defaults) continue;
+    if (view.choice_group != 0) {
+      char selected[CONFIT_LIMIT_SYMBOL_BYTES + 1U];
+      if (confit_cli_choice_seen(reviewed_choices, reviewed_choice_count,
+                                 view.choice_group))
+        continue;
+      reviewed_choices[reviewed_choice_count++] = view.choice_group;
+      if (!confit_cli_prompt_choice(
+              confit_schema_project_catalog(loaded.project), &view, selected,
+              diagnostic)) {
+        if (diagnostic->status == CONFIT_OK)
+          confit_diagnostic_set(diagnostic, CONFIT_ERR_IO, change.symbol, 0U,
+                                0U, kCliOutputFailed);
+        status = diagnostic->status != CONFIT_OK ? diagnostic->status
+                                                  : CONFIT_ERR_IO;
+        break;
+      }
+      status = confit_cli_assign_choice(
+          confit_schema_project_catalog(loaded.project), view.choice_group,
+          selected, assignments, capacity, &assignment_count, diagnostic);
+      continue;
+    }
     confit_value_init(&value);
     if (!confit_cli_prompt_value(&view, &value, &use_default, diagnostic)) {
       if (diagnostic->status == CONFIT_OK)
@@ -1281,7 +1423,6 @@ static ConfitStatus confit_cli_command_oldconfig(
       break;
     }
     if (!use_default && !confit_value_equal(&value, view.default_value)) {
-      confit_assignment_init(&assignments[assignment_count]);
       status = confit_assignment_set(&assignments[assignment_count],
                                      change.symbol, &value, 0, diagnostic);
       if (status == CONFIT_OK)
@@ -1303,8 +1444,9 @@ static ConfitStatus confit_cli_command_oldconfig(
   if (status != CONFIT_OK)
     (void)confit_diagnostic_stabilize_path(diagnostic);
   confit_resolution_destroy(resolution);
-  confit_cli_destroy_prompt_assignments(assignments, existing_count,
-                                        assignment_count, &allocator);
+  if (reviewed_choices != 0)
+    allocator.deallocate(allocator.context, reviewed_choices);
+  confit_cli_destroy_prompt_assignments(assignments, capacity, &allocator);
   confit_migration_review_destroy(review);
   confit_host_root_destroy(output_root);
   confit_cli_loaded_destroy(&loaded);

@@ -100,7 +100,21 @@ static int test_project(char *root, size_t root_size, char *output,
                   "help = \"Select quiet, normal, or verbose logging.\"\n"
                   "values = [\"quiet\", \"normal\", \"verbose\"]\n"
                   "default = \"normal\"\n"
-                  "depends_on = \"ENABLE_LOGGING\"\n") ||
+                  "depends_on = \"ENABLE_LOGGING\"\n\n"
+                  "[[config]]\n"
+                  "symbol = \"BOARD_A\"\n"
+                  "type = \"bool\"\n"
+                  "prompt = \"Board A\"\n"
+                  "help = \"Select the first terminal test board.\"\n"
+                  "default = true\n"
+                  "choice = \"board\"\n\n"
+                  "[[config]]\n"
+                  "symbol = \"BOARD_B\"\n"
+                  "type = \"bool\"\n"
+                  "prompt = \"Board B\"\n"
+                  "help = \"Select the second terminal test board.\"\n"
+                  "default = false\n"
+                  "choice = \"board\"\n") ||
       !test_write(root, "configs/development.toml",
                   "schema_version = 6\n"
                   "[values]\n"
@@ -569,6 +583,26 @@ static void test_narrow_detail_and_resize(const char *binary, const char *root,
   test_result_destroy(&result);
 }
 
+static void test_choice_radio_render_and_toggle(const char *binary,
+                                                const char *root,
+                                                const char *output) {
+  TestTerminalResult result;
+  const TestTerminalStep steps[] = {
+      {"Confit menuconfig", "\r", 0U, 0U},
+      {"(*) Board A", "jjjjjj ", 0U, 0U},
+      {"(*) Board B", ":q!\r", 0U, 0U},
+  };
+  CONFIT_TEST_ASSERT(test_terminal_script(binary, root, output, 100U, 20U,
+                                          steps,
+                                          sizeof(steps) / sizeof(steps[0]),
+                                          &result));
+  CONFIT_TEST_ASSERT_EQ_INT(0, result.exit_code);
+  CONFIT_TEST_ASSERT_CONTAINS(result.transcript, "(*) Board A");
+  CONFIT_TEST_ASSERT_CONTAINS(result.transcript, "( ) Board B");
+  CONFIT_TEST_ASSERT_CONTAINS(result.transcript, "(*) Board B");
+  test_result_destroy(&result);
+}
+
 static void test_failed_save_stays_interactive(const char *binary) {
   char root[TEST_PATH_BYTES];
   char output[TEST_PATH_BYTES];
@@ -613,6 +647,7 @@ int main(int argc, char **argv) {
   test_vim_style_exit_paths(argv[1], root, output);
   test_edit_search_enum_and_command_modes(argv[1], root, output);
   test_narrow_detail_and_resize(argv[1], root, output);
+  test_choice_radio_render_and_toggle(argv[1], root, output);
   test_failed_save_stays_interactive(argv[1]);
   test_signal_restore(argv[1], root, output, SIGINT);
   test_signal_restore(argv[1], root, output, SIGTERM);

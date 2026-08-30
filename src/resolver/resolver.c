@@ -38,6 +38,8 @@ static const char kWrongType[] = "user assignment has the wrong value type";
 static const char kOutsideRange[] = "user assignment is outside the declared range";
 static const char kOutsideDomain[] = "user assignment is outside the enum domain";
 static const char kUnavailableValue[] = "unavailable option has a non-default user value";
+static const char kChoiceCardinality[] =
+    "choice group must resolve to exactly one true value";
 static const char kOutOfMemory[] = "failed to allocate configuration resolution";
 static const char kInternalInvariant[] = "configuration resolver invariant is invalid";
 static const char kDependencyFalse[] = "dependency is false";
@@ -539,6 +541,55 @@ ConfitStatus confit_resolve(
         effective, work.origins[config_index], available, reason_root,
         &resolved_allocator, diagnostic);
     if (status != CONFIT_OK) goto fail;
+  }
+  {
+    size_t choice_members = 0U;
+    for (index = 0U; index < count; ++index) {
+      ConfitConfigView owner;
+      size_t prior;
+      size_t member;
+      size_t true_values = 0U;
+      if (!confit_catalog_config_at(catalog, index, &owner)) {
+        status = confit_resolver_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                      kInternalInvariant);
+        goto fail;
+      }
+      if (owner.choice_group == 0) continue;
+      if (++choice_members > CONFIT_LIMIT_CHOICE_MEMBERS) {
+        status = confit_resolver_fail(diagnostic, CONFIT_ERR_VALIDATION,
+                                      &owner, kChoiceCardinality);
+        goto fail;
+      }
+      for (prior = 0U; prior < index; ++prior) {
+        ConfitConfigView seen;
+        if (!confit_catalog_config_at(catalog, prior, &seen)) {
+          status = confit_resolver_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                        kInternalInvariant);
+          goto fail;
+        }
+        if (seen.choice_group != 0 &&
+            strcmp(seen.choice_group, owner.choice_group) == 0)
+          break;
+      }
+      if (prior != index) continue;
+      for (member = index; member < count; ++member) {
+        ConfitConfigView candidate;
+        if (!confit_catalog_config_at(catalog, member, &candidate)) {
+          status = confit_resolver_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                        kInternalInvariant);
+          goto fail;
+        }
+        if (candidate.choice_group != 0 &&
+            strcmp(candidate.choice_group, owner.choice_group) == 0 &&
+            resolution->values[member].effective_value.data.boolean != 0)
+          ++true_values;
+      }
+      if (true_values != 1U) {
+        status = confit_resolver_fail(diagnostic, CONFIT_ERR_VALIDATION,
+                                      &owner, kChoiceCardinality);
+        goto fail;
+      }
+    }
   }
   confit_resolve_work_destroy(&work);
   *out_resolution = resolution;

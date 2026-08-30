@@ -179,7 +179,6 @@ visible_if
 needs
 select
 imply
-choice
 rule
 assert
 inherit
@@ -193,6 +192,12 @@ Each spelling above must produce an unknown-field or unknown-table error in the
 context where it is used. None is accepted and ignored.
 
 ## 6. Public value types
+
+Bool declaration은 optional `choice = "group-atom"`을 가질 수 있다. 같은 group의
+member는 literal source graph의 서로 다른 leaf에 있을 수 있지만, reachable catalog 전체에서
+둘 이상이어야 하고 exactly one declaration default가 true여야 한다. User resolution도
+exactly-one effective true를 유지해야 한다. Choice는 dependency language, selection side effect,
+central member list 또는 build membership authority가 아니다.
 
 ### 6.1 `bool`
 

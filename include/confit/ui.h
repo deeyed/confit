@@ -80,6 +80,7 @@ typedef struct ConfitUiRowView {
   const char *const *enum_values;
   size_t enum_value_count;
   const char *dependency_text;
+  const char *choice_group;
   const char *reason_detail;
 } ConfitUiRowView;
 

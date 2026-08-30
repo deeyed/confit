@@ -60,6 +60,10 @@ static const char kInvalidDefaultShape[] = "config default must be a TOML scalar
 static const char kInvalidValuesShape[] = "config values must be an array";
 static const char kInvalidRangeShape[] = "config range must be a table";
 static const char kInvalidDependencyShape[] = "config depends_on must be a bounded string";
+static const char kInvalidChoiceShape[] =
+    "config choice must be a bounded atom string";
+static const char kInvalidChoiceGroup[] =
+    "choice group requires at least two bool members and exactly one true default";
 static const char kDuplicateSymbol[] = "configuration symbol is duplicated";
 static const char kInvalidType[] =
     "configuration type must be bool, int, hex, string, or enum";
@@ -648,7 +652,7 @@ static ConfitStatus confit_schema_add_config(
     ConfitDiagnostic *diagnostic) {
   static const char *const allowed[] = {
       "symbol", "type", "prompt", "help", "default", "depends_on",
-      "values", "range"};
+      "values", "range", "choice"};
   ConfitConfigSpec spec;
   ConfitValue default_value;
   ConfitValue range_minimum;
@@ -658,6 +662,7 @@ static ConfitStatus confit_schema_add_config(
   const ConfitTomlValue *prompt;
   const ConfitTomlValue *help;
   const ConfitTomlValue *dependency;
+  const ConfitTomlValue *choice;
   const ConfitTomlValue *default_candidate;
   const ConfitTomlValue *values_candidate;
   const ConfitTomlValue *range_candidate;
@@ -668,6 +673,7 @@ static ConfitStatus confit_schema_add_config(
   char *prompt_text = 0;
   char *help_text = 0;
   char *dependency_text = 0;
+  char *choice_text = 0;
   char **enum_values = 0;
   size_t enum_value_count = 0U;
   ConfitValueKind kind = CONFIT_VALUE_INVALID;
@@ -676,7 +682,7 @@ static ConfitStatus confit_schema_add_config(
   confit_value_init(&default_value);
   confit_value_init(&range_minimum);
   confit_value_init(&range_maximum);
-  status = confit_schema_validate_keys(table, allowed, 8U, path,
+  status = confit_schema_validate_keys(table, allowed, 9U, path,
                                        kUnknownConfigField, diagnostic);
   if (status != CONFIT_OK) return status;
   symbol = confit_toml_table_find(table, "symbol");
@@ -748,6 +754,12 @@ static ConfitStatus confit_schema_add_config(
         dependency, CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 0, 0,
         &project->allocator, &dependency_text, diagnostic, path,
         kInvalidDependencyShape);
+  choice = confit_toml_table_find(table, "choice");
+  if (status == CONFIT_OK && choice != 0)
+    status = confit_schema_copy_string(
+        choice, CONFIT_LIMIT_CHOICE_GROUP_BYTES, 0, 0,
+        &project->allocator, &choice_text, diagnostic, path,
+        kInvalidChoiceShape);
   if (status == CONFIT_OK)
     status = confit_schema_default_value(
         document, default_candidate, kind, &project->allocator, &default_value,
@@ -784,6 +796,7 @@ static ConfitStatus confit_schema_add_config(
     spec.enum_values = (const char *const *)enum_values;
     spec.enum_value_count = enum_value_count;
     spec.dependency_text = dependency_text;
+    spec.choice_group = choice_text;
     spec.declaration.path = path;
     spec.declaration.line = confit_toml_value_line(table);
     spec.declaration.column = confit_toml_value_column(table);
@@ -798,6 +811,8 @@ static ConfitStatus confit_schema_add_config(
   confit_value_destroy(&default_value);
   if (dependency_text != 0)
     project->allocator.deallocate(project->allocator.context, dependency_text);
+  if (choice_text != 0)
+    project->allocator.deallocate(project->allocator.context, choice_text);
   if (help_text != 0)
     project->allocator.deallocate(project->allocator.context, help_text);
   if (prompt_text != 0)
@@ -856,6 +871,59 @@ static ConfitStatus confit_schema_parse_fragment(
     }
   }
   *out_attachment = attachment;
+  return CONFIT_OK;
+}
+
+static ConfitStatus confit_schema_validate_choices(
+    const ConfitCatalog *catalog, ConfitDiagnostic *diagnostic) {
+  const size_t count = confit_catalog_config_count(catalog);
+  size_t choice_members = 0U;
+  size_t index;
+  for (index = 0U; index < count; ++index) {
+    ConfitConfigView owner;
+    size_t prior;
+    size_t member_count = 0U;
+    size_t true_defaults = 0U;
+    size_t member;
+    if (!confit_catalog_config_at(catalog, index, &owner))
+      return confit_schema_fail(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                                kInvalidArgument);
+    if (owner.choice_group == 0) continue;
+    ++choice_members;
+    if (choice_members > CONFIT_LIMIT_CHOICE_MEMBERS)
+      return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION,
+                                owner.declaration.path,
+                                owner.declaration.line,
+                                owner.declaration.column,
+                                kInvalidChoiceGroup);
+    for (prior = 0U; prior < index; ++prior) {
+      ConfitConfigView seen;
+      if (!confit_catalog_config_at(catalog, prior, &seen))
+        return confit_schema_fail(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                                  kInvalidArgument);
+      if (seen.choice_group != 0 &&
+          strcmp(seen.choice_group, owner.choice_group) == 0)
+        break;
+    }
+    if (prior != index) continue;
+    for (member = index; member < count; ++member) {
+      ConfitConfigView candidate;
+      if (!confit_catalog_config_at(catalog, member, &candidate))
+        return confit_schema_fail(diagnostic, CONFIT_ERR_INTERNAL, 0, 0U, 0U,
+                                  kInvalidArgument);
+      if (candidate.choice_group != 0 &&
+          strcmp(candidate.choice_group, owner.choice_group) == 0) {
+        ++member_count;
+        if (candidate.default_value->data.boolean != 0) ++true_defaults;
+      }
+    }
+    if (member_count < 2U || true_defaults != 1U)
+      return confit_schema_fail(diagnostic, CONFIT_ERR_VALIDATION,
+                                owner.declaration.path,
+                                owner.declaration.line,
+                                owner.declaration.column,
+                                kInvalidChoiceGroup);
+  }
   return CONFIT_OK;
 }
 
@@ -947,6 +1015,8 @@ ConfitStatus confit_schema_project_load(
     status = confit_schema_parse_fragment(project, index, &node, parent_menu,
                                           &attachment[index], diagnostic);
   }
+  if (status == CONFIT_OK)
+    status = confit_schema_validate_choices(project->catalog, diagnostic);
   if (status == CONFIT_OK)
     status = confit_dependency_plan_create(project->catalog, &resolved,
                                            &project->dependency_plan,

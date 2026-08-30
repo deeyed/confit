@@ -1,6 +1,7 @@
 #include "confit/migration.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -248,11 +249,20 @@ static ConfitStatus confit_migration_entry_from_view(
   entry->prompt = view->prompt;
   confit_sha256_bytes(view->prompt, strlen(view->prompt), entry->prompt_digest);
   confit_sha256_bytes(view->help, strlen(view->help), entry->help_digest);
-  confit_sha256_bytes(view->dependency_text != 0 ? view->dependency_text : "",
-                      view->dependency_text != 0
-                          ? strlen(view->dependency_text)
-                          : 0U,
-                      entry->dependency_digest);
+  if (view->choice_group != 0) {
+    char choice[CONFIT_LIMIT_CHOICE_GROUP_BYTES + 8U];
+    const int written = snprintf(choice, sizeof(choice), "choice:%s",
+                                 view->choice_group);
+    if (written <= 0 || (size_t)written >= sizeof(choice))
+      return confit_migration_fail(diagnostic, CONFIT_ERR_INTERNAL, 0,
+                                   kInternal);
+    confit_sha256_bytes(choice, (size_t)written, entry->dependency_digest);
+  } else {
+    confit_sha256_bytes(
+        view->dependency_text != 0 ? view->dependency_text : "",
+        view->dependency_text != 0 ? strlen(view->dependency_text) : 0U,
+        entry->dependency_digest);
+  }
   status = confit_migration_value_digest(view->default_value, allocator,
                                          entry->default_digest, diagnostic);
   if (status == CONFIT_OK)

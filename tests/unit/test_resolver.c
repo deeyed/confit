@@ -587,11 +587,93 @@ static void test_maximum_symbol_graph(void) {
   confit_value_destroy(&default_value);
 }
 
+static void add_choice_member(ConfitCatalog *catalog, const char *symbol,
+                              int selected) {
+  ConfitConfigSpec spec;
+  ConfitDiagnostic diagnostic;
+  ConfitValue value;
+  confit_diagnostic_init(&diagnostic);
+  confit_value_init(&value);
+  memset(&spec, 0, sizeof(spec));
+  CONFIT_TEST_ASSERT(confit_value_set_bool(&value, selected, 0,
+                                           &diagnostic) == CONFIT_OK);
+  spec.fragment = 0U;
+  spec.menu = CONFIT_INDEX_NONE;
+  spec.symbol = symbol;
+  spec.kind = CONFIT_VALUE_BOOL;
+  spec.prompt = symbol;
+  spec.help = "Select exactly one resolver choice member.";
+  spec.default_value = &value;
+  spec.choice_group = "resolver-board";
+  spec.declaration.path = "config/choice.toml";
+  spec.declaration.line = selected ? 1U : 2U;
+  spec.declaration.column = 1U;
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &spec, 0,
+                                               &diagnostic) == CONFIT_OK);
+  confit_value_destroy(&value);
+}
+
+static void test_choice_exact_one_resolution(void) {
+  ConfitCatalog *catalog = 0;
+  ConfitDependencyPlan *plan = 0;
+  ConfitResolution *resolution = 0;
+  ConfitDiagnostic diagnostic;
+  ConfitSourceFragmentSpec fragment = {
+      .path = "config/choice.toml",
+      .parent_fragment = CONFIT_INDEX_NONE,
+      .source_ordinal = 0U,
+  };
+  ConfitAssignment assignments[2];
+  confit_diagnostic_init(&diagnostic);
+  CONFIT_TEST_ASSERT(confit_catalog_create(0, &catalog, &diagnostic) ==
+                     CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_catalog_set_mainmenu(
+                         catalog, "Choice resolver", &diagnostic) ==
+                     CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_catalog_add_fragment(catalog, &fragment, 0,
+                                                 &diagnostic) == CONFIT_OK);
+  add_choice_member(catalog, "BOARD_A", 1);
+  add_choice_member(catalog, "BOARD_B", 0);
+  CONFIT_TEST_ASSERT(confit_dependency_plan_create(catalog, 0, &plan,
+                                                   &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(confit_resolve(catalog, plan, 0, 0U, 0, &resolution,
+                                   &diagnostic) == CONFIT_OK);
+  confit_resolution_destroy(resolution);
+  resolution = 0;
+
+  assignment_init_value(&assignments[0], "BOARD_A", CONFIT_VALUE_BOOL, 1, 0);
+  assignment_init_value(&assignments[1], "BOARD_B", CONFIT_VALUE_BOOL, 1, 0);
+  CONFIT_TEST_ASSERT(confit_resolve(catalog, plan, assignments, 2U, 0,
+                                   &resolution, &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  CONFIT_TEST_ASSERT_CONTAINS(diagnostic.message,
+                              "choice group must resolve to exactly one true value");
+  destroy_assignments(assignments, 2U);
+  confit_diagnostic_clear(&diagnostic);
+
+  assignment_init_value(&assignments[0], "BOARD_A", CONFIT_VALUE_BOOL, 0, 0);
+  CONFIT_TEST_ASSERT(confit_resolve(catalog, plan, assignments, 1U, 0,
+                                   &resolution, &diagnostic) ==
+                     CONFIT_ERR_VALIDATION);
+  confit_assignment_destroy(&assignments[0]);
+  confit_diagnostic_clear(&diagnostic);
+
+  assignment_init_value(&assignments[0], "BOARD_A", CONFIT_VALUE_BOOL, 0, 0);
+  assignment_init_value(&assignments[1], "BOARD_B", CONFIT_VALUE_BOOL, 1, 0);
+  CONFIT_TEST_ASSERT(confit_resolve(catalog, plan, assignments, 2U, 0,
+                                   &resolution, &diagnostic) == CONFIT_OK);
+  destroy_assignments(assignments, 2U);
+  confit_resolution_destroy(resolution);
+  confit_dependency_plan_destroy(plan);
+  confit_catalog_destroy(catalog);
+}
+
 int main(void) {
   test_defaults_and_all_typed_overrides();
   test_fail_closed_assignments_and_plan_identity();
   test_order_independent_canonical_identity();
   test_allocation_failure_is_transactional();
   test_maximum_symbol_graph();
+  test_choice_exact_one_resolution();
   return 0;
 }

@@ -853,7 +853,7 @@ Even after all schema 6 rounds pass, Confit does not claim:
   deployment;
 - Windows-native terminal support;
 - certification on every POSIX host, terminal, or filesystem;
-- loadable-module semantics, a three-state bool, profiles, inheritance, choices,
+- loadable-module semantics, a three-state bool, profiles, inheritance,
   plugins, hooks, or schema editing;
 - protection against every same-user denial-of-service or a compromised host;
 - authenticity or signatures from SHA-256 membership digests;

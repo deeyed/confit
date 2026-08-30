@@ -325,7 +325,7 @@ static void test_config_fields_and_legacy(const char *root_path,
       "owner", "since", "stability", "tags", "menu_order", "placement",
       "allowed", "enabled_values", "cardinality", "namespace", "target",
       "profile", "selection", "build", "source_file", "object", "provider",
-      "driver", "visible_if", "needs", "select", "imply", "choice", "rule",
+      "driver", "visible_if", "needs", "select", "imply", "rule",
       "assert", "inherit", "extends", "override", "source_if",
       "conditional_source"};
   size_t index;
@@ -416,6 +416,37 @@ static void test_config_fields_and_legacy(const char *root_path,
   expect_project_failure(root, "fields/root.toml",
                          "dependency expression graph contains a cycle",
                          "fields/leaf.toml", 1U, 3U);
+  write_config_fragment(root_path, "fields/leaf.toml", "choice = 1\n");
+  expect_project_failure(root, "fields/root.toml",
+                         "config choice must be a bounded atom string",
+                         "fields/leaf.toml", 6U, 10U);
+  write_config_fragment(root_path, "fields/leaf.toml",
+                        "choice = \"only-one\"\ndefault = true\n");
+  expect_project_failure(
+      root, "fields/root.toml",
+      "choice group requires at least two bool members and exactly one true default",
+      "fields/leaf.toml", 1U, 3U);
+  write_text(root_path, "fields/leaf.toml",
+             "[[config]]\nsymbol = \"CHOICE_A\"\ntype = \"bool\"\n"
+             "prompt = \"A\"\nhelp = \"A.\"\ndefault = true\n"
+             "choice = \"generic-mode\"\n\n"
+             "[[config]]\nsymbol = \"CHOICE_B\"\ntype = \"bool\"\n"
+             "prompt = \"B\"\nhelp = \"B.\"\ndefault = false\n"
+             "choice = \"generic-mode\"\n");
+  {
+    ConfitDiagnostic diagnostic;
+    ConfitSchemaProject *project = 0;
+    ConfitSchemaConfigView view;
+    confit_diagnostic_init(&diagnostic);
+    CONFIT_TEST_ASSERT(confit_schema_project_load(
+                           root, "fields/root.toml", 0, &project,
+                           &diagnostic) == CONFIT_OK);
+    CONFIT_TEST_ASSERT(confit_schema_project_find_config(
+                           project, "CHOICE_B", &view) &&
+                       view.choice_group != 0 &&
+                       strcmp(view.choice_group, "generic-mode") == 0);
+    confit_schema_project_destroy(project);
+  }
 }
 
 static void test_duplicate_depth_and_control(const char *root_path,

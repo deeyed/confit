@@ -34,6 +34,7 @@ typedef struct ConfitConfigRecord {
   char **enum_values;
   size_t enum_value_count;
   char *dependency_text;
+  char *choice_group;
   char *declaration_path;
   size_t declaration_line;
   size_t declaration_column;
@@ -65,6 +66,8 @@ static const char kHexTooLarge[] = "hex value exceeds the schema 6 domain";
 static const char kInvalidEnumAtom[] = "enum atom is invalid";
 static const char kInvalidEnumDomain[] = "enum domain is invalid";
 static const char kDuplicateEnumAtom[] = "enum domain contains a duplicate atom";
+static const char kInvalidChoice[] =
+    "choice group requires a bool without depends_on and a bounded atom name";
 static const char kBufferTooSmall[] = "canonical value buffer is too small";
 static const char kCatalogLimit[] = "catalog exceeds a public resource limit";
 static const char kDuplicatePath[] = "source fragment path is duplicated";
@@ -681,6 +684,8 @@ static void confit_config_record_destroy(ConfitConfigRecord *record,
   if (record->help != 0) allocator->deallocate(allocator->context, record->help);
   if (record->dependency_text != 0)
     allocator->deallocate(allocator->context, record->dependency_text);
+  if (record->choice_group != 0)
+    allocator->deallocate(allocator->context, record->choice_group);
   if (record->declaration_path != 0)
     allocator->deallocate(allocator->context, record->declaration_path);
   confit_value_destroy(&record->default_value);
@@ -976,6 +981,22 @@ static int confit_enum_domain_contains(const char *const *values, size_t count,
   return 0;
 }
 
+static int confit_choice_group_valid(const char *group) {
+  size_t index;
+  if (group == 0) return 1;
+  if (group[0] == '\0' || strlen(group) >= CONFIT_LIMIT_CHOICE_GROUP_BYTES)
+    return 0;
+  for (index = 0U; group[index] != '\0'; ++index) {
+    const unsigned char byte = (unsigned char)group[index];
+    if (!((byte >= 'A' && byte <= 'Z') ||
+          (byte >= 'a' && byte <= 'z') ||
+          (byte >= '0' && byte <= '9') || byte == '_' || byte == '-' ||
+          byte == '.'))
+      return 0;
+  }
+  return 1;
+}
+
 static ConfitStatus confit_config_validate(const ConfitCatalog *catalog,
                                            const ConfitConfigSpec *spec,
                                            ConfitDiagnostic *diagnostic) {
@@ -993,6 +1014,10 @@ static ConfitStatus confit_config_validate(const ConfitCatalog *catalog,
       spec->default_value->kind != spec->kind) {
     return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kInvalidKind);
   }
+  if (spec->choice_group != 0 &&
+      (spec->kind != CONFIT_VALUE_BOOL || spec->dependency_text != 0 ||
+       !confit_choice_group_valid(spec->choice_group)))
+    return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kInvalidChoice);
   for (index = 0U; index < catalog->config_count; ++index) {
     if (strcmp(catalog->configs[index].symbol, spec->symbol) == 0) {
       return confit_fail(diagnostic, CONFIT_ERR_VALIDATION, kDuplicateSymbol);
@@ -1091,6 +1116,11 @@ static ConfitStatus confit_config_record_build(
                                   CONFIT_LIMIT_DEPENDENCY_TEXT_BYTES, 1, 0,
                                   allocator, &candidate->dependency_text,
                                   diagnostic);
+  if (status == CONFIT_OK && spec->choice_group != 0)
+    status = confit_copy_c_string(spec->choice_group,
+                                  CONFIT_LIMIT_CHOICE_GROUP_BYTES, 0, 0,
+                                  allocator, &candidate->choice_group,
+                                  diagnostic);
   if (status == CONFIT_OK)
     status = confit_copy_optional_span(&spec->declaration, allocator,
                                        &candidate->declaration_path, diagnostic);
@@ -1184,6 +1214,7 @@ int confit_catalog_config_at(const ConfitCatalog *catalog, size_t index,
   out_view->enum_values = (const char *const *)record->enum_values;
   out_view->enum_value_count = record->enum_value_count;
   out_view->dependency_text = record->dependency_text;
+  out_view->choice_group = record->choice_group;
   out_view->declaration.path = record->declaration_path;
   out_view->declaration.line = record->declaration_line;
   out_view->declaration.column = record->declaration_column;

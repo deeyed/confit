@@ -180,6 +180,7 @@ typedef struct ConfitConfigSpec {
   const char *const *enum_values;
   size_t enum_value_count;
   const char *dependency_text;
+  const char *choice_group;
   ConfitSourceSpan declaration;
 } ConfitConfigSpec;
 
@@ -202,6 +203,7 @@ typedef struct ConfitConfigView {
   const char *const *enum_values;
   size_t enum_value_count;
   const char *dependency_text;
+  const char *choice_group;
   ConfitSourceSpan declaration;
 } ConfitConfigView;
 

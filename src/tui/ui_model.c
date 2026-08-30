@@ -16,9 +16,11 @@ typedef struct ConfitUiRow {
 } ConfitUiRow;
 
 typedef struct ConfitUiHistoryEntry {
-  size_t config_index;
-  ConfitValue before;
-  ConfitValue after;
+  ConfitAllocator allocator;
+  size_t *config_indices;
+  ConfitValue *before;
+  ConfitValue *after;
+  size_t count;
 } ConfitUiHistoryEntry;
 
 struct ConfitUiModel {
@@ -108,16 +110,25 @@ static void confit_ui_history_entry_init(ConfitUiHistoryEntry *entry) {
   if (entry == 0)
     return;
   memset(entry, 0, sizeof(*entry));
-  entry->config_index = CONFIT_INDEX_NONE;
-  confit_value_init(&entry->before);
-  confit_value_init(&entry->after);
 }
 
 static void confit_ui_history_entry_destroy(ConfitUiHistoryEntry *entry) {
+  size_t index;
   if (entry == 0)
     return;
-  confit_value_destroy(&entry->after);
-  confit_value_destroy(&entry->before);
+  for (index = entry->count; index > 0U; --index) {
+    confit_value_destroy(&entry->after[index - 1U]);
+    confit_value_destroy(&entry->before[index - 1U]);
+  }
+  if (confit_allocator_is_valid(&entry->allocator)) {
+    if (entry->after != 0)
+      entry->allocator.deallocate(entry->allocator.context, entry->after);
+    if (entry->before != 0)
+      entry->allocator.deallocate(entry->allocator.context, entry->before);
+    if (entry->config_indices != 0)
+      entry->allocator.deallocate(entry->allocator.context,
+                                  entry->config_indices);
+  }
   confit_ui_history_entry_init(entry);
 }
 
@@ -323,11 +334,9 @@ static void confit_ui_assignments_destroy(ConfitAssignment *assignments,
   allocator->deallocate(allocator->context, assignments);
 }
 
-static ConfitStatus
-confit_ui_resolve_candidate(ConfitUiModel *model, size_t changed_index,
-                            const ConfitValue *changed_value,
-                            ConfitResolution **out_resolution,
-                            ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_ui_resolve_values(
+    ConfitUiModel *model, const ConfitValue *values,
+    ConfitResolution **out_resolution, ConfitDiagnostic *diagnostic) {
   ConfitAssignment *assignments = 0;
   size_t assignment_count = 0U;
   size_t initialized = 0U;
@@ -346,8 +355,7 @@ confit_ui_resolve_candidate(ConfitUiModel *model, size_t changed_index,
     memset(assignments, 0, bytes);
     for (index = 0U; index < model->value_count; ++index) {
       ConfitConfigView config;
-      const ConfitValue *value =
-          index == changed_index ? changed_value : &model->working[index];
+      const ConfitValue *value = &values[index];
       if (!confit_catalog_config_at(model->catalog, index, &config)) {
         status =
             confit_ui_fail(diagnostic, CONFIT_ERR_INTERNAL, kInvalidArgument);
@@ -374,22 +382,46 @@ done:
   return status;
 }
 
-static ConfitStatus confit_ui_history_prepare(ConfitUiModel *model,
-                                              size_t config_index,
-                                              const ConfitValue *before,
-                                              const ConfitValue *after,
-                                              ConfitUiHistoryEntry *entry,
-                                              ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_ui_history_prepare(
+    ConfitUiModel *model, const size_t *config_indices,
+    const ConfitValue *before, const ConfitValue *after, size_t count,
+    ConfitUiHistoryEntry *entry, ConfitDiagnostic *diagnostic) {
+  size_t bytes;
+  size_t index;
   ConfitStatus status;
   confit_ui_history_entry_init(entry);
-  entry->config_index = config_index;
-  status =
-      confit_value_copy(&entry->before, before, &model->allocator, diagnostic);
-  if (status == CONFIT_OK)
-    status =
-        confit_value_copy(&entry->after, after, &model->allocator, diagnostic);
-  if (status != CONFIT_OK)
+  entry->allocator = model->allocator;
+  if (count == 0U || count > CONFIT_LIMIT_CHOICE_MEMBERS ||
+      !confit_ui_size_multiply(count, sizeof(*entry->config_indices), &bytes))
+    return confit_ui_fail(diagnostic, CONFIT_ERR_INTERNAL, kOutOfMemory);
+  entry->config_indices = model->allocator.allocate(model->allocator.context,
+                                                     bytes);
+  entry->before = model->allocator.allocate(
+      model->allocator.context, count * sizeof(*entry->before));
+  entry->after = model->allocator.allocate(
+      model->allocator.context, count * sizeof(*entry->after));
+  if (entry->config_indices == 0 || entry->before == 0 || entry->after == 0) {
     confit_ui_history_entry_destroy(entry);
+    return confit_ui_fail(diagnostic, CONFIT_ERR_INTERNAL, kOutOfMemory);
+  }
+  entry->count = count;
+  memset(entry->before, 0, count * sizeof(*entry->before));
+  memset(entry->after, 0, count * sizeof(*entry->after));
+  memcpy(entry->config_indices, config_indices, bytes);
+  for (index = 0U; index < count; ++index) {
+    confit_value_init(&entry->before[index]);
+    confit_value_init(&entry->after[index]);
+  }
+  status = CONFIT_OK;
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    const size_t config_index = config_indices[index];
+    status = confit_value_copy(&entry->before[index], &before[config_index],
+                               &model->allocator, diagnostic);
+    if (status == CONFIT_OK)
+      status = confit_value_copy(&entry->after[index], &after[config_index],
+                                 &model->allocator, diagnostic);
+  }
+  if (status != CONFIT_OK) confit_ui_history_entry_destroy(entry);
   return status;
 }
 
@@ -413,40 +445,60 @@ static void confit_ui_history_push(ConfitUiModel *model,
   model->history_position = model->history_count;
 }
 
-static ConfitStatus confit_ui_replace_value(ConfitUiModel *model,
-                                            size_t config_index,
-                                            const ConfitValue *value,
-                                            int record_history,
-                                            ConfitDiagnostic *diagnostic) {
+static ConfitStatus confit_ui_replace_many(
+    ConfitUiModel *model, const size_t *config_indices,
+    const ConfitValue *values, size_t count, int record_history,
+    ConfitDiagnostic *diagnostic) {
   ConfitResolution *resolution = 0;
-  ConfitValue replacement;
+  ConfitValue *candidate = 0;
   ConfitUiHistoryEntry history;
   ConfitStatus status;
-  confit_value_init(&replacement);
+  size_t index;
+  int changed = 0;
   confit_ui_history_entry_init(&history);
-  if (config_index >= model->value_count)
+  if (config_indices == 0 || values == 0 || count == 0U ||
+      count > CONFIT_LIMIT_CHOICE_MEMBERS)
     return confit_ui_fail(diagnostic, CONFIT_ERR_USAGE, kNoSelection);
-  if (!confit_ui_config_available(model, config_index))
-    return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kUnavailable);
-  if (confit_value_equal(&model->working[config_index], value))
+  status = confit_ui_values_copy(model, model->working, &candidate, diagnostic);
+  for (index = 0U; status == CONFIT_OK && index < count; ++index) {
+    size_t prior;
+    const size_t config_index = config_indices[index];
+    if (config_index >= model->value_count)
+      status = confit_ui_fail(diagnostic, CONFIT_ERR_USAGE, kNoSelection);
+    else if (!confit_ui_config_available(model, config_index))
+      status = confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kUnavailable);
+    for (prior = 0U; status == CONFIT_OK && prior < index; ++prior)
+      if (config_indices[prior] == config_index)
+        status = confit_ui_fail(diagnostic, CONFIT_ERR_USAGE, kInvalidArgument);
+    if (status == CONFIT_OK &&
+        !confit_value_equal(&model->working[config_index], &values[index])) {
+      status = confit_value_copy(&candidate[config_index], &values[index],
+                                 &model->allocator, diagnostic);
+      changed = 1;
+    }
+  }
+  if (status == CONFIT_OK && !changed) {
+    confit_ui_values_destroy(model, candidate);
     return CONFIT_OK;
-  status =
-      confit_value_copy(&replacement, value, &model->allocator, diagnostic);
-  if (status == CONFIT_OK && record_history)
-    status = confit_ui_history_prepare(model, config_index,
-                                       &model->working[config_index], value,
-                                       &history, diagnostic);
+  }
   if (status == CONFIT_OK)
-    status = confit_ui_resolve_candidate(model, config_index, value,
-                                         &resolution, diagnostic);
+    status = confit_ui_resolve_values(model, candidate, &resolution, diagnostic);
+  if (status == CONFIT_OK && record_history)
+    status = confit_ui_history_prepare(model, config_indices, model->working,
+                                       candidate, count, &history, diagnostic);
   if (status != CONFIT_OK) {
     confit_ui_history_entry_destroy(&history);
-    confit_value_destroy(&replacement);
+    confit_ui_values_destroy(model, candidate);
+    confit_resolution_destroy(resolution);
     return status;
   }
-  confit_value_destroy(&model->working[config_index]);
-  model->working[config_index] = replacement;
-  confit_value_init(&replacement);
+  for (index = 0U; index < count; ++index) {
+    const size_t config_index = config_indices[index];
+    confit_value_destroy(&model->working[config_index]);
+    model->working[config_index] = candidate[config_index];
+    confit_value_init(&candidate[config_index]);
+  }
+  confit_ui_values_destroy(model, candidate);
   confit_resolution_destroy(model->resolution);
   model->resolution = resolution;
   if (record_history)
@@ -454,6 +506,15 @@ static ConfitStatus confit_ui_replace_value(ConfitUiModel *model,
   confit_ui_history_entry_destroy(&history);
   confit_ui_rebuild_rows(model);
   return CONFIT_OK;
+}
+
+static ConfitStatus confit_ui_replace_value(ConfitUiModel *model,
+                                            size_t config_index,
+                                            const ConfitValue *value,
+                                            int record_history,
+                                            ConfitDiagnostic *diagnostic) {
+  return confit_ui_replace_many(model, &config_index, value, 1U,
+                                record_history, diagnostic);
 }
 
 static int confit_ui_ascii_fold(int character) {
@@ -935,6 +996,7 @@ int confit_ui_row_at(const ConfitUiModel *model, size_t row_index,
     out_view->enum_values = config.enum_values;
     out_view->enum_value_count = config.enum_value_count;
     out_view->dependency_text = config.dependency_text;
+    out_view->choice_group = config.choice_group;
     if (resolved->reason != CONFIT_INDEX_NONE &&
         (config.dependency_text != 0 || !resolved->available)) {
       const ConfitReasonNode *reason = 0;
@@ -993,6 +1055,40 @@ static ConfitStatus confit_ui_toggle(ConfitUiModel *model,
     return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kNoSelection);
   if (config.kind != CONFIT_VALUE_BOOL)
     return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kWrongType);
+  if (config.choice_group != 0) {
+    size_t indices[CONFIT_LIMIT_CHOICE_MEMBERS];
+    ConfitValue replacements[CONFIT_LIMIT_CHOICE_MEMBERS];
+    size_t count = 0U;
+    size_t index;
+    if (model->working[config_index].data.boolean != 0) return CONFIT_OK;
+    for (index = 0U; index < model->value_count; ++index) {
+      ConfitConfigView member;
+      if (!confit_catalog_config_at(model->catalog, index, &member))
+        return confit_ui_fail(diagnostic, CONFIT_ERR_INTERNAL,
+                              kInvalidArgument);
+      if (member.choice_group != 0 &&
+          strcmp(member.choice_group, config.choice_group) == 0) {
+        if (count == CONFIT_LIMIT_CHOICE_MEMBERS)
+          return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION,
+                                kInvalidArgument);
+        indices[count] = index;
+        confit_value_init(&replacements[count]);
+        status = confit_value_set_bool(&replacements[count],
+                                       index == config_index,
+                                       &model->allocator, diagnostic);
+        if (status != CONFIT_OK) {
+          while (count > 0U)
+            confit_value_destroy(&replacements[--count]);
+          return status;
+        }
+        ++count;
+      }
+    }
+    status = confit_ui_replace_many(model, indices, replacements, count, 1,
+                                    diagnostic);
+    while (count > 0U) confit_value_destroy(&replacements[--count]);
+    return status;
+  }
   status = confit_value_set_bool(&candidate,
                                  !model->working[config_index].data.boolean,
                                  &model->allocator, diagnostic);
@@ -1006,7 +1102,7 @@ static ConfitStatus confit_ui_toggle(ConfitUiModel *model,
 static ConfitStatus confit_ui_history_apply(ConfitUiModel *model, int redo,
                                             ConfitDiagnostic *diagnostic) {
   ConfitUiHistoryEntry *entry;
-  const ConfitValue *value;
+  const ConfitValue *values;
   ConfitStatus status;
   if (!redo && model->history_position == 0U)
     return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kUndoEmpty);
@@ -1014,15 +1110,15 @@ static ConfitStatus confit_ui_history_apply(ConfitUiModel *model, int redo,
     return confit_ui_fail(diagnostic, CONFIT_ERR_VALIDATION, kRedoEmpty);
   entry = redo ? &model->history[model->history_position]
                : &model->history[model->history_position - 1U];
-  value = redo ? &entry->after : &entry->before;
-  status =
-      confit_ui_replace_value(model, entry->config_index, value, 0, diagnostic);
+  values = redo ? entry->after : entry->before;
+  status = confit_ui_replace_many(model, entry->config_indices, values,
+                                  entry->count, 0, diagnostic);
   if (status == CONFIT_OK) {
     if (redo)
       ++model->history_position;
     else
       --model->history_position;
-    (void)confit_ui_select_config(model, entry->config_index);
+    (void)confit_ui_select_config(model, entry->config_indices[0]);
   }
   return status;
 }

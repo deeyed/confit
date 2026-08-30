@@ -47,7 +47,7 @@ line break를 포함할 수 있다. Terminal escape, NUL, DEL, C0/C1 control은 
 모두에서 거부된다. `source`는 optional string array이며 실제 child membership은 R07이
 소유한다.
 
-Config declaration key는 정확히 다음 여덟 개다.
+Config declaration key는 정확히 다음 아홉 개다.
 
 ```text
 symbol
@@ -58,6 +58,7 @@ default
 depends_on
 values
 range
+choice
 ```
 
 `symbol`, `type`, `prompt`, `help`는 필수다. Symbol은 generic public symbol grammar를
@@ -73,6 +74,13 @@ dependency plan까지 schema project에 소유시킨다. 구체적인 경계는
 R09는 이 node를 같은 input image에서 type-check한 뒤 generic catalog가 default, range와
 enum domain을 owned typed value로 deep-copy하게 한다. 자세한 규칙은
 `docs/types-v6.md`가 기록한다.
+
+`choice`는 bool declaration에만 허용하는 bounded group atom이다. 동일 atom을 가진
+declaration은 literal source graph의 어느 leaf에서든 분산 기여할 수 있다. 완성된 reachable
+catalog에서 group은 member 둘 이상이고 declaration default가 정확히 하나만 true여야 한다.
+Choice member에는 `depends_on`을 함께 둘 수 없다. Resolver는 user assignment 적용 뒤에도
+effective true member가 정확히 하나인지 검사하며 TUI는 이를 radio selection과 atomic
+undo/redo transaction으로 표현한다.
 
 ## 2. User document shape
 
@@ -111,7 +119,7 @@ error다.
 ```text
 owner since stability tags menu_order placement allowed enabled_values
 cardinality namespace target profile selection build source_file object
-provider driver visible_if needs select imply choice rule assert inherit
+provider driver visible_if needs select imply rule assert inherit
 extends override source_if conditional_source
 ```
 

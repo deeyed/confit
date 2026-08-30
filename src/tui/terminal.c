@@ -436,11 +436,22 @@ static void confit_terminal_render_list_line(ConfitTerminalWriter *writer,
                      ? '+'
                      : (!row.available ? '-' : (row.changed ? '*' : ' ')));
   value[0] = '\0';
-  if (row.kind == CONFIT_UI_ROW_CONFIG)
-    confit_terminal_value_text(row.effective_value, value, sizeof(value));
-  (void)snprintf(line, sizeof(line), "%s%*s%s%s%s", prefix, (int)(depth * 2U),
-                 "", row.prompt != 0 ? row.prompt : "",
-                 value[0] != '\0' ? " = " : "", value);
+  if (row.kind == CONFIT_UI_ROW_CONFIG && row.choice_group != 0) {
+    (void)snprintf(value, sizeof(value), "%s",
+                   row.effective_value != 0 &&
+                           row.effective_value->data.boolean != 0
+                       ? "(*)"
+                       : "( )");
+    (void)snprintf(line, sizeof(line), "%s%*s%s %s", prefix,
+                   (int)(depth * 2U), "", value,
+                   row.prompt != 0 ? row.prompt : "");
+  } else {
+    if (row.kind == CONFIT_UI_ROW_CONFIG)
+      confit_terminal_value_text(row.effective_value, value, sizeof(value));
+    (void)snprintf(line, sizeof(line), "%s%*s%s%s%s", prefix,
+                   (int)(depth * 2U), "", row.prompt != 0 ? row.prompt : "",
+                   value[0] != '\0' ? " = " : "", value);
+  }
   confit_terminal_writer_safe_text(writer, line, columns);
 }
 

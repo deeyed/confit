@@ -105,6 +105,30 @@ static void add_config(ConfitCatalog *catalog, size_t fragment, size_t menu,
   confit_value_destroy(&value);
 }
 
+static void add_choice_config(ConfitCatalog *catalog, size_t fragment,
+                              size_t menu, const char *symbol,
+                              const char *group, int selected) {
+  ConfitConfigSpec spec;
+  ConfitDiagnostic diagnostic;
+  ConfitValue value;
+  confit_diagnostic_init(&diagnostic);
+  confit_value_init(&value);
+  memset(&spec, 0, sizeof(spec));
+  CONFIT_TEST_ASSERT(confit_value_set_bool(&value, selected, 0, &diagnostic) ==
+                     CONFIT_OK);
+  spec.fragment = fragment;
+  spec.menu = menu;
+  spec.symbol = symbol;
+  spec.kind = CONFIT_VALUE_BOOL;
+  spec.prompt = symbol;
+  spec.help = "Select exactly one generic mode.";
+  spec.default_value = &value;
+  spec.choice_group = group;
+  CONFIT_TEST_ASSERT(confit_catalog_add_config(catalog, &spec, 0,
+                                               &diagnostic) == CONFIT_OK);
+  confit_value_destroy(&value);
+}
+
 static Fixture fixture_create(void) {
   Fixture fixture;
   ConfitDiagnostic diagnostic;
@@ -129,6 +153,8 @@ static Fixture fixture_create(void) {
   add_config(fixture.catalog, 2U, logging, "MODE", CONFIT_VALUE_ENUM, 0);
   add_config(fixture.catalog, 1U, runtime, "ONLY_WHEN_BASE", CONFIT_VALUE_INT,
              "ENABLE_BASE");
+  add_choice_config(fixture.catalog, 1U, runtime, "BOARD_A", "board", 1);
+  add_choice_config(fixture.catalog, 1U, runtime, "BOARD_B", "board", 0);
   CONFIT_TEST_ASSERT(confit_dependency_plan_create(fixture.catalog, 0,
                                                    &fixture.plan,
                                                    &diagnostic) == CONFIT_OK);
@@ -223,7 +249,7 @@ static void test_rows_and_view(void) {
   CONFIT_TEST_ASSERT_CONTAINS(view, "state=0 dirty=0 menu=root cursor=0");
   CONFIT_TEST_ASSERT_CONTAINS(view, ">menu 1 Runtime");
   open_runtime(&fixture);
-  CONFIT_TEST_ASSERT(confit_ui_row_count(fixture.ui) == 6U);
+  CONFIT_TEST_ASSERT(confit_ui_row_count(fixture.ui) == 8U);
   CONFIT_TEST_ASSERT(confit_ui_set_viewport_rows(fixture.ui, 2U, &diagnostic) ==
                      CONFIT_OK);
   CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_NEXT, &effect,
@@ -328,6 +354,46 @@ static void test_row_render_metadata(void) {
   fixture_destroy(&fixture);
 }
 
+static int selected_bool(ConfitUiModel *ui, const char *symbol) {
+  const ConfitResolvedValue *value = 0;
+  return confit_resolution_find_value(confit_ui_resolution(ui), symbol,
+                                      &value) &&
+         value->effective_value.kind == CONFIT_VALUE_BOOL &&
+         value->effective_value.data.boolean != 0;
+}
+
+static void test_choice_radio_and_history(void) {
+  Fixture fixture = fixture_create();
+  ConfitDiagnostic diagnostic;
+  ConfitUiEffect effect;
+  ConfitUiRowView row;
+  confit_diagnostic_init(&diagnostic);
+  open_runtime(&fixture);
+  CONFIT_TEST_ASSERT(selected_bool(fixture.ui, "BOARD_A") &&
+                     !selected_bool(fixture.ui, "BOARD_B"));
+  select_symbol(fixture.ui, "BOARD_B");
+  CONFIT_TEST_ASSERT(confit_ui_row_at(
+                         fixture.ui, confit_ui_cursor(fixture.ui), &row) &&
+                     row.choice_group != 0 &&
+                     strcmp(row.choice_group, "board") == 0);
+  CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_TOGGLE, &effect,
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(!selected_bool(fixture.ui, "BOARD_A") &&
+                     selected_bool(fixture.ui, "BOARD_B") &&
+                     confit_ui_diff_count(fixture.ui) == 2U);
+  CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_TOGGLE, &effect,
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_UNDO, &effect,
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(selected_bool(fixture.ui, "BOARD_A") &&
+                     !selected_bool(fixture.ui, "BOARD_B"));
+  CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_REDO, &effect,
+                         &diagnostic) == CONFIT_OK);
+  CONFIT_TEST_ASSERT(!selected_bool(fixture.ui, "BOARD_A") &&
+                     selected_bool(fixture.ui, "BOARD_B"));
+  fixture_destroy(&fixture);
+}
+
 static void test_search_modes_and_commands(void) {
   Fixture fixture = fixture_create();
   ConfitDiagnostic diagnostic;
@@ -342,7 +408,7 @@ static void test_search_modes_and_commands(void) {
   CONFIT_TEST_ASSERT(command(fixture.ui, ":set nounavailable", &effect,
                              &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(!confit_ui_show_unavailable(fixture.ui) &&
-                     confit_ui_row_count(fixture.ui) == 5U);
+                     confit_ui_row_count(fixture.ui) == 7U);
   CONFIT_TEST_ASSERT(command(fixture.ui, ":set unavailable", &effect,
                              &diagnostic) == CONFIT_OK);
   CONFIT_TEST_ASSERT(act(fixture.ui, CONFIT_UI_ACTION_SHOW_HELP, &effect,
@@ -455,6 +521,7 @@ int main(void) {
   test_rows_and_view();
   test_edits_history_and_transaction();
   test_row_render_metadata();
+  test_choice_radio_and_history();
   test_search_modes_and_commands();
   test_history_bound_and_random_actions();
   return 0;
