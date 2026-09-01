@@ -41,7 +41,7 @@ CONFIT_MANIFEST_FILE:=${CONFIT_SOURCE_ROOT}/share/mk/confit.sources.mk
 .if empty(CONFIT_OBJROOT:M/*)
 .error CONFIT_OBJROOT must be an absolute pre-created directory
 .endif
-.if ${CONFIT_OBJROOT:C,[A-Za-z0-9_./-],,g} != ""
+.if ${CONFIT_OBJROOT:C,[A-Za-z0-9_./+-],,g} != ""
 .error CONFIT_OBJROOT contains an unsafe path character
 .endif
 .if !exists(${CONFIT_OBJROOT})

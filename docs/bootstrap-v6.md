@@ -18,16 +18,18 @@ consumer build, or all-host support.
 The caller provides all four build parameters on the bmake command line:
 
 - `CONFIT_OBJROOT`: an existing, writable, canonical absolute directory outside
-  the source tree;
+  the source tree, using only ASCII alphanumeric, `_`, `.`, `/`, `-`, and `+`
+  path bytes (the literal `+` preserves ISO-8601 timezone suffixes);
 - `CONFIT_HOST_CC`: one existing absolute clang executable;
 - `CONFIT_BMAKE_TOOL`: the absolute bmake identity that is executing the graph;
 - `CONFIT_SHELL`: one existing absolute shell executable.
 
 The build graph rejects `bmake -e`, missing or relative parameters, a bmake
 identity different from the running executable, an object root inside the source
-tree, and command-line attempts to override source lists, warning flags, link
-inputs, output names, or other internal variables. A forced compiler header also
-rejects a compiler that does not define clang and C17 identities.
+tree, unsafe whitespace, control, or shell-metacharacter path bytes, and
+command-line attempts to override source lists, warning flags, link inputs,
+output names, or other internal variables. A forced compiler header also rejects
+a compiler that does not define clang and C17 identities.
 
 Creating and provisioning the object root precedes this claim. It is not a
 mandatory Confit target. Given that root, ordinary build and test targets do not
@@ -39,7 +41,7 @@ On the currently verified host, the product-only build is:
 
 ```sh
 /opt/homebrew/bin/bmake \
-  CONFIT_OBJROOT=/private/tmp/confit-v6-bootstrap-product \
+  CONFIT_OBJROOT=/private/tmp/confit-v6-bootstrap-product+0900 \
   CONFIT_HOST_CC=/usr/bin/clang \
   CONFIT_BMAKE_TOOL=/opt/homebrew/bin/bmake \
   CONFIT_SHELL=/bin/sh \
